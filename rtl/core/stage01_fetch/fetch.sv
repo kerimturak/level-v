@@ -20,6 +20,7 @@ module fetch
     input  logic                       rst_ni,
     input  stall_e                     stall_i,
     input  logic                       flush_i,
+    input  logic            [XLEN-1:0] flush_pc_i,
     input  ilowX_res_t                 lx_ires_i,
     input  logic            [XLEN-1:0] pc_target_i,
     input  logic            [XLEN-1:0] ex_mtvec_i,
@@ -70,7 +71,7 @@ module fetch
   // PC Enable Logic: Stall durumunda PC güncellenmez
   // ============================================================================
   always_comb begin
-    pc_en = trap_active_i || (stall_i == NO_STALL) && !flush_i;
+    pc_en = trap_active_i || (stall_i == NO_STALL) || flush_i;
 
     // ============================================================================
     // Current PC Selection: Exception durumunda writeback PC'si, normal durumda
@@ -91,7 +92,9 @@ module fetch
     // 2. Branch taken -> spec_o.pc
     // 3. Sequential fetch -> pc_incr_o
     // ============================================================================
-    if (trap_active_i) begin
+    if (flush_i) begin
+      pc_next = flush_pc_i;
+    end else if (trap_active_i) begin
       pc_next = ex_mtvec_i;
     end else if (!spec_hit_i) begin
       // Misprediction veya exception recovery durumu

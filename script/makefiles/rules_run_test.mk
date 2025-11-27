@@ -28,6 +28,17 @@ ADDR_DIR := $(TEST_ROOT)/pass_fail_addr
 .PHONY: run test_prepare run_rtl run_spike compare_logs test_report clean_test list_tests help_test run_flist
 
 # ============================================================
+#  Exception Test Address Override
+# ============================================================
+
+EXCEPTION_ADDR_FILE := /home/kerim/level-v/sim/test/exception_test.flist
+
+define GET_EXCEPTION_ADDR
+$(shell awk '$$1=="$(1)" {print $$2" " $$3}' $(EXCEPTION_ADDR_FILE) 2>/dev/null)
+endef
+
+
+# ============================================================
 # Main Pipeline
 # ============================================================
 run: test_prepare run_rtl run_spike compare_logs test_report
@@ -102,16 +113,24 @@ run_spike:
 	@echo -e "$(GREEN)  Step 2/3: Running Spike Golden Model$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@$(MKDIR) "$(dir $(SPIKE_LOG))"
-	ADDR_FILE="$(ADDR_DIR)/$(TEST_NAME)_addr.txt"; \
-	DEBUG_CMD="$(BUILD_DIR)/test_work/$(TEST_NAME)_spike.cmd"; \
-	if [ ! -f "$$ADDR_FILE" ]; then \
-		echo -e "$(RED)[ERROR]$(RESET) Address file not found: $$ADDR_FILE"; \
-		exit 1; \
+
+	@EXC_ADDRS="$(call GET_EXCEPTION_ADDR,$(TEST_NAME))"; \
+	if [ -n "$$EXC_ADDRS" ]; then \
+		echo -e "$(YELLOW)[INFO]$(RESET) Exception override for $(TEST_NAME): $$EXC_ADDRS"; \
+		set -- $$EXC_ADDRS; \
+		PASS_ADDR="$$1"; \
+		FAIL_ADDR="$$2"; \
+	else \
+		ADDR_FILE="$(ADDR_DIR)/$(TEST_NAME)_addr.txt"; \
+		if [ ! -f "$$ADDR_FILE" ]; then \
+			echo -e "$(RED)[ERROR]$(RESET) Address file not found: $$ADDR_FILE"; \
+			exit 1; \
+		fi; \
+		read PASS_ADDR FAIL_ADDR < "$$ADDR_FILE"; \
 	fi; \
-	read PASS_ADDR FAIL_ADDR < "$$ADDR_FILE"; \
-	echo -e "$(GREEN)✓ Loaded PASS address: $$PASS_ADDR$(RESET)"; \
+	echo -e "$(GREEN)✓ Using PASS address: $$PASS_ADDR$(RESET)"; \
+	DEBUG_CMD="$(BUILD_DIR)/test_work/$(TEST_NAME)_spike.cmd"; \
 	echo -e "until pc 0 $$PASS_ADDR\nquit" > "$$DEBUG_CMD"; \
-	echo -e "$(YELLOW)[SPIKE]$(RESET) Running $(TEST_NAME)..."; \
 	$(SPIKE) -d --isa=RV32IMC --pc=0x80000000 --log-commits \
 		--debug-cmd="$$DEBUG_CMD" \
 		$(ELF_DIR)/$(TEST_NAME) \

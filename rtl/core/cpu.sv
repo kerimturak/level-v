@@ -38,6 +38,7 @@ module cpu
   exc_type_e                fe_active_exc_type;
   instr_type_e              fe_instr_type;
   logic                     fencei_flush;
+  logic         [XLEN-1:0]  flush_pc;
 `ifdef TRACER_EN
   fe_tracer_info_t fe_tracer;
 `endif
@@ -139,6 +140,7 @@ module cpu
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
       .flush_i      (fencei_flush),
+      .flush_pc_i   (flush_pc),
       .stall_i      (stall_cause),
       .lx_ires_i    (fe_lx_ires),
       .pc_target_i  (ex_pc_target_last),
@@ -203,6 +205,7 @@ module cpu
     fe_active_exc_type  = ex_spec_hit ? fe_exc_type : NO_EXCEPTION;
     de_active_exc_type  = ex_spec_hit ? pipe1.exc_type != NO_EXCEPTION ? pipe1.exc_type : de_exc_type : NO_EXCEPTION;
     fencei_flush        = (pipe2.instr_type == fence_i);
+    flush_pc            = pipe2.pc_incr;
     de_enable           = (stall_cause == NO_STALL); // to synch spike and core log stall on fetch flush
     de_flush_en         = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL}) ? 1'b0 : de_flush; //(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL}) && de_flush;
     de_info.spec        = pipe1.spec;
