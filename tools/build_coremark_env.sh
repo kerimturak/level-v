@@ -63,14 +63,37 @@ INCLUDES=(
   -I"$ENV_COMMON"
 )
 
-COREMARK_DIR=/home/kerim/riscv/ceres-riscv/build/coremark_build/coremark_src
+# Ensure CoreMark sources are available
+if [ ! -d "$COREMARK_DIR" ]; then
+  echo "Error: COREMARK_DIR='$COREMARK_DIR' not found." >&2
+  echo "Run 'tools/setup_coremark.sh' to clone CoreMark or pass --coremark-dir." >&2
+  exit 1
+fi
+
+# Common extra C flags to ensure CoreMark port headers find std types
+# and to enable the barebones port behavior used elsewhere in the repo.
+# -include stddef.h ensures size_t is defined even if headers omit it.
+# Define COMPILER_FLAGS empty so references in core_main.c compile.
+COMMON_CFLAGS='-include stddef.h -DCOREMARK_PORTME_USE_STDINT -DVALIDATION_RUN -DCOMPILER_FLAGS=""'
 SOURCES=(
   "$COREMARK_DIR/core_main.c"
   "$COREMARK_DIR/core_list_join.c"
   "$COREMARK_DIR/core_matrix.c"
   "$COREMARK_DIR/core_state.c"
   "$COREMARK_DIR/core_util.c"
-  "$COREMARK_DIR/barebones/core_portme.c"
+)
+
+# Prefer a top-level core_portme.c if provided by the CoreMark port; fall back
+# to the barebones implementation which may require platform hooks.
+if [ -f "$ENV_COMMON/core_portme.c" ]; then
+  PORTME_SRC="$ENV_COMMON/core_portme.c"
+elif [ -f "$COREMARK_DIR/core_portme.c" ]; then
+  PORTME_SRC="$COREMARK_DIR/core_portme.c"
+else
+  PORTME_SRC="$COREMARK_DIR/barebones/core_portme.c"
+fi
+SOURCES+=(
+  "$PORTME_SRC"
   "$ENV_COMMON/crt.S"
   "$ENV_COMMON/syscalls.c"
 )
@@ -91,14 +114,14 @@ try_compile(){
     "$COREMARK_DIR/core_matrix.c" \
     "$COREMARK_DIR/core_state.c" \
     "$COREMARK_DIR/core_util.c"; do
-    "$CC" -march="$march_opt" -mabi=ilp32 -O2 -c ${INCLUDES[*]} -o "$OBJ_DIR/$(basename "$src" .c).o" "$src" || { set +x; return 1; }
+    "$CC" -march="$march_opt" -mabi=ilp32 -O2 $COMMON_CFLAGS -c ${INCLUDES[*]} -o "$OBJ_DIR/$(basename "$src" .c).o" "$src" || { set +x; return 1; }
   done
 
   # core_portme needs ITERATIONS and printf mapping to ee_printf
-  "$CC" -march="$march_opt" -mabi=ilp32 -O2 -c ${INCLUDES[*]} -DITERATIONS="$ITERATIONS" -Dprintf=ee_printf -o "$OBJ_DIR/core_portme.o" "$COREMARK_DIR/barebones/core_portme.c" || { set +x; return 1; }
+  "$CC" -march="$march_opt" -mabi=ilp32 -O2 $COMMON_CFLAGS -c ${INCLUDES[*]} -DITERATIONS="$ITERATIONS" -Dprintf=ee_printf -o "$OBJ_DIR/core_portme.o" "$PORTME_SRC" || { set +x; return 1; }
 
   # compile syscalls (do not map printf here)
-  "$CC" -march="$march_opt" -mabi=ilp32 -O2 -c ${INCLUDES[*]} -o "$OBJ_DIR/syscalls.o" "$ENV_COMMON/syscalls.c" || { set +x; return 1; }
+  "$CC" -march="$march_opt" -mabi=ilp32 -O2 $COMMON_CFLAGS -c ${INCLUDES[*]} -o "$OBJ_DIR/syscalls.o" "$ENV_COMMON/syscalls.c" || { set +x; return 1; }
 
   # assemble crt.S (include headers path)
   "$CC" -march="$march_opt" -mabi=ilp32 -O2 -c ${INCLUDES[*]} -o "$OBJ_DIR/crt.o" "$ENV_COMMON/crt.S" || { set +x; return 1; }
@@ -113,7 +136,7 @@ try_compile(){
 # First try with zicsr-aware march if assembler CSR ops are used
 if try_compile "rv32imc_zicsr"; then
   echo "Build succeeded with rv32imc_zicsr"
-elif try_compile "rv32imc_zicsr"; then
+elif try_compile "rv32imc"; then
   echo "Build succeeded with rv32imc"
 else
   echo "Build failed with attempted ISA variants." >&2

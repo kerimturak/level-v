@@ -30,7 +30,8 @@ echo "CoreMark setup helper"
 echo "COREMARK_DIR=$COREMARK_DIR CROSS=$CROSS MARCH=$MARCH MABI=$MABI"
 
 # Remember repository root so we can write output files using absolute paths
-ROOT_DIR="$(pwd)"
+# Use script location (parent of tools/) as repository root for robustness
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # If a git submodule is configured, try to init/update it
 if [ -f .gitmodules ]; then
@@ -43,9 +44,9 @@ if [ ! -d "$COREMARK_DIR" ]; then
   git clone https://github.com/eembc/coremark.git "$COREMARK_DIR"
 fi
 
-# Create out dirs
-mkdir -p "$OUT_DIR"
-mkdir -p "$MEM_OUT_DIR"
+# Create out dirs (absolute paths under repo root)
+mkdir -p "$ROOT_DIR/$OUT_DIR"
+mkdir -p "$ROOT_DIR/$MEM_OUT_DIR"
 
 # Attempt to build CoreMark using its Makefile, but keep it flexible.
 # CoreMark repo has a set of ports; the easiest way is to build the "coremark" benchmark
@@ -54,16 +55,16 @@ mkdir -p "$MEM_OUT_DIR"
 # Copy CoreMark sources into OUT_DIR/coremark_src but exclude the .git
 # directory (some environments restrict copying .git objects). Use tar to
 # avoid recreating problematic .git files.
-mkdir -p "$OUT_DIR/coremark_src"
+mkdir -p "$ROOT_DIR/$OUT_DIR/coremark_src"
 (
   cd "$COREMARK_DIR"
   tar --exclude='.git' -cf - .
 ) | (
-  cd "$OUT_DIR/coremark_src"
+  cd "$ROOT_DIR/$OUT_DIR/coremark_src"
   tar -xf -
 )
 
-pushd "$OUT_DIR/coremark_src" > /dev/null
+pushd "$ROOT_DIR/$OUT_DIR/coremark_src" > /dev/null
 
 # Try to build a barebone coremark using CROSS toolchain
 # The CoreMark repo uses ports; we'll compile the benchmark C files directly.
@@ -115,7 +116,7 @@ $CC $CFLAGS -I. -I./barebones "${SRCS[@]}" -o "$OUTPUT_ELF" $LDFLAGS || {
 # Produce binary and .mem (write binary in current dir, then copy to OUT_DIR)
 OUTPUT_BIN="./coremark.bin"
 $OBJCOPY -O binary "$OUTPUT_ELF" "$OUTPUT_BIN"
-  cp "$OUTPUT_BIN" "$ROOT_DIR/$OUT_DIR/coremark.bin"
+cp "$OUTPUT_BIN" "$ROOT_DIR/$OUT_DIR/coremark.bin"
 
 # Convert to .mem using the Python tool
 MEM_FILE="$ROOT_DIR/$MEM_OUT_DIR/coremark.mem"
