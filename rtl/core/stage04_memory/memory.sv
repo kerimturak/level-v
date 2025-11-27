@@ -106,7 +106,7 @@ module memory
   ) dcache (
       .clk_i      (clk_i),
       .rst_ni     (rst_ni),
-      .flush_i    (1'b0),
+      .flush_i    (fe_flush_cache_i),
       .cache_req_i(dcache_req),
       .cache_res_o(dcache_res),
       .lowX_res_i (lx_dres_i),

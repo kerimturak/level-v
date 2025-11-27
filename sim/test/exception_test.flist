@@ -1,1 +1,2 @@
-rv32ui-p-ma_data        0x80000040 0x8000103c
+rv32ui-p-ma_data 0x80000040 0x8000103c
+rv32ui-p-fence_i 0x80000178 0x800001e0
