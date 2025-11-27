@@ -1,0 +1,8 @@
+//`define STATIC_PREDICT
+`define RAS
+`define WALLACE_SINGLE_CYCLE
+`define TRACER_EN
+//`define CERES_UART_TX_MONITOR
+//`define WALLACE_MULTY_CYCLE
+//`define DSP_MUL
+//`define REMOVE_WB_STAGE

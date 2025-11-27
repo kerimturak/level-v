@@ -1,0 +1,45 @@
+<!-- components/prf.html -->
+<div class="card">
+  <h3>Physical Register File (PRF)</h3>
+  <div class="small">Her fiziksel register’ın değeri ve hazır (V) / bekliyor (P) durumu</div>
+
+  <!-- PRF değerlerinin grid görünümü -->
+  <div id="prfGrid" class="kv mono" style="margin-top:8px;">
+    <div style="color:gray;">No entries yet</div>
+  </div>
+
+  <!-- Kullanım oranı -->
+  <div style="margin-top:10px;">
+    <div class="small">PRF Usage</div>
+    <div class="progress"><div id="prfUsage" style="width:0%"></div></div>
+  </div>
+</div>
+
+<script>
+/* renderPRF(): ana sayfadan çağrılır */
+function renderPRF(state) {
+  const grid = document.getElementById("prfGrid");
+  if (!state || !state.prf) {
+    grid.innerHTML = '<div style="color:gray;">Empty</div>';
+    return;
+  }
+
+  const keys = Object.keys(state.prf).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+  grid.innerHTML = "";
+
+  for (let i = 0; i < Math.min(96, keys.length); i++) {
+    const k = keys[i];
+    const val = state.prf[k];
+    const ready = state.prfReady[k];
+    const d = document.createElement("div");
+    d.textContent = `${k}:${ready ? "V" : "P"}=${val}`;
+    d.style.color = ready ? "#6ee7a8" : "#67d2ff";
+    grid.appendChild(d);
+  }
+
+  // kullanım oranı
+  const usage = Math.min(100, Math.round(100 * (state.prfAllocCount || 0) / (state.PRF_MAX || 256)));
+  const bar = document.getElementById("prfUsage");
+  if (bar) bar.style.width = usage + "%";
+}
+</script>

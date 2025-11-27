@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PipelineLens v2 — Out-of-Order Visualizer</title>
+<style>
+:root[data-theme="dark"]{
+  --bg:#0b0f14; --fg:#e8eef6; --muted:#9fb0c3; --acc:#67d2ff; --ok:#6ee7a8; --warn:#ffd166; --err:#ff6b6b;
+  --card:#121822; --chip:#1a2230; --line:#223049; --ink:#0d131b; --border:#202a39;
+}
+:root[data-theme="light"]{
+  --bg:#f6f8fb; --fg:#0b0f14; --muted:#44566c; --acc:#0f79d0; --ok:#0a8f5d; --warn:#b77900; --err:#c0392b;
+  --card:#ffffff; --chip:#f1f5fb; --line:#dfe7f3; --ink:#f4f7fc; --border:#cfd9e6;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0}
+header{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+h1{font-size:18px;margin:0}
+.small{font-size:12px;color:var(--muted)}
+.mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+.pill{display:inline-block;background:var(--chip);border:1px solid var(--line);padding:2px 8px;border-radius:999px}
+button{background:var(--chip);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:8px 10px;cursor:pointer}
+button.primary{background:var(--acc);color:#000}
+button.warn{background:var(--warn);color:#000}
+button:disabled{opacity:.5;cursor:not-allowed}
+.container{padding:16px 18px;display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+@media(max-width:1200px){ .container{grid-template-columns:1fr} }
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px}
+.card h3{margin:0 0 8px 0;font-size:14px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:768px){ .grid2{grid-template-columns:1fr} }
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kv{display:flex;flex-wrap:wrap;gap:8px}
+.kv div{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+tr.highlight td{background:color-mix(in oklab, var(--acc) 15%, var(--card))}
+
+textarea{width:100%;background:var(--ink);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit}
+
+.legend{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dot{width:10px;height:10px;border-radius:50%}
+.dot.dispatch{background:#5da3ff}
+.dot.issue{background:#ffd166}
+.dot.exec{background:#67d2ff}
+.dot.wb{background:#6ee7a8}
+.dot.commit{background:#a47de8}
+.dot.stall{background:#ff6b6b}
+
+#lensPanel{position:fixed;right:16px;bottom:16px;z-index:20;width:360px;max-height:56vh;overflow:auto}
+@media(max-width:768px){ #lensPanel{width:90%;right:5%;left:5%} }
+.stage-badge{padding:2px 6px;border-radius:6px;border:1px solid var(--line);display:inline-block;font-size:11px}
+.badge-dispatch{background:#10213b;color:#5da3ff}
+.badge-issue{background:#3b300f;color:#ffd166}
+.badge-exec{background:#0f213b;color:#67d2ff}
+.badge-wb{background:#0f3b25;color:#6ee7a8}
+.badge-commit{background:#29113b;color:#a47de8}
+.badge-stall{background:#3b1010;color:#ff6b6b}
+
+.timeline{display:grid;grid-template-columns: 120px repeat(20, 1fr);gap:4px;align-items:center}
+.tl-label{font-size:12px;color:var(--muted)}
+.tl-dot{height:10px;border-radius:3px;border:1px solid var(--line)}
+.tl-d{background:#5da3ff}
+.tl-i{background:#ffd166}
+.tl-e{background:#67d2ff}
+.tl-w{background:#6ee7a8}
+.tl-c{background:#a47de8}
+.tl-s{background:#ff6b6b}
+.tl-n{background:var(--chip)}
+
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.stats .stat{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12px}
+.theme-toggle{display:flex;gap:6px;align-items:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>PipelineLens v2 — Out-of-Order Visualizer</h1>
+    <span class="small">ALU(ADD)=1 cyc, MDU(MUL)=3 cyc, Issue=2, Commit=2</span>
+  </div>
+  <div class="row">
+    <div>Cycle: <span id="cycle" class="pill mono">0</span></div>
+    <button id="btnPrev">◀ Prev</button>
+    <button id="btnStep" class="primary">Step ▶</button>
+    <button id="btnAuto">Auto ▷</button>
+    <select id="speed" class="pill">
+      <option value="700">×1</option>
+      <option value="350">×2</option>
+      <option value="175">×4</option>
+    </select>
+    <button id="btnReset" class="warn">Reset ↺</button>
+    <button id="btnTheme">🌙 / ☀️</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h3>Program & Controls</h3>
+    <div class="grid2">
+      <div>
+        <div class="small">Instruction list (OP src1, src2 -> dst). OP ∈ {ADD, MUL}</div>
+        <textarea id="prog" rows="8" class="mono">MUL R1, R2 -> R3
+ADD R3, R4 -> R5
+ADD R2, R6 -> R7
+ADD R8, R9 -> R10
+MUL R7, R10 -> R11
+ADD R5, R11 -> R5</textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="btnLoad">Load Program</button>
+        </div>
+      </div>
+      <div>
+        <div class="stats" id="statsBar">
+          <div class="stat">IPC: <span id="ipc" class="mono">0.00</span></div>
+          <div class="stat">Active ROB: <span id="activeRob" class="mono">0</span></div>
+          <div class="stat">ALU use: <span id="aluUse" class="mono">0%</span></div>
+          <div class="stat">MDU use: <span id="mduUse" class="mono">0%</span></div>
+          <div class="stat">Committed: <span id="commCount" class="mono">0</span></div>
+        </div>
+        <div class="legend" style="margin-top:8px">
+          <span class="dot dispatch"></span><span class="small">Dispatch</span>
+          <span class="dot issue"></span><span class="small">Issue</span>
+          <span class="dot exec"></span><span class="small">Execute</span>
+          <span class="dot wb"></span><span class="small">Writeback</span>
+          <span class="dot commit"></span><span class="small">Commit</span>
+          <span class="dot stall"></span><span class="small">Stall</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Functional Units</h3>
+    <table>
+      <thead><tr><th>Unit</th><th>Busy</th><th>Currently Executing</th></tr></thead>
+      <tbody id="units"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>ROB (Reorder Buffer)</h3>
+    <table>
+      <thead><tr><th>#</th><th>Instr</th><th>Dst Phys</th><th>State</th><th>Times (D/Is/Ex/WB/C)</th></tr></thead>
+      <tbody id="rob"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Issue Queue (IQ)</h3>
+    <table>
+      <thead><tr><th>#</th><th>Instr</th><th>Src Phys</th><th>Ready?</th><th>Reason</th></tr></thead>
+      <tbody id="iq"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>RAT (Register Alias Table)</h3>
+    <div id="rat" class="kv mono"></div>
+  </div>
+
+  <div class="card">
+    <h3>Mini Timeline (last 20 cycles)</h3>
+    <div id="timeline"></div>
+  </div>
+
+  <div class="card">
+    <h3>Event Log (this cycle)</h3>
+    <div id="log" class="mono small"></div>
+  </div>
+</div>
+
+<div id="lensPanel" class="card">
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <h3>PipelineLens Panel</h3>
+    <button id="btnToggleLens">Hide</button>
+  </div>
+  <div id="lensBody"></div>
+</div>
+
+<script>
+// Core Simulation Engine
+const LAT = { ADD:1, MUL:3 };
+const FU  = { ADD:"ALU", MUL:"MDU" };
+const UNITS = { ALU:1, MDU:1 };
+const ISSUE_WIDTH=2, COMMIT_WIDTH=2, DISPATCH_PER_CYCLE=1;
+const ARCH_N=64;
+
+function parseProgram(text){
+  const lines = text.split(/[\r\n]+/).map(s=>s.trim()).filter(Boolean);
+  const out = [];
+  for(const [i,line] of lines.entries()){
+    const m = line.match(/^([A-Z]+)\s+([Rr]\d+)\s*,\s*([Rr]\d+)\s*->\s*([Rr]\d+)$/);
+    if(!m) throw new Error(`Line ${i+1}: bad syntax "${line}"`);
+    const op = m[1].toUpperCase();
+    if(!(op in FU)) throw new Error(`Line ${i+1}: unsupported OP "${op}"`);
+    out.push({op, src:["R"+(+m[2].slice(1)), "R"+(+m[3].slice(1))], dst:"R"+(+m[4].slice(1))});
+  }
+  return out;
+}
+
+function buildInitialState(program){
+  const RAT = {}; const readyTime={}; const free=[];
+  for(let i=1;i<=ARCH_N;i++){ RAT["R"+i]="p"+i; readyTime["p"+i]=0; }
+  for(let i=ARCH_N+1;i<=512;i++) free.push("p"+i);
+
+  let cycle=1;
+  const ROB=[];
+  for(let i=0;i<program.length;i++){
+    const {op,src,dst} = program[i];
+    const srcP = [RAT[src[0]], RAT[src[1]]];
+    const dstP = free.shift();
+    ROB.push({
+      idx:i+1, op, src, dst,
+      srcP, dstP, fu:FU[op],
+      dispatch: cycle, issue:null, start:null, end:null, wb:null, commit:null,
+      state:"dispatched"
+    });
+    RAT[dst]=dstP; readyTime[dstP]=1e9;
+    cycle += 1;
+  }
+
+  return {
+    cycle:0,
+    ROB, RAT, readyTime,
+    inflight:{ALU:0, MDU:0},
+    execEnds:{}, wbs:{},
+    commitPtr:0,
+    log:[],
+    hist:[]
+  };
+}
+
+function isReady(inst, t, readyTime){
+  return readyTime[inst.srcP[0]]<=t && readyTime[inst.srcP[1]]<=t;
+}
+
+function stageCode(inst, t){
+  if(inst.commit && inst.commit<=t) return "c";
+  if(inst.wb && inst.wb<=t && (!inst.commit || inst.commit>t)) return "w";
+  if(inst.start && inst.end && inst.start<=t && t<inst.end) return "e";
+  if(inst.issue && inst.issue<=t && (!inst.start || t<inst.start)) return "i";
+  if(inst.dispatch && inst.dispatch<=t && (!inst.issue || t<inst.issue)) return "d";
+  return "n";
+}
+
+function producerOf(state, phys){
+  for(const inst of state.ROB){ if(inst.dstP===phys) return inst; }
+  return null;
+}
+
+function stallReason(inst, t, state){
+  if(inst.issue!=null) return "";
+  if(state.cycle < inst.dispatch) return "";
+  const unitBusy = state.inflight[inst.fu] >= UNITS[inst.fu];
+  const src0Ready = state.readyTime[inst.srcP[0]]<=t;
+  const src1Ready = state.readyTime[inst.srcP[1]]<=t;
+  let reasons=[];
+  if(!src0Ready){
+    const prod = producerOf(state, inst.srcP[0]); const wb = prod? (prod.wb||"-") : "-";
+    reasons.push(`wait ${inst.srcP[0]} (from i${prod?prod.idx:"?"}, WB@t${wb})`);
+  }
+  if(!src1Ready){
+    const prod = producerOf(state, inst.srcP[1]); const wb = prod? (prod.wb||"-") : "-";
+    reasons.push(`wait ${inst.srcP[1]} (from i${prod?prod.idx:"?"}, WB@t${wb})`);
+  }
+  if(unitBusy) reasons.push(`${inst.fu} busy`);
+  return reasons.join("; ");
+}
+
+function snapshotState(state){
+  const t = state.cycle;
+  const row = state.ROB.map(inst => stageCode(inst, t));
+  state.hist.push(row);
+  if(state.hist.length>200) state.hist.shift();
+}
+
+function step(state){
+  const log=[]; const t=state.cycle+1;
+
+  const dueExec = state.execEnds[t] || [];
+  for(const inst of dueExec){
+    state.inflight[inst.fu]--;
+    (state.wbs[t] ||= []).push(inst);
+    log.push(`ExecEnd@t${t}: i${inst.idx}`);
+  }
+  delete state.execEnds[t];
+
+  const doWb = state.wbs[t] || [];
+  for(const inst of doWb){
+    state.readyTime[inst.dstP] = t;
+    inst.wb = t;
+    if(inst.state!=="committed") inst.state="written-back";
+    log.push(`WB@t${t}: i${inst.idx} -> ${inst.dstP}`);
+  }
+  delete state.wbs[t];
+
+  let issued=0;
+  for(const inst of state.ROB){
+    if(inst.issue!=null) continue;
+    if(inst.dispatch>t) continue;
+    if(state.inflight[inst.fu] >= UNITS[inst.fu]) continue;
+    if(!isReady(inst, t, state.readyTime)) continue;
+    inst.issue = t; inst.start = t; inst.end = t + LAT[inst.op];
+    state.inflight[inst.fu]++;
+    (state.execEnds[inst.end] ||= []).push(inst);
+    inst.state="executing";
+    log.push(`Issue@t${t}: i${inst.idx} -> ${inst.fu}`);
+    if(++issued>=ISSUE_WIDTH) break;
+  }
+
+  let committed=0;
+  while(committed<COMMIT_WIDTH && state.commitPtr < state.ROB.length){
+    const head = state.ROB[state.commitPtr];
+    if(head.wb!=null && head.wb<=t){
+      head.commit=t; head.state="committed";
+      state.commitPtr++; committed++;
+      log.push(`Commit@t${t}: i${head.idx}`);
+    }else break;
+  }
+
+  state.cycle=t;
+  state.log = log;
+  snapshotState(state);
+  return state;
+}
+
+// Pipeline Lens Renderer
+function renderLens(state){
+  const body = document.getElementById("lensBody");
+  body.innerHTML="";
+  for(const inst of state.ROB){
+    const row = document.createElement("div");
+    row.className="row";
+    row.style.marginBottom="4px";
+    const label = document.createElement("div");
+    label.innerHTML = `<span class="pill mono">#${inst.idx}</span> <span class="mono small">${inst.op} ${inst.src[0]}, ${inst.src[1]} → ${inst.dst}</span>`;
+    const badge = document.createElement("div");
+    const st = stageCode(inst, state.cycle);
+    let cls="badge-dispatch", name="Dispatch";
+    if(st==="i"){ cls="badge-issue"; name="Issue"; }
+    else if(st==="e"){ cls="badge-exec"; name="Execute"; }
+    else if(st==="w"){ cls="badge-wb"; name="Writeback"; }
+    else if(st==="c"){ cls="badge-commit"; name="Commit"; }
+    else if(st==="d"){ cls="badge-dispatch"; name="Dispatch"; }
+    else if(st==="n"){ cls="badge-stall"; name="Stall/Waiting"; }
+    badge.innerHTML = `<span class="stage-badge ${cls}">${name}</span>`;
+    row.appendChild(label);
+    row.appendChild(badge);
+    body.appendChild(row);
+  }
+}
+
+// UI Main
+let STATE=null, HIST=[], autoTimer=null, ticks=0, committedTotal=0;
+let unitBusyTicks={ALU:0, MDU:0};
+
+function setTheme(theme){
+  document.documentElement.dataset.theme = theme;
+  try{ localStorage.setItem("pl_theme", theme); }catch(e){}
+}
+
+function toggleTheme(){
+  const cur = document.documentElement.dataset.theme || "dark";
+  setTheme(cur==="dark"?"light":"dark");
+}
+
+function resetFromProgram(){
+  const progTxt = document.getElementById("prog").value;
+  let prog;
+  try{ prog = parseProgram(progTxt); }
+  catch(e){ alert(e.message); return; }
+  STATE = buildInitialState(prog);
+  HIST = [JSON.parse(JSON.stringify(STATE))];
+  ticks = 0; committedTotal=0; unitBusyTicks={ALU:0, MDU:0};
+  render();
+}
+
+function render(){
+  document.getElementById("cycle").textContent = STATE.cycle;
+
+  const units = document.getElementById("units"); units.innerHTML="";
+  for(const u of ["ALU","MDU"]){
+    const tr = document.createElement("tr");
+    const exec = STATE.ROB.filter(x=>x.state==="executing" && x.fu===u)
+      .map(x=>`#${x.idx} [t${x.start}..t${x.end})`);
+    tr.innerHTML = `<td>${u}</td><td>${STATE.inflight[u]}</td><td class="mono">${exec.join(", ")||"—"}</td>`;
+    units.appendChild(tr);
+  }
+
+  const rob = document.getElementById("rob"); rob.innerHTML="";
+  for(const inst of STATE.ROB){
+    const tr = document.createElement("tr");
+    if(STATE.commitPtr<STATE.ROB.length && STATE.ROB[STATE.commitPtr].idx===inst.idx) tr.classList.add("highlight");
+    const times = `D${inst.dispatch||"-"}/I${inst.issue||"-"}/E${inst.start||"-"}-${inst.end||"-"}/W${inst.wb||"-"}/C${inst.commit||"-"}`;
+    tr.innerHTML = `<td>${inst.idx}</td>
+    <td class="mono">${inst.op} ${inst.src[0]}, ${inst.src[1]} -> ${inst.dst}</td>
+    <td class="mono">${inst.dstP}</td>
+    <td>${inst.state}</td>
+    <td class="mono">${times}</td>`;
+    rob.appendChild(tr);
+  }
+
+  const iq = document.getElementById("iq"); iq.innerHTML="";
+  for(const inst of STATE.ROB){
+    if(inst.issue!=null) continue;
+    if(STATE.cycle < inst.dispatch) continue;
+    const ready = isReady(inst, STATE.cycle, STATE.readyTime);
+    const tr = document.createElement("tr");
+    const reason = ready ? (STATE.inflight[inst.fu] >= UNITS[inst.fu] ? (inst.fu+" busy") : "") : stallReason(inst, STATE.cycle, STATE);
+    tr.innerHTML = `<td>${inst.idx}</td>
+      <td class="mono">${inst.op} ${inst.src[0]}, ${inst.src[1]} -> ${inst.dst}</td>
+      <td class="mono">${inst.srcP.join(", ")}</td>
+      <td>${ready?'<span class="pill" style="background:#0f2f1f;border:1px solid #254;color:#9f9">READY</span>':'<span class="pill" style="background:#2f1f1f;border:1px solid #542;color:#f99">WAIT</span>'}</td>
+      <td class="small mono" title="${reason}">${reason||"—"}</td>`;
+    iq.appendChild(tr);
+  }
+
+  const ratDiv = document.getElementById("rat"); ratDiv.innerHTML="";
+  const touched = new Set();
+  for(const inst of STATE.ROB){ touched.add(inst.dst); touched.add(inst.src[0]); touched.add(inst.src[1]); }
+  const list = Array.from(touched).sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)));
+  for(const r of list){
+    const d = document.createElement("div");
+    d.textContent = `${r}→${STATE.RAT[r]}`;
+    ratDiv.appendChild(d);
+  }
+
+  document.getElementById("log").innerHTML = STATE.log.map(x=>"• "+x).join("<br>") || "—";
+
+  ticks = Math.max(ticks, STATE.cycle);
+  committedTotal = STATE.ROB.filter(x=>x.commit!=null).length;
+  if(STATE.inflight.ALU>0) unitBusyTicks.ALU++;
+  if(STATE.inflight.MDU>0) unitBusyTicks.MDU++;
+  const ipc = ticks? (committedTotal / ticks):0;
+  document.getElementById("ipc").textContent = ipc.toFixed(2);
+  const activeRob = STATE.ROB.filter(x=>!x.commit).length;
+  document.getElementById("activeRob").textContent = activeRob;
+  document.getElementById("commCount").textContent = committedTotal;
+  const aluUse = ticks? Math.round(100*unitBusyTicks.ALU/ticks):0;
+  const mduUse = ticks? Math.round(100*unitBusyTicks.MDU/ticks):0;
+  document.getElementById("aluUse").textContent = aluUse+"%";
+  document.getElementById("mduUse").textContent = mduUse+"%";
+
+  renderLens(STATE);
+  renderTimeline(STATE);
+}
+
+function renderTimeline(state){
+  const host = document.getElementById("timeline");
+  host.innerHTML="";
+  const depth = Math.min(20, state.hist.length);
+  const startIdx = state.hist.length - depth;
+  for(let i=0;i<state.ROB.length;i++){
+    const row = document.createElement("div"); row.className="timeline";
+    const label = document.createElement("div"); label.className="tl-label mono";
+    label.textContent = "#"+state.ROB[i].idx+" "+state.ROB[i].op;
+    row.appendChild(label);
+    for(let k=0;k<depth;k++){
+      const code = state.hist[startIdx + k][i] || "n";
+      const dot = document.createElement("div");
+      dot.className = "tl-dot tl-"+code;
+      row.appendChild(dot);
+    }
+    host.appendChild(row);
+  }
+}
+
+function applyAuto(run){
+  const btnAuto = document.getElementById("btnAuto");
+  if(run){
+    if(autoTimer) return;
+    btnAuto.textContent="Pause ❚❚";
+    const spd = +document.getElementById("speed").value;
+    autoTimer = setInterval(()=>{
+      step(STATE);
+      HIST.push(JSON.parse(JSON.stringify(STATE)));
+      render();
+      if(STATE.commitPtr >= STATE.ROB.length){
+        applyAuto(false);
+      }
+    }, spd);
+  }else{
+    btnAuto.textContent="Auto ▷";
+    clearInterval(autoTimer); autoTimer=null;
+  }
+}
+
+document.getElementById("btnPrev").onclick = ()=>{
+  if(HIST.length>1){
+    HIST.pop();
+    STATE = JSON.parse(JSON.stringify(HIST[HIST.length-1]));
+    render();
+  }
+};
+
+document.getElementById("btnStep").onclick = ()=>{
+  step(STATE);
+  HIST.push(JSON.parse(JSON.stringify(STATE)));
+  render();
+};
+
+document.getElementById("btnAuto").onclick = ()=> applyAuto(!autoTimer);
+document.getElementById("btnReset").onclick = resetFromProgram;
+document.getElementById("btnLoad").onclick = resetFromProgram;
+document.getElementById("btnTheme").onclick = toggleTheme;
+
+document.getElementById("speed").onchange = ()=>{
+  if(autoTimer){ applyAuto(false); applyAuto(true); }
+}
+
+document.getElementById("btnToggleLens").onclick = ()=>{
+  const el = document.getElementById("lensBody");
+  if(el.style.display==="none"){ 
+    el.style.display=""; 
+    document.getElementById("btnToggleLens").textContent="Hide"; 
+  }
+  else{ 
+    el.style.display="none"; 
+    document.getElementById("btnToggleLens").textContent="Show"; 
+  }
+}
+
+(function init(){
+  let saved = "dark";
+  try{ saved = localStorage.getItem("pl_theme") || "dark"; }catch(e){}
+  document.documentElement.dataset.theme = saved;
+  resetFromProgram();
+})();
+</script>
+</body>
+</html>

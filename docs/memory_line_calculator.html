@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Line Calculator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Monaco', 'Courier New', monospace;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #999;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            color: #555;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: 'Monaco', monospace;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        input::placeholder {
+            color: #ccc;
+        }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+            animation: slideIn 0.4s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        .result-row:last-child {
+            border-bottom: none;
+        }
+        
+        .result-label {
+            color: #555;
+            font-weight: bold;
+        }
+        
+        .result-value {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .result-value.big {
+            font-size: 32px;
+            color: #764ba2;
+        }
+        
+        .error {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .error.show {
+            display: block;
+        }
+        
+        .note {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 5px;
+            font-size: 13px;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔢 Memory Line Calculator</h1>
+        <p class="subtitle">128-bit (16 byte) satır sayısı hesaplayıcı</p>
+        
+        <div class="input-group">
+            <label for="startAddr">Başlangıç Adresi (hex)</label>
+            <input 
+                type="text" 
+                id="startAddr" 
+                placeholder="0x80000000 veya 80000000"
+                value="0x80000000"
+            >
+        </div>
+        
+        <div class="input-group">
+            <label for="endAddr">Son Adres (hex)</label>
+            <input 
+                type="text" 
+                id="endAddr" 
+                placeholder="0x800037fa veya 800037fa"
+                value="0x800037fa"
+            >
+        </div>
+        
+        <button onclick="calculate()">Hesapla 🚀</button>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="result" id="result">
+            <div class="result-row">
+                <span class="result-label">Byte Sayısı:</span>
+                <span class="result-value" id="byteCount">-</span>
+            </div>
+            <div class="result-row">
+                <span class="result-label">KB:</span>
+                <span class="result-value" id="kbCount">-</span>
+            </div>
+            <div class="result-row">
+                <span class="result-label">Satır Sayısı (128-bit):</span>
+                <span class="result-value big" id="lineCount">-</span>
+            </div>
+            <div class="result-row">
+                <span class="result-label">Kapsanan Adres:</span>
+                <span class="result-value" id="coverage">-</span>
+            </div>
+        </div>
+        
+        <div class="note">
+            💡 <strong>Not:</strong> Her satır 128-bit (16 byte) veri içerir. 
+            Hesaplama sonraki 16-byte boundary'ye yuvarlanır.
+        </div>
+    </div>
+    
+    <script>
+        function parseHexAddress(addr) {
+            // "0x" prefix'i varsa kaldır
+            addr = addr.trim().toLowerCase().replace('0x', '');
+            
+            // Hex mi kontrol et
+            if (!/^[0-9a-f]+$/.test(addr)) {
+                throw new Error('Geçersiz hex adresi');
+            }
+            
+            return parseInt(addr, 16);
+        }
+        
+        function formatHex(num) {
+            return '0x' + num.toString(16).toUpperCase().padStart(8, '0');
+        }
+        
+        function formatNumber(num) {
+            return num.toLocaleString('tr-TR');
+        }
+        
+        function calculate() {
+            const errorDiv = document.getElementById('error');
+            const resultDiv = document.getElementById('result');
+            
+            // Hata mesajını temizle
+            errorDiv.classList.remove('show');
+            errorDiv.textContent = '';
+            
+            try {
+                // Adresleri parse et
+                const startAddr = parseHexAddress(document.getElementById('startAddr').value);
+                const endAddr = parseHexAddress(document.getElementById('endAddr').value);
+                
+                // Validasyon
+                if (startAddr > endAddr) {
+                    throw new Error('Başlangıç adresi son adresten büyük olamaz');
+                }
+                
+                // Hesaplamalar
+                const byteCount = endAddr - startAddr + 1;
+                const lineCount = Math.ceil(byteCount / 16);
+                const actualEndAddr = startAddr + (lineCount * 16) - 1;
+                
+                // Sonuçları göster
+                document.getElementById('byteCount').textContent = formatNumber(byteCount);
+                document.getElementById('kbCount').textContent = (byteCount / 1024).toFixed(2);
+                document.getElementById('lineCount').textContent = formatNumber(lineCount);
+                document.getElementById('coverage').textContent = 
+                    formatHex(startAddr) + ' - ' + formatHex(actualEndAddr);
+                
+                resultDiv.classList.add('show');
+                
+            } catch (error) {
+                errorDiv.textContent = '❌ ' + error.message;
+                errorDiv.classList.add('show');
+                resultDiv.classList.remove('show');
+            }
+        }
+        
+        // Enter tuşu ile hesaplama
+        document.getElementById('startAddr').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') calculate();
+        });
+        
+        document.getElementById('endAddr').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') calculate();
+        });
+        
+        // Sayfa yüklenince otomatik hesapla
+        window.addEventListener('load', calculate);
+    </script>
+</body>
+</html>

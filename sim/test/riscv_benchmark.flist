@@ -1,0 +1,13 @@
+dhrystone
+median
+memcpy
+mm
+mt-matmul
+mt-memcpy
+mt-vvadd
+multiply
+pmp
+qsort
+rsort
+spmv
+towers

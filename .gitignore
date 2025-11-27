@@ -1,0 +1,12 @@
+transcript
+*.wlf
+*.vcd
+work
+wlf*
+*.vstf
+*.txt
+build
+tests
+results
+*.tmp
+*.cmd
