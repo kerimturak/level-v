@@ -5,7 +5,7 @@
 # - invokes the Verilated binary and writes logs + a small JSON summary
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
 RESULTS_DIR="${RESULTS_DIR:-$ROOT_DIR/results}"
 OBJ_DIR="${OBJ_DIR:-$BUILD_DIR/obj_dir}"
@@ -54,14 +54,22 @@ else
   # search by TEST_NAME
   if [ -n "${TEST_NAME:-}" ]; then
     FOUND=""
+    # Search in */mem subdirectories (riscv-tests style)
     for d in "$BUILD_DIR"/tests/*/mem; do
       if [ -f "$d/$TEST_NAME.mem" ]; then FOUND="$d/$TEST_NAME.mem"; break; fi
       if [ -f "$d/$TEST_NAME.hex" ]; then FOUND="$d/$TEST_NAME.hex"; break; fi
     done
+    # Also search directly in test directories (coremark style)
+    if [ -z "$FOUND" ]; then
+      for d in "$BUILD_DIR"/tests/*; do
+        if [ -f "$d/$TEST_NAME.mem" ]; then FOUND="$d/$TEST_NAME.mem"; break; fi
+        if [ -f "$d/$TEST_NAME.hex" ]; then FOUND="$d/$TEST_NAME.hex"; break; fi
+      done
+    fi
     if [ -n "$FOUND" ]; then
       MEM_PATH="$(realpath "$FOUND")"
     else
-      echo "[ERROR] Could not locate MEM/HEX for TEST_NAME='$TEST_NAME' under $BUILD_DIR/tests/*/mem" >&2
+      echo "[ERROR] Could not locate MEM/HEX for TEST_NAME='$TEST_NAME' under $BUILD_DIR/tests/" >&2
       exit 4
     fi
   else
@@ -80,13 +88,19 @@ if [ ! -x "$RUN_BIN" ]; then
   exit 6
 fi
 
-# Optional addr file
+# Optional addr file - skip if NO_ADDR is set
+NO_ADDR="${NO_ADDR:-0}"
 ADDR_FILE="$BUILD_DIR/tests/riscv-tests/pass_fail_addr/${TEST_NAME}_addr.txt"
-if [ -f "$ADDR_FILE" ]; then
+
+if [ "$NO_ADDR" = "1" ]; then
+  echo "[INFO] Address checking disabled (NO_ADDR=1)"
+  ADDR_ARG="+no_addr"
+elif [ -f "$ADDR_FILE" ]; then
   echo "[INFO] addr_file => $ADDR_FILE"
   ADDR_ARG="+addr_file=$ADDR_FILE"
 else
-  ADDR_ARG=""
+  echo "[INFO] No addr_file found, disabling address check"
+  ADDR_ARG="+no_addr"
 fi
 
 # Allow callers to pass extra plusargs to the simulation binary (e.g. +define+FETCH_LOGGER)
@@ -100,6 +114,7 @@ SIM_PLUSARGS=${SIM_PLUSARGS:-}
   +test_name="${TEST_NAME}" \
   +trace_file="${VERILATOR_LOG_DIR}/commit_trace.log" \
   +log_path="${VERILATOR_LOG_DIR}/ceres.log" \
+  +uart_log_path="${VERILATOR_LOG_DIR}/uart_output.log" \
   +DUMP_FILE="${VERILATOR_LOG_DIR}/waveform.fst" \
   ${ADDR_ARG} ${SIM_PLUSARGS} | tee "${VERILATOR_LOG_DIR}/verilator_run.log"
 EXIT_CODE=${PIPESTATUS[0]:-0}

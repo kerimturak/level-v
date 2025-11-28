@@ -92,47 +92,77 @@ module uart_tx #(  // counter
   end
 
   // ============================================================================
-  // SIMULATION MONITORING BLOCK
+  // UART OUTPUT FILE LOGGER
+  // Logs each character written to UART TX to a file (uart_output.log)
+  // Disabled when NO_UART_LOG is defined (for FAST_SIM mode)
+  // ============================================================================
+
+`ifndef NO_UART_LOG
+  integer uart_fd;
+  string  uart_log_path;
+
+  initial begin
+    // Runtime'da +uart_log_path=<path> ile path geçilebilir
+    if (!$value$plusargs("uart_log_path=%s", uart_log_path)) begin
+      uart_log_path = "uart_output.log";  // Default: current directory
+    end
+    uart_fd = $fopen(uart_log_path, "w");
+    if (uart_fd == 0) begin
+      $display("[UART_TX] Warning: Could not open %s for writing", uart_log_path);
+    end else begin
+      $display("[UART_TX] Logging UART output to: %s", uart_log_path);
+    end
+  end
+
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && tx_we_i && !full_o && uart_fd != 0) begin
+      // Her karakter geldiğinde dosyaya yaz (flush ile)
+      $fwrite(uart_fd, "%c", din_i);
+      $fflush(uart_fd);
+    end
+  end
+
+  final begin
+    if (uart_fd != 0) begin
+      $fclose(uart_fd);
+    end
+  end
+`endif
+
+  // ============================================================================
+  // SIMULATION MONITORING BLOCK (Optional - for threshold-based termination)
   // Dumps UART TX buffer contents as ASCII and stops simulation when threshold met
   // ============================================================================
 
-`ifdef CERES_UART_TX_MONITOR  // <-- Enable/disable from compile flags
-  logic   [7:0] shadow_buf    [0:FIFO_DEPTH-1];
+`ifdef CERES_UART_TX_MONITOR
+  logic   [7:0] shadow_buf    [0:4095];  // 4KB buffer for longer outputs
   integer       shadow_wr_ptr;
-  parameter int MONITOR_THRESHOLD = 50;
-  // ^ Eşik: FIFO neredeyse dolduğunda dump yap
+  parameter int MONITOR_THRESHOLD = 2000;  // Wait for more output before stopping
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       shadow_wr_ptr <= 0;
     end else begin
       if (tx_we_i && !full_o) begin
-        // Veriyi shadow buffer'a kaydet
         shadow_buf[shadow_wr_ptr] <= din_i;
         shadow_wr_ptr <= shadow_wr_ptr + 1;
       end
 
-      // FIFO doluluğu eşiğe dayandı mı?
       if (shadow_wr_ptr >= MONITOR_THRESHOLD) begin
         integer i;
-
         $display("=====================================================");
         $display(" CERES UART TX BUFFER DUMP (ASCII)");
         $display("=====================================================");
         $write(" DATA: \"");
-
         for (i = 0; i < shadow_wr_ptr; i++) begin
-          // ASCII karakterler yazdırılır
           if (shadow_buf[i] >= 8'h20 && shadow_buf[i] <= 8'h7E) $write("%c", shadow_buf[i]);
-          else $write("\\x%02x", shadow_buf[i]);  // printable olmayan byte
+          else $write("\\x%02x", shadow_buf[i]);
         end
-
         $write("\"\n");
         $display("=====================================================");
         $display(" Simulation halted by CERES UART TX monitor.");
         $display("=====================================================");
-
-        $finish;  // veya $fatal(1);
+        $finish;
       end
     end
   end

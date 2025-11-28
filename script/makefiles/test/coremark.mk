@@ -105,6 +105,9 @@ coremark_gen_linker: coremark_setup
 # 4️⃣ Build CoreMark for Ceres-V
 # ============================================================
 
+# ELF to MEM converter script
+ELF_TO_MEM := $(SCRIPT_DIR)/python/elf_to_mem.py
+
 coremark_build: coremark_gen_linker
 	@echo -e "$(YELLOW)[COREMARK] Building with $(COREMARK_ITERATIONS) iterations...$(RESET)"
 	@mkdir -p $(COREMARK_BUILD_DIR)
@@ -123,8 +126,17 @@ coremark_build: coremark_gen_linker
 	@cp $(COREMARK_SRC_DIR)/coremark.elf $(COREMARK_ELF) 2>/dev/null || true
 	@cp $(COREMARK_SRC_DIR)/coremark.bin $(COREMARK_BIN) 2>/dev/null || true
 	@cp $(COREMARK_SRC_DIR)/coremark.hex $(COREMARK_HEX) 2>/dev/null || true
-	@cp $(COREMARK_SRC_DIR)/coremark.mem $(COREMARK_MEM) 2>/dev/null || true
 	@cp $(COREMARK_SRC_DIR)/coremark.dump $(COREMARK_DUMP) 2>/dev/null || true
+	@# Generate proper .mem file using elf_to_mem.py (Verilog $readmemh compatible)
+	@echo -e "$(YELLOW)[COREMARK] Generating Verilog-compatible .mem file...$(RESET)"
+	@python3 $(ELF_TO_MEM) \
+		--in $(COREMARK_BIN) \
+		--out $(COREMARK_MEM) \
+		--addr 0x80000000 \
+		--block-bytes 4 \
+		--word-size 4 \
+		--word-endian little \
+		--word-order high-to-low
 	@echo -e "$(GREEN)[COREMARK] ✓ Build successful$(RESET)"
 
 # ============================================================

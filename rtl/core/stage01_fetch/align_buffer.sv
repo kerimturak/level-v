@@ -69,6 +69,37 @@ module align_buffer
   logic                      unalign;  // Signal indicating an unaligned access (instruction spans two cache lines)
   logic [      TAG_SIZE-1:0] tag_plus1;
 
+  // Fix for lingering valid signal during double miss
+  logic                      masked_valid;
+  logic                      ignore_valid_q;
+  logic                      waiting_second_q;
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni | flush_i) begin
+      waiting_second_q <= 1'b0;
+    end else begin
+      if ((miss_state == 2'b11) && masked_valid && unalign) begin
+        waiting_second_q <= 1'b1;
+      end else if (waiting_second_q && masked_valid) begin
+        waiting_second_q <= 1'b0;
+      end
+    end
+  end
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni | flush_i) begin
+      ignore_valid_q <= 1'b0;
+    end else begin
+      if ((miss_state == 2'b11) && lowX_res_i.valid && unalign) begin
+        ignore_valid_q <= 1'b1;
+      end else begin
+        ignore_valid_q <= 1'b0;
+      end
+    end
+  end
+
+  assign masked_valid = lowX_res_i.valid && !ignore_valid_q;
+
   always_comb begin
     half_sel                = buff_req_i.addr[1];
     word_sel                = buff_req_i.addr[OFFSET_WIDTH-1:2];
@@ -100,9 +131,9 @@ module align_buffer
     wr_tag                  = odd.miss ? odd.wr_tag : even.wr_tag;
     wr_idx                  = odd.miss ? odd.rd_idx : even.rd_idx;
 
-    even.tag_wr_en          = lowX_res_i.valid && !buff_req_i.uncached && !odd.miss && even.miss;
-    odd.tag_wr_en           = lowX_res_i.valid && !buff_req_i.uncached && odd.miss;
-    tag_wr_en               = lowX_res_i.valid && !buff_req_i.uncached && (odd.miss || (!odd.miss && even.miss));
+    even.tag_wr_en          = masked_valid && !buff_req_i.uncached && !odd.miss && even.miss;
+    odd.tag_wr_en           = masked_valid && !buff_req_i.uncached && odd.miss;
+    tag_wr_en               = masked_valid && !buff_req_i.uncached && (odd.miss || (!odd.miss && even.miss));
 
     even.data_wr_idx        = odd.tag_wr_en ? odd.rd_idx : even.rd_idx;
     odd.data_wr_idx         = even.tag_wr_en && !odd.tag_wr_en ? even.rd_idx : odd.rd_idx;
@@ -146,9 +177,9 @@ module align_buffer
   end
 
   always_comb begin : EVEN_ODD_COMBINE
-    if (!unalign && !half_sel && |miss_state && lowX_res_i.valid) begin
+    if (!unalign && !half_sel && |miss_state && masked_valid) begin
       buff_res_o.blk = lowX_res_i.blk[((word_sel+1)*WORD_BITS)-1-:WORD_BITS];
-    end else if (half_sel && |miss_state && lowX_res_i.valid) begin
+    end else if (half_sel && |miss_state && masked_valid) begin
       case (miss_state)
         2'b00: buff_res_o.blk = {even.parcel, odd.parcel};  // Should never occur if both are hit.
         2'b01: buff_res_o.blk = {even.deviceX_parcel, odd.parcel};  // Lower (even) miss; use deviceX parcel.
@@ -164,7 +195,7 @@ module align_buffer
 
   // Combinational block to generate final valid/ready signals and prepare the lower-level request.
   always_comb begin
-    buff_res_o.valid    = (&hit_state || (((|miss_state && !(half_sel)) || (!(&miss_state) && (half_sel))) && lowX_res_i.valid));
+    buff_res_o.valid    = (&hit_state || (((|miss_state && !(half_sel)) || (!(&miss_state) && (half_sel))) && masked_valid));
     buff_res_o.miss     = |miss_state;
     buff_res_o.ready    = 1;
 
@@ -174,13 +205,13 @@ module align_buffer
     // Generate the lower level request signal.
     if (&miss_state) begin
       // When both even and odd paths miss:
-      if (lowX_res_i.valid) begin
+      if (masked_valid) begin
         lowX_req_o.valid = (unalign ? !buff_req_i.uncached : 0);
       end else begin
         lowX_req_o.valid = !buff_req_i.uncached;
       end
     end else if (|miss_state) begin
-      lowX_req_o.valid = !buff_req_i.uncached && !lowX_res_i.valid;
+      lowX_req_o.valid = !buff_req_i.uncached && !masked_valid && !waiting_second_q;
     end else begin
       lowX_req_o.valid = 0;
     end
@@ -199,13 +230,18 @@ module align_buffer
         unalign, odd.miss, even.miss
       })
         3'b101:  lowX_req_o.addr = base_addr + BLOCK_BYTES;
+        // When both cache lines miss (3'b111) and unalign is set:
+        // - Before first response: fetch odd cache line (base_addr)
+        // - After first response (masked_valid): fetch even cache line (base_addr + BLOCK_BYTES)
+        3'b111:  lowX_req_o.addr = masked_valid ? (base_addr + BLOCK_BYTES) : base_addr;
         default: lowX_req_o.addr = base_addr;
       endcase
     end
 
   end
 
-`ifndef SYNTHESIS
+`ifdef ALIGN_LOGGER
+  // Disable with +define+ALIGN_LOGGER (default off)
   initial begin
     $display("[align_buffer] LowX response monitor initialized at time %0t", $time);
   end

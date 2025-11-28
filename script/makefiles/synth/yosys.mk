@@ -1,11 +1,23 @@
 # =========================================
-# YOSYS STATIC STRUCTURAL ANALYSIS RULES
+# CERES RISC-V — Yosys Synthesis & Analysis
 # =========================================
 # Performs static design checks such as:
 #   - Unconnected nets
 #   - Multiple drivers
 #   - Combinational loops
 # Also supports synthesis and graphical netlist visualization.
+# =========================================
+
+# -----------------------------------------
+# Yosys Configuration
+# -----------------------------------------
+YOSYS_FLAGS := -q
+YOSYS_CMD   := read_verilog -sv $(SV_SOURCES) $(TB_FILE); \
+               hierarchy -check -top $(RTL_LEVEL); \
+               proc; opt; check
+
+# =========================================
+# Targets
 # =========================================
 
 # ---- Structural Check ----

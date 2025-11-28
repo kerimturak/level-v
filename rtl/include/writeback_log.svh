@@ -7,12 +7,9 @@
 //   2. Memory write
 //   3. Register writeback
 //   4. No-write instruction
+// 
+// Use +define+NO_COMMIT_TRACE or FAST_SIM=1 to disable for faster simulation
 // ============================================================================
-
-integer trace_fd;
-string  trace_path;
-string  test_name;
-string  simulator;
 
 // Define SOC path based on top module name
 `ifdef VERILATOR
@@ -20,6 +17,13 @@ string  simulator;
 `else
   `define SOC tb_wrapper.ceres_wrapper.soc
 `endif
+
+`ifndef NO_COMMIT_TRACE
+
+integer trace_fd;
+string  trace_path;
+string  test_name;
+string  simulator;
 
 // ============================================================================
 // INITIAL (open trace file)
@@ -171,35 +175,61 @@ end
   end
 end
 
+final begin
+  if (trace_fd != 0) $fclose(trace_fd);
+end
+
+`endif // NO_COMMIT_TRACE
+
 // ==========================================================
 // PASS/FAIL Address Detector (from per-test addr.txt file)
+// Disable with +no_addr plusarg
+// This section is always active (not affected by FAST_SIM)
 // ==========================================================
 
 string addr_file;
+`ifdef NO_COMMIT_TRACE
+string test_name;  // Needed for legacy check below
+`endif
 logic [31:0] pass_addr, fail_addr;
-integer fd, r;
+logic addr_check_enabled;
+integer addr_fd, r;
 
 initial begin
+  // Check if address checking is disabled
+  if ($test$plusargs("no_addr")) begin
+    $display("[INFO] Address checking disabled (+no_addr)");
+    addr_check_enabled = 0;
+    pass_addr = 32'h0;
+    fail_addr = 32'h0;
+  end
   // Dosya ismini +arg ile al: +addr_file=/path/to/test_addr.txt
-  if (!$value$plusargs("addr_file=%s", addr_file)) begin
-    $display(" No +addr_file given. Skipping PASS/FAIL auto-stop.");
+  else if (!$value$plusargs("addr_file=%s", addr_file)) begin
+    $display("[INFO] No +addr_file given. Skipping PASS/FAIL auto-stop.");
+`ifdef NO_COMMIT_TRACE
+    if (!$value$plusargs("test_name=%s", test_name)) test_name = "";
+`endif
     if (test_name == "rv32ui-p-simple") begin
       pass_addr = 32'h8000013c;
       fail_addr = 32'h80000140;
+      addr_check_enabled = 1;
     end else begin
       pass_addr = 32'h0;
       fail_addr = 32'h0;
+      addr_check_enabled = 0;
     end
   end else begin
-    fd = $fopen(addr_file, "r");
-    if (fd == 0) begin
+    addr_fd = $fopen(addr_file, "r");
+    if (addr_fd == 0) begin
       $display("ERROR: cannot open %s", addr_file);
       pass_addr = 32'h0;
       fail_addr = 32'h0;
+      addr_check_enabled = 0;
     end else begin
-      r = $fscanf(fd, "%h %h", pass_addr, fail_addr);
-      $fclose(fd);
+      r = $fscanf(addr_fd, "%h %h", pass_addr, fail_addr);
+      $fclose(addr_fd);
       $display("Loaded PASS/FAIL addresses: PASS=0x%08h FAIL=0x%08h", pass_addr, fail_addr);
+      addr_check_enabled = 1;
     end
   end
 end
@@ -207,23 +237,21 @@ end
 // Writeback veya memory stage içinde:
 `ifndef CERES_UART_TX_MONITOR
 always_comb begin
-  if (pc_i == pass_addr) begin
+  if (addr_check_enabled && pc_i == pass_addr && pass_addr != 32'h0) begin
     $display("🎯 PASS address reached at PC=0x%08h", pc_i);
-    $fclose(fd);
     $finish;
-  end else if (pc_i == fail_addr) begin
+  end else if (addr_check_enabled && pc_i == fail_addr && fail_addr != 32'h0) begin
     $display("FAIL address reached at PC=0x%08h", pc_i);
-    $fclose(fd);
     $finish;
   end
 end
 
 task automatic check_pass_fail();
-  if (pass_addr != 32'h0 && pc_i == pass_addr) begin
+  if (addr_check_enabled && pass_addr != 32'h0 && pc_i == pass_addr) begin
     $display("PASS reached at PC=0x%08h", pc_i);
     $finish;
   end
-  if (fail_addr != 32'h0 && pc_i == fail_addr) begin
+  if (addr_check_enabled && fail_addr != 32'h0 && pc_i == fail_addr) begin
     $display("FAIL reached at PC=0x%08h", pc_i);
     $finish;
   end
@@ -235,7 +263,7 @@ always @(posedge clk_i) begin
   automatic logic [31:0] addr = `SOC.pipe4.alu_result;
   automatic logic [31:0] data = `SOC.pipe4.write_data;
 
-  if (valid && we && addr == 32'h80001000) begin
+  if (addr_check_enabled && valid && we && addr == 32'h80001000) begin
     if (data == 32'h1) begin
       $display("🎉 TOHOST PASS");
       $finish;
@@ -247,7 +275,3 @@ always @(posedge clk_i) begin
 end
 
 `endif
-
-final begin
-  if (trace_fd != 0) $fclose(trace_fd);
-end

@@ -1,3 +1,34 @@
+# =========================================
+# CERES RISC-V — ModelSim / Questa Simulation
+# =========================================
+
+# -----------------------------------------
+# ModelSim Paths
+# -----------------------------------------
+MODELSIM_LOG_DIR := $(LOG_DIR)/modelsim/$(TEST_NAME)
+
+# -----------------------------------------
+# Compilation Options
+# -----------------------------------------
+VLOG_OPTS := -sv -mfcu +acc=npr +incdir+$(INC_DIRS) \
+             -work $(WORK_DIR) -svinputport=relaxed \
+             -suppress vlog-2583 -suppress vlog-2275
+
+# -----------------------------------------
+# Simulation Flags
+# -----------------------------------------
+VSIM_FLAGS_BASE := -t ns -voptargs=+acc=npr +notimingchecks \
+             +define+TRACER_EN=1 +test_name=$(TEST_NAME) \
+             +sim=modelsim +define+KONATA_TRACE $(SV_DEFINES) \
+             +simulator=modelsim
+
+DO_FILE    ?= $(SIM_DIR)/do/questa.do
+VSIM_LOG   := $(LOG_DIR)/vsim_$(shell date +%Y%m%d_%H%M%S).log
+
+# =========================================
+# Targets
+# =========================================
+
 .PHONY: $(WORK_DIR) compile resolve_mem simulate clean_modelsim modelsim_help
 
 # ============================================================
@@ -25,9 +56,6 @@ compile: $(WORK_DIR)
 		echo -e "$(GREEN)Compilation successful.$(RESET)"; \
 	fi
 
-# ============================================================
-# Resolve Memory File (TEST_NAME -> absolute path)
-# ============================================================
 # ============================================================
 # Resolve Memory File (TEST_NAME -> absolute path)
 # ============================================================

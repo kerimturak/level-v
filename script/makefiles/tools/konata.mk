@@ -4,11 +4,8 @@
 #   make konata SIM=verilator TEST_NAME=rv32ui-p-add
 # ============================================================
 
-# Varsayılan root
-ROOT ?= $(HOME)/riscv_git/ceres-riscv
-
 # Logların bulunduğu path
-LOG_ROOT   := $(ROOT)/results/logs
+LOG_ROOT   := $(RESULTS_DIR)/logs
 
 # Parametreler
 SIM        ?= verilator

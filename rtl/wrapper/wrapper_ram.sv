@@ -24,51 +24,51 @@ module wrapper_ram #(
     parameter PROG_BAUD_RATE   = 115200,
     parameter PROGRAM_SEQUENCE = "ceresTEST"
 ) (
-    input  logic                              clk_i,
-    input  logic                              rst_ni,
-    
+    input logic clk_i,
+    input logic rst_ni,
+
     // Cache/Memory Interface (cache line width)
-    input  logic [$clog2(RAM_DEPTH)-1:0]      addr_i,         // Word address
-    input  logic [CACHE_LINE_WIDTH-1:0]       wdata_i,        // Write data (full cache line)
-    input  logic [CACHE_LINE_WIDTH/8-1:0]     wstrb_i,        // Byte write strobes
-    output logic [CACHE_LINE_WIDTH-1:0]       rdata_o,        // Read data (full cache line)
-    input  logic                              rd_en_i,
-    
+    input  logic [ $clog2(RAM_DEPTH)-1:0] addr_i,   // Word address
+    input  logic [  CACHE_LINE_WIDTH-1:0] wdata_i,  // Write data (full cache line)
+    input  logic [CACHE_LINE_WIDTH/8-1:0] wstrb_i,  // Byte write strobes
+    output logic [  CACHE_LINE_WIDTH-1:0] rdata_o,  // Read data (full cache line)
+    input  logic                          rd_en_i,
+
     // Programming interface
-    input  logic                              ram_prog_rx_i,
-    output logic                              system_reset_o,
-    output logic                              prog_mode_led_o
+    input  logic ram_prog_rx_i,
+    output logic system_reset_o,
+    output logic prog_mode_led_o
 );
 
   // Derived parameters
   localparam WORDS_PER_LINE = CACHE_LINE_WIDTH / WORD_WIDTH;  // 4 for 128-bit line
-  localparam BYTES_PER_WORD = WORD_WIDTH / 8;                 // 4 bytes
-  localparam LINE_ADDR_BITS = $clog2(WORDS_PER_LINE);         // 2 bits for 4 words
-  
+  localparam BYTES_PER_WORD = WORD_WIDTH / 8;  // 4 bytes
+  localparam LINE_ADDR_BITS = $clog2(WORDS_PER_LINE);  // 2 bits for 4 words
+
   // Word-based memory array (32-bit words)
-  logic [WORD_WIDTH-1:0] ram [0:RAM_DEPTH-1];
-  
+  logic [       WORD_WIDTH-1:0] ram       [0:RAM_DEPTH-1];
+
   // Internal signals
   logic [$clog2(RAM_DEPTH)-1:0] base_addr;
-  logic [CACHE_LINE_WIDTH-1:0]  rdata_reg;
-  
+  logic [ CACHE_LINE_WIDTH-1:0] rdata_reg;
+
   // Programming FSM signals
   localparam PROG_SEQ_LENGTH = 9;
   localparam SEQ_BREAK_THRESHOLD = 32'd1000000;
-  
-  logic [31:0]                   prog_uart_do;
-  logic [PROG_SEQ_LENGTH*8-1:0]  received_sequence;
-  logic [3:0]                    rcv_seq_ctr;
-  logic [31:0]                   sequence_break_ctr;
-  logic                          sequence_break;
-  logic [$clog2(RAM_DEPTH)-1:0]  prog_addr;
-  logic [WORD_WIDTH-1:0]         prog_word;
-  logic                          prog_word_valid;
-  logic [1:0]                    prog_byte_ctr;
-  logic [31:0]                   prog_word_number;
-  logic [31:0]                   prog_word_ctr;
-  logic                          prog_sys_rst_n;
-  logic                          ram_prog_rd_en;
+
+  logic [                 31:0] prog_uart_do;
+  logic [PROG_SEQ_LENGTH*8-1:0] received_sequence;
+  logic [                  3:0] rcv_seq_ctr;
+  logic [                 31:0] sequence_break_ctr;
+  logic                         sequence_break;
+  logic [$clog2(RAM_DEPTH)-1:0] prog_addr;
+  logic [       WORD_WIDTH-1:0] prog_word;
+  logic                         prog_word_valid;
+  logic [                  1:0] prog_byte_ctr;
+  logic [                 31:0] prog_word_number;
+  logic [                 31:0] prog_word_ctr;
+  logic                         prog_sys_rst_n;
+  logic                         ram_prog_rd_en;
 
   // FSM states
   typedef enum logic [2:0] {
@@ -88,14 +88,15 @@ module wrapper_ram #(
   string  init_file;
   integer fd;
   string  line;
-  int     line_num;
 
   initial begin
     if ($value$plusargs("INIT_FILE=%s", init_file)) begin
+`ifndef NO_RAM_LOG
       $display("------------------------------------------------------");
       $display("[INFO] Loading memory from file: %s", init_file);
       $display("[INFO] Memory organization: %0d-bit words, %0d depth", WORD_WIDTH, RAM_DEPTH);
       $display("------------------------------------------------------");
+`endif
 
       fd = $fopen(init_file, "r");
       if (fd == 0) begin
@@ -103,20 +104,18 @@ module wrapper_ram #(
         $finish;
       end
 
-      line_num = 0;
-      while (!$feof(fd) && line_num < 8) begin
-        line_num++;
-        void'($fgets(line, fd));
-        line = line.tolower();
-        $display("  [%0d] %s", line_num, line);
-      end
+
       $fclose(fd);
 
       $readmemh(init_file, ram, 0, RAM_DEPTH - 1);
+`ifndef NO_RAM_LOG
       $display("[INFO] Memory file successfully loaded into RAM.");
       $display("------------------------------------------------------");
+`endif
     end else begin
+`ifndef NO_RAM_LOG
       $display("[INFO] No INIT_FILE provided -> initializing RAM to zero");
+`endif
       ram = '{default: '0};
     end
   end
@@ -134,11 +133,11 @@ module wrapper_ram #(
     if (rd_en_i) begin
       // Read WORDS_PER_LINE consecutive words
       for (int i = 0; i < WORDS_PER_LINE; i++) begin
-        rdata_reg[i*WORD_WIDTH +: WORD_WIDTH] <= ram[base_addr + i[$clog2(RAM_DEPTH)-1:0]];
+        rdata_reg[i*WORD_WIDTH+:WORD_WIDTH] <= ram[base_addr+i[$clog2(RAM_DEPTH)-1:0]];
       end
     end
   end
-  
+
   assign rdata_o = rdata_reg;
 
   // ============================================
@@ -149,16 +148,14 @@ module wrapper_ram #(
     for (genvar word_idx = 0; word_idx < WORDS_PER_LINE; word_idx++) begin : gen_word_write
       for (genvar byte_idx = 0; byte_idx < BYTES_PER_WORD; byte_idx++) begin : gen_byte_write
         localparam int strobe_idx = word_idx * BYTES_PER_WORD + byte_idx;
-        
+
         always_ff @(posedge clk_i) begin
           // Normal cache line write
           if (wstrb_i[strobe_idx]) begin
-            ram[base_addr + word_idx[$clog2(RAM_DEPTH)-1:0]][byte_idx*8 +: 8] <= 
-              wdata_i[word_idx*WORD_WIDTH + byte_idx*8 +: 8];
-          end
-          // Programming write (word at a time)
+            ram[base_addr+word_idx[$clog2(RAM_DEPTH)-1:0]][byte_idx*8+:8] <= wdata_i[word_idx*WORD_WIDTH+byte_idx*8+:8];
+          end  // Programming write (word at a time)
           else if (prog_mode_led_o && prog_word_valid && (word_idx == 0)) begin
-            ram[prog_addr][byte_idx*8 +: 8] <= prog_word[byte_idx*8 +: 8];
+            ram[prog_addr][byte_idx*8+:8] <= prog_word[byte_idx*8+:8];
           end
         end
       end
@@ -199,34 +196,28 @@ module wrapper_ram #(
     state_prog_next = state_prog;
     case (state_prog)
       SequenceWait: begin
-        if (prog_uart_do != '1)
-          state_prog_next = SequenceReceive;
+        if (prog_uart_do != '1) state_prog_next = SequenceReceive;
       end
 
       SequenceReceive: begin
         if (prog_uart_do != '1) begin
-          if (rcv_seq_ctr == PROG_SEQ_LENGTH - 1) 
-            state_prog_next = SequenceCheck;
+          if (rcv_seq_ctr == PROG_SEQ_LENGTH - 1) state_prog_next = SequenceCheck;
         end else if (sequence_break) begin
           state_prog_next = SequenceWait;
         end
       end
 
       SequenceCheck: begin
-        if (received_sequence == PROGRAM_SEQUENCE) 
-          state_prog_next = SequenceLengthCalc;
-        else 
-          state_prog_next = SequenceWait;
+        if (received_sequence == PROGRAM_SEQUENCE) state_prog_next = SequenceLengthCalc;
+        else state_prog_next = SequenceWait;
       end
 
       SequenceLengthCalc: begin
-        if ((prog_uart_do != '1) && &prog_byte_ctr) 
-          state_prog_next = SequenceProgram;
+        if ((prog_uart_do != '1) && &prog_byte_ctr) state_prog_next = SequenceProgram;
       end
 
       SequenceProgram: begin
-        if ((prog_word_ctr == prog_word_number) && ~&prog_byte_ctr) 
-          state_prog_next = SequenceFinish;
+        if ((prog_word_ctr == prog_word_number) && ~&prog_byte_ctr) state_prog_next = SequenceFinish;
       end
 
       SequenceFinish: begin
@@ -272,15 +263,11 @@ module wrapper_ram #(
         SequenceReceive: begin
           if (prog_uart_do != '1) begin
             received_sequence <= {received_sequence[PROG_SEQ_LENGTH*8-9:0], prog_uart_do[7:0]};
-            if (rcv_seq_ctr == PROG_SEQ_LENGTH - 1) 
-              rcv_seq_ctr <= 0;
-            else 
-              rcv_seq_ctr <= rcv_seq_ctr + 1;
+            if (rcv_seq_ctr == PROG_SEQ_LENGTH - 1) rcv_seq_ctr <= 0;
+            else rcv_seq_ctr <= rcv_seq_ctr + 1;
           end else begin
-            if (sequence_break) 
-              sequence_break_ctr <= 0;
-            else 
-              sequence_break_ctr <= sequence_break_ctr + 1;
+            if (sequence_break) sequence_break_ctr <= 0;
+            else sequence_break_ctr <= sequence_break_ctr + 1;
           end
         end
 
@@ -301,7 +288,7 @@ module wrapper_ram #(
           if (prog_uart_do != '1) begin
             // Receive bytes and form 32-bit words (little-endian for RISC-V)
             prog_word <= {prog_uart_do[7:0], prog_word[31:8]};
-            
+
             if (&prog_byte_ctr) begin
               // Complete word received
               prog_byte_ctr   <= 0;

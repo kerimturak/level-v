@@ -1,14 +1,14 @@
 # ============================================================
-# CERES RISC-V Test Runner (Debug + Fixed)
-# ============================================================
-
-# ============================================================
-# Test Type: isa / bench (manual selection)
+# CERES RISC-V Test Runner
 # ============================================================
 # Usage:
 #   make run TEST_NAME=median TEST_TYPE=bench
 #   make run TEST_NAME=rv32ui-p-add TEST_TYPE=isa
+# ============================================================
 
+# -----------------------------------------
+# Test Type Based Paths
+# -----------------------------------------
 ifeq ($(TEST_TYPE),bench)
     TEST_ROOT := $(BUILD_DIR)/tests/riscv-benchmarks
 else ifeq ($(TEST_TYPE),isa)
@@ -17,25 +17,27 @@ else
     $(error Invalid TEST_TYPE="$(TEST_TYPE)". Use: isa or bench)
 endif
 
-# Paths for ELF/MEM/HEX/DUMP/ADDR
+# Derived paths from TEST_ROOT
 ELF_DIR  := $(TEST_ROOT)/elf
 MEM_DIR  := $(TEST_ROOT)/mem
 HEX_DIR  := $(TEST_ROOT)/hex
 DUMP_DIR := $(TEST_ROOT)/dump
 ADDR_DIR := $(TEST_ROOT)/pass_fail_addr
 
-
-.PHONY: run test_prepare run_rtl run_spike compare_logs test_report clean_test list_tests help_test run_flist
-
-# ============================================================
-#  Exception Test Address Override
-# ============================================================
-
-EXCEPTION_ADDR_FILE := /home/kerim/level-v/sim/test/exception_test.flist
+# -----------------------------------------
+# Exception Address Override
+# -----------------------------------------
+EXCEPTION_ADDR_FILE := $(SIM_DIR)/test/exception_test.flist
 
 define GET_EXCEPTION_ADDR
 $(shell awk '$$1=="$(1)" {print $$2" " $$3}' $(EXCEPTION_ADDR_FILE) 2>/dev/null)
 endef
+
+# =========================================
+# Targets
+# =========================================
+
+.PHONY: run test_prepare run_rtl run_spike compare_logs test_report clean_test list_tests help_test run_flist
 
 
 # ============================================================
@@ -150,43 +152,22 @@ compare_logs:
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Step 3/3: Comparing RTL vs Spike$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-
-	@if [ "$(SIM)" = "verilator" ]; then \
-		RTL_LOG_PATH="$(RTL_LOG_DIR)/commit_trace.log"; \
-	elif [ "$(SIM)" = "modelsim" ]; then \
-		RTL_LOG_PATH="$(RTL_LOG_DIR)/commit_trace.log"; \
-	else \
-		echo -e "$(RED)[ERROR]$(RESET) Unknown SIM=$(SIM)"; exit 1; \
-	fi; \
-	echo -e "$(CYAN)[DEBUG]$(RESET) RTL log path: $$RTL_LOG_PATH"; \
-	echo -e "$(CYAN)[DEBUG]$(RESET) Spike log path: $(SPIKE_LOG)"; \
-	echo -e "$(CYAN)[DEBUG]$(RESET) Diff output: $(DIFF_LOG)"; \
+	@RTL_LOG_PATH="$(RTL_LOG_DIR)/commit_trace.log"; \
+	echo -e "$(CYAN)[DEBUG]$(RESET) RTL log: $$RTL_LOG_PATH"; \
+	echo -e "$(CYAN)[DEBUG]$(RESET) Spike log: $(SPIKE_LOG)"; \
 	if [ ! -f "$$RTL_LOG_PATH" ]; then \
-		echo -e "$(RED)[ERROR]$(RESET) RTL log not found at $$RTL_LOG_PATH"; \
+		echo -e "$(RED)[ERROR]$(RESET) RTL log not found"; \
 		echo "COMPARE_STATUS=RTL_LOG_MISSING" >> $(REPORT_FILE); \
 		exit 1; \
 	fi; \
 	if [ ! -f "$(SPIKE_LOG)" ]; then \
-		echo -e "$(RED)[ERROR]$(RESET) Spike log not found at $(SPIKE_LOG)"; \
+		echo -e "$(RED)[ERROR]$(RESET) Spike log not found"; \
 		echo "COMPARE_STATUS=SPIKE_LOG_MISSING" >> $(REPORT_FILE); \
 		exit 1; \
 	fi; \
-	DUMP_FILE="$(DUMP_DIR)/$(TEST_NAME).dump"; \
-	ADDR_FILE="$(ADDR_DIR)/$(TEST_NAME)_addr.txt"; \
 	EXTRA_ARGS=""; \
-	if [ -f "$$DUMP_FILE" ]; then \
-		echo -e "$(GREEN)✓$(RESET) Found disassembly: $$DUMP_FILE"; \
-		EXTRA_ARGS="$$EXTRA_ARGS --dump $$DUMP_FILE"; \
-	else \
-		echo -e "$(YELLOW)[INFO]$(RESET) No disassembly file found (optional)"; \
-	fi; \
-	if [ -f "$$ADDR_FILE" ]; then \
-		echo -e "$(GREEN)✓$(RESET) Found address file: $$ADDR_FILE"; \
-		EXTRA_ARGS="$$EXTRA_ARGS --addr $$ADDR_FILE"; \
-	else \
-		echo -e "$(YELLOW)[INFO]$(RESET) No address file found (optional)"; \
-	fi; \
-	echo -e "$(YELLOW)[INFO]$(RESET) Comparing RTL vs Spike..."; \
+	[ -f "$(DUMP_DIR)/$(TEST_NAME).dump" ] && EXTRA_ARGS="$$EXTRA_ARGS --dump $(DUMP_DIR)/$(TEST_NAME).dump"; \
+	[ -f "$(ADDR_DIR)/$(TEST_NAME)_addr.txt" ] && EXTRA_ARGS="$$EXTRA_ARGS --addr $(ADDR_DIR)/$(TEST_NAME)_addr.txt"; \
 	$(MKDIR) "$(dir $(DIFF_LOG))"; \
 	python3 $(SCRIPT_DIR)/python/makefile/compare_logs.py \
 		--rtl "$$RTL_LOG_PATH" \
@@ -203,8 +184,7 @@ compare_logs:
 		echo -e "$(GREEN)✓ Logs match!$(RESET)"; \
 	else \
 		echo "COMPARE_STATUS=MISMATCH" >> $(REPORT_FILE); \
-		echo "COMPARE_EXIT_CODE=$$COMPARE_EXIT" >> $(REPORT_FILE); \
-		echo -e "$(RED)✗ Logs differ (exit code: $$COMPARE_EXIT)$(RESET)"; \
+		echo -e "$(RED)✗ Logs differ$(RESET)"; \
 		exit $$COMPARE_EXIT; \
 	fi
 
