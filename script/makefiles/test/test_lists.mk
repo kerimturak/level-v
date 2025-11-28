@@ -21,6 +21,7 @@ FLIST_CSR       := $(TEST_LIST_DIR)/machine_csr_test.flist
 FLIST_BENCH     := $(TEST_LIST_DIR)/riscv_benchmark.flist
 FLIST_ALL       := $(TEST_LIST_DIR)/all_tests.flist
 FLIST_EXCEPTION := $(TEST_LIST_DIR)/exception_test.flist
+FLIST_ARCH      := $(TEST_LIST_DIR)/arch_test.flist
 
 # -----------------------------------------
 # ISA Tests (riscv-tests)
@@ -95,6 +96,54 @@ exc exception-tests:
 		TEST_TYPE=isa \
 		SIM=$(SIM) \
 		MAX_CYCLES=$(MAX_CYCLES)
+
+# -----------------------------------------
+# Architecture Tests (riscv-arch-test)
+# -----------------------------------------
+.PHONY: arch arch-tests
+
+arch arch-tests:
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Running RISC-V Architecture Tests$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@if [ ! -f "$(FLIST_ARCH)" ]; then \
+		echo -e "$(YELLOW)[INFO] Generating arch test list...$(RESET)"; \
+		$(MAKE) --no-print-directory arch_gen_flist; \
+	fi
+	@$(MAKE) --no-print-directory run_flist \
+		FLIST=$(FLIST_ARCH) \
+		TEST_TYPE=arch \
+		SIM=$(SIM) \
+		MAX_CYCLES=$(MAX_CYCLES)
+
+# Generate arch test flist from built tests
+.PHONY: arch_gen_flist
+arch_gen_flist:
+	@echo -e "$(YELLOW)[GEN] Generating arch_test.flist...$(RESET)"
+	@mkdir -p $(TEST_LIST_DIR)
+	@echo "# RISC-V Architecture Tests" > $(FLIST_ARCH)
+	@echo "# Auto-generated from build/tests/riscv-arch-test/elf" >> $(FLIST_ARCH)
+	@if [ -d "$(BUILD_DIR)/tests/riscv-arch-test/elf" ]; then \
+		for elf in $(BUILD_DIR)/tests/riscv-arch-test/elf/*.elf; do \
+			if [ -f "$$elf" ]; then \
+				basename $$elf .elf >> $(FLIST_ARCH); \
+			fi; \
+		done; \
+		echo -e "$(GREEN)[OK] Generated $(FLIST_ARCH)$(RESET)"; \
+	else \
+		echo -e "$(RED)[ERROR] No arch tests found. Run 'make arch_auto' first.$(RESET)"; \
+	fi
+
+# Quick arch test: make ta T=I-add-01
+.PHONY: ta
+ta:
+ifndef T
+	$(error Usage: make ta T=<arch_test_name> (e.g., I-add-01))
+endif
+	@$(MAKE) --no-print-directory run_verilator \
+		TEST_NAME=$(T) \
+		TEST_TYPE=arch \
+		SIM=verilator
 
 # -----------------------------------------
 # Benchmark List Runner (NO_ADDR=1)
@@ -196,22 +245,30 @@ help_lists:
 	@echo -e "  $(GREEN)make isa$(RESET)         – Run all ISA tests (rv32ui, rv32um, rv32uc)"
 	@echo -e "  $(GREEN)make csr$(RESET)         – Run machine CSR tests (rv32mi)"
 	@echo -e "  $(GREEN)make bench$(RESET)       – Run benchmarks (dhrystone, etc.) [NO_ADDR=1]"
+	@echo -e "  $(GREEN)make arch$(RESET)        – Run architecture tests (riscv-arch-test)"
 	@echo -e "  $(GREEN)make all_tests$(RESET)   – Run ALL tests"
 	@echo -e "  $(GREEN)make exc$(RESET)         – Run exception tests"
 	@echo -e ""
 	@echo -e "$(YELLOW)Quick Single Test:$(RESET)"
 	@echo -e "  $(GREEN)make t T=rv32ui-p-add$(RESET)     – Quick ISA test"
 	@echo -e "  $(GREEN)make tb T=dhrystone$(RESET)       – Quick benchmark [NO_ADDR=1]"
+	@echo -e "  $(GREEN)make ta T=I-add-01$(RESET)        – Quick arch test"
 	@echo -e ""
 	@echo -e "$(YELLOW)Options:$(RESET)"
 	@echo -e "  SIM=verilator|modelsim  – Simulator (default: verilator)"
 	@echo -e "  MAX_CYCLES=<n>          – Max cycles (default: 100000)"
 	@echo -e "  FAST_SIM=1              – Disable all logging for speed (NO_COMMIT_TRACE, NO_PIPELINE_LOG, NO_RAM_LOG)"
 	@echo -e ""
+	@echo -e "$(YELLOW)Architecture Test Pipeline:$(RESET)"
+	@echo -e "  $(GREEN)make arch_auto$(RESET)   – Full pipeline: Clone → Build → Import"
+	@echo -e "  $(GREEN)make arch_list$(RESET)   – List available arch test extensions"
+	@echo -e "  $(GREEN)make arch_help$(RESET)   – Show detailed arch test help"
+	@echo -e ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
 	@echo -e "  make isa SIM=verilator"
 	@echo -e "  make bench MAX_CYCLES=5000000"
 	@echo -e "  make t T=rv32ui-p-add"
 	@echo -e "  make tb T=median MAX_CYCLES=500000"
+	@echo -e "  make ta T=I-add-01"
 	@echo -e "  make t T=rv32ui-p-add FAST_SIM=1  # Fast simulation without logs"
 	@echo -e ""

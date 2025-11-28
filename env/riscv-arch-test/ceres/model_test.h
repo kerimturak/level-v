@@ -1,70 +1,109 @@
-// RISC-V Compliance Test Header File
-// Copyright (c) 2017, Codasip Ltd. All Rights Reserved.
+// RISC-V Architecture Test Model Header File for Ceres Processor
+// Copyright (c) 2024, Ceres-V Project
 // See LICENSE for license details.
 //
-// Description: Common header file for RV32I tests
+// Description: Target-specific macros for riscv-arch-test framework
+// Ceres-V RV32IMC_Zicsr Processor
 
-#ifndef _COMPLIANCE_TEST_H
-#define _COMPLIANCE_TEST_H
+#ifndef _MODEL_TEST_H
+#define _MODEL_TEST_H
 
-#include "riscv_test.h"
+//=============================================================================
+// Configuration
+//=============================================================================
 
-//-----------------------------------------------------------------------
-// RV Compliance Macros
-//-----------------------------------------------------------------------
+#define XLEN 32
+#define ALIGNMENT 2
 
-#define RV_COMPLIANCE_HALT                                                    \
-        RVTEST_PASS                                                           
-
-#define RV_COMPLIANCE_RV32M                                                   \
-        RVTEST_RV32M                                                          
-
-#define RV_COMPLIANCE_CODE_BEGIN                                              \
-        RVTEST_CODE_BEGIN_OLD                                                     
-
-#define RV_COMPLIANCE_CODE_END                                                \
-        RVTEST_CODE_END_OLD                                                       
-
-#define RV_COMPLIANCE_DATA_BEGIN                                              \
-        RVTEST_DATA_BEGIN_OLD                                                     
-
-#define RV_COMPLIANCE_DATA_END                                                \
-        RVTEST_DATA_END_OLD                                                       
-
+// PMP Configuration (if supported)
+#ifndef RVMODEL_PMP_GRAIN
+  #define RVMODEL_PMP_GRAIN   0
 #endif
-// RISC-V Compliance IO Test Header File
 
-/*
- * Copyright (c) 2005-2018 Imperas Software Ltd., www.imperas.com
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
- * either express or implied.
- *
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+#ifndef RVMODEL_NUM_PMPS
+  #define RVMODEL_NUM_PMPS    0  // Ceres doesn't have PMP yet
+#endif
 
-#ifndef _COMPLIANCE_IO_H
-#define _COMPLIANCE_IO_H
+// Vectored trap handler alignment
+#ifndef MTVEC_ALIGN
+  #define MTVEC_ALIGN   6
+#endif
 
-//-----------------------------------------------------------------------
-// RV IO Macros (Non functional)
-//-----------------------------------------------------------------------
+//=============================================================================
+// Boot and Halt Macros
+//=============================================================================
 
-#define RVTEST_IO_INIT
-#define RVTEST_IO_WRITE_STR(_SP, _STR)
-#define RVTEST_IO_CHECK()
-#define RVTEST_IO_ASSERT_GPR_EQ(_SP, _R, _I)
-#define RVTEST_IO_ASSERT_SFPR_EQ(_F, _R, _I)
-#define RVTEST_IO_ASSERT_DFPR_EQ(_D, _R, _I)
+// Boot sequence - minimal for Ceres
+#define RVMODEL_BOOT
 
-#endif // _COMPLIANCE_IO_H
+// Halt sequence - signal test completion via ecall
+#define RVMODEL_HALT                                                    \
+    fence;                                                              \
+    li a7, 93;                /* exit syscall number */                 \
+    li a0, 0;                 /* exit code 0 = pass */                  \
+    ecall;                                                              \
+halt_loop:                                                              \
+    j halt_loop;
+
+//=============================================================================
+// Data Section Macros
+//=============================================================================
+
+// Additional data section for tohost/fromhost (simulation interface)
+#define RVMODEL_DATA_SECTION                                            \
+    .pushsection .tohost,"aw",@progbits;                                \
+    .align 8; .global tohost; tohost: .dword 0;                         \
+    .align 8; .global fromhost; fromhost: .dword 0;                     \
+    .popsection;                                                        \
+    .align 8; .global begin_regstate; begin_regstate:                   \
+    .word 128;                                                          \
+    .align 8; .global end_regstate; end_regstate:                       \
+    .word 4;
+
+// Begin signature area
+#define RVMODEL_DATA_BEGIN                                              \
+    RVMODEL_DATA_SECTION                                                \
+    .align ALIGNMENT;                                                   \
+    .global begin_signature; begin_signature:
+
+// End signature area
+#define RVMODEL_DATA_END                                                \
+    .align ALIGNMENT;                                                   \
+    .global end_signature; end_signature:
+
+//=============================================================================
+// I/O Macros (non-functional for RTL simulation)
+//=============================================================================
+
+#define RVMODEL_IO_INIT
+#define RVMODEL_IO_WRITE_STR(_R, _STR)
+#define RVMODEL_IO_CHECK()
+#define RVMODEL_IO_ASSERT_GPR_EQ(_S, _R, _I)
+#define RVMODEL_IO_ASSERT_SFPR_EQ(_F, _R, _I)
+#define RVMODEL_IO_ASSERT_DFPR_EQ(_D, _R, _I)
+
+//=============================================================================
+// Interrupt Clearing Macros (stubs - Ceres minimal interrupt support)
+//=============================================================================
+
+#define RVMODEL_SET_MSW_INT
+#define RVMODEL_CLEAR_MSW_INT
+#define RVMODEL_CLEAR_MTIMER_INT
+#define RVMODEL_CLEAR_MEXT_INT
+
+// S-mode interrupt macros (stubs if S-mode not supported)
+#define RVMODEL_CLR_SSW_INT
+#define RVMODEL_CLR_STIMER_INT
+#define RVMODEL_CLR_SEXT_INT
+
+// VS-mode interrupt macros (stubs)
+#define RVMODEL_CLR_VSW_INT
+#define RVMODEL_CLR_VTIMER_INT
+#define RVMODEL_CLR_VEXT_INT
+
+// M-mode interrupt macros
+#define RVMODEL_CLR_MSW_INT
+#define RVMODEL_CLR_MTIMER_INT
+#define RVMODEL_CLR_MEXT_INT
+
+#endif // _MODEL_TEST_H

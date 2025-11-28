@@ -13,8 +13,10 @@ ifeq ($(TEST_TYPE),bench)
     TEST_ROOT := $(BUILD_DIR)/tests/riscv-benchmarks
 else ifeq ($(TEST_TYPE),isa)
     TEST_ROOT := $(BUILD_DIR)/tests/riscv-tests
+else ifeq ($(TEST_TYPE),arch)
+    TEST_ROOT := $(BUILD_DIR)/tests/riscv-arch-test
 else
-    $(error Invalid TEST_TYPE="$(TEST_TYPE)". Use: isa or bench)
+    $(error Invalid TEST_TYPE="$(TEST_TYPE)". Use: isa, bench, or arch)
 endif
 
 # Derived paths from TEST_ROOT
