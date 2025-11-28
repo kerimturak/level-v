@@ -4,6 +4,7 @@
 # ============================================================
 
 .PHONY: coremark coremark_check coremark_setup coremark_build coremark_clean coremark_help
+.PHONY: coremark_gen_linker
 
 # ============================================================
 # Configuration
@@ -19,6 +20,12 @@ COREMARK_PORT_DST    := $(COREMARK_SRC_DIR)/ceresv
 COREMARK_BUILD_DIR   := $(BUILD_DIR)/tests/coremark
 COREMARK_REPO_URL    := https://github.com/eembc/coremark.git
 
+# Memory Map and Linker Script
+COREMARK_MEMORY_MAP  := $(COREMARK_PORT_SRC)/memory_map.yaml
+COREMARK_LINKER_GEN  := $(SCRIPT_DIR)/python/gen_linker.py
+COREMARK_LINKER_OUT  := $(COREMARK_PORT_DST)/link.ld
+COREMARK_HEADER_OUT  := $(COREMARK_PORT_DST)/memory_map.h
+
 # Output files
 COREMARK_ELF  := $(COREMARK_BUILD_DIR)/coremark.elf
 COREMARK_BIN  := $(COREMARK_BUILD_DIR)/coremark.bin
@@ -30,7 +37,7 @@ COREMARK_DUMP := $(COREMARK_BUILD_DIR)/coremark.dump
 # 1️⃣ Main Target - Full Pipeline
 # ============================================================
 
-coremark: coremark_check coremark_setup coremark_build
+coremark: coremark_check coremark_setup coremark_gen_linker coremark_build
 	@echo -e "$(GREEN)[COREMARK] ✓ Build complete$(RESET)"
 	@echo -e "$(GREEN)[COREMARK] Output files:$(RESET)"
 	@echo -e "  ELF:  $(COREMARK_ELF)"
@@ -78,10 +85,27 @@ coremark_setup: coremark_check
 	@echo -e "$(GREEN)[COREMARK] ✓ Port files copied to $(COREMARK_PORT_DST)$(RESET)"
 
 # ============================================================
+# 3.5️⃣ Generate Linker Script from Memory Map
+# ============================================================
+
+coremark_gen_linker: coremark_setup
+	@echo -e "$(YELLOW)[COREMARK] Generating linker script from memory map...$(RESET)"
+	@if [ ! -f "$(COREMARK_MEMORY_MAP)" ]; then \
+		echo -e "$(YELLOW)[COREMARK] No memory_map.yaml found, using default link.ld$(RESET)"; \
+	else \
+		python3 $(COREMARK_LINKER_GEN) \
+			$(COREMARK_MEMORY_MAP) \
+			$(COREMARK_LINKER_OUT) \
+			--header $(COREMARK_HEADER_OUT) \
+			--verbose; \
+		echo -e "$(GREEN)[COREMARK] ✓ Linker script generated$(RESET)"; \
+	fi
+
+# ============================================================
 # 4️⃣ Build CoreMark for Ceres-V
 # ============================================================
 
-coremark_build: coremark_setup
+coremark_build: coremark_gen_linker
 	@echo -e "$(YELLOW)[COREMARK] Building with $(COREMARK_ITERATIONS) iterations...$(RESET)"
 	@mkdir -p $(COREMARK_BUILD_DIR)
 	@# Clean previous build in coremark source
@@ -130,12 +154,17 @@ coremark_help:
 	@echo -e "  make coremark              - Full build pipeline"
 	@echo -e "  make coremark_check        - Check/clone CoreMark source"
 	@echo -e "  make coremark_setup        - Copy Ceres-V port files"
+	@echo -e "  make coremark_gen_linker   - Generate linker script from YAML"
 	@echo -e "  make coremark_build        - Build CoreMark"
 	@echo -e "  make coremark_clean        - Clean build artifacts"
 	@echo -e "  make coremark_help         - Show this help"
 	@echo ""
 	@echo -e "$(YELLOW)Configuration:$(RESET)"
 	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1000)"
+	@echo ""
+	@echo -e "$(YELLOW)Memory Map:$(RESET)"
+	@echo -e "  Edit: $(COREMARK_PORT_SRC)/memory_map.yaml"
+	@echo -e "  Linker script is auto-generated from memory map"
 	@echo ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
 	@echo -e "  make coremark COREMARK_ITERATIONS=2000"

@@ -1,0 +1,83 @@
+# ============================================================
+# Ceres-V Memory Map Configuration
+# ============================================================
+# Bu dosya işlemcinin memory map'ini tanımlar.
+# Linker script'ler bu dosyadan otomatik oluşturulur.
+# ============================================================
+
+# Genel Bilgiler
+processor:
+  name: "Ceres-V"
+  isa: "RV32IMC_Zicsr"
+  endian: "little"
+
+# Clock ve Timing
+clock:
+  cpu_hz: 50000000        # 50 MHz
+  timer_hz: 50000000      # Timer CPU clock'ta çalışır
+
+# Memory Bölgeleri
+# Her bölge için: origin (başlangıç adresi), length (boyut), type (rx/rw/rwx)
+memory:
+  # Program Memory (ROM/Flash)
+  rom:
+    origin: 0x80000000
+    length: 32K
+    type: "rx"
+    description: "Program code and read-only data"
+  
+  # Data Memory (RAM)
+  ram:
+    origin: 0x80008000    # ROM'dan hemen sonra (32K offset)
+    length: 32K
+    type: "rwx"
+    description: "Data, BSS, Heap and Stack"
+
+# Stack Konfigürasyonu
+stack:
+  size: 4K                # Stack boyutu
+  location: "end_of_ram"  # RAM'in sonunda
+
+# Heap Konfigürasyonu (opsiyonel)
+heap:
+  size: 2K
+  location: "after_bss"
+
+# Peripheral Memory Map
+peripherals:
+  uart:
+    base: 0x20000000
+    size: 16              # 4 register x 4 byte
+    registers:
+      ctrl:   { offset: 0x00, access: "rw", description: "Control register" }
+      status: { offset: 0x04, access: "ro", description: "Status register" }
+      rdata:  { offset: 0x08, access: "ro", description: "RX data register" }
+      wdata:  { offset: 0x0C, access: "wo", description: "TX data register" }
+    
+  timer:
+    base: 0x30000000
+    size: 8               # 2 register x 4 byte
+    registers:
+      low:  { offset: 0x00, access: "ro", description: "Timer low 32-bit" }
+      high: { offset: 0x04, access: "ro", description: "Timer high 32-bit" }
+
+# UART Konfigürasyonu
+uart:
+  baud_rate: 115200
+  # baud_divider = cpu_hz / baud_rate (otomatik hesaplanır)
+
+# Entry Point
+entry: "_start"
+
+# Özel Section'lar (opsiyonel)
+sections:
+  # Boot code mutlaka ROM başında olmalı
+  text_init:
+    vma: 0x80000000       # Virtual Memory Address
+    align: 4
+    
+  # TOHOST/FROMHOST (simülasyon için)
+  tohost:
+    vma: 0x80001000
+    size: 64
+    align: 64
