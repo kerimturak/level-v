@@ -5,49 +5,72 @@ Permission is granted to use, copy, modify, and distribute this software for any
 with or without fee, provided that the above notice appears in all copies.
 
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
+
+Description:
+  Word-based (32-bit) RAM with burst support for cache line transfers.
+  Memory is organized as 32-bit words, but supports reading/writing
+  full cache lines (e.g., 128-bit) through burst operations.
+  
+  This allows using standard 32-bit .mem files while still supporting
+  cache line width transfers.
 */
 `timescale 1ns / 1ps
+
 module wrapper_ram #(
-    parameter NB_COL           = 4,           // Sütun sayısı (byte sayısı)
-    parameter COL_WIDTH        = 8,           // Her sütunun bit genişliği (byte)
-    parameter RAM_DEPTH        = 131072,      // Bellek derinliği
-    parameter INIT_FILE        = "",          // Başlangıç dosyası (varsa)
+    parameter WORD_WIDTH       = 32,          // Word genişliği (bit)
+    parameter RAM_DEPTH        = 32768,       // Word sayısı (32K words = 128KB)
+    parameter CACHE_LINE_WIDTH = 128,         // Cache line genişliği (bit)
     parameter CPU_CLK          = 50_000_000,
     parameter PROG_BAUD_RATE   = 115200,
-    // Programlama FSM parametreleri ve sinyalleri
-    parameter PROGRAM_SEQUENCE = "ceresTEST"  // Beklenen programlama başlangıç dizisi
-
+    parameter PROGRAM_SEQUENCE = "ceresTEST"
 ) (
-    input logic clk_i,
-    input logic rst_ni,
-    input logic [$clog2(RAM_DEPTH)-1:0] wr_addr,
-    input logic [$clog2(RAM_DEPTH)-1:0] rd_addr,
-    input logic [(NB_COL*COL_WIDTH)-1:0] wr_data,
-    input logic [NB_COL-1:0] wr_en,
-    output logic [(NB_COL*COL_WIDTH)-1:0] rd_data,
-    input logic rd_en,
-    input logic ram_prog_rx_i,
-    output logic system_reset_o,
-    output logic prog_mode_led_o
+    input  logic                              clk_i,
+    input  logic                              rst_ni,
+    
+    // Cache/Memory Interface (cache line width)
+    input  logic [$clog2(RAM_DEPTH)-1:0]      addr_i,         // Word address
+    input  logic [CACHE_LINE_WIDTH-1:0]       wdata_i,        // Write data (full cache line)
+    input  logic [CACHE_LINE_WIDTH/8-1:0]     wstrb_i,        // Byte write strobes
+    output logic [CACHE_LINE_WIDTH-1:0]       rdata_o,        // Read data (full cache line)
+    input  logic                              rd_en_i,
+    
+    // Programming interface
+    input  logic                              ram_prog_rx_i,
+    output logic                              system_reset_o,
+    output logic                              prog_mode_led_o
 );
 
+  // Derived parameters
+  localparam WORDS_PER_LINE = CACHE_LINE_WIDTH / WORD_WIDTH;  // 4 for 128-bit line
+  localparam BYTES_PER_WORD = WORD_WIDTH / 8;                 // 4 bytes
+  localparam LINE_ADDR_BITS = $clog2(WORDS_PER_LINE);         // 2 bits for 4 words
+  
+  // Word-based memory array (32-bit words)
+  logic [WORD_WIDTH-1:0] ram [0:RAM_DEPTH-1];
+  
+  // Internal signals
+  logic [$clog2(RAM_DEPTH)-1:0] base_addr;
+  logic [CACHE_LINE_WIDTH-1:0]  rdata_reg;
+  
+  // Programming FSM signals
   localparam PROG_SEQ_LENGTH = 9;
   localparam SEQ_BREAK_THRESHOLD = 32'd1000000;
-
-  // Bellek tanımı
-  logic [(NB_COL*COL_WIDTH)-1:0] ram                                          [0:RAM_DEPTH-1];
-  logic [(NB_COL*COL_WIDTH)-1:0] ram_prog_data;
-  logic                          ram_prog_data_valid;
-  logic [ $clog2(RAM_DEPTH)-1:0] prog_addr;
-  logic [ $clog2(RAM_DEPTH)-1:0] wr_addr_ram;
-  logic [(NB_COL*COL_WIDTH)-1:0] wr_data_ram;
-  logic [ PROG_SEQ_LENGTH*8-1:0] received_sequence;
-  logic [                   3:0] rcv_seq_ctr;  // Dizinin alınan bayt sayacı
-  logic [                  31:0] sequence_break_ctr;
+  
+  logic [31:0]                   prog_uart_do;
+  logic [PROG_SEQ_LENGTH*8-1:0]  received_sequence;
+  logic [3:0]                    rcv_seq_ctr;
+  logic [31:0]                   sequence_break_ctr;
   logic                          sequence_break;
-  logic [                  31:0] prog_uart_do;
+  logic [$clog2(RAM_DEPTH)-1:0]  prog_addr;
+  logic [WORD_WIDTH-1:0]         prog_word;
+  logic                          prog_word_valid;
+  logic [1:0]                    prog_byte_ctr;
+  logic [31:0]                   prog_word_number;
+  logic [31:0]                   prog_word_ctr;
+  logic                          prog_sys_rst_n;
+  logic                          ram_prog_rd_en;
 
-  // FSM durumları
+  // FSM states
   typedef enum logic [2:0] {
     SequenceWait       = 3'b000,
     SequenceReceive    = 3'b001,
@@ -59,32 +82,21 @@ module wrapper_ram #(
 
   fsm_t state_prog, state_prog_next;
 
-  // Diğer programlama ilgili sinyaller
-  logic   [$clog2((NB_COL*COL_WIDTH)/8)-1:0] instruction_byte_ctr;  // Her kelimenin bayt sayacı
-  logic   [          (NB_COL*COL_WIDTH)-1:0] prog_instruction;
-  logic   [                            31:0] prog_intr_number;  // Beklenen program uzunluğu
-  logic   [                            31:0] prog_intr_ctr;  // Alınan program uzunluğu
-  logic                                      prog_inst_valid;
-  logic                                      prog_sys_rst_n;
-  logic                                      ram_prog_rd_en;
-
-  // Bellek içeriğinin başlatılması: Dosya varsa okunur, yoksa tüm elemanlar 0'a eşitlenir.
   // ============================================
-  // Dynamic memory init via +INIT_FILE plusarg
+  // Memory Initialization
   // ============================================
-  string                                     init_file;
-
-  integer                                    fd;
-  string                                     line;
-  int                                        line_num;
+  string  init_file;
+  integer fd;
+  string  line;
+  int     line_num;
 
   initial begin
     if ($value$plusargs("INIT_FILE=%s", init_file)) begin
       $display("------------------------------------------------------");
       $display("[INFO] Loading memory from file: %s", init_file);
+      $display("[INFO] Memory organization: %0d-bit words, %0d depth", WORD_WIDTH, RAM_DEPTH);
       $display("------------------------------------------------------");
 
-      // 1️⃣ Dosya içeriğini oku (ilk 8 satır örnek)
       fd = $fopen(init_file, "r");
       if (fd == 0) begin
         $display("[ERROR] Cannot open memory file: %s", init_file);
@@ -92,94 +104,129 @@ module wrapper_ram #(
       end
 
       line_num = 0;
-      while (!$feof(
-          fd
-      ) && line_num < 8) begin
+      while (!$feof(fd) && line_num < 8) begin
         line_num++;
         void'($fgets(line, fd));
-        line = line.tolower();  // opsiyonel, hexi küçük harf yapar
+        line = line.tolower();
         $display("  [%0d] %s", line_num, line);
       end
       $fclose(fd);
 
-      // 2️⃣ RAM yükle
       $readmemh(init_file, ram, 0, RAM_DEPTH - 1);
       $display("[INFO] Memory file successfully loaded into RAM.");
       $display("------------------------------------------------------");
     end else begin
-      $display("[INFO] No INIT_FILE provided → initializing RAM to zero");
+      $display("[INFO] No INIT_FILE provided -> initializing RAM to zero");
       ram = '{default: '0};
     end
   end
 
+  // ============================================
+  // Cache Line Address Calculation
+  // ============================================
+  // addr_i is word-aligned, we need to get the base address of the cache line
+  assign base_addr = {addr_i[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS], {LINE_ADDR_BITS{1'b0}}};
 
-  // Bellek yazma seçimleri: Programlama modu aktifse UART'dan gelen veriler kullanılır
-  assign wr_addr_ram = (prog_mode_led_o && ram_prog_data_valid) ? prog_addr : wr_addr;
-  assign wr_data_ram = (prog_mode_led_o && ram_prog_data_valid) ? ram_prog_data : wr_data;
-
-  // Okuma işlemi (senkron): rd_en aktifse okunan veriyi rd_data çıkışına aktar.
+  // ============================================
+  // Read Operation - Burst read for cache line
+  // ============================================
   always_ff @(posedge clk_i) begin
-    if (rd_en) rd_data <= ram[rd_addr];
+    if (rd_en_i) begin
+      // Read WORDS_PER_LINE consecutive words
+      for (int i = 0; i < WORDS_PER_LINE; i++) begin
+        rdata_reg[i*WORD_WIDTH +: WORD_WIDTH] <= ram[base_addr + i[$clog2(RAM_DEPTH)-1:0]];
+      end
+    end
   end
+  
+  assign rdata_o = rdata_reg;
 
-  // Belleğe byte bazlı yazma işlemi: Her bayt için ayrı kontrol
-  for (genvar i = 0; i < NB_COL; i = i + 1) begin : byte_write
-    always_ff @(posedge clk_i) begin
-      if (wr_en[i] || (prog_mode_led_o && ram_prog_data_valid)) ram[wr_addr_ram][i*COL_WIDTH+:COL_WIDTH] <= wr_data_ram[i*COL_WIDTH+:COL_WIDTH];
+  // ============================================
+  // Write Operation - Byte-wise write with strobes
+  // ============================================
+  // Handle both normal writes and programming writes
+  generate
+    for (genvar word_idx = 0; word_idx < WORDS_PER_LINE; word_idx++) begin : gen_word_write
+      for (genvar byte_idx = 0; byte_idx < BYTES_PER_WORD; byte_idx++) begin : gen_byte_write
+        localparam int strobe_idx = word_idx * BYTES_PER_WORD + byte_idx;
+        
+        always_ff @(posedge clk_i) begin
+          // Normal cache line write
+          if (wstrb_i[strobe_idx]) begin
+            ram[base_addr + word_idx[$clog2(RAM_DEPTH)-1:0]][byte_idx*8 +: 8] <= 
+              wdata_i[word_idx*WORD_WIDTH + byte_idx*8 +: 8];
+          end
+          // Programming write (word at a time)
+          else if (prog_mode_led_o && prog_word_valid && (word_idx == 0)) begin
+            ram[prog_addr][byte_idx*8 +: 8] <= prog_word[byte_idx*8 +: 8];
+          end
+        end
+      end
+    end
+  endgenerate
+
+  // ============================================
+  // Programming Address Counter
+  // ============================================
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni || !system_reset_o) begin
+      prog_addr <= '0;
+    end else if (prog_mode_led_o && prog_word_valid) begin
+      prog_addr <= prog_addr + 1'b1;
     end
   end
 
-  // Programlama adres sayacı: Programlama modu aktifse artar, reset durumunda sıfırlanır.
-  always_ff @(posedge clk_i) begin
-    if (!rst_ni || !system_reset_o) prog_addr <= '0;
-    else if (prog_mode_led_o && ram_prog_data_valid) prog_addr <= prog_addr + 1'b1;
-  end
+  // ============================================
+  // Control Signals
+  // ============================================
+  assign system_reset_o  = prog_sys_rst_n;
+  assign ram_prog_rd_en  = (state_prog != SequenceFinish);
+  assign prog_mode_led_o = (state_prog == SequenceProgram);
+  assign sequence_break  = (sequence_break_ctr == SEQ_BREAK_THRESHOLD);
 
-  // Word veri yeniden sıralaması: UART'dan gelen veriyi belleğe uygun hale getirir.
-  for (genvar j = 0; j < (NB_COL * COL_WIDTH); j = j + 32) begin : reorder_word
-    assign ram_prog_data[j+:32] = prog_instruction[127-j-:32];
-  end
-
-  assign ram_prog_data_valid = prog_inst_valid;
-  assign system_reset_o      = prog_sys_rst_n;
-  assign ram_prog_rd_en      = (state_prog != SequenceFinish);
-  assign prog_mode_led_o     = (state_prog == SequenceProgram);
-  assign sequence_break      = (sequence_break_ctr == SEQ_BREAK_THRESHOLD);
-
-  // FSM durum kaydı
+  // ============================================
+  // Programming FSM - State Register
+  // ============================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) state_prog <= SequenceWait;
     else state_prog <= state_prog_next;
   end
 
-  // FSM geçiş mantığı
+  // ============================================
+  // Programming FSM - Next State Logic
+  // ============================================
   always_comb begin
     state_prog_next = state_prog;
     case (state_prog)
       SequenceWait: begin
-        if (prog_uart_do != '1)  // Gelen veri "1" değilse programlama başlayabilir
+        if (prog_uart_do != '1)
           state_prog_next = SequenceReceive;
       end
 
       SequenceReceive: begin
         if (prog_uart_do != '1) begin
-          if (rcv_seq_ctr == PROG_SEQ_LENGTH - 1) state_prog_next = SequenceCheck;
+          if (rcv_seq_ctr == PROG_SEQ_LENGTH - 1) 
+            state_prog_next = SequenceCheck;
         end else if (sequence_break) begin
           state_prog_next = SequenceWait;
         end
       end
 
       SequenceCheck: begin
-        if (received_sequence == PROGRAM_SEQUENCE) state_prog_next = SequenceLengthCalc;
-        else state_prog_next = SequenceWait;
+        if (received_sequence == PROGRAM_SEQUENCE) 
+          state_prog_next = SequenceLengthCalc;
+        else 
+          state_prog_next = SequenceWait;
       end
 
       SequenceLengthCalc: begin
-        if ((prog_uart_do != '1) && &instruction_byte_ctr[1:0]) state_prog_next = SequenceProgram;
+        if ((prog_uart_do != '1) && &prog_byte_ctr) 
+          state_prog_next = SequenceProgram;
       end
 
       SequenceProgram: begin
-        if ((prog_intr_ctr == prog_intr_number) && ~&instruction_byte_ctr) state_prog_next = SequenceFinish;
+        if ((prog_word_ctr == prog_word_number) && ~&prog_byte_ctr) 
+          state_prog_next = SequenceFinish;
       end
 
       SequenceFinish: begin
@@ -190,30 +237,32 @@ module wrapper_ram #(
     endcase
   end
 
-  // FSM çıkış ve ilgili sayaçların güncellenmesi
+  // ============================================
+  // Programming FSM - Output Logic
+  // ============================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      instruction_byte_ctr <= '0;
-      prog_instruction     <= '0;
-      prog_intr_number     <= '0;
-      prog_intr_ctr        <= '0;
-      sequence_break_ctr   <= '0;
-      received_sequence    <= '0;
-      rcv_seq_ctr          <= '0;
-      prog_inst_valid      <= 1'b0;
-      prog_sys_rst_n       <= 1'b1;
+      prog_byte_ctr      <= '0;
+      prog_word          <= '0;
+      prog_word_number   <= '0;
+      prog_word_ctr      <= '0;
+      sequence_break_ctr <= '0;
+      received_sequence  <= '0;
+      rcv_seq_ctr        <= '0;
+      prog_word_valid    <= 1'b0;
+      prog_sys_rst_n     <= 1'b1;
     end else begin
       case (state_prog)
         SequenceWait: begin
-          instruction_byte_ctr <= '0;
-          prog_instruction     <= '0;
-          prog_intr_number     <= '0;
-          prog_intr_ctr        <= '0;
-          sequence_break_ctr   <= '0;
-          received_sequence    <= '0;
-          rcv_seq_ctr          <= '0;
-          prog_inst_valid      <= 1'b0;
-          prog_sys_rst_n       <= 1'b1;
+          prog_byte_ctr      <= '0;
+          prog_word          <= '0;
+          prog_word_number   <= '0;
+          prog_word_ctr      <= '0;
+          sequence_break_ctr <= '0;
+          received_sequence  <= '0;
+          rcv_seq_ctr        <= '0;
+          prog_word_valid    <= 1'b0;
+          prog_sys_rst_n     <= 1'b1;
           if (prog_uart_do != '1) begin
             rcv_seq_ctr       <= rcv_seq_ctr + 1;
             received_sequence <= {received_sequence[PROG_SEQ_LENGTH*8-9:0], prog_uart_do[7:0]};
@@ -223,40 +272,47 @@ module wrapper_ram #(
         SequenceReceive: begin
           if (prog_uart_do != '1) begin
             received_sequence <= {received_sequence[PROG_SEQ_LENGTH*8-9:0], prog_uart_do[7:0]};
-            if (rcv_seq_ctr == PROG_SEQ_LENGTH - 1) rcv_seq_ctr <= 0;
-            else rcv_seq_ctr <= rcv_seq_ctr + 1;
+            if (rcv_seq_ctr == PROG_SEQ_LENGTH - 1) 
+              rcv_seq_ctr <= 0;
+            else 
+              rcv_seq_ctr <= rcv_seq_ctr + 1;
           end else begin
-            if (sequence_break) sequence_break_ctr <= 0;
-            else sequence_break_ctr <= sequence_break_ctr + 1;
+            if (sequence_break) 
+              sequence_break_ctr <= 0;
+            else 
+              sequence_break_ctr <= sequence_break_ctr + 1;
           end
         end
 
         SequenceCheck: begin
-          instruction_byte_ctr <= 0;  // Sıfırlama, program uzunluğu verilerini alacağız
+          prog_byte_ctr <= 0;
         end
 
         SequenceLengthCalc: begin
-          prog_intr_ctr <= 0;
+          prog_word_ctr <= 0;
           if (prog_uart_do != '1) begin
-            prog_intr_number <= {prog_intr_number[23:0], prog_uart_do[7:0]};
-            if (&instruction_byte_ctr[1:0]) instruction_byte_ctr <= 0;
-            else instruction_byte_ctr <= instruction_byte_ctr + 1;
+            // Receive 4 bytes for word count (big-endian)
+            prog_word_number <= {prog_word_number[23:0], prog_uart_do[7:0]};
+            prog_byte_ctr <= prog_byte_ctr + 1;
           end
         end
 
         SequenceProgram: begin
           if (prog_uart_do != '1) begin
-            prog_instruction <= {prog_instruction[(NB_COL*COL_WIDTH-8)-1:0], prog_uart_do[7:0]};
-            if (&instruction_byte_ctr) begin
-              instruction_byte_ctr <= 0;
-              prog_inst_valid      <= 1'b1;
+            // Receive bytes and form 32-bit words (little-endian for RISC-V)
+            prog_word <= {prog_uart_do[7:0], prog_word[31:8]};
+            
+            if (&prog_byte_ctr) begin
+              // Complete word received
+              prog_byte_ctr   <= 0;
+              prog_word_valid <= 1'b1;
+              prog_word_ctr   <= prog_word_ctr + 1;
             end else begin
-              instruction_byte_ctr <= instruction_byte_ctr + 1;
-              prog_inst_valid      <= 1'b0;
+              prog_byte_ctr   <= prog_byte_ctr + 1;
+              prog_word_valid <= 1'b0;
             end
-            if (&instruction_byte_ctr[1:0]) prog_intr_ctr <= prog_intr_ctr + 1;
           end else begin
-            prog_inst_valid <= 1'b0;
+            prog_word_valid <= 1'b0;
           end
         end
 
@@ -265,19 +321,21 @@ module wrapper_ram #(
         end
 
         default: begin
-          // Varsayılan durumda hiçbir işlem yapılmaz
+          // No action
         end
       endcase
     end
   end
 
-  // Basit UART modülü örneği: Programlama sırasında veriyi almak için
+  // ============================================
+  // UART for Programming
+  // ============================================
   simpleuart #(
       .DEFAULT_DIV(CPU_CLK / PROG_BAUD_RATE)
   ) simpleuart_inst (
       .clk       (clk_i),
       .resetn    (rst_ni),
-      .ser_tx    (),                // İsteğe bağlı, kullanılmıyorsa boş bırakılabilir
+      .ser_tx    (),
       .ser_rx    (ram_prog_rx_i),
       .reg_div_we(4'h0),
       .reg_div_di(32'h0),

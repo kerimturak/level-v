@@ -14,10 +14,11 @@ string  trace_path;
 string  test_name;
 string  simulator;
 
+// Define SOC path based on top module name
 `ifdef VERILATOR
-`define SOC $root.ceres_wrapper.soc
+  `define SOC $root.ceres_wrapper.soc
 `else
-`define SOC tb_wrapper.ceres_wrapper.soc
+  `define SOC tb_wrapper.ceres_wrapper.soc
 `endif
 
 // ============================================================================

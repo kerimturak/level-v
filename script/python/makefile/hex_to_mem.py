@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-hex_to_mem.py — Convert Verilog HEX (from objcopy) → 128-bit MEM (TCORE format)
--------------------------------------------------------------------------------
+hex_to_mem.py — Convert Verilog HEX (from objcopy) → 32-bit MEM format
+-----------------------------------------------------------------------
 
-Düzeltilmiş sürüm:
-- Memory boyutunu max adrese göre hesaplar (kullanılan byte'lara değil)
-- Disassembly'de görülen tüm adreslere erişimi destekler
-- Gap'leri doğru şekilde 0x00 ile doldurur
+For wrapper_ram which uses 32-bit word-based memory organization.
+Each line in output is a single 32-bit word (8 hex chars).
+
+Usage:
+    python3 hex_to_mem.py input.hex output.mem
 """
 
 import sys
@@ -37,7 +38,6 @@ def parse_objcopy_hex_bytes(path):
                 current_addr = int(line[1:], 16)
                 if base_addr is None:
                     base_addr = current_addr
-                # Max adresi güncelle
                 if current_addr > max_addr:
                     max_addr = current_addr
                 continue
@@ -59,7 +59,6 @@ def parse_objcopy_hex_bytes(path):
                 offset = current_addr - base_addr
                 mem_bytes[offset] = byte_val
                 
-                # Max adresi güncelle
                 if current_addr > max_addr:
                     max_addr = current_addr
 
@@ -68,85 +67,56 @@ def parse_objcopy_hex_bytes(path):
     return mem_bytes, base_addr, max_addr
 
 
-def bytes_to_128bit_lines(mem_bytes, base_addr, max_addr, line_bytes=16, word_bytes=4):
+def bytes_to_32bit_lines(mem_bytes, base_addr, max_addr, word_bytes=4):
     """
-    Byte-level memory haritasını 128-bit satırlar halinde döndürür.
+    Byte-level memory haritasını 32-bit satırlar halinde döndürür.
     
     Args:
         mem_bytes: {offset: byte_value}
         base_addr: Base address
         max_addr: Maximum address seen
-        line_bytes: Bytes per line (16 for 128-bit)
         word_bytes: Bytes per word (4 for 32-bit)
     
     Returns:
-        List of hex strings (128-bit lines)
+        List of hex strings (32-bit words)
     """
     if not mem_bytes and max_addr == 0:
         raise ValueError("Empty memory map")
 
     # Memory boyutunu hesapla
-    # Max adresten base'i çıkar, sonra bir sonraki 16-byte boundary'ye yuvarla
     memory_size = max_addr - base_addr + 1
     
-    # Disassembly'de görülen adresleri de kapsayacak şekilde genişlet
-    # Örnek: 0x80006904 - 0x80000000 = 0x6904 = 26884 bytes
-    # Bu da 1681 satır (26884 / 16 = 1680.25 -> 1681)
-    
-    # 16-byte boundary'ye yuvarla
-    num_lines = (memory_size + line_bytes - 1) // line_bytes
+    # 4-byte boundary'ye yuvarla
+    num_words = (memory_size + word_bytes - 1) // word_bytes
     
     lines = []
 
-    # Her 16-byte satır için
-    for line_idx in range(num_lines):
-        line_start = line_idx * line_bytes
-        words = []
+    # Her 4-byte word için
+    for word_idx in range(num_words):
+        word_offset = word_idx * word_bytes
 
-        # Her satırda 4 word (32-bit) var
-        for w in range(4):
-            word_offset = line_start + w * word_bytes
+        # Little-endian: düşük adres = LSB
+        b0 = mem_bytes.get(word_offset + 0, 0)
+        b1 = mem_bytes.get(word_offset + 1, 0)
+        b2 = mem_bytes.get(word_offset + 2, 0)
+        b3 = mem_bytes.get(word_offset + 3, 0)
 
-            # Little-endian: düşük adres = LSB
-            b0 = mem_bytes.get(word_offset + 0, 0)
-            b1 = mem_bytes.get(word_offset + 1, 0)
-            b2 = mem_bytes.get(word_offset + 2, 0)
-            b3 = mem_bytes.get(word_offset + 3, 0)
-
-            word_val = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0
-            words.append(word_val)
-
-        # TCORE format: w3 w2 w1 w0
-        # w0 = en düşük adresli word (en sağda)
-        w0, w1, w2, w3 = words
-        line_hex = f"{w3:08x}{w2:08x}{w1:08x}{w0:08x}"
-        lines.append(line_hex)
+        word_val = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0
+        lines.append(f"{word_val:08x}")
 
     return lines
 
 
 def convert(input_hex, output_mem):
     """
-    HEX → MEM dönüşümü
+    HEX → 32-bit MEM dönüşümü
     """
     mem_bytes, base_addr, max_addr = parse_objcopy_hex_bytes(input_hex)
-    lines = bytes_to_128bit_lines(mem_bytes, base_addr, max_addr)
+    lines = bytes_to_32bit_lines(mem_bytes, base_addr, max_addr)
 
     with open(output_mem, "w") as f:
         f.write("\n".join(lines))
-
-    total_bytes = len(mem_bytes)
-    memory_size = max_addr - base_addr + 1
-    
-    print(f"✅ Converted HEX → MEM")
-    print(f"   Input         : {input_hex}")
-    print(f"   Output        : {output_mem}")
-    print(f"   Base addr     : 0x{base_addr:08x}")
-    print(f"   Max addr      : 0x{max_addr:08x}")
-    print(f"   Memory size   : {memory_size} bytes")
-    print(f"   Bytes used    : {total_bytes} ({100*total_bytes/memory_size:.1f}%)")
-    print(f"   Lines (128b)  : {len(lines)}")
-    print(f"   Mem coverage  : 0x{base_addr:08x} - 0x{base_addr + len(lines)*16:08x}")
+        f.write("\n")
 
 
 if __name__ == "__main__":
