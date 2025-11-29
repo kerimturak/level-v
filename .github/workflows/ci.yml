@@ -183,6 +183,16 @@ jobs:
           echo "/opt/verilator/bin" >> $GITHUB_PATH
           echo "/opt/riscv/bin" >> $GITHUB_PATH
       
+      - name: Clone test repositories
+        run: |
+          # riscv-tests is a submodule, but we need to ensure it's initialized
+          git submodule update --init --recursive || true
+          
+          # Clone riscv-arch-test if not exists
+          if [ ! -d "subrepo/riscv-arch-test" ]; then
+            git clone --depth 1 https://github.com/riscv-non-isa/riscv-arch-test.git subrepo/riscv-arch-test
+          fi
+
       - name: Build ISA tests
         run: make isa_build RISCV_PREFIX=riscv-none-elf
       
@@ -245,6 +255,19 @@ jobs:
           echo "/opt/verilator/bin" >> $GITHUB_PATH
           echo "/opt/riscv/bin" >> $GITHUB_PATH
       
+      - name: Clone test repositories
+        run: |
+          # riscv-tests is a submodule
+          git submodule update --init --recursive || true
+          
+          # Clone additional test repos if not exists
+          if [ ! -d "subrepo/riscv-arch-test" ]; then
+            git clone --depth 1 https://github.com/riscv-non-isa/riscv-arch-test.git subrepo/riscv-arch-test
+          fi
+          if [ ! -d "subrepo/imperas-riscv-tests" ]; then
+            git clone --depth 1 https://github.com/riscv-ovpsim/imperas-riscv-tests.git subrepo/imperas-riscv-tests
+          fi
+
       - name: Build all tests
         run: |
           make isa_build RISCV_PREFIX=riscv-none-elf
