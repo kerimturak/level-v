@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 package ceres_param;
   localparam CPU_CLK = 50_000_000;
   localparam PROG_BAUD_RATE = 115200;
-  localparam PROGRAM_SEQUENCE = "ceresTEST";
+  localparam PROGRAM_SEQUENCE = "CERESTEST";
 
   localparam RESET_VECTOR = 32'h8000_0000;
   localparam RAS_SIZE = 8;
@@ -790,5 +790,108 @@ package ceres_param;
     logic [31:0]     data;
     logic            ld_op_sign;
   } data_req_t;
+
+  // ============================================================================
+  // SoC Memory Map Definitions
+  // ============================================================================
+  // Standard RISC-V memory regions with room for peripherals
+  //
+  // 0x0000_0000 - 0x0FFF_FFFF : Reserved / Debug
+  // 0x1000_0000 - 0x1FFF_FFFF : Boot ROM (optional)
+  // 0x2000_0000 - 0x2FFF_FFFF : Peripheral Region
+  //   0x2000_0000 : UART0
+  //   0x2000_1000 : UART1
+  //   0x2000_2000 : SPI0
+  //   0x2000_3000 : I2C0
+  //   0x2000_4000 : GPIO
+  //   0x2000_5000 : PWM
+  //   0x2000_6000 : Timer
+  //   0x2000_7000 : Interrupt Controller (PLIC-lite)
+  //   0x2000_8000 - 0x2000_FFFF : Reserved for future peripherals
+  // 0x3000_0000 - 0x3FFF_FFFF : CLINT (Core Local Interruptor)
+  //   0x3000_0000 : msip
+  //   0x3000_4000 : mtimecmp
+  //   0x3000_BFF8 : mtime
+  // 0x4000_0000 - 0x7FFF_FFFF : External Memory / MMIO
+  // 0x8000_0000 - 0xFFFF_FFFF : Main RAM
+
+  // Memory Map Base Addresses
+  localparam logic [31:0] MMAP_DEBUG_BASE = 32'h0000_0000;
+  localparam logic [31:0] MMAP_BOOTROM_BASE = 32'h1000_0000;
+  localparam logic [31:0] MMAP_PERIPH_BASE = 32'h2000_0000;
+  localparam logic [31:0] MMAP_CLINT_BASE = 32'h3000_0000;
+  localparam logic [31:0] MMAP_EXTMEM_BASE = 32'h4000_0000;
+  localparam logic [31:0] MMAP_RAM_BASE = 32'h8000_0000;
+
+  // Peripheral Offsets (relative to MMAP_PERIPH_BASE)
+  localparam logic [15:0] PERIPH_UART0_OFF = 16'h0000;
+  localparam logic [15:0] PERIPH_UART1_OFF = 16'h1000;
+  localparam logic [15:0] PERIPH_SPI0_OFF = 16'h2000;
+  localparam logic [15:0] PERIPH_I2C0_OFF = 16'h3000;
+  localparam logic [15:0] PERIPH_GPIO_OFF = 16'h4000;
+  localparam logic [15:0] PERIPH_PWM_OFF = 16'h5000;
+  localparam logic [15:0] PERIPH_TIMER_OFF = 16'h6000;
+  localparam logic [15:0] PERIPH_PLIC_OFF = 16'h7000;
+
+  // Peripheral slot size (4KB each)
+  localparam int PERIPH_SLOT_SIZE = 4096;
+
+  // CLINT Offsets
+  localparam logic [15:0] CLINT_MSIP_OFF = 16'h0000;
+  localparam logic [15:0] CLINT_MTIMECMP_OFF = 16'h4000;
+  localparam logic [15:0] CLINT_MTIME_OFF = 16'hBFF8;
+
+  // ============================================================================
+  // Peripheral Bus Interface (Simple, AXI-Lite inspired)
+  // ============================================================================
+  // Simplified bus for peripheral access - 32-bit only
+  typedef struct packed {
+    logic        valid;  // Request valid
+    logic        ready;  // Requester ready for response
+    logic        write;  // 1=write, 0=read
+    logic [31:0] addr;   // Byte address
+    logic [31:0] wdata;  // Write data
+    logic [3:0]  wstrb;  // Write strobes (byte enables)
+  } pbus_req_t;
+
+  typedef struct packed {
+    logic        valid;  // Response valid
+    logic        ready;  // Responder ready
+    logic [31:0] rdata;  // Read data
+    logic        error;  // Error response
+  } pbus_res_t;
+
+  // ============================================================================
+  // Interrupt Definitions
+  // ============================================================================
+  // External interrupt sources (directly mapped to PLIC)
+  typedef struct packed {
+    logic       uart0_rx;  // UART0 receive interrupt
+    logic       uart0_tx;  // UART0 transmit interrupt
+    logic       uart1_rx;  // UART1 receive interrupt
+    logic       uart1_tx;  // UART1 transmit interrupt
+    logic       spi0;      // SPI0 interrupt
+    logic       i2c0;      // I2C0 interrupt
+    logic       gpio;      // GPIO interrupt (any pin)
+    logic       timer;     // Timer interrupt
+    logic [7:0] external;  // External interrupt pins
+  } ext_irq_t;
+
+  // Number of external interrupt sources
+  localparam int NUM_EXT_IRQ = 16;
+
+  // ============================================================================
+  // GPIO Configuration
+  // ============================================================================
+  localparam int GPIO_WIDTH = 32;
+
+  typedef struct packed {
+    logic [GPIO_WIDTH-1:0] output_en;   // Output enable (1=output, 0=input)
+    logic [GPIO_WIDTH-1:0] output_val;  // Output values
+    logic [GPIO_WIDTH-1:0] input_val;   // Input values (directly sampled)
+    logic [GPIO_WIDTH-1:0] irq_en;      // Interrupt enable per pin
+    logic [GPIO_WIDTH-1:0] irq_edge;    // 1=edge, 0=level triggered
+    logic [GPIO_WIDTH-1:0] irq_pol;     // 1=rising/high, 0=falling/low
+  } gpio_cfg_t;
 
 endpackage
