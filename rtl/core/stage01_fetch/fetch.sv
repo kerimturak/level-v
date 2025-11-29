@@ -51,9 +51,9 @@ module fetch
   abuff_res_t             buff_res;
   abuff_req_t             buff_req;
   icache_res_t            icache_res;
-  icache_req_t            icache_req;
+  icache_req_t            abuff_icache_req;  // Raw request from align_buffer
+  icache_req_t            icache_req;  // Gated request to cache
   blowX_res_t             buff_lowX_res;
-  logic                   buf_lookup_ack;
 
   // ============================================================================
   // PC Register: Program Counter yönetimi
@@ -182,21 +182,38 @@ module fetch
     buff_lowX_res.blk   = icache_res.blk;
 
     // ============================================================================
-    // Buffer to cache request  
+    // Buffer to Cache Request Gating
     // ============================================================================
-    //    icache_req.valid &= (exc_type_o == NO_EXCEPTION) && !buf_lookup_ack;  // convert continuous valid signal to one cycle handshale signal.
-
-    icache_req.valid &= !buf_lookup_ack;  // convert continuous valid signal to one cycle handshale signal.
+    // align_buffer outputs a continuous valid signal during miss.
+    // We gate it with buf_lookup_ack to create a one-cycle handshake:
+    //   - buf_lookup_ack=0: Allow request through
+    //   - buf_lookup_ack=1: Request already sent, suppress until response
+    icache_req.valid    = abuff_icache_req.valid && !buf_lookup_ack;
+    icache_req.ready    = abuff_icache_req.ready;
+    icache_req.addr     = abuff_icache_req.addr;
+    icache_req.uncached = abuff_icache_req.uncached;
   end
+
+  // Track pending request to icache - reset on response or new request from buffer
+  logic buf_lookup_ack;
+  logic prev_icache_req_valid;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || flush_i) begin
-      buf_lookup_ack <= '0;
+      buf_lookup_ack <= 1'b0;
+      prev_icache_req_valid <= 1'b0;
     end else begin
+      prev_icache_req_valid <= icache_req.valid;
+
       if (buff_lowX_res.valid) begin
-        buf_lookup_ack <= 0;
-      end else if (!buf_lookup_ack) begin
-        buf_lookup_ack <= icache_req.valid && buff_lowX_res.ready;
+        // Response received - clear ack to allow next request
+        buf_lookup_ack <= 1'b0;
+      end else if (buff_res.waiting_second && buf_lookup_ack) begin
+        // Double miss: align_buffer needs second request, clear ack
+        buf_lookup_ack <= 1'b0;
+      end else if (icache_req.valid && buff_lowX_res.ready && !buf_lookup_ack) begin
+        // Request accepted by cache - set ack
+        buf_lookup_ack <= 1'b1;
       end
     end
   end
@@ -241,7 +258,7 @@ module fetch
       .buff_req_i(buff_req),
       .buff_res_o(buff_res),
       .lowX_res_i(buff_lowX_res),
-      .lowX_req_o(icache_req)
+      .lowX_req_o(abuff_icache_req)  // Raw request, gated in always_comb
   );
 
   // ============================================================================

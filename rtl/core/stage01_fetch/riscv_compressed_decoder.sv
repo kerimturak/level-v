@@ -187,14 +187,17 @@ module riscv_compressed_decoder
                   // c.jr -> jalr x0, rd/rs1, 0
                   instr_o = {12'b0, instr_i[11:7], 3'b0, 5'b0, OPCODE_JALR};
                 end
+                // Note: c.mv with rd=x0 is a HINT, not illegal
               end else begin
                 // c.add -> add rd, rd, rs2
                 instr_o = {7'b0, instr_i[6:2], instr_i[11:7], 3'b0, instr_i[11:7], OPCODE_OP};
 
-                if (instr_i[11:7] == 5'b0) begin
-                  // c.ebreak -> ebreak
-                  if (instr_i[6:2] != 5'b0) illegal_instr_o = 1'b1;
-                  else instr_o = {32'h00_10_00_73};
+                if (instr_i[11:7] == 5'b0 && instr_i[6:2] == 5'b0) begin
+                  // c.ebreak -> ebreak (rd=0, rs2=0)
+                  instr_o = {32'h00_10_00_73};
+                end else if (instr_i[11:7] == 5'b0) begin
+                  // c.add x0, rs2 is a HINT (rd=0, rs2!=0) - treat as NOP
+                  instr_o = {25'b0, OPCODE_OP};  // add x0, x0, x0 = NOP
                 end else if (instr_i[6:2] == 5'b0) begin
                   // c.jalr -> jalr x1, rs1, 0
                   instr_o = {12'b0, instr_i[11:7], 3'b000, 5'b00001, OPCODE_JALR};

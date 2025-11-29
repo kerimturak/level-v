@@ -580,6 +580,7 @@ package ceres_param;
     logic        valid;
     logic        miss;
     logic        ready;
+    logic        waiting_second;  // Double miss: waiting for second cache line
     logic [31:0] blk;
   } abuff_res_t;
 
