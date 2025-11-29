@@ -39,15 +39,21 @@ module memory
 
 
   logic                   ex_valid_q;
-  data_req_t              ex_data_req_q;
+  logic        [XLEN-1:0] ex_addr_q;
+  logic                   ex_rw_q;
+  logic        [     1:0] ex_rw_size_q;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
-      ex_valid_q <= 1'b0;
-      ex_data_req_q <= '0;
+      ex_valid_q   <= 1'b0;
+      ex_addr_q    <= '0;
+      ex_rw_q      <= 1'b0;
+      ex_rw_size_q <= '0;
     end else begin
-      ex_valid_q <= ex_data_req_i.valid;
-      ex_data_req_q <= ex_data_req_i;
+      ex_valid_q   <= ex_data_req_i.valid;
+      ex_addr_q    <= ex_data_req_i.addr;
+      ex_rw_q      <= ex_data_req_i.rw;
+      ex_rw_size_q <= ex_data_req_i.rw_size;
     end
   end
 
@@ -55,7 +61,12 @@ module memory
   // differs from the previous captured request, and there is no active
   // transaction for the memory region. This handles consecutive requests
   // whose `valid` may remain asserted across cycles (addresses/data change).
-  assign mem_req_fire = ex_data_req_i.valid && (ex_data_req_i != ex_data_req_q) && memregion && !mem_txn_active;
+  // NOTE: We intentionally exclude .data from comparison to break combinational
+  // loop: ex_data_req.data depends on forwarding which depends on stall_cause
+  // which depends on dmiss_stall which depends on mem_req_fire.
+  logic req_changed;
+  assign req_changed  = (ex_data_req_i.addr != ex_addr_q) || (ex_data_req_i.rw != ex_rw_q) || (ex_data_req_i.rw_size != ex_rw_size_q) || (ex_data_req_i.valid && !ex_valid_q);
+  assign mem_req_fire = ex_data_req_i.valid && req_changed && memregion && !mem_txn_active;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin

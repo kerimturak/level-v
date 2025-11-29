@@ -319,8 +319,12 @@ module cpu
     end else begin
       ex_exc_type = NO_EXCEPTION;
     end
-    ex_rd_csr = pipe2.rd_csr & !(stall_cause inside {LOAD_RAW_STALL, IMISS_STALL, DMISS_STALL, ALU_STALL});
-    ex_wr_csr = pipe2.wr_csr & !(stall_cause inside {LOAD_RAW_STALL, IMISS_STALL, DMISS_STALL, ALU_STALL});
+    // NOTE: Removed stall_cause dependency from ex_rd_csr/ex_wr_csr to break
+    // combinational loop: stall_cause → ex_rd_csr → csr_rdata → alu_result → 
+    // ex_data_req.data → memory → dmiss_stall → stall_cause
+    // The stall control is already handled inside cs_reg_file via stall_i input.
+    ex_rd_csr = pipe2.rd_csr;
+    ex_wr_csr = pipe2.wr_csr;
   end
 
   execution execution (
