@@ -15,7 +15,7 @@ Description:
   cache line width transfers.
 */
 `timescale 1ns / 1ps
-
+/* verilator lint_off VARHIDDEN */
 module wrapper_ram #(
     parameter WORD_WIDTH       = 32,          // Word genişliği (bit)
     parameter RAM_DEPTH        = 32768,       // Word sayısı (32K words = 128KB)
@@ -87,7 +87,6 @@ module wrapper_ram #(
   // ============================================
   string  init_file;
   integer fd;
-  string  line;
 
   initial begin
     if ($value$plusargs("INIT_FILE=%s", init_file)) begin

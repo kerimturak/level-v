@@ -56,6 +56,7 @@ module uart_tx #(  // counter
       IDLE:    if (!empty_o && tx_en_i) next_state = LOAD;
       LOAD:    next_state = SENDING;
       SENDING: if (bit_counter == 4'd9) next_state = (!empty_o && tx_en_i) ? LOAD : IDLE;
+      default: next_state = IDLE;
     endcase
     frame = {1'b1, data, 1'b0};
     tx_bit_o = (state == SENDING) ? frame[bit_counter] : 1'b1;

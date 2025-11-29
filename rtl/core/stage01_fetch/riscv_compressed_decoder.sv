@@ -210,6 +210,11 @@ module riscv_compressed_decoder
               instr_o = {4'b0, instr_i[8:7], instr_i[12], instr_i[6:2], 5'h02, 3'b010, instr_i[11:9], 2'b00, OPCODE_STORE};
             end
 
+            default: begin
+              // Unhandled C2 instructions - treat as illegal
+              illegal_instr_o = 1'b1;
+            end
+
           endcase
         end
 

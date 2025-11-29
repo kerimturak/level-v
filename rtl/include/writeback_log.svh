@@ -160,6 +160,7 @@ end
           $fwrite(trace_fd,
             "core   0: 3 0x%08h (0x%08h) mem 0x%08h 0x%08h\n",
             pc_i, fe_tracer_i.inst, alu_result_i, wdata[31:0]);
+        default: ; // Do nothing for 2'b00
       endcase
     end
 

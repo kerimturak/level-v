@@ -35,7 +35,7 @@ module pma
       '{addr : 32'h3000_0000, mask: 32'h0000_0007, uncached: 1'b1, memregion: 1'b1, x : 1'b0, w : 1'b0, r : 1'b1}  // Timer
   };
 
-  for (genvar i = 0; i < 3; i++) begin
+  for (genvar i = 0; i < 3; i++) begin : gen_region_match
     assign region_match[i] = pma_map[i].addr == (addr_i & ~pma_map[i].mask);
   end
 

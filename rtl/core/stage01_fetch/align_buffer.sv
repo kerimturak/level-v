@@ -7,6 +7,7 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
+/* verilator lint_off VARHIDDEN */
 module align_buffer
   import ceres_param::*;
 #(
@@ -135,7 +136,7 @@ module align_buffer
     unalign                 = &{word_sel, half_sel};
 
     odd.rd_idx              = buff_req_i.addr[IDX_WIDTH+OFFSET_WIDTH-1:OFFSET_WIDTH];
-    {overflow, even.rd_idx} = odd.rd_idx + unalign;
+    {overflow, even.rd_idx} = odd.rd_idx + {{(IDX_WIDTH - 1) {1'b0}}, unalign};
 
     odd.wr_tag              = {1'b1, buff_req_i.addr[XLEN-1 : IDX_WIDTH+OFFSET_WIDTH]};
     tag_plus1               = buff_req_i.addr[XLEN-1 : IDX_WIDTH+OFFSET_WIDTH] + 1;
@@ -170,7 +171,7 @@ module align_buffer
     data_wr_en              = even.tag_wr_en || odd.tag_wr_en;
   end
 
-  for (genvar i = 0; i < NUM_WORDS; i++) begin
+  for (genvar i = 0; i < NUM_WORDS; i++) begin : gen_parcel_logic
     always_comb begin
       even.wr_parcel[i] = lowX_res_i.blk[i*WORD_BITS+:PARCEL_BITS];
       odd.wr_parcel[i]  = lowX_res_i.blk[(2*i+1)*PARCEL_BITS+:PARCEL_BITS];
@@ -220,8 +221,8 @@ module align_buffer
     // Memory response parcels for miss cases
     // odd.deviceX_parcel:  upper 16-bit of selected word from memory response
     // even.deviceX_parcel: for unalign -> first parcel, else -> upper 16-bit of word
-    odd.deviceX_parcel = lowX_res_i.blk[((word_sel+1)*WORD_BITS)-1-:PARCEL_BITS];
-    even.deviceX_parcel = unalign ? lowX_res_i.blk[PARCEL_BITS-1:0] : lowX_res_i.blk[((word_sel+1)*WORD_BITS)-1-:PARCEL_BITS];
+    odd.deviceX_parcel = lowX_res_i.blk[((32'(word_sel)+1)*WORD_BITS)-1-:PARCEL_BITS];
+    even.deviceX_parcel = unalign ? lowX_res_i.blk[PARCEL_BITS-1:0] : lowX_res_i.blk[((32'(word_sel)+1)*WORD_BITS)-1-:PARCEL_BITS];
   end
 
   // ============================================================================

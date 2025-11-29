@@ -241,7 +241,7 @@ module gshare_bp
         // Taken ise: Sol shift ve yeni bit ekle
         // `pht_ptr >>> ghr` işlemi mantıksız - eski GHR değerini nasıl restore eder?
         // Çözüm: Checkpoint buffer kullanarak eski GHR'leri saklamalısınız
-        ghr                    <= ex_taken ? {ghr[GHR_SIZE-2:0], pht_bit1[1] & spec_hit_i} : pht_ptr >>> ghr;
+        ghr                    <= ex_taken ? {ghr[GHR_SIZE-2:0], pht_bit1[1] & spec_hit_i} : GHR_SIZE'(pht_ptr) >>> ghr;
       end
     end
   end

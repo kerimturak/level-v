@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 
 `timescale 1ns / 1ps
-
+/* verilator lint_off VARHIDDEN */
 module ras
   import ceres_param::*;
 #(
@@ -89,6 +89,7 @@ module ras
             ras[0].data  <= return_addr_i;
             ras[0].valid <= 1;
           end
+          default: ;  // NONE - do nothing
         endcase
       end
     end

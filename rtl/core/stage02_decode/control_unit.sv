@@ -306,6 +306,19 @@ module control_unit
             ctrl_o.rw_size      = '0;
             ctrl_o.dcache_valid = 1'b0;
           end
+          default: begin
+            ctrl_o.rf_rw_en     = 1'b0;
+            ctrl_o.wr_csr       = 1'b0;
+            ctrl_o.rd_csr       = 1'b0;
+            ctrl_o.csr_idx      = 12'h000;
+            ctrl_o.csr_or_data  = 1'b0;
+            ctrl_o.imm_sel      = NO_IMM;
+            ctrl_o.alu_in2_sel  = 1'b0;
+            ctrl_o.wr_en        = 1'b0;
+            ctrl_o.result_src   = 2'b00;
+            ctrl_o.rw_size      = '0;
+            ctrl_o.dcache_valid = 1'b0;
+          end
         endcase
       end
       default: begin

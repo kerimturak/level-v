@@ -659,15 +659,13 @@ package ceres_param;
       12'hB80,  // mcycleh (RV32)
       12'hB82,  // minstreth (RV32)
 
-      12'h3A0,  // pmpcfg0   <-- YENİ
-      12'h3B0,  // pmpaddr0  <-- YENİ
+      12'h3A0,  // pmpcfg0
+      12'h3B0,  // pmpaddr0
       // ============================
       // OPTIONAL CSRs required by tests (read-zero dummy)
       // ============================
       12'h106,  // scounteren
       12'h320,  // mcountinhibit
-      12'h3A0,  // pmpcfg0
-      12'h3B0,  // pmpaddr0
       12'h7A0,  // tselect
       12'h7A1,  // tdata1
       12'h7A2,  // tdata2

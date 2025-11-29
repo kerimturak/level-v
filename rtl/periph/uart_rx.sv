@@ -61,7 +61,7 @@ module uart_rx #(  // counter
     end else begin
       if (baud_clk) begin
         if (state == SAMPLING || bit_counter == 4'b0) begin
-          data[bit_counter] <= rx_bit_i;
+          data[bit_counter[2:0]] <= rx_bit_i;
         end
         if (rx_en_i) begin
           rx_bit_old <= rx_bit_new;

@@ -1,3 +1,6 @@
+/* verilator lint_off UNUSEDPARAM */
+/* verilator lint_off UNUSEDSIGNAL */
+/* verilator lint_off VARHIDDEN */
 package configure;
   timeunit 1ps; timeprecision 1ps;
 

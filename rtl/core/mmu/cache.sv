@@ -7,7 +7,7 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-
+/* verilator lint_off VARHIDDEN */
 module cache
   import ceres_param::*;
 #(
@@ -110,8 +110,8 @@ module cache
         if (!lowX_res_i.valid || !cache_req_i.ready) cache_req_q <= cache_req_q;
         else cache_req_q <= cache_req_i;
       end else begin
-        if (!cache_req_i.ready) cache_req_q <= flush && flush_index != NUM_SET - 1 ? '0 : cache_req_q;
-        else cache_req_q <= flush && flush_index != NUM_SET - 1 ? '0 : cache_req_i;
+        if (!cache_req_i.ready) cache_req_q <= flush && flush_index != IDX_WIDTH'(NUM_SET - 1) ? '0 : cache_req_q;
+        else cache_req_q <= flush && flush_index != IDX_WIDTH'(NUM_SET - 1) ? '0 : cache_req_i;
       end
     end
   end
@@ -121,9 +121,9 @@ module cache
       flush_index <= '0;
       flush       <= 1'b1;
     end else begin
-      if (flush && flush_index != NUM_SET - 1) flush_index <= flush_index + 1'b1;
+      if (flush && flush_index != IDX_WIDTH'(NUM_SET - 1)) flush_index <= flush_index + 1'b1;
       else begin
-        flush_index <= 1'b0;
+        flush_index <= '0;
         flush       <= flush_i;
       end
     end
@@ -257,8 +257,8 @@ module cache
       data_wr_pre = mask_data;
       case (cache_req_q.rw_size)
         2'b11: data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
-        2'b10: data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data;
-        2'b01: data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data;
+        2'b10: data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
+        2'b01: data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
         2'b00: data_wr_pre = '0;
       endcase
 
@@ -341,7 +341,7 @@ module cache
           idx_base = (2 ** lvl) - 1;
           shift = $clog2(NUM_WAY) - lvl;
           // Güncelleme: ilgili bit tersleniyor
-          node_tmp[idx_base+(i>>shift)] = ~((i >> (shift - 1)) & 1'b1);
+          node_tmp[idx_base+(i>>shift)] = ((i >> (shift - 1)) & 1) == 0;
         end
       end
     end
@@ -358,7 +358,7 @@ module cache
       for (int unsigned lvl = 0; lvl < $clog2(NUM_WAY); lvl++) begin
         idx_base = (2 ** lvl) - 1;
         shift = $clog2(NUM_WAY) - lvl;
-        if (((i >> (shift - 1)) & 1'b1) == 1'b1) en &= node_in[idx_base+(i>>shift)];
+        if (((i >> (shift - 1)) & 32'b1) == 32'b1) en &= node_in[idx_base+(i>>shift)];
         else en &= ~node_in[idx_base+(i>>shift)];
       end
       way[i] = en;

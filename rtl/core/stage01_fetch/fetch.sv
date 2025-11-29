@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
 `include "ceres_defines.svh"
+/* verilator lint_off VARHIDDEN */
 module fetch
   import ceres_param::*;
 #(
@@ -44,7 +45,9 @@ module fetch
   logic                   pc_en;
   logic                   fetch_valid;
   logic                   uncached;
+  /* verilator lint_off UNUSEDSIGNAL */
   logic                   memregion;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic                   grand;
   logic                   illegal_instr;
   logic                   is_comp;
@@ -196,7 +199,9 @@ module fetch
 
   // Track pending request to icache - reset on response or new request from buffer
   logic buf_lookup_ack;
+  /* verilator lint_off UNUSEDSIGNAL */
   logic prev_icache_req_valid;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || flush_i) begin
@@ -338,6 +343,7 @@ module fetch
 
 `ifdef TRACER_EN
   always_comb begin
+    fe_tracer_o.inst = '0;
     if ((stall_i == NO_STALL) && buff_res.valid) begin
       if ((buff_res.valid && is_comp)) begin
         fe_tracer_o.inst = {16'b0, buff_res.blk[15:0]};
