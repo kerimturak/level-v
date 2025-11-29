@@ -156,6 +156,11 @@ run_bench_flist:
 		exit 1; \
 	fi
 	@$(MKDIR) "$(LOG_DIR)"
+	@# Clean all logs for this simulator if CLEAN_LOGS=1
+	@if [ "$(CLEAN_LOGS)" = "1" ]; then \
+		echo -e "$(CYAN)[CLEAN]$(RESET) Removing all previous logs: $(RESULTS_DIR)/logs/$(SIM)/"; \
+		rm -rf "$(RESULTS_DIR)/logs/$(SIM)/"*; \
+	fi
 	@echo -n "" > $(PASS_LIST_FILE)
 	@echo -n "" > $(FAIL_LIST_FILE)
 	@echo -e "$(GREEN)Running benchmarks from list file:$(RESET) $(FLIST)"
@@ -166,6 +171,9 @@ run_bench_flist:
 		if echo "$${test}" | grep -E '^\s*#' >/dev/null || [ -z "$${test}" ]; then continue; fi; \
 		TOTAL=$$(( $${TOTAL} + 1 )); \
 		TEST_LOG_DIR="$(RESULTS_DIR)/logs/$(SIM)/$${test}"; \
+		if [ -d "$${TEST_LOG_DIR}" ]; then \
+			rm -rf "$${TEST_LOG_DIR}"; \
+		fi; \
 		mkdir -p "$${TEST_LOG_DIR}"; \
 		echo -e ""; \
 		echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
@@ -249,6 +257,12 @@ help_lists:
 	@echo -e "  $(GREEN)make all_tests$(RESET)   – Run ALL tests"
 	@echo -e "  $(GREEN)make exc$(RESET)         – Run exception tests"
 	@echo -e ""
+	@echo -e "$(YELLOW)CoreMark Commands:$(RESET)"
+	@echo -e "  $(GREEN)make cm$(RESET)          – Build and run CoreMark"
+	@echo -e "  $(GREEN)make cm_run$(RESET)      – Quick CoreMark run (skip rebuild if exists)"
+	@echo -e "  $(GREEN)make coremark$(RESET)    – Build CoreMark only"
+	@echo -e "  $(GREEN)make coremark_help$(RESET)– Show detailed CoreMark help"
+	@echo -e ""
 	@echo -e "$(YELLOW)Quick Single Test:$(RESET)"
 	@echo -e "  $(GREEN)make t T=rv32ui-p-add$(RESET)     – Quick ISA test"
 	@echo -e "  $(GREEN)make tb T=dhrystone$(RESET)       – Quick benchmark [NO_ADDR=1]"
@@ -257,7 +271,8 @@ help_lists:
 	@echo -e "$(YELLOW)Options:$(RESET)"
 	@echo -e "  SIM=verilator|modelsim  – Simulator (default: verilator)"
 	@echo -e "  MAX_CYCLES=<n>          – Max cycles (default: 100000)"
-	@echo -e "  FAST_SIM=1              – Disable all logging for speed (NO_COMMIT_TRACE, NO_PIPELINE_LOG, NO_RAM_LOG)"
+	@echo -e "  FAST_SIM=1              – Disable all logging for speed"
+	@echo -e "  CLEAN_LOGS=1            – Clear all logs before batch run"
 	@echo -e ""
 	@echo -e "$(YELLOW)Architecture Test Pipeline:$(RESET)"
 	@echo -e "  $(GREEN)make arch_auto$(RESET)   – Full pipeline: Clone → Build → Import"
@@ -267,8 +282,11 @@ help_lists:
 	@echo -e "$(YELLOW)Examples:$(RESET)"
 	@echo -e "  make isa SIM=verilator"
 	@echo -e "  make bench MAX_CYCLES=5000000"
+	@echo -e "  make bench CLEAN_LOGS=1          # Clear old logs first"
 	@echo -e "  make t T=rv32ui-p-add"
 	@echo -e "  make tb T=median MAX_CYCLES=500000"
 	@echo -e "  make ta T=I-add-01"
 	@echo -e "  make t T=rv32ui-p-add FAST_SIM=1  # Fast simulation without logs"
+	@echo -e "  make cm                           # Run CoreMark"
+	@echo -e "  make cm MAX_CYCLES=10000000       # CoreMark with more cycles"
 	@echo -e ""

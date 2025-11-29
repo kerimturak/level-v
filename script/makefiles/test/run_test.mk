@@ -227,6 +227,11 @@ run_flist:
 		exit 1; \
 	fi
 	@$(MKDIR) "$(LOG_DIR)"
+	@# Clean all logs for this simulator if CLEAN_LOGS=1
+	@if [ "$(CLEAN_LOGS)" = "1" ]; then \
+		echo -e "$(CYAN)[CLEAN]$(RESET) Removing all previous logs: $(RESULTS_DIR)/logs/$(SIM)/"; \
+		rm -rf "$(RESULTS_DIR)/logs/$(SIM)/"*; \
+	fi
 	@echo -n "" > $(PASS_LIST_FILE)
 	@echo -n "" > $(FAIL_LIST_FILE)
 	@echo -e "$(GREEN)Running tests from list file:$(RESET) $(FLIST)"
@@ -237,6 +242,9 @@ run_flist:
 		if echo "$${test}" | grep -E '^\s*#' >/dev/null || [ -z "$${test}" ]; then continue; fi; \
 		TOTAL=$$(( $${TOTAL} + 1 )); \
 		TEST_LOG_DIR="$(RESULTS_DIR)/logs/$(SIM)/$${test}"; \
+		if [ -d "$${TEST_LOG_DIR}" ]; then \
+			rm -rf "$${TEST_LOG_DIR}"; \
+		fi; \
 		mkdir -p "$${TEST_LOG_DIR}"; \
 		echo -e ""; \
 		echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \

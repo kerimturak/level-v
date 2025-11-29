@@ -123,7 +123,7 @@ end
     else if (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu} && rd_addr_i != 0) begin
       automatic string spacing = (rd_addr_i < 10) ? "  " : " ";
       $fwrite(trace_fd,
-        "core    0: 3 0x%08h (0x%08h) x%0d%s0x%08h mem 0x%08h\n",
+        "core   0: 3 0x%08h (0x%08h) x%0d%s0x%08h mem 0x%08h\n",
         pc_i, fe_tracer_i.inst,
         rd_addr_i, spacing, wb_data_o,
         alu_result_i

@@ -4,7 +4,7 @@
 # ============================================================
 
 .PHONY: coremark coremark_check coremark_setup coremark_build coremark_clean coremark_help
-.PHONY: coremark_gen_linker
+.PHONY: coremark_gen_linker run_coremark cm cm_run
 
 # ============================================================
 # Configuration
@@ -140,6 +140,67 @@ coremark_build: coremark_gen_linker
 	@echo -e "$(GREEN)[COREMARK] ✓ Build successful$(RESET)"
 
 # ============================================================
+# 4.5️⃣ Run CoreMark Simulation
+# ============================================================
+# CoreMark log directory
+COREMARK_LOG_DIR := $(RESULTS_DIR)/logs/$(SIM)/coremark
+
+# Main run target - build if needed, then simulate
+run_coremark: coremark
+	@echo -e ""
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Running CoreMark Simulation$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@# Clean previous CoreMark logs
+	@if [ -d "$(COREMARK_LOG_DIR)" ]; then \
+		echo -e "$(CYAN)[CLEAN]$(RESET) Removing previous CoreMark logs: $(COREMARK_LOG_DIR)"; \
+		rm -rf "$(COREMARK_LOG_DIR)"; \
+	fi
+	@$(MKDIR) "$(COREMARK_LOG_DIR)"
+	@echo -e "$(YELLOW)[INFO]$(RESET) MEM File: $(COREMARK_MEM)"
+	@echo -e "$(YELLOW)[INFO]$(RESET) Log Dir:  $(COREMARK_LOG_DIR)"
+	@echo -e "$(YELLOW)[INFO]$(RESET) Max Cycles: $(or $(MAX_CYCLES),5000000)"
+	@$(MAKE) --no-print-directory run_verilator \
+		TEST_NAME=coremark \
+		TEST_TYPE=bench \
+		MEM_FILE=$(COREMARK_MEM) \
+		NO_ADDR=1 \
+		MAX_CYCLES=$(or $(MAX_CYCLES),5000000) \
+		VERILATOR_LOG_DIR=$(COREMARK_LOG_DIR)
+	@echo -e ""
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  CoreMark Simulation Complete$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@if [ -f "$(COREMARK_LOG_DIR)/uart_output.log" ]; then \
+		echo -e "$(YELLOW)[UART OUTPUT]$(RESET)"; \
+		cat "$(COREMARK_LOG_DIR)/uart_output.log"; \
+	fi
+
+# Short alias for run_coremark
+cm: run_coremark
+
+# Even shorter - just run (assumes already built)
+cm_run:
+	@if [ ! -f "$(COREMARK_MEM)" ]; then \
+		echo -e "$(YELLOW)[INFO]$(RESET) CoreMark not built yet, building first..."; \
+		$(MAKE) --no-print-directory coremark; \
+	fi
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Running CoreMark (Quick Mode)$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@if [ -d "$(COREMARK_LOG_DIR)" ]; then \
+		rm -rf "$(COREMARK_LOG_DIR)"; \
+	fi
+	@$(MKDIR) "$(COREMARK_LOG_DIR)"
+	@$(MAKE) --no-print-directory run_verilator \
+		TEST_NAME=coremark \
+		TEST_TYPE=bench \
+		MEM_FILE=$(COREMARK_MEM) \
+		NO_ADDR=1 \
+		MAX_CYCLES=$(or $(MAX_CYCLES),5000000) \
+		VERILATOR_LOG_DIR=$(COREMARK_LOG_DIR)
+
+# ============================================================
 # 5️⃣ Clean
 # ============================================================
 
@@ -158,29 +219,36 @@ coremark_clean:
 
 coremark_help:
 	@echo -e "$(GREEN)═══════════════════════════════════════════════════════════$(RESET)"
-	@echo -e "$(GREEN)  CERES CoreMark Build System$(RESET)"
+	@echo -e "$(GREEN)  CERES CoreMark Build & Run System$(RESET)"
 	@echo -e "$(GREEN)  Target: Ceres-V RV32IMC_Zicsr Processor$(RESET)"
 	@echo -e "$(GREEN)═══════════════════════════════════════════════════════════$(RESET)"
 	@echo ""
-	@echo -e "$(YELLOW)Targets:$(RESET)"
+	@echo -e "$(YELLOW)Build Targets:$(RESET)"
 	@echo -e "  make coremark              - Full build pipeline"
 	@echo -e "  make coremark_check        - Check/clone CoreMark source"
 	@echo -e "  make coremark_setup        - Copy Ceres-V port files"
 	@echo -e "  make coremark_gen_linker   - Generate linker script from YAML"
 	@echo -e "  make coremark_build        - Build CoreMark"
 	@echo -e "  make coremark_clean        - Clean build artifacts"
-	@echo -e "  make coremark_help         - Show this help"
+	@echo ""
+	@echo -e "$(YELLOW)Run Targets:$(RESET)"
+	@echo -e "  make run_coremark          - Build (if needed) and run simulation"
+	@echo -e "  make cm                    - Short alias for run_coremark"
+	@echo -e "  make cm_run                - Quick run (skip rebuild if exists)"
 	@echo ""
 	@echo -e "$(YELLOW)Configuration:$(RESET)"
 	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1000)"
+	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo ""
 	@echo -e "$(YELLOW)Memory Map:$(RESET)"
 	@echo -e "  Edit: $(COREMARK_PORT_SRC)/memory_map.yaml"
 	@echo -e "  Linker script is auto-generated from memory map"
 	@echo ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
+	@echo -e "  make cm                              # Build & run CoreMark"
+	@echo -e "  make cm MAX_CYCLES=10000000          # Run with more cycles"
 	@echo -e "  make coremark COREMARK_ITERATIONS=2000"
-	@echo -e "  make coremark_clean coremark"
+	@echo -e "  make coremark_clean coremark         # Clean rebuild"
 	@echo ""
 	@echo -e "$(YELLOW)Output Files (in $(COREMARK_BUILD_DIR)):$(RESET)"
 	@echo -e "  coremark.elf   - ELF executable"
@@ -188,4 +256,9 @@ coremark_help:
 	@echo -e "  coremark.hex   - Intel HEX format"
 	@echo -e "  coremark.mem   - Verilog memory file"
 	@echo -e "  coremark.dump  - Disassembly listing"
+	@echo ""
+	@echo -e "$(YELLOW)Simulation Logs (in $(COREMARK_LOG_DIR)):$(RESET)"
+	@echo -e "  uart_output.log  - UART output (CoreMark results)"
+	@echo -e "  ceres.log        - Pipeline trace"
+	@echo -e "  waveform.fst     - Waveform dump"
 	@echo ""
