@@ -180,6 +180,7 @@ NO_WARN_TIMING = \
     --Wno-ASSIGNDLY \
     --Wno-INITIALDLY \
     --Wno-BLKANDNBLK \
+    --Wno-BLKLOOPINIT \
     --Wno-TIMESCALEMOD
 
 # Structural warnings
