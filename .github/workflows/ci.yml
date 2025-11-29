@@ -104,7 +104,7 @@ jobs:
       - name: Build Verilator model
         run: |
           export RISCV_PREFIX=riscv-none-elf
-          make verilator_build
+          make verilate
       
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
