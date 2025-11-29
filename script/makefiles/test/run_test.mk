@@ -302,3 +302,38 @@ run_flist:
 	else \
 		echo -e "$(GREEN)🎉 All tests passed!$(RESET)"; \
 	fi
+
+
+# ============================================================
+# 7️⃣ Generate HTML Test Dashboard
+# ============================================================
+# Usage:
+#   make html                    # Generate dashboard for verilator results
+#   make html SIM=modelsim       # Generate dashboard for modelsim results
+#   make html DASHBOARD_TITLE="My Tests"  # Custom title
+# ============================================================
+DASHBOARD_OUTPUT ?= $(RESULTS_DIR)/logs/dashboard.html
+DASHBOARD_TITLE  ?= CERES Test Dashboard
+DASHBOARD_SCRIPT := $(SCRIPT_DIR)/python/makefile/generate_test_dashboard.py
+
+.PHONY: html dashboard open_dashboard
+
+html: dashboard
+
+dashboard:
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Generating HTML Test Dashboard$(RESET)"
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)[INFO]$(RESET) Results Dir : $(RESULTS_DIR)"
+	@echo -e "$(CYAN)[INFO]$(RESET) Simulator   : $(SIM)"
+	@echo -e "$(CYAN)[INFO]$(RESET) Output      : $(DASHBOARD_OUTPUT)"
+	@python3 $(DASHBOARD_SCRIPT) \
+		--results-dir "$(RESULTS_DIR)" \
+		--simulator "$(SIM)" \
+		--output "$(DASHBOARD_OUTPUT)" \
+		--title "$(DASHBOARD_TITLE)"
+	@echo -e "$(GREEN)✓ Dashboard generated successfully$(RESET)"
+	@echo -e "$(CYAN)[INFO]$(RESET) Open with: xdg-open $(DASHBOARD_OUTPUT)"
+
+open_dashboard: dashboard
+	@xdg-open "$(DASHBOARD_OUTPUT)" 2>/dev/null || open "$(DASHBOARD_OUTPUT)" 2>/dev/null || echo "Please open $(DASHBOARD_OUTPUT) in a browser"
