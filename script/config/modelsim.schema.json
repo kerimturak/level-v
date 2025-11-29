@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ModelSim Configuration",
+  "description": "Configuration schema for CERES RISC-V ModelSim/Questa simulation",
+  "type": "object",
+  "properties": {
+    "simulation": {
+      "type": "object",
+      "properties": {
+        "time_resolution": { "enum": ["fs", "ps", "ns", "us", "ms", "s"], "description": "Simulation time resolution" },
+        "sim_time": { "type": "string", "description": "Default simulation time (e.g., 100us)" },
+        "voptargs": { "type": "string", "description": "Arguments passed to vopt" },
+        "quiet": { "type": "boolean", "description": "Suppress Loading messages" }
+      }
+    },
+    "compile": {
+      "type": "object",
+      "properties": {
+        "sv_mode": { "type": "boolean", "description": "Enable SystemVerilog features" },
+        "mfcu": { "type": "boolean", "description": "Multi-file compilation unit" },
+        "svinputport": { "enum": ["net", "var", "compat", "relaxed"], "description": "Input port handling" },
+        "opt_level": { "enum": ["O0", "O1", "O4", "O5"], "description": "Optimization level" },
+        "incremental": { "type": "boolean", "description": "Enable incremental compilation" }
+      }
+    },
+    "lint": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Enable lint checking" },
+        "mode": { "enum": ["default", "fast", "full"], "description": "Lint checking mode" },
+        "pedantic": { "type": "boolean", "description": "Strict language checks" },
+        "style_checks": { "type": "boolean", "description": "Enable style-related checks" },
+        "width_checks": { "type": "boolean", "description": "Enable width mismatch checks" }
+      }
+    },
+    "debug": {
+      "type": "object",
+      "properties": {
+        "acc": { "type": "string", "description": "Access level: n=nets, p=ports, r=variables" },
+        "fsmdebug": { "type": "boolean", "description": "Enable FSM visualization" },
+        "classdebug": { "type": "boolean", "description": "Enable class debug features" },
+        "assertdebug": { "type": "boolean", "description": "Keep assertion debug data" },
+        "lineinfo": { "type": "boolean", "description": "Enable line info in messages" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Enable code coverage" },
+        "statement": { "type": "boolean", "description": "Statement coverage (s)" },
+        "branch": { "type": "boolean", "description": "Branch coverage (b)" },
+        "condition": { "type": "boolean", "description": "Condition coverage (c)" },
+        "expression": { "type": "boolean", "description": "Expression coverage (e)" },
+        "fsm": { "type": "boolean", "description": "FSM coverage (f)" },
+        "toggle": { "type": "boolean", "description": "Toggle coverage (t)" }
+      }
+    },
+    "language": {
+      "type": "object",
+      "properties": {
+        "sv_standard": { "enum": ["sv05compat", "sv09compat", "sv12compat", "sv17compat"], "description": "SystemVerilog standard" },
+        "define_macros": { "type": "array", "items": { "type": "string" }, "description": "Macro definitions" },
+        "include_dirs": { "type": "array", "items": { "type": "string" }, "description": "Include directories" },
+        "timescale": { "type": "string", "description": "Default timescale" }
+      }
+    },
+    "gls": {
+      "type": "object",
+      "properties": {
+        "timing_checks": { "type": "boolean", "description": "Enable timing checks" },
+        "specify_delays": { "type": "boolean", "description": "Use specify path delays" },
+        "delay_mode": { "enum": ["min", "typ", "max", "zero", "unit", "distributed", "path"], "description": "Delay mode" }
+      }
+    },
+    "messages": {
+      "type": "object",
+      "properties": {
+        "suppress": { "type": "array", "items": { "type": "string" }, "description": "Message IDs to suppress" },
+        "nowarn": { "type": "array", "items": { "type": "integer" }, "description": "Warning categories to disable" },
+        "error": { "type": "array", "items": { "type": "string" }, "description": "Messages to report as errors" },
+        "fatal": { "type": "array", "items": { "type": "string" }, "description": "Messages to report as fatal" },
+        "source_on_error": { "type": "boolean", "description": "Print source line with errors" }
+      }
+    },
+    "multicore": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Enable multicore simulation" },
+        "threads": { "type": "integer", "minimum": 1, "description": "Number of threads" }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "description": "Profile configuration overrides"
+      }
+    }
+  }
+}

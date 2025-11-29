@@ -206,7 +206,7 @@ module gshare_bp
   // ============================================================================
   ras #(
       .RAS_SIZE(RAS_SIZE)
-  ) u_ras (
+  ) ras (
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
       .restore_i    (restore),

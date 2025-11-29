@@ -1,0 +1,99 @@
+{
+  "$schema": "./modelsim.schema.json",
+  "_comment": "CERES RISC-V ModelSim/Questa Simulation Configuration",
+
+  "simulation": {
+    "time_resolution": "ns",
+    "sim_time": "100us",
+    "voptargs": "+acc=npr",
+    "quiet": false
+  },
+
+  "compile": {
+    "sv_mode": true,
+    "mfcu": true,
+    "svinputport": "relaxed",
+    "incremental": false
+  },
+
+  "lint": {
+    "enabled": true,
+    "mode": "default",
+    "pedantic": false,
+    "style_checks": true,
+    "width_checks": true
+  },
+
+  "debug": {
+    "acc": "npr",
+    "fsmdebug": false,
+    "classdebug": false,
+    "assertdebug": false
+  },
+
+  "coverage": {
+    "enabled": false,
+    "statement": true,
+    "branch": true,
+    "condition": true,
+    "expression": true,
+    "fsm": true,
+    "toggle": true
+  },
+
+  "language": {
+    "sv_standard": "sv12compat",
+    "define_macros": [],
+    "include_dirs": [],
+    "timescale": "1ns/1ps"
+  },
+
+  "gls": {
+    "timing_checks": false,
+    "specify_delays": false,
+    "delay_mode": "typ"
+  },
+
+  "messages": {
+    "suppress": [
+      "vlog-2583",
+      "vlog-2275"
+    ],
+    "nowarn": [],
+    "error": [],
+    "fatal": [],
+    "source_on_error": true
+  },
+
+  "multicore": {
+    "enabled": false,
+    "threads": 2
+  },
+
+  "profiles": {
+    "fast": {
+      "_description": "Maximum speed, minimal checking",
+      "lint": { "enabled": false },
+      "debug": { "acc": "" },
+      "simulation": { "quiet": true }
+    },
+    "debug": {
+      "_description": "Full debugging with all features",
+      "lint": { "enabled": true, "mode": "full" },
+      "debug": { "acc": "npr", "fsmdebug": true, "classdebug": true, "assertdebug": true }
+    },
+    "lint_only": {
+      "_description": "Lint checking without simulation",
+      "lint": { "enabled": true, "mode": "full", "pedantic": true, "style_checks": true }
+    },
+    "coverage": {
+      "_description": "Coverage collection mode",
+      "coverage": { "enabled": true, "statement": true, "branch": true, "condition": true, "expression": true, "toggle": true }
+    },
+    "gls": {
+      "_description": "Gate-level simulation mode",
+      "gls": { "timing_checks": true, "specify_delays": true },
+      "simulation": { "voptargs": "+acc=npr +notimingchecks" }
+    }
+  }
+}
