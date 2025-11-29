@@ -598,7 +598,7 @@ module cpu
     end
     excp_mask = '0;
     excp_mask = {1'b0, ex_exc_type != NO_EXCEPTION, de_active_exc_type != NO_EXCEPTION, fe_active_exc_type != NO_EXCEPTION};
-    fe_trap_active = |{excp_mask[3:1], pipe1.exc_type != NO_EXCEPTION};
+    fe_trap_active = |{excp_mask[3:1], de_active_exc_type != NO_EXCEPTION};
     trap_active = |excp_mask[3:1];
     de_trap_active = de_active_exc_type != NO_EXCEPTION;
     priority_flush = ex_exc_type != NO_EXCEPTION ? 3:

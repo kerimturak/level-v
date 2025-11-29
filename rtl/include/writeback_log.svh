@@ -120,12 +120,21 @@ end
     // ============================================================
     // 3) REGISTER WRITE ONLY (normal ALU, load result, jump-link, etc.)
     // ============================================================
-    else if (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu}) begin
+    else if (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu} && rd_addr_i != 0) begin
       automatic string spacing = (rd_addr_i < 10) ? "  " : " ";
       $fwrite(trace_fd,
         "core    0: 3 0x%08h (0x%08h) x%0d%s0x%08h mem 0x%08h\n",
         pc_i, fe_tracer_i.inst,
         rd_addr_i, spacing, wb_data_o,
+        alu_result_i
+      );
+    end
+
+    // Load to x0 - just log memory access without register write
+    else if (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu} && rd_addr_i == 0) begin
+      $fwrite(trace_fd,
+        "core   0: 3 0x%08h (0x%08h) mem 0x%08h\n",
+        pc_i, fe_tracer_i.inst,
         alu_result_i
       );
     end
@@ -258,13 +267,16 @@ task automatic check_pass_fail();
   end
 endtask
 
+// TOHOST check - only for riscv-tests (isa tests), not arch tests
+// When addr_check_enabled is true, pass/fail is determined by PC addresses
+// When addr_check_enabled is false, use TOHOST memory-mapped register
 always @(posedge clk_i) begin
   automatic logic        we = wr_en_i;
   automatic logic        valid = `SOC.pipe4.dcache_valid;
   automatic logic [31:0] addr = `SOC.pipe4.alu_result;
   automatic logic [31:0] data = `SOC.pipe4.write_data;
 
-  if (addr_check_enabled && valid && we && addr == 32'h80001000) begin
+  if (!addr_check_enabled && valid && we && addr == 32'h80001000) begin
     if (data == 32'h1) begin
       $display("🎉 TOHOST PASS");
       $finish;

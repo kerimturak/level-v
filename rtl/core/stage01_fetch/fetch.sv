@@ -57,6 +57,7 @@ module fetch
   icache_req_t            abuff_icache_req;  // Raw request from align_buffer
   icache_req_t            icache_req;  // Gated request to cache
   blowX_res_t             buff_lowX_res;
+  logic                   buf_lookup_ack;
 
   // ============================================================================
   // PC Register: Program Counter yönetimi
@@ -198,7 +199,6 @@ module fetch
   end
 
   // Track pending request to icache - reset on response or new request from buffer
-  logic buf_lookup_ack;
   /* verilator lint_off UNUSEDSIGNAL */
   logic prev_icache_req_valid;
   /* verilator lint_on UNUSEDSIGNAL */

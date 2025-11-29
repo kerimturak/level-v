@@ -225,8 +225,8 @@ module compressed_decoder
 
       3'b010: begin
         // C.LI: addi rd, x0, imm
+        // Note: rd=x0 is HINT (valid, treated as NOP)
         c1_instr = gen_i_type(get_imm_ci(), REG_ZERO, FUNCT3_ADD, rd_rs1_full, OPCODE_OPIMM);
-        if (rd_rs1_full == REG_ZERO) c1_illegal = 1'b1;  // rd=x0 is reserved
       end
 
       3'b011: begin
@@ -235,10 +235,12 @@ module compressed_decoder
           c1_instr = gen_i_type(get_imm_addi16sp(), REG_SP, FUNCT3_ADD, REG_SP, OPCODE_OPIMM);
         end else begin
           // C.LUI: lui rd, nzimm
+          // Note: rd=x0 is HINT (valid, treated as NOP)
           c1_instr = gen_u_type(get_imm_lui(), rd_rs1_full, OPCODE_LUI);
         end
         // Check for reserved encodings
-        if (rd_rs1_full == REG_ZERO) c1_illegal = 1'b1;
+        // Note: rd=x0 case goes to C.LUI which is HINT, not illegal
+        // But nzimm=0 is reserved for both C.ADDI16SP and C.LUI
         if ({instr_i[12], instr_i[6:2]} == 6'b0) c1_illegal = 1'b1;  // nzimm=0 is reserved
       end
 
@@ -316,8 +318,8 @@ module compressed_decoder
     case (funct3)
       3'b000: begin
         // C.SLLI: slli rd, rd, shamt
+        // Note: rd=x0 is HINT (valid, treated as NOP)
         c2_instr = gen_i_type({7'b0, get_shamt()}, rd_rs1_full, FUNCT3_SLL, rd_rs1_full, OPCODE_OPIMM);
-        if (rd_rs1_full == REG_ZERO) c2_illegal = 1'b1;  // rd=x0 is reserved
         if (instr_i[12] || get_shamt() == 5'b0) c2_illegal = 1'b1;  // shamt[5]=1 or shamt=0 is reserved
       end
 

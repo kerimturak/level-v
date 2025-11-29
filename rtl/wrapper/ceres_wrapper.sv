@@ -34,7 +34,7 @@ module ceres_wrapper
     parameter int unsigned BAUD_RATE   = 115200,
 
     // Memory Configuration
-    parameter int unsigned RAM_SIZE_KB = 128,
+    parameter int unsigned RAM_SIZE_KB = 1024,
     parameter int unsigned RAM_LATENCY = 16,
 
     // Peripheral Configuration

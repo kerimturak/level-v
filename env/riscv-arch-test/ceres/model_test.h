@@ -42,21 +42,32 @@
 rvtest_trap_handler:                                                    \
     csrr t0, mcause;                                                    \
     csrr t1, mepc;                                                      \
-    li t2, 3;                   /* EBREAK mcause */                     \
+    /* Check EBREAK (mcause = 3) */                                     \
+    li t2, 3;                                                           \
     bne t0, t2, 1f;                                                     \
-    lhu t3, 0(t1);              /* Load instruction */                  \
-    andi t3, t3, 0x3;           /* Check if compressed */               \
+    /* EBREAK: check if compressed */                                   \
+    lhu t3, 0(t1);                                                      \
+    andi t3, t3, 0x3;                                                   \
     li t4, 0x3;                                                         \
-    beq t3, t4, 2f;             /* If 0x3, it's 32-bit */               \
+    beq t3, t4, 2f;                                                     \
     addi t1, t1, 2;             /* Compressed: PC += 2 */               \
     j 3f;                                                               \
 2:  addi t1, t1, 4;             /* 32-bit: PC += 4 */                   \
 3:  csrw mepc, t1;                                                      \
     mret;                                                               \
-1:  li t2, 11;                  /* ECALL mcause */                      \
+1:  /* Check ECALL (mcause = 11) */                                     \
+    li t2, 11;                                                          \
     bne t0, t2, 4f;                                                     \
-    j halt_loop;                /* ECALL = halt */                      \
-4:  addi t1, t1, 4;             /* Unknown: skip 4 bytes */             \
+    /* ECALL: check if it's exit syscall (a7 = 93) */                   \
+    li t2, 93;                                                          \
+    bne a7, t2, 5f;                                                     \
+    j halt_loop;                /* Exit syscall = halt */               \
+5:  /* Normal ECALL: advance PC and return */                           \
+    addi t1, t1, 4;                                                     \
+    csrw mepc, t1;                                                      \
+    mret;                                                               \
+4:  /* Other exceptions: advance PC and return */                       \
+    addi t1, t1, 4;                                                     \
     csrw mepc, t1;                                                      \
     mret;                                                               \
 _rvtest_boot_continue:                                                  \
