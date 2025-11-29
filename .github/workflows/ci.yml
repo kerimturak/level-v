@@ -32,7 +32,7 @@ on:
           - nightly
 
 env:
-  VERILATOR_VERSION: "5.020"
+  VERILATOR_VERSION: "5.026"
   RISCV_PREFIX: "riscv-none-elf"
 
 jobs:
@@ -58,7 +58,7 @@ jobs:
   # -----------------------------------------
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     
     steps:
       - name: Checkout repository
@@ -66,12 +66,35 @@ jobs:
         with:
           submodules: recursive
       
-      # Use pre-built Verilator from apt (Ubuntu 24.04 has v5.020)
-      - name: Install Verilator and dependencies
+      # Cache Verilator build
+      - name: Cache Verilator
+        uses: actions/cache@v4
+        id: cache-verilator
+        with:
+          path: /opt/verilator
+          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
+      
+      - name: Install Verilator dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y verilator python3 python3-pip
-          verilator --version
+          sudo apt-get install -y git make autoconf g++ flex bison \
+            libfl2 libfl-dev zlib1g zlib1g-dev ccache \
+            perl python3 python3-pip help2man
+      
+      - name: Build and Install Verilator
+        if: steps.cache-verilator.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/verilator/verilator.git verilator-src
+          cd verilator-src
+          git checkout v${{ env.VERILATOR_VERSION }}
+          autoconf
+          ./configure --prefix=/opt/verilator
+          make -j$(nproc)
+          sudo make install
+          cd .. && rm -rf verilator-src
+      
+      - name: Add Verilator to PATH
+        run: echo "/opt/verilator/bin" >> $GITHUB_PATH
       
       - name: Cache RISC-V Toolchain
         uses: actions/cache@v4
@@ -93,16 +116,15 @@ jobs:
       - name: Add RISC-V Toolchain to PATH
         run: |
           echo "/opt/riscv/bin" >> $GITHUB_PATH
-          ls -la /opt/riscv/bin/ | head -10
       
       - name: Verify tools
         run: |
-          export PATH="/opt/riscv/bin:$PATH"
-          verilator --version
-          riscv-none-elf-gcc --version
+          /opt/verilator/bin/verilator --version
+          /opt/riscv/bin/riscv-none-elf-gcc --version
       
       - name: Build Verilator model
         run: |
+          export PATH="/opt/verilator/bin:/opt/riscv/bin:$PATH"
           export RISCV_PREFIX=riscv-none-elf
           make verilate
       
@@ -134,10 +156,11 @@ jobs:
           name: verilator-build
           path: build/obj_dir/
       
-      - name: Install Verilator
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator
+      - name: Restore Verilator cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/verilator
+          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
       
       - name: Restore RISC-V Toolchain cache
         uses: actions/cache@v4
@@ -156,7 +179,9 @@ jobs:
           rm riscv-toolchain.tar.gz
       
       - name: Setup tools
-        run: echo "/opt/riscv/bin" >> $GITHUB_PATH
+        run: |
+          echo "/opt/verilator/bin" >> $GITHUB_PATH
+          echo "/opt/riscv/bin" >> $GITHUB_PATH
       
       - name: Build ISA tests
         run: make isa_build RISCV_PREFIX=riscv-none-elf
@@ -193,10 +218,11 @@ jobs:
           name: verilator-build
           path: build/obj_dir/
       
-      - name: Install Verilator
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator
+      - name: Restore Verilator cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/verilator
+          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
       
       - name: Restore RISC-V Toolchain cache
         uses: actions/cache@v4
@@ -215,7 +241,9 @@ jobs:
           rm riscv-toolchain.tar.gz
       
       - name: Setup tools
-        run: echo "/opt/riscv/bin" >> $GITHUB_PATH
+        run: |
+          echo "/opt/verilator/bin" >> $GITHUB_PATH
+          echo "/opt/riscv/bin" >> $GITHUB_PATH
       
       - name: Build all tests
         run: |
