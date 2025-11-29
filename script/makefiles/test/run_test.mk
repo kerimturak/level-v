@@ -110,6 +110,12 @@ ifeq ($(SIM),verilator)
 		echo -e "$(RED)[ERROR]$(RESET) RTL simulation failed with exit code $$RTL_EXIT"; \
 		exit $$RTL_EXIT; \
 	fi
+else ifeq ($(SIM),icarus)
+	@echo -e "$(RED)⚠ WARNING: Icarus Verilog does NOT support CERES RTL$(RESET)"
+	@echo -e "$(RED)  CERES uses SystemVerilog 2012 features not supported by Icarus:$(RESET)"
+	@echo -e "$(RED)  - 'inside' operator, 'automatic' variables, struct parameters$(RESET)"
+	@echo -e "$(YELLOW)  Please use: make run SIM=verilator or make run SIM=modelsim$(RESET)"
+	@exit 1
 else ifeq ($(SIM),modelsim)
 	@$(MAKE) --no-print-directory simulate TEST_NAME=$(TEST_NAME) GUI=0 \
 		2>&1 | tee $(RTL_LOG); \
@@ -121,7 +127,7 @@ else ifeq ($(SIM),modelsim)
 	fi
 else
 	@echo -e "$(RED)❌ Unknown simulator: $(SIM)$(RESET)"
-	@echo -e "   Valid options: verilator, modelsim"
+	@echo -e "   Valid options: verilator, icarus, modelsim"
 	@exit 1
 endif
 	@echo -e "$(GREEN)✓ RTL simulation complete$(RESET)"

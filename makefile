@@ -12,6 +12,7 @@ include script/makefiles/config/profiles.mk
 # Simulation Tools
 include script/makefiles/sim/modelsim.mk
 include script/makefiles/sim/verilator.mk
+include script/makefiles/sim/icarus.mk
 include script/makefiles/sim/spike.mk
 
 # Test Rules
@@ -42,6 +43,8 @@ help:
 	@echo -e "  lint            - Run Verilator lint & loop check"
 	@echo -e "  verilate        - Build Verilator model"
 	@echo -e "  run_verilator   - Run Verilator simulation"
+	@echo -e "  iverilog        - Compile with Icarus Verilog"
+	@echo -e "  run_icarus      - Run Icarus simulation"
 	@echo -e "  run             - Run test with RTL+Spike comparison"
 	@echo -e "  run_batch       - Run multiple tests"
 	@echo -e "  quick_test      - Run RTL only (no Spike)"
