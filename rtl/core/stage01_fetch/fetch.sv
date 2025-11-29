@@ -294,7 +294,7 @@ module fetch
   // RISC-V Compressed Decoder: 16-bit compressed instruction'ları 32-bit
   // formata çevirir ve illegal instruction tespiti yapar
   // ============================================================================
-  riscv_compressed_decoder compressed_decoder (
+  compressed_decoder compressed_decoder (
       .instr_i        (buff_res.blk),
       .instr_o        (inst_o),
       .is_compressed_o(is_comp),

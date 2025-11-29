@@ -15,6 +15,16 @@ ifeq ($(TEST_TYPE),bench)
   SV_DEFINES += +define+CERES_UART_TX_MONITOR
 endif
 
+# Branch Predictor Logger - aktivasyon: BP_LOG=1
+ifeq ($(BP_LOG),1)
+  SV_DEFINES += +define+BP_LOGGER_EN
+endif
+
+# Verbose BP Logger - aktivasyon: BP_VERBOSE=1
+ifeq ($(BP_VERBOSE),1)
+  SV_DEFINES += +define+BP_LOGGER_EN +define+BP_VERBOSE_LOG
+endif
+
 # Fast simulation mode - disable all loggers for speed
 ifeq ($(FAST_SIM),1)
   SV_DEFINES += +define+FAST_SIM
@@ -151,6 +161,11 @@ verilate: dirs
 # ============================================================
 run_verilator: verilate
 	@echo -e "$(GREEN)[RUNNING VERILATOR SIMULATION]$(RESET)"
+	@# Clean previous logs for this test
+	@if [ -d "$(VERILATOR_LOG_DIR)" ]; then \
+		echo -e "$(CYAN)[CLEAN]$(RESET) Removing previous logs: $(VERILATOR_LOG_DIR)"; \
+		rm -rf "$(VERILATOR_LOG_DIR)"; \
+	fi
 	@mkdir -p "$(VERILATOR_LOG_DIR)"
 	@VERILATOR_LOG_DIR="$(VERILATOR_LOG_DIR)" \
 		TEST_NAME="$(TEST_NAME)" \
@@ -198,7 +213,11 @@ verilator_help:
 	@echo -e "$(YELLOW)Parameters:$(RESET)"
 	@echo -e "  TEST_NAME=<name>  – Test to run"
 	@echo -e "  MAX_CYCLES=<n>    – Max cycles (default: $(MAX_CYCLES))"
+	@echo -e "  BP_LOG=1          – Enable branch predictor statistics logger"
+	@echo -e "  BP_VERBOSE=1      – Enable verbose BP logger (logs every misprediction)"
 	@echo -e ""
 	@echo -e "$(YELLOW)Example:$(RESET)"
 	@echo -e "  make run_verilator TEST_NAME=rv32ui-p-add"
+	@echo -e "  make isa BP_LOG=1                          # ISA tests with BP stats"
+	@echo -e "  make bench BP_LOG=1                        # Benchmarks with BP stats"
 	@echo -e ""

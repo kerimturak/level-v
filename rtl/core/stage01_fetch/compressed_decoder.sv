@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 `timescale 1ns / 1ps
 
-module riscv_compressed_decoder
+module compressed_decoder
   import ceres_param::*;
 (
     input  logic [31:0] instr_i,

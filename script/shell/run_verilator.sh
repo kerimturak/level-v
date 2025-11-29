@@ -124,6 +124,7 @@ SIM_PLUSARGS=${SIM_PLUSARGS:-}
   +log_path="${VERILATOR_LOG_DIR}/ceres.log" \
   +uart_log_path="${VERILATOR_LOG_DIR}/uart_output.log" \
   +DUMP_FILE="${VERILATOR_LOG_DIR}/waveform.fst" \
+  +BP_LOG_DIR="${VERILATOR_LOG_DIR}" \
   ${ADDR_ARG} ${SIM_PLUSARGS} | tee "${VERILATOR_LOG_DIR}/verilator_run.log"
 EXIT_CODE=${PIPESTATUS[0]:-0}
 

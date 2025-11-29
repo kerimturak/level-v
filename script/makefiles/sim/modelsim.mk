@@ -83,6 +83,11 @@ resolve_mem:
 # Simulation
 # ============================================================
 simulate: compile
+	@# Clean previous logs for this test
+	@if [ -d "$(MODELSIM_LOG_DIR)" ]; then \
+		echo -e "$(CYAN)[CLEAN]$(RESET) Removing previous logs: $(MODELSIM_LOG_DIR)"; \
+		rm -rf "$(MODELSIM_LOG_DIR)"; \
+	fi
 	@if [ -z "$(MEM_FILE)" ]; then \
 		echo -e "$(YELLOW)[INFO]$(RESET) Resolving MEM_FILE from TEST_NAME='$(TEST_NAME)'..."; \
 		$(MAKE) --no-print-directory resolve_mem TEST_NAME=$(TEST_NAME); \

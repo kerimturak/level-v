@@ -73,6 +73,11 @@ test_prepare:
 	@echo -e "$(YELLOW)[INFO]$(RESET) DUMP File    : $(DUMP_DIR)/$(TEST_NAME).dump"
 	@echo -e "$(YELLOW)[INFO]$(RESET) ADDR File    : $(ADDR_DIR)/$(TEST_NAME)_addr.txt"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@# Clean previous test logs to avoid stale data
+	@if [ -d "$(RTL_LOG_DIR)" ]; then \
+		echo -e "$(CYAN)[CLEAN]$(RESET) Removing previous logs: $(RTL_LOG_DIR)"; \
+		rm -rf "$(RTL_LOG_DIR)"; \
+	fi
 	@$(MKDIR) "$(TEST_LOG_DIR)" "$(TEST_WORK_DIR)"
 	@echo "=== CERES Test Report ==="        >  $(REPORT_FILE)
 	@echo "Test: $(TEST_NAME)"              >> $(REPORT_FILE)

@@ -26,74 +26,81 @@ module gshare_bp
 );
 
   // ============================================================================
-  // PARAMETRELER VE SABITLER
+  // GSHARE YAPISAL BİLEŞENLERİ
   // ============================================================================
-  localparam PROGRAM_LIMIT = 32'h8000_3D40;  // Program bellek sınırı (muhtemelen gereksiz)
+
+  // Global History Register: Son N branch'in sonuçlarını tutar
+  logic [             GHR_SIZE-1:0] ghr;
+
+  // Pattern History Table: 2-bit saturating counter'lar
+  logic [                      1:0] pht       [PHT_SIZE];
+
+  // Branch Target Buffer
+  logic                             btb_valid [BTB_SIZE];
+  logic [XLEN-1:$clog2(BTB_SIZE)+2] btb_tag   [BTB_SIZE];
+  logic [                 XLEN-1:0] btb_target[BTB_SIZE];
+
+  // Indirect Branch Target Cache (JALR için)
+  // PC ile indekslenen basit bir hedef adresi tablosu
+  localparam IBTC_SIZE = 32;  // 32 entry indirect branch target cache
+  logic                              ibtc_valid                          [IBTC_SIZE];
+  logic [XLEN-1:$clog2(IBTC_SIZE)+2] ibtc_tag                            [IBTC_SIZE];
+  logic [                  XLEN-1:0] ibtc_target                         [IBTC_SIZE];
 
   // ============================================================================
   // İÇ SİNYALLER
   // ============================================================================
 
-  // Immediate değer (B/J/I type için farklı formatlar)
-  logic          [                 XLEN-1:0] imm;
+  // Immediate değer (B/J type için)
+  logic [                  XLEN-1:0] imm;
 
   // Instruction type decode sinyalleri
-  logic                                      j_type;  // JAL (unconditional jump)
-  logic                                      jr_type;  // JALR (indirect jump - register based)
-  logic                                      b_type;  // BEQ, BNE, BLT, vb. (conditional branch)
+  logic                              j_type;  // JAL (unconditional jump)
+  logic                              jr_type;  // JALR (indirect jump)
+  logic                              b_type;  // Conditional branch
 
-  // RAS (Return Address Stack) sinyalleri
-  logic                                      req_valid;  // RAS'a push/pop isteği
-  logic          [                 XLEN-1:0] pushed_addr;  // RAS'a push edilecek return adresi
+  // RAS sinyalleri
+  logic                              req_valid;
+  logic [                  XLEN-1:0] return_addr;
+  ras_t                              restore;
+  ras_t                              popped;
+
+  // Index hesaplama
+  logic [      $clog2(PHT_SIZE)-1:0] pht_rd_idx;
+  logic [      $clog2(PHT_SIZE)-1:0] pht_wr_idx;
+  logic [      $clog2(BTB_SIZE)-1:0] btb_rd_idx;
+  logic [      $clog2(BTB_SIZE)-1:0] btb_wr_idx;
+  logic [     $clog2(IBTC_SIZE)-1:0] ibtc_rd_idx;
+  logic [     $clog2(IBTC_SIZE)-1:0] ibtc_wr_idx;
+
+  // BTB lookup sonuçları
+  logic                              btb_hit;
+  logic [                  XLEN-1:0] btb_predicted_target;
+
+  // IBTC lookup sonuçları
+  logic                              ibtc_hit;
+  logic [                  XLEN-1:0] ibtc_predicted_target;
+
+  // PHT prediction
+  logic                              pht_taken;
+
+  // Misprediction sinyali
+  logic                              spec_miss;
+
+  // EX stage'den gelen branch bilgisi
+  logic                              ex_is_branch;
+  logic                              ex_was_taken;
 
   // ============================================================================
-  // GSHARE YAPISAL BİLEŞENLERİ
-  // ============================================================================
-
-  // Global History Register: Son N branch'in sonuçlarını tutar
-  logic          [             GHR_SIZE-1:0] ghr;
-
-  // Pattern History Table: 2-bit saturating counter'lar
-  // Her entry bir branch pattern için tahmin gücünü tutar (00=Strong NT, 11=Strong T)
-  logic          [                      1:0] pht                                                           [PHT_SIZE];
-
-  // Branch Target Buffer: Branch hedef adreslerini cache'ler
-  logic          [XLEN-1:$clog2(PHT_SIZE)+1] btb_pc                                                        [BTB_SIZE];  // Tag (PC'nin üst bitleri)
-  logic          [                 XLEN-1:0] btb_target                                                    [BTB_SIZE];  // Hedef adres
-
-  // SORUN: BTB'de valid bit yok! Initialization'dan sonra garbage match olabilir
-
-  // Pipeline register'ları (2 aşamalık - YETERSİZ!)
-
-  // Prediction bilgisi
-  predict_info_t                             branch;  // BTB'den gelen tahmin
-
-  // Index hesaplama sinyalleri
-  logic          [     $clog2(PHT_SIZE)-1:0] pht_rd_idx;  // PHT okuma index'i (PC ⊕ GHR)
-  logic          [     $clog2(PHT_SIZE)-1:0] pht_wr_idx;  // PHT yazma index'i
-  logic          [     $clog2(BTB_SIZE)-1:0] btb_rd_idx;  // BTB okuma index'i
-  logic          [     $clog2(BTB_SIZE)-1:0] btb_wr_idx;  // BTB yazma index'i
-
-  // Durum takip değişkenleri
-  logic          [                      1:0] pht_ptr;  // SORUN: Amacı belirsiz, tutarlı kullanılmamış
-  logic          [                      1:0] pht_bit1;  // PHT'nin MSB'sini tutar (taken/not taken)
-  logic                                      ex_taken;  // EX aşamasında branch gerçekten alındı mı?
-
-  // RAS restore sinyalleri
-  ras_t                                      restore;
-  ras_t                                      popped;
-  logic                                      spec_miss;
-  // ============================================================================
-  // INSTRUCTION DECODE VE PREDICTION LOGIC
+  // INSTRUCTION DECODE
   // ============================================================================
   always_comb begin
-    spec_miss = (!spec_hit_i && |ex_info_i.bjtype);
     // Instruction type detection
-    b_type = inst_i[6:0] == op_b_type;  // Conditional branch
-    j_type = inst_i[6:0] == op_u_type_jump;  // JAL
-    jr_type = inst_i[6:0] == op_i_type_jump;  // JALR
+    b_type  = (inst_i[6:0] == op_b_type);
+    j_type  = (inst_i[6:0] == op_u_type_jump);
+    jr_type = (inst_i[6:0] == op_i_type_jump);
 
-    // Immediate extraction (RISC-V encoding)
+    // Immediate extraction
     case (1'b1)
       b_type:  imm = {{20{inst_i[31]}}, inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};
       j_type:  imm = {{12{inst_i[31]}}, inst_i[19:12], inst_i[20], inst_i[30:21], 1'b0};
@@ -101,173 +108,343 @@ module gshare_bp
       default: imm = '0;
     endcase
 
-    // Return address (PC+4 / PC+2) - call instruction'lar için
-    pushed_addr = pc_incr_i;
-
-    // PREDICTION LOGIC (öncelik sırası ile):
-    // 1. RAS hit ise -> RAS'tan gelen adres
-    // 2. JAL ise -> PC + immediate
-    // 3. Branch ve PHT[1]=1 ise -> BTB'den gelen hedef
-    // 4. Hiçbiri değilse -> Sequential (PC+4)
-    if (popped.valid) begin
-      spec_o.pc = popped.data;
-    end else if (j_type) begin
-      spec_o.pc = pc_i + imm;
-    end else if ((pht[pht_rd_idx][1] && b_type)) begin
-      spec_o.pc = branch.pc;
-    end else begin
-      spec_o.pc = pushed_addr;
-    end
-
-    // Taken sinyali: jump, predicted branch veya RAS hit
-    // PROGRAM_LIMIT kontrolü gereksiz enerji tüketir
-    // Sanırım sadece branch tipi için speculation üretiyoruz, ama ras overflow falan oldu ise oda yanlış olabiliyor o yüzden spec demek mantıklı gibi
-
-    spec_o.taken = (j_type || branch.taken || (popped.valid && popped.data != 0)) && (spec_o.pc < PROGRAM_LIMIT);
-    spec_o.spectype = NO_SPEC;
-
-    if (spec_o.taken) begin
-      if (popped.valid) begin
-        spec_o.spectype = RAS;
-      end else if (j_type) begin
-        spec_o.spectype = JUMP;
-      end else if ((pht[pht_rd_idx][1] && b_type)) begin
-        spec_o.spectype = BRANCH;
-      end else begin
-        spec_o.spectype = NO_SPEC;
-      end
-    end
-    // RAS'a istek gönder (JAL/JALR için)
-    req_valid = spec_miss ? 1'b0 : !stall_i && fetch_valid_i && (j_type || jr_type);
+    return_addr = pc_incr_i;
   end
 
   // ============================================================================
-  // RETURN ADDRESS STACK (RAS) MODÜLÜ
-  // ============================================================================
-  // Function call/return tracking için stack yapısı
-  // rd=x1/x5 ise push, rs1=x1/x5 ise pop mantığı
-  ras #(
-      .RAS_SIZE(RAS_SIZE)
-  ) ras (
-      .clk_i        (clk_i),
-      .rst_ni       (rst_ni),
-      .restore_i    (restore),         // Misprediction'da RAS'ı restore et
-      .req_valid_i  (req_valid),
-      .rd_addr_i    (inst_i.rd_addr),  // Destination register
-      .r1_addr_i    (inst_i.r1_addr),  // Source register
-      .j_type_i     (j_type),
-      .jr_type_i    (jr_type),
-      .return_addr_i(pushed_addr),
-      .popped_o     (popped)
-  );
-  // ============================================================================
-  // INDEX HESAPLAMA VE LOOKUP LOGIC
+  // INDEX HESAPLAMA
   // ============================================================================
   always_comb begin
-    // RAS restore: Stage 0'daki PC'ye geri dön
-    restore.data = de_info_i.pc;
-    restore.valid = !stall_i && !spec_hit_i && de_info_i.spec.spectype == RAS;
+    // GSHARE: PC XOR GHR
+    pht_rd_idx  = pc_i[$clog2(PHT_SIZE):1] ^ ghr[$clog2(PHT_SIZE)-1:0];
+    btb_rd_idx  = pc_i[$clog2(BTB_SIZE):1];
+    ibtc_rd_idx = pc_i[$clog2(IBTC_SIZE):1];
 
-
-    // GSHARE INDEX: PC ⊕ GHR (global history ile correlation)
-    pht_rd_idx = pc_i[$clog2(PHT_SIZE):1] ^ ghr[$clog2(PHT_SIZE)-1:0];
-    btb_rd_idx = pc_i[$clog2(BTB_SIZE):1];  // BTB: sadece PC indexing
-
-    // Update için index'ler (1 cycle gecikmiş PC ile)
-    pht_wr_idx = ex_info_i.pc[$clog2(PHT_SIZE):1] ^ ghr[$clog2(PHT_SIZE)-1:0];
-    btb_wr_idx = ex_info_i.pc[$clog2(BTB_SIZE):1];
-
-    // EX aşamasında branch gerçekten alındı mı?
-    // spec_hit_i=1 && ex_info_i.spec.taken=1 -> Doğru tahmin, taken
-    // spec_hit_i=0 && ex_info_i.spec.taken=0 -> Misprediction vardı, ama aslında taken
-    ex_taken = ex_info_i.spec.spectype == BRANCH && ((spec_hit_i && ex_info_i.spec.taken && ex_info_i.spec.spectype != RAS) || (!spec_hit_i && !(ex_info_i.spec.taken && ex_info_i.spec.spectype != RAS)));
-
-    // BTB lookup: Tag match ve PHT MSB kontrolü
-    // SORUN: Valid bit yok, initialization sonrası false positive olabilir
-    branch.pc = btb_target[btb_rd_idx];
-    branch.taken = (btb_pc[btb_rd_idx] == pc_i[31:$clog2(PHT_SIZE)+1]) && (pht[pht_rd_idx][1]);
+    // Write index'leri (EX stage PC ile)
+    pht_wr_idx  = ex_info_i.pc[$clog2(PHT_SIZE):1] ^ ghr[$clog2(PHT_SIZE)-1:0];
+    btb_wr_idx  = ex_info_i.pc[$clog2(BTB_SIZE):1];
+    ibtc_wr_idx = ex_info_i.pc[$clog2(IBTC_SIZE):1];
   end
 
   // ============================================================================
-  // PIPELINE REGISTER UPDATE
+  // BTB & IBTC LOOKUP
+  // ============================================================================
+  always_comb begin
+    btb_hit = btb_valid[btb_rd_idx] && (btb_tag[btb_rd_idx] == pc_i[XLEN-1:$clog2(BTB_SIZE)+2]);
+    btb_predicted_target = btb_target[btb_rd_idx];
+
+    ibtc_hit = ibtc_valid[ibtc_rd_idx] && (ibtc_tag[ibtc_rd_idx] == pc_i[XLEN-1:$clog2(IBTC_SIZE)+2]);
+    ibtc_predicted_target = ibtc_target[ibtc_rd_idx];
+
+    pht_taken = pht[pht_rd_idx][1];  // MSB = taken prediction
+  end
+
+  // ============================================================================
+  // PREDICTION LOGIC
+  // ============================================================================
+  always_comb begin
+    spec_miss       = !spec_hit_i && (ex_info_i.bjtype != NO_BJ);
+
+    // RAS restore kontrolü
+    restore.data    = de_info_i.pc;
+    restore.valid   = !stall_i && !spec_hit_i && (de_info_i.spec.spectype == RAS);
+
+    // RAS request
+    req_valid       = !spec_miss && !stall_i && fetch_valid_i && (j_type || jr_type);
+
+    // Prediction öncelik sırası:
+    // 1. RAS (return prediction)
+    // 2. JAL (unconditional direct jump)
+    // 3. JALR (unconditional indirect jump) - IBTC kullan
+    // 4. Branch (conditional) - PHT + BTB
+    // 5. Sequential (PC + 4)
+
+    spec_o.pc       = pc_incr_i;
+    spec_o.taken    = 1'b0;
+    spec_o.spectype = NO_SPEC;
+
+    if (fetch_valid_i && !stall_i) begin
+      if (popped.valid) begin
+        // RAS hit - return prediction
+        spec_o.pc       = popped.data;
+        spec_o.taken    = 1'b1;
+        spec_o.spectype = RAS;
+      end else if (j_type) begin
+        // JAL - always taken, PC-relative
+        spec_o.pc       = pc_i + imm;
+        spec_o.taken    = 1'b1;
+        spec_o.spectype = JUMP;
+      end else if (jr_type && ibtc_hit) begin
+        // JALR - IBTC hit, use cached target
+        spec_o.pc       = ibtc_predicted_target;
+        spec_o.taken    = 1'b1;
+        spec_o.spectype = JUMP;
+      end else if (b_type && pht_taken && btb_hit) begin
+        // Branch predicted taken ve BTB hit
+        spec_o.pc       = btb_predicted_target;
+        spec_o.taken    = 1'b1;
+        spec_o.spectype = BRANCH;
+      end
+      // else: sequential (default)
+    end
+  end
+
+  // ============================================================================
+  // EX STAGE FEEDBACK
+  // ============================================================================
+  always_comb begin
+    ex_is_branch = (ex_info_i.bjtype != NO_BJ) && (ex_info_i.spec.spectype == BRANCH);
+
+    // Branch gerçekten alındı mı?
+    // spec_hit && taken -> doğru tahmin, taken
+    // !spec_hit && !taken -> yanlış tahmin ama aslında taken (branch taken, biz not-taken dedik)
+    ex_was_taken = ex_is_branch && ((spec_hit_i && ex_info_i.spec.taken) || (!spec_hit_i && !ex_info_i.spec.taken));
+  end
+
+  // ============================================================================
+  // RETURN ADDRESS STACK (RAS)
+  // ============================================================================
+  ras #(
+      .RAS_SIZE(RAS_SIZE)
+  ) u_ras (
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .restore_i    (restore),
+      .req_valid_i  (req_valid),
+      .rd_addr_i    (inst_i.rd_addr),
+      .r1_addr_i    (inst_i.r1_addr),
+      .j_type_i     (j_type),
+      .jr_type_i    (jr_type),
+      .return_addr_i(return_addr),
+      .popped_o     (popped)
+  );
+
+  // ============================================================================
+  // PHT, BTB, IBTC ve GHR UPDATE
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      pht_bit1 <= '{default: 0};
-    end else if (!stall_i) begin
-      if (!spec_hit_i) begin
-        // MİSPREDICTION: Pipeline flush
-        pht_bit1 <= '{default: 0};
-      end else begin
-        // Normal pipeline advance
-
-
-
-        pht_bit1[1] <= pht_bit1[0];
-        pht_bit1[0] <= popped.valid ? pht_bit1[0] : pht[pht_wr_idx][1];
-
+      ghr <= '0;
+      for (int i = 0; i < PHT_SIZE; i++) pht[i] <= 2'b01;  // Weakly Not-Taken
+      for (int i = 0; i < BTB_SIZE; i++) begin
+        btb_valid[i]  <= 1'b0;
+        btb_tag[i]    <= '0;
+        btb_target[i] <= '0;
       end
-    end
-  end
-
-  // ============================================================================
-  // PHT, BTB ve GHR UPDATE LOGİC
-  // ============================================================================
-  always @(posedge clk_i) begin
-    if (!rst_ni) begin
-      ghr        <= '0;
-      btb_target <= '{default: 0};
-      btb_pc     <= '{default: 0};
-      pht        <= '{default: 2'b01};  // Weakly Not Taken (alternatif: 2'b10)
-      pht_ptr    <= '0;
-    end else begin
-      // Branch EX aşamasında çözüldüğünde update
-      if (spec_o.spectype == BRANCH && !stall_i) begin
-
-        // PHT UPDATE: 2-bit saturating counter
-        if (ex_taken) begin
-          if (pht[pht_wr_idx] < 2'b11) pht[pht_wr_idx] <= pht[pht_wr_idx] + 1;  // Increment (max 11)
+      for (int i = 0; i < IBTC_SIZE; i++) begin
+        ibtc_valid[i]  <= 1'b0;
+        ibtc_tag[i]    <= '0;
+        ibtc_target[i] <= '0;
+      end
+    end else if (!stall_i) begin
+      // Branch çözüldüğünde güncelle
+      if (ex_is_branch) begin
+        // PHT Update: 2-bit saturating counter
+        if (ex_was_taken) begin
+          if (pht[pht_wr_idx] < 2'b11) pht[pht_wr_idx] <= pht[pht_wr_idx] + 1;
         end else begin
-          if (pht[pht_wr_idx] > 2'b00) pht[pht_wr_idx] <= pht[pht_wr_idx] + 1;  // Decrement (min 00)
+          if (pht[pht_wr_idx] > 2'b00) pht[pht_wr_idx] <= pht[pht_wr_idx] - 1;
         end
 
-        // BTB UPDATE: Sadece taken branch'leri cache'le
-        btb_target[btb_wr_idx] <= ex_taken ? pc_target_i : '0;
-        btb_pc[btb_wr_idx]     <= ex_taken ? ex_info_i.pc[31:$clog2(PHT_SIZE)+1] : '0;
+        // BTB Update: Taken branch'leri cache'le
+        if (ex_was_taken) begin
+          btb_valid[btb_wr_idx]  <= 1'b1;
+          btb_tag[btb_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(BTB_SIZE)+2];
+          btb_target[btb_wr_idx] <= pc_target_i;
+        end
 
-        pht_ptr                <= ex_taken ? pht_ptr + 1 : 0;
+        // GHR Update: Shift left, yeni sonucu ekle
+        ghr <= {ghr[GHR_SIZE-2:0], ex_was_taken};
+      end
 
-        // GHR UPDATE:
-        // Taken ise: Sol shift ve yeni bit ekle
-        // `pht_ptr >>> ghr` işlemi mantıksız - eski GHR değerini nasıl restore eder?
-        // Çözüm: Checkpoint buffer kullanarak eski GHR'leri saklamalısınız
-        ghr                    <= ex_taken ? {ghr[GHR_SIZE-2:0], pht_bit1[1] & spec_hit_i} : GHR_SIZE'(pht_ptr) >>> ghr;
+      // IBTC Update: JALR instruction'ları için hedef adresi cache'le
+      // RAS tarafından handle edilmeyenler (non-return JALR'lar)
+      if (ex_info_i.bjtype == JALR && ex_info_i.spec.spectype != RAS) begin
+        ibtc_valid[ibtc_wr_idx]  <= 1'b1;
+        ibtc_tag[ibtc_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(IBTC_SIZE)+2];
+        ibtc_target[ibtc_wr_idx] <= pc_target_i;
       end
     end
   end
 
-endmodule
+  // ============================================================================
+  // BRANCH PREDICTION LOGGER (ifdef ile açılır)
+  // ============================================================================
+`ifdef BP_LOGGER_EN
+  // İstatistik sayaçları
+  logic [63:0] total_branches;
+  logic [63:0] correct_predictions;
+  logic [63:0] mispredictions;
+  logic [63:0] ras_predictions;
+  logic [63:0] ras_correct;
+  logic [63:0] btb_hits;
+  logic [63:0] btb_misses;
+  // JAL/JALR için ek sayaçlar
+  logic [63:0] jal_count;
+  logic [63:0] jal_correct;
+  logic [63:0] jalr_count;
+  logic [63:0] jalr_correct;
+  // IBTC sayaçları
+  logic [63:0] ibtc_predictions;
+  logic [63:0] ibtc_correct;
 
-// ============================================================================
-// ÖNERİLEN İYİLEŞTİRMELER:
-// ============================================================================
-// 1. Pipeline depth'i 5'e çıkarın (stage_pc[4:0], branch_q[4:0], vb.)
-// 2. BTB'ye valid bit ekleyin
-// 3. GHR için checkpoint buffer implementasyonu yapın (her branch için eski GHR'yi sakla)
-// 4. BTB'yi 2-way set-associative yapın (LRU replacement ile)
-// 5. PHT initialization'ı 2'b10 olarak değiştirmeyi deneyin
-// 6. pht_ptr değişkenini kaldırın veya amacını netleştirin
-// 7. PROGRAM_LIMIT kontrolünü kaldırın (gereksiz güç tüketimi)
-// 8. BTB tag boyutunu artırın (alias problemini azaltır)
-//
-// ÖRNEK GHR CHECKPOINT YAPISI:
-// logic [GHR_SIZE-1:0] ghr_checkpoint [PIPELINE_DEPTH];
-// logic [$clog2(PIPELINE_DEPTH)-1:0] ghr_head;
-// 
-// // Branch fetch olduğunda checkpoint al:
-// ghr_checkpoint[ghr_head] <= ghr;
-// ghr_head <= ghr_head + 1;
-//
-// // Misprediction'da restore et:
-// ghr <= ghr_checkpoint[correct_checkpoint_index];
-// ============================================================================
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      total_branches      <= '0;
+      correct_predictions <= '0;
+      mispredictions      <= '0;
+      ras_predictions     <= '0;
+      ras_correct         <= '0;
+      btb_hits            <= '0;
+      btb_misses          <= '0;
+      jal_count           <= '0;
+      jal_correct         <= '0;
+      jalr_count          <= '0;
+      jalr_correct        <= '0;
+      ibtc_predictions    <= '0;
+      ibtc_correct        <= '0;
+    end else if (!stall_i) begin
+      // Tüm control transfer istatistikleri
+      if (ex_info_i.bjtype != NO_BJ) begin
+        total_branches <= total_branches + 1;
+        if (spec_hit_i) begin
+          correct_predictions <= correct_predictions + 1;
+        end else begin
+          mispredictions <= mispredictions + 1;
+        end
+      end
+
+      // JAL istatistikleri
+      if (ex_info_i.bjtype == JAL) begin
+        jal_count <= jal_count + 1;
+        if (spec_hit_i) jal_correct <= jal_correct + 1;
+      end
+
+      // JALR istatistikleri
+      if (ex_info_i.bjtype == JALR) begin
+        jalr_count <= jalr_count + 1;
+        if (spec_hit_i) jalr_correct <= jalr_correct + 1;
+      end
+
+      // RAS istatistikleri
+      if (ex_info_i.spec.spectype == RAS) begin
+        ras_predictions <= ras_predictions + 1;
+        if (spec_hit_i) begin
+          ras_correct <= ras_correct + 1;
+        end
+      end
+
+      // IBTC istatistikleri (JALR, RAS değil, JUMP spectype ile)
+      if (ex_info_i.bjtype == JALR && ex_info_i.spec.spectype == JUMP) begin
+        ibtc_predictions <= ibtc_predictions + 1;
+        if (spec_hit_i) ibtc_correct <= ibtc_correct + 1;
+      end
+
+      // BTB/Branch istatistikleri
+      if (ex_info_i.spec.spectype == BRANCH) begin
+        if (spec_hit_i) begin
+          btb_hits <= btb_hits + 1;
+        end else begin
+          btb_misses <= btb_misses + 1;
+        end
+      end
+    end
+  end
+
+  // Log dosyasına yazma - VERILATOR_LOG_DIR environment variable kullanır
+  integer bp_log_file;
+  string  log_dir;
+  string  bp_log_path;
+
+  initial begin
+    // Environment variable'dan log dizinini al
+    if (!$value$plusargs("BP_LOG_DIR=%s", log_dir)) begin
+      // Plusarg yoksa environment variable'ı dene
+      if ($test$plusargs("VERILATOR_LOG_DIR")) begin
+        void'($value$plusargs("VERILATOR_LOG_DIR=%s", log_dir));
+      end else begin
+        log_dir = ".";  // Varsayılan: çalışma dizini
+      end
+    end
+
+    bp_log_path = {log_dir, "/bp_stats.log"};
+    bp_log_file = $fopen(bp_log_path, "w");
+
+    if (bp_log_file == 0) begin
+      $display("ERROR: Cannot open %s", bp_log_path);
+    end else begin
+      $display("[BP_LOGGER] Writing to: %s", bp_log_path);
+      $fwrite(bp_log_file, "=== GSHARE Branch Predictor Statistics ===\n");
+      $fwrite(bp_log_file, "Time,TotalBranches,Correct,Mispred,JAL,JAL_Correct,JALR,JALR_Correct,RAS_Total,RAS_Correct,BTB_Hits,BTB_Misses\n");
+    end
+  end
+
+  // Her N cycle'da log yaz
+  localparam LOG_INTERVAL = 10000;
+  logic [31:0] log_counter;
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      log_counter <= '0;
+    end else begin
+      log_counter <= log_counter + 1;
+      if (log_counter == LOG_INTERVAL) begin
+        log_counter <= '0;
+        if (bp_log_file != 0) begin
+          $fwrite(bp_log_file, "%0t,%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d\n", $time, total_branches, correct_predictions, mispredictions, jal_count, jal_correct, jalr_count, jalr_correct,
+                  ras_predictions, ras_correct, btb_hits, btb_misses);
+          $fflush(bp_log_file);
+        end
+      end
+    end
+  end
+
+  // Simülasyon sonunda özet yazdır
+  final begin
+    if (bp_log_file != 0) begin
+      $fwrite(bp_log_file, "\n=== Final Statistics ===\n");
+      $fwrite(bp_log_file, "Total Control Transfers: %0d\n", total_branches);
+      $fwrite(bp_log_file, "Correct Predictions    : %0d (%.2f%%)\n", correct_predictions, total_branches > 0 ? (real'(correct_predictions) * 100.0 / real'(total_branches)) : 0.0);
+      $fwrite(bp_log_file, "Mispredictions         : %0d (%.2f%%)\n", mispredictions, total_branches > 0 ? (real'(mispredictions) * 100.0 / real'(total_branches)) : 0.0);
+      $fwrite(bp_log_file, "\nJAL Statistics:\n");
+      $fwrite(bp_log_file, "  Total JAL  : %0d\n", jal_count);
+      $fwrite(bp_log_file, "  JAL Correct: %0d (%.2f%%)\n", jal_correct, jal_count > 0 ? (real'(jal_correct) * 100.0 / real'(jal_count)) : 0.0);
+      $fwrite(bp_log_file, "\nJALR Statistics:\n");
+      $fwrite(bp_log_file, "  Total JALR  : %0d\n", jalr_count);
+      $fwrite(bp_log_file, "  JALR Correct: %0d (%.2f%%)\n", jalr_correct, jalr_count > 0 ? (real'(jalr_correct) * 100.0 / real'(jalr_count)) : 0.0);
+      $fwrite(bp_log_file, "  - RAS Predictions : %0d (%.2f%% accurate)\n", ras_predictions, ras_predictions > 0 ? (real'(ras_correct) * 100.0 / real'(ras_predictions)) : 0.0);
+      $fwrite(bp_log_file, "  - IBTC Predictions: %0d (%.2f%% accurate)\n", ibtc_predictions, ibtc_predictions > 0 ? (real'(ibtc_correct) * 100.0 / real'(ibtc_predictions)) : 0.0);
+      $fwrite(bp_log_file, "\nConditional Branch Statistics:\n");
+      $fwrite(bp_log_file, "  Branch Hits  : %0d\n", btb_hits);
+      $fwrite(bp_log_file, "  Branch Misses: %0d\n", btb_misses);
+      $fclose(bp_log_file);
+    end
+
+    $display("\n========================================");
+    $display("   GSHARE Branch Predictor Summary");
+    $display("========================================");
+    $display("Total Control Transfers: %0d", total_branches);
+    $display("Correct Predictions    : %0d (%.2f%%)", correct_predictions, total_branches > 0 ? (real'(correct_predictions) * 100.0 / real'(total_branches)) : 0.0);
+    $display("Mispredictions         : %0d (%.2f%%)", mispredictions, total_branches > 0 ? (real'(mispredictions) * 100.0 / real'(total_branches)) : 0.0);
+    $display("----------------------------------------");
+    $display("JAL  : %0d total, %0d correct (%.2f%%)", jal_count, jal_correct, jal_count > 0 ? (real'(jal_correct) * 100.0 / real'(jal_count)) : 0.0);
+    $display("JALR : %0d total, %0d correct (%.2f%%)", jalr_count, jalr_correct, jalr_count > 0 ? (real'(jalr_correct) * 100.0 / real'(jalr_count)) : 0.0);
+    $display("  RAS : %0d (%.2f%% accurate)", ras_predictions, ras_predictions > 0 ? (real'(ras_correct) * 100.0 / real'(ras_predictions)) : 0.0);
+    $display("  IBTC: %0d (%.2f%% accurate)", ibtc_predictions, ibtc_predictions > 0 ? (real'(ibtc_correct) * 100.0 / real'(ibtc_predictions)) : 0.0);
+    $display("========================================\n");
+  end
+
+  // Real-time misprediction log (opsiyonel, çok verbose)
+`ifdef BP_VERBOSE_LOG
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      // nothing
+    end else if (!stall_i && !spec_hit_i && (ex_info_i.bjtype != NO_BJ)) begin
+      $display("[BP MISS] Time=%0t PC=0x%08h Type=%s Predicted=%s Actual=%s Target=0x%08h", $time, ex_info_i.pc, ex_info_i.spec.spectype.name(), ex_info_i.spec.taken ? "TAKEN" : "NOT_TAKEN",
+               ex_info_i.spec.taken ? "NOT_TAKEN" : "TAKEN", pc_target_i);
+    end
+  end
+`endif
+`endif
+
+endmodule
