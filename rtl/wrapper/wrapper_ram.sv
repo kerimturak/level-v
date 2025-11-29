@@ -29,20 +29,20 @@ module wrapper_ram
     parameter int unsigned WORD_WIDTH       = 32,
     parameter int unsigned RAM_DEPTH        = 32768,
     parameter int unsigned CACHE_LINE_WIDTH = BLK_SIZE,
-    
+
     // Programming Configuration  
     parameter int unsigned CPU_CLK          = ceres_param::CPU_CLK,
     parameter int unsigned PROG_BAUD_RATE   = ceres_param::PROG_BAUD_RATE,
     parameter              PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
 ) (
-    input  logic clk_i,
-    input  logic rst_ni,
+    input logic clk_i,
+    input logic rst_ni,
 
     // Memory Interface (cache line width)
-    input  logic [$clog2(RAM_DEPTH)-1:0]  addr_i,
-    input  logic [CACHE_LINE_WIDTH-1:0]   wdata_i,
+    input  logic [ $clog2(RAM_DEPTH)-1:0] addr_i,
+    input  logic [  CACHE_LINE_WIDTH-1:0] wdata_i,
     input  logic [CACHE_LINE_WIDTH/8-1:0] wstrb_i,
-    output logic [CACHE_LINE_WIDTH-1:0]   rdata_o,
+    output logic [  CACHE_LINE_WIDTH-1:0] rdata_o,
     input  logic                          rd_en_i,
 
     // Programming Interface
@@ -61,30 +61,30 @@ module wrapper_ram
   // ==========================================================================
   // Memory Array
   // ==========================================================================
-  logic [WORD_WIDTH-1:0] ram [0:RAM_DEPTH-1];
+  logic   [       WORD_WIDTH-1:0] ram            [0:RAM_DEPTH-1];
 
   // ==========================================================================
   // Internal Signals
   // ==========================================================================
-  
+
   // Address calculation
-  logic [$clog2(RAM_DEPTH)-1:0] line_base_addr;
-  
+  logic   [$clog2(RAM_DEPTH)-1:0] line_base_addr;
+
   // Read data register
-  logic [CACHE_LINE_WIDTH-1:0] rdata_q;
-  
+  logic   [ CACHE_LINE_WIDTH-1:0] rdata_q;
+
   // Programming interface
-  logic [31:0] prog_addr;
-  logic [31:0] prog_data;
-  logic        prog_valid;
-  logic        prog_mode;
-  logic        prog_sys_rst;
+  logic   [                 31:0] prog_addr;
+  logic   [                 31:0] prog_data;
+  logic                           prog_valid;
+  logic                           prog_mode;
+  logic                           prog_sys_rst;
 
   // ==========================================================================
   // Memory Initialization
   // ==========================================================================
-  string  init_file;
-  integer fd;
+  string                          init_file;
+  integer                         fd;
 
   initial begin
     if ($value$plusargs("INIT_FILE=%s", init_file)) begin
@@ -127,7 +127,7 @@ module wrapper_ram
   always_ff @(posedge clk_i) begin
     if (rd_en_i) begin
       for (int i = 0; i < WORDS_PER_LINE; i++) begin
-        rdata_q[i*WORD_WIDTH +: WORD_WIDTH] <= ram[line_base_addr + i[$clog2(RAM_DEPTH)-1:0]];
+        rdata_q[i*WORD_WIDTH+:WORD_WIDTH] <= ram[line_base_addr+i[$clog2(RAM_DEPTH)-1:0]];
       end
     end
   end
@@ -141,16 +141,14 @@ module wrapper_ram
     for (genvar w = 0; w < WORDS_PER_LINE; w++) begin : gen_word
       for (genvar b = 0; b < BYTES_PER_WORD; b++) begin : gen_byte
         localparam int STROBE_IDX = w * BYTES_PER_WORD + b;
-        
+
         always_ff @(posedge clk_i) begin
           // Normal write via strobes
           if (wstrb_i[STROBE_IDX]) begin
-            ram[line_base_addr + w[$clog2(RAM_DEPTH)-1:0]][b*8 +: 8] <= 
-                wdata_i[w*WORD_WIDTH + b*8 +: 8];
-          end
-          // Programming write (only to word 0 position)
+            ram[line_base_addr+w[$clog2(RAM_DEPTH)-1:0]][b*8+:8] <= wdata_i[w*WORD_WIDTH+b*8+:8];
+          end  // Programming write (only to word 0 position)
           else if (prog_mode && prog_valid && w == 0) begin
-            ram[prog_addr[$clog2(RAM_DEPTH)-1:0]][b*8 +: 8] <= prog_data[b*8 +: 8];
+            ram[prog_addr[$clog2(RAM_DEPTH)-1:0]][b*8+:8] <= prog_data[b*8+:8];
           end
         end
       end

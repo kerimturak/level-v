@@ -33,8 +33,38 @@
 // Boot and Halt Macros
 //=============================================================================
 
-// Boot sequence - minimal for Ceres
-#define RVMODEL_BOOT
+// Boot sequence - setup trap handler for Ceres
+// Jump over the handler, set mtvec, then continue
+#define RVMODEL_BOOT                                                    \
+    j _rvtest_boot_continue;                                            \
+    .align 4;                                                           \
+    .global rvtest_trap_handler;                                        \
+rvtest_trap_handler:                                                    \
+    csrr t0, mcause;                                                    \
+    csrr t1, mepc;                                                      \
+    li t2, 3;                   /* EBREAK mcause */                     \
+    bne t0, t2, 1f;                                                     \
+    lhu t3, 0(t1);              /* Load instruction */                  \
+    andi t3, t3, 0x3;           /* Check if compressed */               \
+    li t4, 0x3;                                                         \
+    beq t3, t4, 2f;             /* If 0x3, it's 32-bit */               \
+    addi t1, t1, 2;             /* Compressed: PC += 2 */               \
+    j 3f;                                                               \
+2:  addi t1, t1, 4;             /* 32-bit: PC += 4 */                   \
+3:  csrw mepc, t1;                                                      \
+    mret;                                                               \
+1:  li t2, 11;                  /* ECALL mcause */                      \
+    bne t0, t2, 4f;                                                     \
+    j halt_loop;                /* ECALL = halt */                      \
+4:  addi t1, t1, 4;             /* Unknown: skip 4 bytes */             \
+    csrw mepc, t1;                                                      \
+    mret;                                                               \
+_rvtest_boot_continue:                                                  \
+    .option push;                                                       \
+    .option norelax;                                                    \
+    la t0, rvtest_trap_handler;                                         \
+    csrw mtvec, t0;                                                     \
+    .option pop;
 
 // Halt sequence - signal test completion via ecall
 #define RVMODEL_HALT                                                    \

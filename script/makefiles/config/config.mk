@@ -11,7 +11,6 @@
 MODE          ?= debug
 TEST_NAME     ?= rv32ui-p-add
 TEST_TYPE     ?= isa
-MAX_CYCLES    ?= 10000
 SIM_TIME      := 20000ns
 SIM           ?= verilator
 GUI           ?= 0
@@ -19,6 +18,18 @@ TRACE         ?= 0
 VERBOSE       ?= 0
 NO_ADDR       ?= 0
 FAST_SIM      ?= 0
+
+# MAX_CYCLES defaults based on TEST_TYPE
+# - isa:   10000  (fast ISA tests)
+# - arch: 100000  (longer arch compliance tests)
+# - bench: 1000000 (benchmarks need more cycles)
+ifeq ($(TEST_TYPE),arch)
+    MAX_CYCLES ?= 100000
+else ifeq ($(TEST_TYPE),bench)
+    MAX_CYCLES ?= 1000000
+else
+    MAX_CYCLES ?= 10000
+endif
 
 # -----------------------------------------
 # Core Configuration Modules
