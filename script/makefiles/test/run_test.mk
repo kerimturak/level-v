@@ -26,6 +26,14 @@ HEX_DIR  := $(TEST_ROOT)/hex
 DUMP_DIR := $(TEST_ROOT)/dump
 ADDR_DIR := $(TEST_ROOT)/pass_fail_addr
 
+# ELF file extension (arch tests use .elf, others don't)
+ifeq ($(TEST_TYPE),arch)
+    ELF_EXT := .elf
+else
+    ELF_EXT :=
+endif
+ELF_FILE := $(ELF_DIR)/$(TEST_NAME)$(ELF_EXT)
+
 # -----------------------------------------
 # Exception Address Override
 # -----------------------------------------
@@ -59,7 +67,7 @@ test_prepare:
 	@echo -e "$(YELLOW)[INFO]$(RESET) Max Cycles  : $(MAX_CYCLES)"
 	@echo -e "$(YELLOW)[INFO]$(RESET) Test Log Dir: $(TEST_LOG_DIR)"
 	@echo -e "$(YELLOW)[INFO]$(RESET) RTL Log Dir : $(RTL_LOG_DIR)"
-	@echo -e "$(YELLOW)[INFO]$(RESET) ELF File     : $(ELF_DIR)/$(TEST_NAME)"
+	@echo -e "$(YELLOW)[INFO]$(RESET) ELF File     : $(ELF_FILE)"
 	@echo -e "$(YELLOW)[INFO]$(RESET) MEM File     : $(MEM_DIR)/$(TEST_NAME).mem"
 	@echo -e "$(YELLOW)[INFO]$(RESET) HEX File     : $(HEX_DIR)/$(TEST_NAME).hex"
 	@echo -e "$(YELLOW)[INFO]$(RESET) DUMP File    : $(DUMP_DIR)/$(TEST_NAME).dump"
@@ -137,7 +145,7 @@ run_spike:
 	echo -e "until pc 0 $$PASS_ADDR\nquit" > "$$DEBUG_CMD"; \
 	$(SPIKE) -d --isa=RV32IMC --pc=0x80000000 --log-commits \
 		--debug-cmd="$$DEBUG_CMD" \
-		$(ELF_DIR)/$(TEST_NAME) \
+		$(ELF_FILE) \
 		2>&1 | tee $(SPIKE_LOG); \
 	SPIKE_EXIT=$$?; \
 	echo "SPIKE_EXIT_CODE=$$SPIKE_EXIT" >> $(REPORT_FILE); \

@@ -90,12 +90,20 @@ fi
 
 # Optional addr file - skip if NO_ADDR is set
 NO_ADDR="${NO_ADDR:-0}"
-ADDR_FILE="$BUILD_DIR/tests/riscv-tests/pass_fail_addr/${TEST_NAME}_addr.txt"
+
+# Try multiple locations for addr file
+ADDR_FILE=""
+for addr_dir in "$BUILD_DIR"/tests/*/pass_fail_addr; do
+  if [ -f "$addr_dir/${TEST_NAME}_addr.txt" ]; then
+    ADDR_FILE="$addr_dir/${TEST_NAME}_addr.txt"
+    break
+  fi
+done
 
 if [ "$NO_ADDR" = "1" ]; then
   echo "[INFO] Address checking disabled (NO_ADDR=1)"
   ADDR_ARG="+no_addr"
-elif [ -f "$ADDR_FILE" ]; then
+elif [ -n "$ADDR_FILE" ] && [ -f "$ADDR_FILE" ]; then
   echo "[INFO] addr_file => $ADDR_FILE"
   ADDR_ARG="+addr_file=$ADDR_FILE"
 else

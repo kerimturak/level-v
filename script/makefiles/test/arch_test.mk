@@ -176,13 +176,13 @@ arch_import:
 			python3 $(HEX_TO_MEM_PY) $$hex $$mem 2>/dev/null || \
 				{ echo -e "  $(RED)✗ HEX→MEM failed: $${name}$(RESET)"; continue; }; \
 			if [ -f "$$dump" ]; then \
-				halt_addr=$$(grep -m1 '<halt_loop>:' $$dump | cut -d' ' -f1); \
 				exit_addr=$$(grep -m1 '<exit_cleanup>:' $$dump | cut -d' ' -f1); \
+				halt_addr=$$(grep -m1 '<halt_loop>:' $$dump | cut -d' ' -f1); \
 				pass_addr=$$(grep -m1 '<pass>:' $$dump | cut -d' ' -f1); \
-				if [ -n "$$halt_addr" ]; then \
-					p="0x$$halt_addr"; \
-				elif [ -n "$$exit_addr" ]; then \
+				if [ -n "$$exit_addr" ]; then \
 					p="0x$$exit_addr"; \
+				elif [ -n "$$halt_addr" ]; then \
+					p="0x$$halt_addr"; \
 				elif [ -n "$$pass_addr" ]; then \
 					p="0x$$pass_addr"; \
 				else \

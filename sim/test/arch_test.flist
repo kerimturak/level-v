@@ -1,5 +1,3 @@
-# RISC-V Architecture Tests
-# Auto-generated from build/tests/riscv-arch-test/elf
 C-cadd-01
 C-caddi-01
 C-caddi16sp-01
@@ -73,3 +71,21 @@ M-mulhsu-01
 M-mulhu-01
 M-rem-01
 M-remu-01
+privilege-ebreak
+privilege-ecall
+privilege-misalign-beq-01
+privilege-misalign-bge-01
+privilege-misalign-bgeu-01
+privilege-misalign-blt-01
+privilege-misalign-bltu-01
+privilege-misalign-bne-01
+privilege-misalign-jal-01
+privilege-misalign-lh-01
+privilege-misalign-lhu-01
+privilege-misalign-lw-01
+privilege-misalign-sh-01
+privilege-misalign-sw-01
+privilege-misalign1-cjalr-01
+privilege-misalign1-cjr-01
+privilege-misalign1-jalr-01
+privilege-misalign2-jalr-01
