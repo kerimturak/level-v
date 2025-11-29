@@ -91,14 +91,28 @@ fi
 # Optional addr file - skip if NO_ADDR is set
 NO_ADDR="${NO_ADDR:-0}"
 
-# Try multiple locations for addr file
-ADDR_FILE=""
-for addr_dir in "$BUILD_DIR"/tests/*/pass_fail_addr; do
-  if [ -f "$addr_dir/${TEST_NAME}_addr.txt" ]; then
-    ADDR_FILE="$addr_dir/${TEST_NAME}_addr.txt"
-    break
-  fi
-done
+# First, check exception_test.flist for override addresses
+EXCEPTION_FLIST="$ROOT_DIR/sim/test/exception_test.flist"
+EXCEPTION_ADDR=""
+if [ -f "$EXCEPTION_FLIST" ] && [ -n "${TEST_NAME:-}" ]; then
+  EXCEPTION_ADDR=$(awk -v test="$TEST_NAME" '$1==test {print $2" "$3}' "$EXCEPTION_FLIST" 2>/dev/null)
+fi
+
+if [ -n "$EXCEPTION_ADDR" ]; then
+  # Create temporary addr file with exception override addresses
+  ADDR_FILE="$VERILATOR_LOG_DIR/${TEST_NAME}_addr.txt"
+  echo "$EXCEPTION_ADDR" > "$ADDR_FILE"
+  echo "[INFO] Exception override for $TEST_NAME: $EXCEPTION_ADDR"
+else
+  # Try multiple locations for addr file
+  ADDR_FILE=""
+  for addr_dir in "$BUILD_DIR"/tests/*/pass_fail_addr; do
+    if [ -f "$addr_dir/${TEST_NAME}_addr.txt" ]; then
+      ADDR_FILE="$addr_dir/${TEST_NAME}_addr.txt"
+      break
+    fi
+  done
+fi
 
 if [ "$NO_ADDR" = "1" ]; then
   echo "[INFO] Address checking disabled (NO_ADDR=1)"
