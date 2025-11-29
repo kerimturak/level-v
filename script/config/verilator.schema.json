@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Verilator Configuration",
+  "description": "Configuration schema for CERES RISC-V Verilator simulation",
+  "type": "object",
+  "properties": {
+    "simulation": {
+      "type": "object",
+      "properties": {
+        "max_cycles": { "type": "integer", "minimum": 1, "description": "Maximum simulation cycles" },
+        "timeout": { "type": "integer", "minimum": 0, "description": "Timeout in seconds (0 = disabled)" },
+        "threads": { "oneOf": [{"type": "integer"}, {"const": "auto"}], "description": "Thread count" },
+        "seed": { "oneOf": [{"type": "integer"}, {"const": "auto"}], "description": "Random seed" }
+      }
+    },
+    "build": {
+      "type": "object",
+      "properties": {
+        "mode": { "enum": ["release", "debug", "profile"], "description": "Build mode" },
+        "jobs": { "oneOf": [{"type": "integer"}, {"const": "auto"}], "description": "Parallel jobs" },
+        "opt_level": { "enum": ["-O0", "-O1", "-O2", "-O3"], "description": "Optimization level" },
+        "cpp_standard": { "type": "string", "description": "C++ standard version" }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Enable waveform tracing" },
+        "format": { "enum": ["fst", "vcd"], "description": "Trace format" },
+        "depth": { "type": "integer", "minimum": 1, "description": "Trace hierarchy depth" },
+        "structs": { "type": "boolean", "description": "Trace structure names" },
+        "params": { "type": "boolean", "description": "Trace parameters" },
+        "threads": { "type": "integer", "minimum": 1, "description": "Trace writer threads" },
+        "underscore": { "type": "boolean", "description": "Trace _signals" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "line": { "type": "boolean" },
+        "toggle": { "type": "boolean" },
+        "user": { "type": "boolean" }
+      }
+    },
+    "optimization": {
+      "type": "object",
+      "properties": {
+        "output_split": { "type": "integer" },
+        "output_split_cfuncs": { "type": "integer" },
+        "unroll_count": { "type": "integer" },
+        "unroll_stmts": { "type": "integer" },
+        "x_assign": { "enum": ["0", "1", "fast", "unique"] },
+        "x_initial": { "enum": ["0", "1", "fast", "unique"] }
+      }
+    },
+    "features": {
+      "type": "object",
+      "properties": {
+        "vpi": { "type": "boolean" },
+        "hierarchical": { "type": "boolean" },
+        "savable": { "type": "boolean" },
+        "debug_check": { "type": "boolean" }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "properties": {
+        "fast_sim": { "type": "boolean" },
+        "bp_log": { "type": "boolean" },
+        "bp_verbose": { "type": "boolean" },
+        "commit_trace": { "type": "boolean" },
+        "pipeline_log": { "type": "boolean" },
+        "ram_log": { "type": "boolean" },
+        "uart_log": { "type": "boolean" }
+      }
+    },
+    "warnings": {
+      "type": "object",
+      "properties": {
+        "fatal": { "type": "boolean" },
+        "lint": { "type": "boolean" },
+        "style": { "type": "boolean" },
+        "width": { "type": "boolean" },
+        "unused": { "type": "boolean" },
+        "unoptflat": { "type": "boolean" }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "description": "Named configuration profile"
+      }
+    }
+  }
+}

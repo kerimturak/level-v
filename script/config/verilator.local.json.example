@@ -1,0 +1,21 @@
+{
+  "_comment": "Local overrides for verilator.json - This file is gitignored",
+  "_usage": "Copy this file to verilator.local.json and customize",
+
+  "simulation": {
+    "max_cycles": 500000
+  },
+
+  "build": {
+    "mode": "release"
+  },
+
+  "trace": {
+    "enabled": true,
+    "depth": 50
+  },
+
+  "logging": {
+    "bp_log": true
+  }
+}

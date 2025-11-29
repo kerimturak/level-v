@@ -9,4 +9,4 @@ build
 tests
 results
 *.tmp
-*.cmd
+*.cmdscript/config/verilator.local.json

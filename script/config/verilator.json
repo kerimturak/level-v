@@ -1,0 +1,100 @@
+{
+  "$schema": "./verilator.schema.json",
+  "_comment": "CERES RISC-V Verilator Simulation Configuration",
+
+  "simulation": {
+    "max_cycles": 100000,
+    "timeout": 0,
+    "threads": "auto",
+    "seed": "auto"
+  },
+
+  "build": {
+    "mode": "release",
+    "jobs": "auto",
+    "opt_level": "-O3",
+    "cpp_standard": "c++17"
+  },
+
+  "trace": {
+    "enabled": true,
+    "format": "fst",
+    "depth": 99,
+    "structs": true,
+    "params": true,
+    "threads": 1,
+    "underscore": false
+  },
+
+  "coverage": {
+    "enabled": false,
+    "line": true,
+    "toggle": true,
+    "user": false
+  },
+
+  "optimization": {
+    "output_split": 20000,
+    "output_split_cfuncs": 5000,
+    "unroll_count": 64,
+    "unroll_stmts": 30000,
+    "x_assign": "fast",
+    "x_initial": "fast"
+  },
+
+  "features": {
+    "vpi": false,
+    "hierarchical": false,
+    "savable": false,
+    "debug_check": false
+  },
+
+  "logging": {
+    "fast_sim": false,
+    "bp_log": false,
+    "bp_verbose": false,
+    "commit_trace": true,
+    "pipeline_log": true,
+    "ram_log": true,
+    "uart_log": true
+  },
+
+  "warnings": {
+    "fatal": false,
+    "lint": false,
+    "style": false,
+    "width": false,
+    "unused": false,
+    "unoptflat": false
+  },
+
+  "profiles": {
+    "fast": {
+      "_description": "Maximum speed, no tracing or logging",
+      "simulation": { "threads": "auto" },
+      "build": { "mode": "release", "opt_level": "-O3" },
+      "trace": { "enabled": false },
+      "logging": { "fast_sim": true }
+    },
+    "debug": {
+      "_description": "Full debugging with all features",
+      "build": { "mode": "debug", "opt_level": "-O0" },
+      "trace": { "enabled": true, "depth": 99 },
+      "features": { "debug_check": true },
+      "logging": { "commit_trace": true, "pipeline_log": true }
+    },
+    "coverage": {
+      "_description": "Coverage collection mode",
+      "build": { "mode": "release" },
+      "coverage": { "enabled": true, "line": true, "toggle": true },
+      "trace": { "enabled": false }
+    },
+    "benchmark": {
+      "_description": "Benchmark mode with BP logging",
+      "simulation": { "max_cycles": 10000000 },
+      "build": { "mode": "release", "opt_level": "-O3" },
+      "trace": { "enabled": false },
+      "logging": { "fast_sim": true, "bp_log": true }
+    }
+  }
+}

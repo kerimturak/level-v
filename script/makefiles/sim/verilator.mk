@@ -1,12 +1,48 @@
 # =========================================
 # CERES RISC-V — Verilator Simulation
+# Optimized for Verilator 5.x
 # =========================================
+
+# -----------------------------------------
+# Configuration Loading (from JSON)
+# -----------------------------------------
+CONFIG_SCRIPT := $(ROOT_DIR)/script/shell/parse_verilator_config.sh
+CONFIG_FILE   := $(ROOT_DIR)/script/config/verilator.json
+
+# Load config if available and no explicit overrides
+ifneq ($(wildcard $(CONFIG_SCRIPT)),)
+  ifneq ($(wildcard $(CONFIG_FILE)),)
+    # Check if jq is available
+    JQ_EXISTS := $(shell command -v jq 2>/dev/null)
+    ifdef JQ_EXISTS
+      # Load profile if specified
+      ifdef PROFILE
+        CONFIG_ARGS := --profile $(PROFILE)
+      endif
+      
+      # Include generated config (only if not already set)
+      -include $(BUILD_DIR)/.verilator_config.mk
+      
+      # Generate config makefile
+      $(BUILD_DIR)/.verilator_config.mk: $(CONFIG_FILE) $(wildcard $(ROOT_DIR)/script/config/verilator.local.json)
+		@mkdir -p $(BUILD_DIR)
+		@$(CONFIG_SCRIPT) --make $(CONFIG_ARGS) > $@ 2>/dev/null || true
+    endif
+  endif
+endif
 
 # -----------------------------------------
 # Verilator Paths
 # -----------------------------------------
 VERILATOR_LOG_DIR  := $(LOG_DIR)/verilator/$(TEST_NAME)
 VERILATOR_INCLUDES := $(addprefix -I, $(INC_DIRS))
+
+# -----------------------------------------
+# Threading Configuration
+# -----------------------------------------
+# Auto-detect CPU cores if not specified
+VERILATOR_THREADS  ?= $(shell nproc 2>/dev/null || echo 4)
+BUILD_JOBS         ?= $(VERILATOR_THREADS)
 
 # -----------------------------------------
 # Verilator Defines
@@ -25,6 +61,28 @@ ifeq ($(BP_VERBOSE),1)
   SV_DEFINES += +define+BP_LOGGER_EN +define+BP_VERBOSE_LOG
 endif
 
+# Coverage mode - aktivasyon: COVERAGE=1
+ifeq ($(COVERAGE),1)
+  COVERAGE_FLAGS := --coverage --coverage-line --coverage-toggle
+  SV_DEFINES += +define+COVERAGE_EN
+else
+  COVERAGE_FLAGS :=
+endif
+
+# VPI support - aktivasyon: VPI=1
+ifeq ($(VPI),1)
+  VPI_FLAGS := --vpi
+else
+  VPI_FLAGS :=
+endif
+
+# Hierarchical build for large designs - aktivasyon: HIERARCHICAL=1
+ifeq ($(HIERARCHICAL),1)
+  HIER_FLAGS := --hierarchical
+else
+  HIER_FLAGS :=
+endif
+
 # Fast simulation mode - disable all loggers for speed
 ifeq ($(FAST_SIM),1)
   SV_DEFINES += +define+FAST_SIM
@@ -33,8 +91,25 @@ ifeq ($(FAST_SIM),1)
   SV_DEFINES += +define+NO_RAM_LOG
   SV_DEFINES += +define+NO_UART_LOG
   VERILATOR_DEFINE = $(SV_DEFINES)
+  # Disable tracing in fast mode
+  TRACE_FLAGS :=
+  TRACE_DEFINE :=
 else
-  VERILATOR_DEFINE = +define+KONATA_TRACE +define+VM_TRACE_FST $(SV_DEFINES)
+  # Normal mode with tracing
+  TRACE_FLAGS := --trace-fst --trace-structs --trace-params
+  TRACE_DEFINE := +define+KONATA_TRACE +define+VM_TRACE_FST
+  VERILATOR_DEFINE = $(TRACE_DEFINE) $(SV_DEFINES)
+endif
+
+# Trace depth control - limit signal hierarchy depth
+TRACE_DEPTH ?= 99
+ifneq ($(TRACE_FLAGS),)
+  TRACE_FLAGS += --trace-depth $(TRACE_DEPTH)
+endif
+
+# Multi-threaded FST writing for faster waveform dumps
+ifeq ($(TRACE_THREADS),1)
+  TRACE_FLAGS += --trace-threads 2
 endif
 
 # -----------------------------------------
@@ -42,119 +117,300 @@ endif
 # -----------------------------------------
 ifeq ($(MODE),debug)
     OPT_LEVEL     := -O0
-    CFLAGS_DEBUG  := -g
-else
+    CFLAGS_DEBUG  := -g -DDEBUG
+    # Debug mode specific verilator flags
+    VERILATOR_DEBUG_FLAGS := --debug-check
+else ifeq ($(MODE),profile)
     OPT_LEVEL     := -O2
+    CFLAGS_DEBUG  := -pg -g
+    # Profile mode for gprof/perf
+    VERILATOR_DEBUG_FLAGS := --prof-cfuncs --prof-exec
+else
+    OPT_LEVEL     := -O3
     CFLAGS_DEBUG  :=
+    VERILATOR_DEBUG_FLAGS :=
 endif
 
 # -----------------------------------------
-# Warning Suppressions (simplified)
+# Advanced Optimization Flags
 # -----------------------------------------
+# Output splitting for faster compilation of large designs
+OUTPUT_SPLIT       ?= 20000
+OUTPUT_SPLIT_CFUNC ?= 5000
+
+# Loop unrolling limits
+UNROLL_COUNT       ?= 64
+UNROLL_STMTS       ?= 30000
+
+# X-state handling
+X_ASSIGN           ?= fast
+X_INITIAL          ?= fast
+
+# -----------------------------------------
+# Warning Suppressions (organized by category)
+# -----------------------------------------
+# Critical warnings that should never be suppressed
 # --Wno-fatal allows build to continue despite warnings
-# --Wno-lint disables most lint warnings
-# Additional specific suppressions for common cases
-NO_WARNING = \
-    --Wno-UNOPTFLAT \
-    --Wno-CASEINCOMPLETE \
-    --Wno-fatal \
-    --Wno-lint \
-    --Wno-style \
-	--Wno-WIDTH \
-    --Wno-UNOPTFLAT \
+
+# Width-related warnings
+NO_WARN_WIDTH = \
+    --Wno-WIDTH \
     --Wno-WIDTHEXPAND \
     --Wno-WIDTHTRUNC \
-    --Wno-WIDTHCONCAT \
+    --Wno-WIDTHCONCAT
+
+# Unused signal warnings
+NO_WARN_UNUSED = \
     --Wno-UNDRIVEN \
     --Wno-UNUSED \
     --Wno-UNUSEDPARAM \
-    --Wno-UNUSEDSIGNAL \
-    --Wno-LATCH \
-    --Wno-IMPLICIT \
-    --Wno-MODDUP \
-    --Wno-PINCONNECTEMPTY \
+    --Wno-UNUSEDSIGNAL
+
+# Style and naming warnings
+NO_WARN_STYLE = \
+    --Wno-style \
     --Wno-DECLFILENAME \
     --Wno-GENUNNAMED \
+    --Wno-VARHIDDEN \
+    --Wno-SYMRSVDWORD \
+    --Wno-IMPORTSTAR
+
+# Timing and synthesis warnings
+NO_WARN_TIMING = \
     --Wno-ASSIGNDLY \
-    --Wno-ALWCOMBORDER \
-    --Wno-ENUMVALUE \
     --Wno-INITIALDLY \
     --Wno-BLKANDNBLK \
-    --Wno-UNOPTTHREADS \
-    --Wno-SYMRSVDWORD \
-    --Wno-TIMESCALEMOD \
-    --Wno-IMPORTSTAR \
-    --Wno-IMPORTSTAR \
-    --Wno-VARHIDDEN
+    --Wno-TIMESCALEMOD
 
-# Lint-specific (fewer suppressions for better feedback)
+# Structural warnings
+NO_WARN_STRUCT = \
+    --Wno-PINCONNECTEMPTY \
+    --Wno-MODDUP \
+    --Wno-IMPLICIT \
+    --Wno-LATCH
+
+# Optimization warnings
+NO_WARN_OPT = \
+    --Wno-UNOPTFLAT \
+    --Wno-UNOPTTHREADS \
+    --Wno-ALWCOMBORDER
+
+# Case/enum warnings
+NO_WARN_CASE = \
+    --Wno-CASEINCOMPLETE \
+    --Wno-ENUMVALUE
+
+# Combined warning suppressions for simulation
+NO_WARNING = \
+    --Wno-fatal \
+    --Wno-lint \
+    $(NO_WARN_WIDTH) \
+    $(NO_WARN_UNUSED) \
+    $(NO_WARN_STYLE) \
+    $(NO_WARN_TIMING) \
+    $(NO_WARN_STRUCT) \
+    $(NO_WARN_OPT) \
+    $(NO_WARN_CASE)
+
+# Lint-specific - minimal suppressions for maximum feedback
+# Only suppress warnings that are truly not useful for lint
 NO_WARNING_LINT = \
     --Wno-DECLFILENAME \
-    --Wno-PINCONNECTEMPTY \
-    --Wno-GENUNNAMED \
-    --Wno-IMPORTSTAR \
-    --Wno-WIDTHEXPAND \
-    --Wno-VARHIDDEN \
-    --Wno-WIDTHEXPAND \
-    --Wno-UNUSEDSIGNAL \
-    --Wno-UNUSEDPARAM \
-    --Wno-UNDRIVEN \
-    --Wno-UNOPTFLAT \
-    --Wno-ALWCOMBORDER
+    --Wno-IMPORTSTAR
 
 # -----------------------------------------
 # Build Flags
 # -----------------------------------------
-LINT_FLAGS  = --lint-only -Wall $(NO_WARNING_LINT) -I$(INC_DIRS) --top-module $(RTL_LEVEL)
+# Lint flags: -Wall enables all warnings, no suppressions for real issues
+LINT_FLAGS  = --lint-only -Wall -I$(INC_DIRS) --top-module $(RTL_LEVEL)
 RUN_BIN     := $(OBJ_DIR)/V$(RTL_LEVEL)
+
+# Common verilator flags
+VERILATOR_COMMON_FLAGS = \
+    --top-module $(RTL_LEVEL) \
+    $(VERILATOR_INCLUDES) \
+    --timing \
+    --x-assign $(X_ASSIGN) \
+    --x-initial $(X_INITIAL) \
+    --error-limit 100 \
+    --Mdir $(OBJ_DIR)
+
+# Build-specific flags
+VERILATOR_BUILD_FLAGS = \
+    --cc \
+    --exe $(CPP_TB_FILE) \
+    --build \
+    -j $(BUILD_JOBS) \
+    --output-split $(OUTPUT_SPLIT) \
+    --output-split-cfuncs $(OUTPUT_SPLIT_CFUNC) \
+    --unroll-count $(UNROLL_COUNT) \
+    --unroll-stmts $(UNROLL_STMTS) \
+    $(TRACE_FLAGS) \
+    $(COVERAGE_FLAGS) \
+    $(VPI_FLAGS) \
+    $(HIER_FLAGS) \
+    $(VERILATOR_DEBUG_FLAGS) \
+    --CFLAGS "$(OPT_LEVEL) $(CFLAGS_DEBUG) -std=c++17 -Wall -Wextra -Wno-unused-parameter" \
+    --LDFLAGS "-lm -lpthread"
 
 # =========================================
 # Targets
 # =========================================
 
-.PHONY: dirs lint verilate run_verilator wave clean_verilator verilator_help
+.PHONY: dirs lint lint-report verilate verilate-fast run_verilator wave clean_verilator verilator_help stats
 
 dirs:
 	@$(MKDIR) -p "$(BUILD_DIR)" "$(OBJ_DIR)" "$(LOG_DIR)" "$(VERILATOR_LOG_DIR)"
 
 # ============================================================
-# Lint (includes loop detection)
+# Lint — Full lint check with all warnings enabled
 # ============================================================
+# Log output: $(LOG_DIR)/verilator/lint.log
+# Waiver output: $(LOG_DIR)/verilator/lint_waiver.vlt
 lint: dirs
-	@printf "$(GREEN)[VERILATOR LINT — $(MODE)]$(RESET)\n"
+	@printf "$(GREEN)[VERILATOR LINT]$(RESET)\n"
 	@mkdir -p "$(LOG_DIR)/verilator"
-	@$(VERILATOR) \
+	@printf "$(CYAN)[INFO]$(RESET) Log: $(LOG_DIR)/verilator/lint.log\n"
+	-@$(VERILATOR) \
 		$(LINT_FLAGS) $(VERILATOR_INCLUDES) \
-		$(SV_SOURCES) $(CPP_TB_FILE) \
+		$(SV_SOURCES) \
 		--timing \
-		--error-limit 100 \
+		--Wno-fatal \
 		--bbox-unsup \
+		--report-unoptflat \
+		--Mdir "$(OBJ_DIR)" \
+		--waiver-output "$(LOG_DIR)/verilator/lint_waiver.vlt" \
 		2>&1 | tee "$(LOG_DIR)/verilator/lint.log"
-	@if grep -qi "loop\|UNOPTFLAT" "$(LOG_DIR)/verilator/lint.log"; then \
-		printf "$(RED)[WARNING] Potential combinational loops detected.$(RESET)\n"; \
+	@echo ""
+	@printf "$(CYAN)════════════════════════════════════════$(RESET)\n"
+	@printf "$(CYAN)  Lint Summary$(RESET)\n"
+	@printf "$(CYAN)════════════════════════════════════════$(RESET)\n"
+	@ERR=$$(grep -c "%Error" "$(LOG_DIR)/verilator/lint.log" 2>/dev/null) || ERR=0; \
+		if [ "$$ERR" != "0" ] && [ -n "$$ERR" ]; then \
+			printf "  $(RED)Errors:   $$ERR$(RESET)\n"; \
+		else \
+			printf "  $(GREEN)Errors:   0$(RESET)\n"; \
+		fi
+	@WARN=$$(grep -c "%Warning" "$(LOG_DIR)/verilator/lint.log" 2>/dev/null) || WARN=0; \
+		if [ "$$WARN" != "0" ] && [ -n "$$WARN" ]; then \
+			printf "  $(YELLOW)Warnings: $$WARN$(RESET)\n"; \
+		else \
+			printf "  $(GREEN)Warnings: 0$(RESET)\n"; \
+		fi
+	@printf "$(CYAN)════════════════════════════════════════$(RESET)\n"
+	@printf "  Log:    $(LOG_DIR)/verilator/lint.log\n"
+	@printf "  Waiver: $(LOG_DIR)/verilator/lint_waiver.vlt\n"
+	@printf "$(CYAN)════════════════════════════════════════$(RESET)\n"
+
+# Lint with detailed report and statistics
+lint-report: dirs
+	@printf "$(GREEN)[VERILATOR LINT REPORT]$(RESET)\n"
+	@mkdir -p "$(LOG_DIR)/verilator"
+	@printf "$(CYAN)[INFO]$(RESET) Log: $(LOG_DIR)/verilator/lint_report.log\n"
+	-@$(VERILATOR) \
+		$(LINT_FLAGS) $(VERILATOR_INCLUDES) \
+		$(SV_SOURCES) \
+		--timing \
+		--Wno-fatal \
+		--stats \
+		--stats-vars \
+		--report-unoptflat \
+		--Mdir "$(OBJ_DIR)" \
+		--bbox-unsup \
+		2>&1 | tee "$(LOG_DIR)/verilator/lint_report.log"
+	@echo ""
+	@printf "$(GREEN)[DONE]$(RESET) Report: $(LOG_DIR)/verilator/lint_report.log\n"
+
+# Lint specific category
+lint-width: dirs
+	@printf "$(GREEN)[LINT: WIDTH WARNINGS]$(RESET)\n"
+	-@$(VERILATOR) --lint-only -Wall -Wno-fatal \
+		$(VERILATOR_INCLUDES) $(SV_SOURCES) \
+		--timing --bbox-unsup --Mdir "$(OBJ_DIR)" \
+		--top-module $(RTL_LEVEL) 2>&1 | grep -E "WIDTH|width" || echo "No width issues found"
+
+lint-unused: dirs
+	@printf "$(GREEN)[LINT: UNUSED SIGNALS]$(RESET)\n"
+	-@$(VERILATOR) --lint-only -Wall -Wno-fatal \
+		$(VERILATOR_INCLUDES) $(SV_SOURCES) \
+		--timing --bbox-unsup --Mdir "$(OBJ_DIR)" \
+		--top-module $(RTL_LEVEL) 2>&1 | grep -E "UNUSED|UNDRIVEN" || echo "No unused signals found"
+
+lint-loops: dirs
+	@printf "$(GREEN)[LINT: COMBINATIONAL LOOPS]$(RESET)\n"
+	-@$(VERILATOR) --lint-only -Wall -Wno-fatal \
+		$(VERILATOR_INCLUDES) $(SV_SOURCES) \
+		--timing --bbox-unsup --report-unoptflat --Mdir "$(OBJ_DIR)" \
+		--top-module $(RTL_LEVEL) 2>&1 | grep -E "UNOPTFLAT|loop|circular" || printf "$(GREEN)No combinational loops found$(RESET)\n"
+	@if ls $(OBJ_DIR)/*_unoptflat.dot 1>/dev/null 2>&1; then \
+		printf "$(CYAN)[INFO]$(RESET) Loop diagrams available in $(OBJ_DIR)/*.dot\n"; \
+		printf "$(CYAN)[TIP]$(RESET)  Run 'make lint-loops-view' to generate PDF\n"; \
+	fi
+
+# View combinational loop diagrams as PDF
+lint-loops-view: lint-loops
+	@printf "$(GREEN)[GENERATING LOOP DIAGRAMS]$(RESET)\n"
+	@mkdir -p "$(LOG_DIR)/verilator/loops"
+	@if ! command -v dot &>/dev/null; then \
+		printf "$(RED)[ERROR]$(RESET) Graphviz not installed. Run: sudo apt install graphviz\n"; \
+		exit 1; \
+	fi
+	@for dotfile in $(OBJ_DIR)/*_unoptflat.dot; do \
+		if [ -f "$$dotfile" ]; then \
+			name=$$(basename "$$dotfile" .dot); \
+			printf "  $(CYAN)→$(RESET) Converting $$name.dot to PDF...\n"; \
+			dot -Tpdf -o "$(LOG_DIR)/verilator/loops/$$name.pdf" "$$dotfile"; \
+			dot -Tsvg -o "$(LOG_DIR)/verilator/loops/$$name.svg" "$$dotfile"; \
+		fi; \
+	done
+	@if ls $(LOG_DIR)/verilator/loops/*.pdf 1>/dev/null 2>&1; then \
+		printf "$(GREEN)[DONE]$(RESET) Diagrams saved to: $(LOG_DIR)/verilator/loops/\n"; \
+		printf "$(CYAN)[INFO]$(RESET) Opening first diagram...\n"; \
+		xdg-open "$$(ls $(LOG_DIR)/verilator/loops/*.pdf | head -1)" 2>/dev/null || \
+		printf "$(YELLOW)[TIP]$(RESET) Open manually: $(LOG_DIR)/verilator/loops/\n"; \
 	else \
-		printf "$(GREEN)No combinational loops found.$(RESET)\n"; \
+		printf "$(GREEN)[INFO]$(RESET) No loop diagrams to display (no UNOPTFLAT warnings)\n"; \
 	fi
 
 # ============================================================
-# Verilate — Build C++ Model
+# Verilate — Build C++ Model (Standard)
 # ============================================================
 verilate: dirs
-	@printf "$(GREEN)[VERILATING RTL SOURCES]$(RESET)\n"
+	@printf "$(GREEN)[VERILATING RTL SOURCES — $(MODE) mode, $(VERILATOR_THREADS) threads]$(RESET)\n"
 	$(VERILATOR) \
-		--cc $(SV_SOURCES) $(LOGGER_SRC) \
-		--exe $(CPP_TB_FILE) \
-		--top-module $(RTL_LEVEL) \
-		$(VERILATOR_INCLUDES) \
+		$(SV_SOURCES) $(LOGGER_SRC) \
+		$(VERILATOR_COMMON_FLAGS) \
+		$(VERILATOR_BUILD_FLAGS) \
 		$(NO_WARNING) \
-		--trace-fst \
+		$(VERILATOR_DEFINE)
+	@printf "$(GREEN)[SUCCESS]$(RESET) Built: $(RUN_BIN)\n"
+
+# Fast verilate - skip if binary is up-to-date
+verilate-fast: dirs
+	@if [ -x "$(RUN_BIN)" ] && [ "$(RUN_BIN)" -nt "$(word 1,$(SV_SOURCES))" ]; then \
+		printf "$(YELLOW)[SKIP]$(RESET) Binary up-to-date: $(RUN_BIN)\n"; \
+	else \
+		printf "$(GREEN)[VERILATING RTL SOURCES — FAST MODE]$(RESET)\n"; \
+		$(VERILATOR) \
+			$(SV_SOURCES) $(LOGGER_SRC) \
+			$(VERILATOR_COMMON_FLAGS) \
+			$(VERILATOR_BUILD_FLAGS) \
+			$(NO_WARNING) \
+			$(VERILATOR_DEFINE); \
+		printf "$(GREEN)[SUCCESS]$(RESET) Built: $(RUN_BIN)\n"; \
+	fi
+
+# Rebuild only C++ without re-verilating (for testbench changes)
+rebuild-cpp: dirs
+	@printf "$(GREEN)[REBUILDING C++ ONLY]$(RESET)\n"
+	$(VERILATOR) \
+		$(SV_SOURCES) $(LOGGER_SRC) \
+		$(VERILATOR_COMMON_FLAGS) \
+		$(VERILATOR_BUILD_FLAGS) \
+		$(NO_WARNING) \
 		$(VERILATOR_DEFINE) \
-		--build -j 0 \
-		--timing \
-		--Mdir $(OBJ_DIR) \
-		--CFLAGS "$(OPT_LEVEL) $(CFLAGS_DEBUG) -std=c++17 -Wall -Wextra" \
-		--LDFLAGS "-lm -lpthread"
-	@printf "$(GREEN)[SUCCESS]$(RESET) Built: $(OBJ_DIR)/V$(RTL_LEVEL)\n"
+		--no-verilate
+	@printf "$(GREEN)[SUCCESS]$(RESET) Rebuilt: $(RUN_BIN)\n"
 
 # ============================================================
 # Run Simulation
@@ -172,6 +428,18 @@ run_verilator: verilate
 		MAX_CYCLES="$(MAX_CYCLES)" \
 		MEM_FILE="$(MEM_FILE)" \
 		NO_ADDR="$(NO_ADDR)" \
+		VERILATOR_THREADS="$(VERILATOR_THREADS)" \
+		"$(ROOT_DIR)/script/shell/run_verilator.sh"
+
+# Quick run - use verilate-fast
+run_verilator_quick: verilate-fast
+	@echo -e "$(GREEN)[RUNNING VERILATOR SIMULATION — QUICK]$(RESET)"
+	@mkdir -p "$(VERILATOR_LOG_DIR)"
+	@VERILATOR_LOG_DIR="$(VERILATOR_LOG_DIR)" \
+		TEST_NAME="$(TEST_NAME)" \
+		MAX_CYCLES="$(MAX_CYCLES)" \
+		MEM_FILE="$(MEM_FILE)" \
+		NO_ADDR="$(NO_ADDR)" \
 		"$(ROOT_DIR)/script/shell/run_verilator.sh"
 
 # ============================================================
@@ -182,7 +450,42 @@ wave:
 	@if [ -f "$(VERILATOR_LOG_DIR)/waveform.fst" ]; then \
 		gtkwave "$(VERILATOR_LOG_DIR)/waveform.fst" & \
 	else \
-		echo -e "$(RED)[ERROR]$(RESET) No waveform file found!"; \
+		echo -e "$(RED)[ERROR]$(RESET) No waveform file found at $(VERILATOR_LOG_DIR)/waveform.fst"; \
+		echo -e "$(YELLOW)[TIP]$(RESET) Run simulation first with: make run_verilator TEST_NAME=<test>"; \
+	fi
+
+# ============================================================
+# Statistics and Profiling
+# ============================================================
+stats: dirs
+	@printf "$(GREEN)[GENERATING VERILATOR STATISTICS]$(RESET)\n"
+	@mkdir -p "$(LOG_DIR)/verilator"
+	$(VERILATOR) \
+		--lint-only \
+		$(SV_SOURCES) \
+		$(VERILATOR_INCLUDES) \
+		--top-module $(RTL_LEVEL) \
+		--timing \
+		--stats \
+		--stats-vars \
+		$(NO_WARNING) \
+		--bbox-unsup \
+		2>&1 | tee "$(LOG_DIR)/verilator/stats.log"
+	@if [ -f "$(OBJ_DIR)/V$(RTL_LEVEL)__stats.txt" ]; then \
+		cp "$(OBJ_DIR)/V$(RTL_LEVEL)__stats.txt" "$(LOG_DIR)/verilator/"; \
+	fi
+	@printf "$(GREEN)[DONE]$(RESET) Statistics saved to $(LOG_DIR)/verilator/\n"
+
+# ============================================================
+# Coverage Report (requires COVERAGE=1 during build)
+# ============================================================
+coverage-report:
+	@if [ -d "$(LOG_DIR)/verilator" ]; then \
+		verilator_coverage --annotate "$(LOG_DIR)/verilator/coverage_annotated" \
+			"$(LOG_DIR)/verilator/coverage.dat" 2>/dev/null || \
+		echo -e "$(RED)[ERROR]$(RESET) No coverage data. Build with COVERAGE=1"; \
+	else \
+		echo -e "$(RED)[ERROR]$(RESET) Run simulation with COVERAGE=1 first"; \
 	fi
 
 # ============================================================
@@ -194,6 +497,12 @@ clean_verilator:
 	@$(RM) "$(LOG_DIR)/verilator"
 	@echo -e "$(GREEN)Clean complete.$(RESET)"
 
+# Deep clean - also remove dependency files
+clean_verilator_deep: clean_verilator
+	@echo -e "$(RED)[DEEP CLEANING]$(RESET)"
+	@find "$(BUILD_DIR)" -name "*.d" -delete 2>/dev/null || true
+	@find "$(BUILD_DIR)" -name "*.o" -delete 2>/dev/null || true
+
 # ============================================================
 # Help
 # ============================================================
@@ -201,23 +510,89 @@ verilator_help:
 	@echo -e ""
 	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
 	@echo -e "$(GREEN)            CERES RISC-V — Verilator Simulation               $(RESET)"
+	@echo -e "$(GREEN)              Verilator 5.x Optimized Makefile                $(RESET)"
 	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
 	@echo -e ""
-	@echo -e "$(YELLOW)Targets:$(RESET)"
-	@echo -e "  $(GREEN)lint           $(RESET)– Run lint & loop checks"
-	@echo -e "  $(GREEN)verilate       $(RESET)– Build C++ simulation model"
-	@echo -e "  $(GREEN)run_verilator  $(RESET)– Run simulation"
-	@echo -e "  $(GREEN)wave           $(RESET)– Open GTKWave"
-	@echo -e "  $(GREEN)clean_verilator$(RESET)– Clean build files"
+	@echo -e "$(YELLOW)Lint Targets:$(RESET)"
+	@echo -e "  $(GREEN)lint              $(RESET)– Full lint with all warnings (log: build/logs/verilator/lint.log)"
+	@echo -e "  $(GREEN)lint-report       $(RESET)– Lint with statistics"
+	@echo -e "  $(GREEN)lint-width        $(RESET)– Check width mismatches only"
+	@echo -e "  $(GREEN)lint-unused       $(RESET)– Check unused/undriven signals only"
+	@echo -e "  $(GREEN)lint-loops        $(RESET)– Check combinational loops only"
+	@echo -e "  $(GREEN)lint-loops-view   $(RESET)– Generate and view loop diagrams (PDF/SVG)"
 	@echo -e ""
-	@echo -e "$(YELLOW)Parameters:$(RESET)"
-	@echo -e "  TEST_NAME=<name>  – Test to run"
-	@echo -e "  MAX_CYCLES=<n>    – Max cycles (default: $(MAX_CYCLES))"
-	@echo -e "  BP_LOG=1          – Enable branch predictor statistics logger"
-	@echo -e "  BP_VERBOSE=1      – Enable verbose BP logger (logs every misprediction)"
+	@echo -e "$(YELLOW)Build Targets:$(RESET)"
+	@echo -e "  $(GREEN)verilate          $(RESET)– Build C++ simulation model"
+	@echo -e "  $(GREEN)verilate-fast     $(RESET)– Build only if sources changed"
+	@echo -e "  $(GREEN)rebuild-cpp       $(RESET)– Rebuild C++ without re-verilating"
+	@echo -e "  $(GREEN)stats             $(RESET)– Generate design statistics"
 	@echo -e ""
-	@echo -e "$(YELLOW)Example:$(RESET)"
+	@echo -e "$(YELLOW)Run Targets:$(RESET)"
+	@echo -e "  $(GREEN)run_verilator     $(RESET)– Build and run simulation"
+	@echo -e "  $(GREEN)run_verilator_quick$(RESET)– Quick run (skip rebuild if up-to-date)"
+	@echo -e "  $(GREEN)wave              $(RESET)– Open GTKWave waveform viewer"
+	@echo -e "  $(GREEN)coverage-report   $(RESET)– Generate coverage report"
+	@echo -e ""
+	@echo -e "$(YELLOW)Config Targets:$(RESET)"
+	@echo -e "  $(GREEN)config-show       $(RESET)– Show current configuration"
+	@echo -e "  $(GREEN)config-profiles   $(RESET)– List available profiles"
+	@echo -e ""
+	@echo -e "$(YELLOW)Clean Targets:$(RESET)"
+	@echo -e "  $(GREEN)clean_verilator   $(RESET)– Clean build files"
+	@echo -e "  $(GREEN)clean_verilator_deep$(RESET)– Deep clean including .d/.o files"
+	@echo -e ""
+	@echo -e "$(YELLOW)Configuration (via JSON or command line):$(RESET)"
+	@echo -e "  $(CYAN)PROFILE$(RESET)=<name>        – Use predefined profile (fast/debug/coverage/benchmark)"
+	@echo -e "  $(CYAN)Config file$(RESET): script/config/verilator.json"
+	@echo -e "  $(CYAN)Local override$(RESET): script/config/verilator.local.json"
+	@echo -e ""
+	@echo -e "$(YELLOW)Basic Parameters (override JSON):$(RESET)"
+	@echo -e "  $(CYAN)TEST_NAME$(RESET)=<name>     – Test to run"
+	@echo -e "  $(CYAN)MAX_CYCLES$(RESET)=<n>       – Max cycles (default: $(MAX_CYCLES))"
+	@echo -e "  $(CYAN)MODE$(RESET)=debug|profile   – Build mode (default: release)"
+	@echo -e ""
+	@echo -e "$(YELLOW)Logger Parameters:$(RESET)"
+	@echo -e "  $(CYAN)BP_LOG$(RESET)=1             – Enable branch predictor statistics"
+	@echo -e "  $(CYAN)BP_VERBOSE$(RESET)=1         – Enable verbose BP logger"
+	@echo -e "  $(CYAN)FAST_SIM$(RESET)=1           – Fast mode (disable all loggers)"
+	@echo -e ""
+	@echo -e "$(YELLOW)Advanced Parameters:$(RESET)"
+	@echo -e "  $(CYAN)VERILATOR_THREADS$(RESET)=<n>  – Parallel threads (default: auto)"
+	@echo -e "  $(CYAN)BUILD_JOBS$(RESET)=<n>         – Parallel build jobs"
+	@echo -e "  $(CYAN)COVERAGE$(RESET)=1             – Enable coverage collection"
+	@echo -e "  $(CYAN)VPI$(RESET)=1                  – Enable VPI support"
+	@echo -e "  $(CYAN)HIERARCHICAL$(RESET)=1         – Enable hierarchical build"
+	@echo -e "  $(CYAN)TRACE_DEPTH$(RESET)=<n>        – Signal trace depth (default: 99)"
+	@echo -e "  $(CYAN)TRACE_THREADS$(RESET)=1        – Multi-threaded FST writing"
+	@echo -e ""
+	@echo -e "$(YELLOW)Examples:$(RESET)"
 	@echo -e "  make run_verilator TEST_NAME=rv32ui-p-add"
-	@echo -e "  make isa BP_LOG=1                          # ISA tests with BP stats"
-	@echo -e "  make bench BP_LOG=1                        # Benchmarks with BP stats"
+	@echo -e "  make run_verilator TEST_NAME=rv32ui-p-add PROFILE=debug"
+	@echo -e "  make bench PROFILE=fast                        # Fast benchmark"
+	@echo -e "  make isa PROFILE=coverage                      # With coverage"
+	@echo -e "  make verilate PROFILE=benchmark BP_LOG=1       # Profile + override"
 	@echo -e ""
+
+# ============================================================
+# Configuration Management
+# ============================================================
+.PHONY: config-show config-profiles config-edit
+
+config-show:
+	@if [ -x "$(CONFIG_SCRIPT)" ] && command -v jq &>/dev/null; then \
+		$(CONFIG_SCRIPT) --summary $(if $(PROFILE),--profile $(PROFILE),); \
+	else \
+		echo -e "$(YELLOW)[INFO]$(RESET) Install jq for config management: sudo apt install jq"; \
+	fi
+
+config-profiles:
+	@if [ -x "$(CONFIG_SCRIPT)" ] && command -v jq &>/dev/null; then \
+		$(CONFIG_SCRIPT) --list-profiles; \
+	else \
+		echo -e "$(YELLOW)[INFO]$(RESET) Install jq for config management: sudo apt install jq"; \
+	fi
+
+config-edit:
+	@echo -e "$(CYAN)[INFO]$(RESET) Edit config: $(CONFIG_FILE)"
+	@echo -e "$(CYAN)[INFO]$(RESET) For local overrides, create: $(ROOT_DIR)/script/config/verilator.local.json"
+	@$${EDITOR:-nano} "$(CONFIG_FILE)"

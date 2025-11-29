@@ -1,10 +1,29 @@
 #!/usr/bin/env bash
-# Lightweight wrapper for running the Verilator simulation binary
-# - sets safe shell flags
-# - resolves MEM file or TEST_NAME
-# - invokes the Verilated binary and writes logs + a small JSON summary
+# =========================================
+# CERES RISC-V — Verilator Simulation Runner
+# Optimized for Verilator 5.x
+# =========================================
+#
+# Features:
+# - Safe shell flags with proper error handling
+# - MEM file resolution (by path or TEST_NAME)
+# - Comprehensive logging with JSON summary
+# - Performance timing and statistics
+# - Signal handling for clean termination
+# - Timeout support for runaway simulations
+#
 set -euo pipefail
 
+# Color codes for output
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly CYAN='\033[0;36m'
+readonly RESET='\033[0m'
+
+# -----------------------------------------
+# Path Configuration
+# -----------------------------------------
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
 RESULTS_DIR="${RESULTS_DIR:-$ROOT_DIR/results}"
@@ -12,14 +31,61 @@ OBJ_DIR="${OBJ_DIR:-$BUILD_DIR/obj_dir}"
 RTL_LEVEL="${RTL_LEVEL:-ceres_wrapper}"
 RUN_BIN="${RUN_BIN:-$OBJ_DIR/V${RTL_LEVEL}}"
 
-# Inputs (export environment variables or provide on command line)
+# -----------------------------------------
+# Simulation Configuration
+# -----------------------------------------
 # EXPECTED env:
 #   TEST_NAME, MEM_FILE, MAX_CYCLES, VERILATOR_LOG_DIR
 : "${MAX_CYCLES:=100000}"
+: "${TIMEOUT:=0}"                    # 0 = no timeout
+: "${VERILATOR_THREADS:=1}"          # Thread count for multi-threaded sim
+: "${VERBOSE:=0}"                    # Verbose output
+: "${QUIET:=0}"                      # Suppress info messages
 
+# -----------------------------------------
+# Helper Functions
+# -----------------------------------------
+log_info() {
+  [[ "$QUIET" == "1" ]] && return
+  echo -e "${CYAN}[INFO]${RESET} $*"
+}
+
+log_success() {
+  echo -e "${GREEN}[SUCCESS]${RESET} $*"
+}
+
+log_warn() {
+  echo -e "${YELLOW}[WARNING]${RESET} $*" >&2
+}
+
+log_error() {
+  echo -e "${RED}[ERROR]${RESET} $*" >&2
+}
+
+# Cleanup function for signal handling
+cleanup() {
+  local exit_code=$?
+  if [[ -n "${SIM_PID:-}" ]] && kill -0 "$SIM_PID" 2>/dev/null; then
+    log_warn "Terminating simulation (PID: $SIM_PID)..."
+    kill -TERM "$SIM_PID" 2>/dev/null || true
+    wait "$SIM_PID" 2>/dev/null || true
+  fi
+  exit "$exit_code"
+}
+
+# Setup signal handlers
+trap cleanup INT TERM
+
+# -----------------------------------------
+# Log Directory Setup
+# -----------------------------------------
+
+# -----------------------------------------
+# Log Directory Setup
+# -----------------------------------------
 if [ -z "${VERILATOR_LOG_DIR:-}" ]; then
   if [ -z "${TEST_NAME:-}" ]; then
-    echo "[ERROR] Provide TEST_NAME or set VERILATOR_LOG_DIR" >&2
+    log_error "Provide TEST_NAME or set VERILATOR_LOG_DIR"
     exit 2
   fi
   VERILATOR_LOG_DIR="$RESULTS_DIR/logs/verilator/$TEST_NAME"
@@ -27,7 +93,13 @@ fi
 
 mkdir -p "$VERILATOR_LOG_DIR"
 
-# Resolve MEM_PATH
+# -----------------------------------------
+# MEM File Resolution
+# -----------------------------------------
+
+# -----------------------------------------
+# MEM File Resolution
+# -----------------------------------------
 MEM_PATH=""
 if [ -n "${MEM_FILE:-}" ]; then
   if [ "${MEM_FILE}" = "-" ]; then
@@ -46,7 +118,7 @@ if [ -n "${MEM_FILE:-}" ]; then
     if [ -n "$FOUND" ]; then
       MEM_PATH="$(realpath "$FOUND")"
     else
-      echo "[ERROR] MEM_FILE '$MEM_FILE' not found in build tests mem dirs" >&2
+      log_error "MEM_FILE '$MEM_FILE' not found in build tests mem dirs"
       exit 3
     fi
   fi
@@ -69,25 +141,35 @@ else
     if [ -n "$FOUND" ]; then
       MEM_PATH="$(realpath "$FOUND")"
     else
-      echo "[ERROR] Could not locate MEM/HEX for TEST_NAME='$TEST_NAME' under $BUILD_DIR/tests/" >&2
+      log_error "Could not locate MEM/HEX for TEST_NAME='$TEST_NAME' under $BUILD_DIR/tests/"
       exit 4
     fi
   else
-    echo "[ERROR] Either MEM_FILE or TEST_NAME must be provided" >&2
+    log_error "Either MEM_FILE or TEST_NAME must be provided"
     exit 5
   fi
 fi
 
-echo "[INFO] INIT_FILE => ${MEM_PATH:-<none>}"
-echo "[INFO] test_name => ${TEST_NAME:-<none>}"
-echo "[INFO] log dir   => $VERILATOR_LOG_DIR"
-echo "[INFO] MAX_CYCLES => $MAX_CYCLES"
+# -----------------------------------------
+# Simulation Info Display
+# -----------------------------------------
+log_info "INIT_FILE => ${MEM_PATH:-<none>}"
+log_info "test_name => ${TEST_NAME:-<none>}"
+log_info "log dir   => $VERILATOR_LOG_DIR"
+log_info "MAX_CYCLES => $MAX_CYCLES"
+[[ "$VERILATOR_THREADS" -gt 1 ]] && log_info "threads   => $VERILATOR_THREADS"
 
+# -----------------------------------------
+# Binary Check
+# -----------------------------------------
 if [ ! -x "$RUN_BIN" ]; then
-  echo "[ERROR] Simulation binary not found: $RUN_BIN" >&2
+  log_error "Simulation binary not found: $RUN_BIN"
   exit 6
 fi
 
+# -----------------------------------------
+# Address File Resolution
+# -----------------------------------------
 # Optional addr file - skip if NO_ADDR is set
 NO_ADDR="${NO_ADDR:-0}"
 
@@ -102,7 +184,7 @@ if [ -n "$EXCEPTION_ADDR" ]; then
   # Create temporary addr file with exception override addresses
   ADDR_FILE="$VERILATOR_LOG_DIR/${TEST_NAME}_addr.txt"
   echo "$EXCEPTION_ADDR" > "$ADDR_FILE"
-  echo "[INFO] Exception override for $TEST_NAME: $EXCEPTION_ADDR"
+  log_info "Exception override for $TEST_NAME: $EXCEPTION_ADDR"
 else
   # Try multiple locations for addr file
   ADDR_FILE=""
@@ -115,48 +197,126 @@ else
 fi
 
 if [ "$NO_ADDR" = "1" ]; then
-  echo "[INFO] Address checking disabled (NO_ADDR=1)"
+  log_info "Address checking disabled (NO_ADDR=1)"
   ADDR_ARG="+no_addr"
 elif [ -n "$ADDR_FILE" ] && [ -f "$ADDR_FILE" ]; then
-  echo "[INFO] addr_file => $ADDR_FILE"
+  log_info "addr_file => $ADDR_FILE"
   ADDR_ARG="+addr_file=$ADDR_FILE"
 else
-  echo "[INFO] No addr_file found, disabling address check"
+  log_info "No addr_file found, disabling address check"
   ADDR_ARG="+no_addr"
 fi
 
-# Allow callers to pass extra plusargs to the simulation binary (e.g. +define+FETCH_LOGGER)
+# -----------------------------------------
+# Runtime Arguments
+# -----------------------------------------
+# Allow callers to pass extra plusargs to the simulation binary
 # Set SIM_PLUSARGS env var to forward arbitrary plusargs.
 SIM_PLUSARGS=${SIM_PLUSARGS:-}
 
-# Run binary
-"$RUN_BIN" "$MAX_CYCLES" \
-  +INIT_FILE="$MEM_PATH" \
-  +simulator=verilator \
-  +test_name="${TEST_NAME}" \
-  +trace_file="${VERILATOR_LOG_DIR}/commit_trace.log" \
-  +log_path="${VERILATOR_LOG_DIR}/ceres.log" \
-  +uart_log_path="${VERILATOR_LOG_DIR}/uart_output.log" \
-  +DUMP_FILE="${VERILATOR_LOG_DIR}/waveform.fst" \
-  +BP_LOG_DIR="${VERILATOR_LOG_DIR}" \
-  ${ADDR_ARG} ${SIM_PLUSARGS} | tee "${VERILATOR_LOG_DIR}/verilator_run.log"
-EXIT_CODE=${PIPESTATUS[0]:-0}
+# Verilator runtime options
+VERILATOR_RUNTIME_ARGS=""
+[[ "$VERBOSE" == "1" ]] && VERILATOR_RUNTIME_ARGS="$VERILATOR_RUNTIME_ARGS +verilator+debug"
+[[ "$QUIET" == "1" ]] && VERILATOR_RUNTIME_ARGS="$VERILATOR_RUNTIME_ARGS +verilator+quiet"
 
-# Write a brief JSON summary for CI consumption
+# Random seed (for reproducibility or randomization)
+if [ -n "${SEED:-}" ]; then
+  VERILATOR_RUNTIME_ARGS="$VERILATOR_RUNTIME_ARGS +verilator+seed+$SEED"
+  log_info "seed      => $SEED"
+fi
+
+# -----------------------------------------
+# Run Simulation
+# -----------------------------------------
+START_TIME=$(date +%s.%N)
+
+# Build command
+SIM_CMD="\"$RUN_BIN\" \"$MAX_CYCLES\" \
+  +INIT_FILE=\"$MEM_PATH\" \
+  +simulator=verilator \
+  +test_name=\"${TEST_NAME}\" \
+  +trace_file=\"${VERILATOR_LOG_DIR}/commit_trace.log\" \
+  +log_path=\"${VERILATOR_LOG_DIR}/ceres.log\" \
+  +uart_log_path=\"${VERILATOR_LOG_DIR}/uart_output.log\" \
+  +DUMP_FILE=\"${VERILATOR_LOG_DIR}/waveform.fst\" \
+  +BP_LOG_DIR=\"${VERILATOR_LOG_DIR}\" \
+  ${ADDR_ARG} ${VERILATOR_RUNTIME_ARGS} ${SIM_PLUSARGS}"
+
+# Run with or without timeout
+if [ "$TIMEOUT" -gt 0 ]; then
+  log_info "timeout   => ${TIMEOUT}s"
+  timeout --signal=TERM "$TIMEOUT" bash -c "$SIM_CMD" 2>&1 | tee "${VERILATOR_LOG_DIR}/verilator_run.log"
+  EXIT_CODE=${PIPESTATUS[0]:-0}
+  if [ "$EXIT_CODE" -eq 124 ]; then
+    log_warn "Simulation timed out after ${TIMEOUT}s"
+  fi
+else
+  eval "$SIM_CMD" 2>&1 | tee "${VERILATOR_LOG_DIR}/verilator_run.log"
+  EXIT_CODE=${PIPESTATUS[0]:-0}
+fi
+
+END_TIME=$(date +%s.%N)
+ELAPSED=$(echo "$END_TIME - $START_TIME" | bc 2>/dev/null || echo "N/A")
+
+# -----------------------------------------
+# Determine Result
+# -----------------------------------------
+RESULT="unknown"
+if [ "$EXIT_CODE" -eq 0 ]; then
+  # Check log for pass/fail indicators
+  if grep -qi "PASS\|passed\|SUCCESS" "${VERILATOR_LOG_DIR}/verilator_run.log" 2>/dev/null; then
+    RESULT="pass"
+  elif grep -qi "FAIL\|failed\|ERROR" "${VERILATOR_LOG_DIR}/verilator_run.log" 2>/dev/null; then
+    RESULT="fail"
+  else
+    RESULT="completed"
+  fi
+elif [ "$EXIT_CODE" -eq 124 ]; then
+  RESULT="timeout"
+else
+  RESULT="error"
+fi
+
+# -----------------------------------------
+# Write JSON Summary
+# -----------------------------------------
+
+# -----------------------------------------
+# Write JSON Summary
+# -----------------------------------------
 SUMMARY="${VERILATOR_LOG_DIR}/summary.json"
+
+# Get file sizes for reporting
+WAVEFORM_SIZE="0"
+if [ -f "${VERILATOR_LOG_DIR}/waveform.fst" ]; then
+  WAVEFORM_SIZE=$(stat -c%s "${VERILATOR_LOG_DIR}/waveform.fst" 2>/dev/null || echo "0")
+fi
+
 cat > "$SUMMARY" <<EOF
 {
   "test_name": "${TEST_NAME:-}",
   "mem_path": "${MEM_PATH:-}",
   "verilator_log_dir": "${VERILATOR_LOG_DIR}",
-  "exit_code": ${EXIT_CODE}
+  "max_cycles": ${MAX_CYCLES},
+  "exit_code": ${EXIT_CODE},
+  "result": "${RESULT}",
+  "elapsed_seconds": ${ELAPSED:-0},
+  "timestamp": "$(date -Iseconds)",
+  "waveform_size_bytes": ${WAVEFORM_SIZE},
+  "verilator_threads": ${VERILATOR_THREADS},
+  "seed": "${SEED:-auto}"
 }
 EOF
 
+# -----------------------------------------
+# Final Status Report
+# -----------------------------------------
 if [ "$EXIT_CODE" -ne 0 ]; then
-  echo "[ERROR] Simulation exited with code $EXIT_CODE" >&2
+  log_error "Simulation exited with code $EXIT_CODE (result: $RESULT)"
   exit "$EXIT_CODE"
 fi
 
-echo "[INFO] Verilator simulation complete. Logs: $VERILATOR_LOG_DIR"
+log_success "Verilator simulation complete in ${ELAPSED:-N/A}s"
+log_info "Logs: $VERILATOR_LOG_DIR"
+log_info "Result: $RESULT"
 exit 0
