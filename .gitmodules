@@ -1,6 +1,6 @@
 [submodule "subrepo/riscv-tests"]
-    path = subrepo/riscv-tests
-    url = https://github.com/riscv-software-src/riscv-tests.git
+	path = subrepo/riscv-tests
+	url = https://github.com/riscv-software-src/riscv-tests.git
 [submodule "subrepo/riscv-arch-test"]
 	path = subrepo/riscv-arch-test
 	url = https://github.com/riscv-non-isa/riscv-arch-test.git
