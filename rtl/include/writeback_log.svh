@@ -57,7 +57,7 @@ always @(posedge clk_i) begin
     trace_fd <= $fopen(trace_path, "w");
   end
   
-  else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL} && !trap_active_i)) begin
+  else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
 
     // ============================================================
     // 1) SPIKE-STYLE: CSR + RD WRITE IN SAME INSTRUCTION (CSRRW / CSRRS / CSRRC)

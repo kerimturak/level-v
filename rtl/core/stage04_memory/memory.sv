@@ -12,6 +12,7 @@ module memory
     output dlowX_req_t            lx_dreq_o,
     output logic       [XLEN-1:0] me_data_o,
     output logic                  dmiss_stall_o,
+    output logic                  fencei_stall_o,    // Dcache dirty writeback stall for fence.i
     output logic                  uart_tx_o,
     input  logic                  uart_rx_i,
     // MEM stage view (pipe3)
@@ -115,13 +116,14 @@ module memory
       .XLEN       (XLEN),
       .NUM_WAY    (DC_WAY)
   ) dcache (
-      .clk_i      (clk_i),
-      .rst_ni     (rst_ni),
-      .flush_i    (fe_flush_cache_i),
-      .cache_req_i(dcache_req),
-      .cache_res_o(dcache_res),
-      .lowX_res_i (lx_dres_i),
-      .lowX_req_o (lx_dreq_o)
+      .clk_i         (clk_i),
+      .rst_ni        (rst_ni),
+      .flush_i       (fe_flush_cache_i),
+      .cache_req_i   (dcache_req),
+      .cache_res_o   (dcache_res),
+      .lowX_res_i    (lx_dres_i),
+      .lowX_req_o    (lx_dreq_o),
+      .fencei_stall_o(fencei_stall_o)
   );
 
   logic [ 7:0] selected_byte;
@@ -145,9 +147,9 @@ module memory
   end
 
   always_comb begin
-    pherip_valid = !memregion && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL});
+    pherip_valid = !memregion && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
     pherip_addr  = !memregion ? ex_data_req_i.addr : '0;
-    pherip_sel   = !memregion && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL}) ? 4'b1111 : 4'b0000;
+    pherip_sel   = !memregion && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) ? 4'b1111 : 4'b0000;
     pherip_wdata = !memregion ? ex_data_req_i.data : '0;
   end
 

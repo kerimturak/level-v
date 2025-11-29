@@ -187,7 +187,7 @@ module pipeline_logger;
     //  - Front: FETCH & pipe1 sadece NO_STALL iken ilerliyor
     //  - Back:  pipe2/3/4 sadece IMISS/DMISS/ALU iken duruyor
     adv_front = (`SOC.stall_cause == NO_STALL);
-    adv_back  = !(`SOC.stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL});
+    adv_back  = !(`SOC.stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
 
     wb_closed = 1'b0;
 

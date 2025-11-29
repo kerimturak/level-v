@@ -219,7 +219,7 @@ module cs_reg_file
       pmpcfg0   <= '0;
       pmpaddr0  <= '0;
 
-    end else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL} && !trap_active_i)) begin
+    end else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
       
       // ------------------------------------------------------------------------
       // PERFORMANCE COUNTERS (always increment unless stalled)

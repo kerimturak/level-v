@@ -62,7 +62,8 @@ package ceres_param;
     LOAD_RAW_STALL = 1,
     IMISS_STALL = 2,
     DMISS_STALL = 3,
-    ALU_STALL = 4
+    ALU_STALL = 4,
+    FENCEI_STALL = 5
   } stall_e;
 
   typedef enum logic [5:0] {

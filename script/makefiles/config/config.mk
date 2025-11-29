@@ -20,11 +20,14 @@ NO_ADDR       ?= 0
 FAST_SIM      ?= 0
 
 # MAX_CYCLES defaults based on TEST_TYPE
-# - isa:   10000  (fast ISA tests)
-# - arch: 100000  (longer arch compliance tests)
-# - bench: 1000000 (benchmarks need more cycles)
+# - isa:     10000  (fast ISA tests)
+# - arch:   100000  (longer arch compliance tests)
+# - imperas: 200000 (comprehensive Imperas tests)
+# - bench: 1000000  (benchmarks need more cycles)
 ifeq ($(TEST_TYPE),arch)
     MAX_CYCLES ?= 100000
+else ifeq ($(TEST_TYPE),imperas)
+    MAX_CYCLES ?= 2000000
 else ifeq ($(TEST_TYPE),bench)
     MAX_CYCLES ?= 1000000
 else

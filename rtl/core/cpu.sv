@@ -98,6 +98,7 @@ module cpu
   // ============================================================================
   pipe3_t                pipe3;
   logic                  me_dmiss_stall;
+  logic                  me_fencei_stall;  // Dcache dirty writeback stall for fence.i
   logic       [XLEN-1:0] me_rdata;
   data_req_t me_data_req;
 
@@ -207,7 +208,7 @@ module cpu
     fencei_flush        = (pipe2.instr_type == fence_i);
     flush_pc            = pipe2.pc_incr;
     de_enable           = (stall_cause == NO_STALL); // to synch spike and core log stall on fetch flush
-    de_flush_en         = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL}) ? 1'b0 : de_flush; //(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL}) && de_flush;
+    de_flush_en         = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) ? 1'b0 : de_flush; //(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) && de_flush;
     de_info.spec        = pipe1.spec;
     de_info.bjtype      = is_branch(pipe1.instr_type);
     de_info.pc          = pipe1.pc;
@@ -244,14 +245,15 @@ module cpu
   //   execute aşamasına aktarılır.
   // Exception bilgisi:
   // Eğer speculative branch tahmini hatalıysa bu instruction flushlanacak,
-  // bu yüzden exception’ı sıfırla. Aksi durumda decode exception’ı taşı.
+  // bu yüzden exception'ı sıfırla. Aksi durumda decode exception'ı taşı.
   // - ex_exc_type varsa decode ve fetch flush edilmeli, exception öncesi yanlış çekilmiştir
-  // - fencei_flush durumunda ilerideki aşamaları stalluyorum
+  // - fencei_flush durumunda pipe1'i (decode) flush ediyoruz ama pipe2'deki fence.i instruction'ı
+  //   execute/memory/writeback'e ilerlemeli, kendisini flush etmemeli
   // ============================================================================
   always_ff @(posedge clk_i) begin
-    if (!rst_ni || ex_flush_en || priority_flush == 3 || priority_flush == 2 || fencei_flush) begin
+    if (!rst_ni || ex_flush_en || priority_flush == 3 || priority_flush == 2) begin
       pipe2 <= '{instr_type: instr_invalid, alu_ctrl: OP_ADD, pc_sel: NO_BJ, default: 0};
-    end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL})) begin
+    end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL})) begin
       pipe2 <= '{
         `ifdef TRACER_EN
             fe_tracer   : pipe1.fe_tracer,
@@ -299,7 +301,7 @@ module cpu
   // ============================================================================
 
   always_comb begin
-    ex_flush_en = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL}) ? 1'b0 : ex_flush; // !(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL}) &&  ex_flush;
+    ex_flush_en = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) ? 1'b0 : ex_flush; // !(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) &&  ex_flush;
     if (ex_alu_exc_type != NO_EXCEPTION) begin
       ex_exc_type = ex_alu_exc_type;
     end else if (pipe2.rw_size != 0) begin
@@ -419,7 +421,7 @@ module cpu
   always_ff @(posedge clk_i) begin
     if (!rst_ni || priority_flush == 3) begin
       pipe3 <= '{instr_type:instr_invalid, default: 0};
-    end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL} && !trap_active)) begin
+    end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active)) begin
       pipe3 <= '{
         `ifdef TRACER_EN
           fe_tracer    : pipe2.fe_tracer,
@@ -472,6 +474,7 @@ module cpu
       .lx_dreq_o        (lx_dreq),
       .me_data_o        (me_rdata),
       .dmiss_stall_o    (me_dmiss_stall),
+      .fencei_stall_o   (me_fencei_stall),
       .uart_rx_i        (uart_rx_i),
       .uart_tx_o        (uart_tx_o)
   );
@@ -491,7 +494,7 @@ module cpu
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       pipe4 <= '{instr_type:instr_invalid, default: 0};
-    end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL} && !trap_active)) begin
+    end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active)) begin
       pipe4 <= '{
         `ifdef TRACER_EN
           fe_tracer   : pipe3.fe_tracer,
@@ -591,7 +594,10 @@ module cpu
   // ============================================================================
   always_comb begin
     stall_cause = NO_STALL;
-    if (fe_imiss_stall) begin
+    if (me_fencei_stall) begin
+      // Fence.i: dcache dirty writeback in progress, stall everything
+      stall_cause = FENCEI_STALL;
+    end else if (fe_imiss_stall) begin
       stall_cause = IMISS_STALL;
     end else if (me_dmiss_stall) begin
       stall_cause = DMISS_STALL;

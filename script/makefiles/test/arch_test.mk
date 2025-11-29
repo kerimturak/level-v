@@ -34,7 +34,7 @@ ARCH_OBJCOPY     := $(RISCV_PREFIX)-objcopy
 ARCH_OBJDUMP     := $(RISCV_PREFIX)-objdump
 
 # Architecture flags for RV32IMC_Zicsr
-ARCH_MARCH       := rv32imc_zicsr
+ARCH_MARCH       := rv32imc_zicsr_zifencei
 ARCH_MABI        := ilp32
 
 # Compiler flags

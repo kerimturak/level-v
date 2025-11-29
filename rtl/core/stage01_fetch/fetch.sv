@@ -270,6 +270,8 @@ module fetch
   // Instruction Cache: Instruction'ları cache'ler, cache miss durumunda
   // lower level memory'ye istek gönderir
   // ============================================================================
+  logic icache_fencei_stall;  // Not used for icache, always 0
+
   cache #(
       .IS_ICACHE  (1),
       .cache_req_t(icache_req_t),
@@ -281,13 +283,14 @@ module fetch
       .XLEN       (XLEN),
       .NUM_WAY    (IC_WAY)
   ) icache (
-      .clk_i      (clk_i),
-      .rst_ni     (rst_ni),
-      .flush_i    (flush_i),
-      .cache_req_i(icache_req),
-      .cache_res_o(icache_res),
-      .lowX_res_i (lx_ires_i),
-      .lowX_req_o (lx_ireq_o)
+      .clk_i         (clk_i),
+      .rst_ni        (rst_ni),
+      .flush_i       (flush_i),
+      .cache_req_i   (icache_req),
+      .cache_res_o   (icache_res),
+      .lowX_res_i    (lx_ires_i),
+      .lowX_req_o    (lx_ireq_o),
+      .fencei_stall_o(icache_fencei_stall)  // Always 0 for icache
   );
 
   // ============================================================================

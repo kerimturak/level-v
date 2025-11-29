@@ -54,7 +54,7 @@ module writeback
 );
 
   always_comb begin
-    rf_rw_en_o = rf_rw_en_i && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL});
+    rf_rw_en_o = rf_rw_en_i && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
     wb_data_o  = data_sel_i[1] ? pc_incr_i : (data_sel_i[0] ? read_data_i : alu_result_i);
   end
 

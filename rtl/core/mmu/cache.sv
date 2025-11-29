@@ -27,7 +27,8 @@ module cache
     input  cache_req_t cache_req_i,
     output cache_res_t cache_res_o,
     input  lowX_res_t  lowX_res_i,
-    output lowX_req_t  lowX_req_o
+    output lowX_req_t  lowX_req_o,
+    output logic       fencei_stall_o  // Dcache dirty writeback stall for fence.i
 );
 
   // COMMON SIGNALS & Parameters
@@ -204,6 +205,9 @@ module cache
   // Generate different behavior for i-cache versus d-cache.
 
   if (IS_ICACHE) begin : icache_impl
+    // icache has no dirty writeback, so fencei_stall is always 0
+    assign fencei_stall_o = 1'b0;
+
     always_comb begin
       nsram.rw_en = cache_wr_en || cache_hit;
       nsram.wnode = flush ? '0 : updated_node;
@@ -237,18 +241,208 @@ module cache
     // Example: extra generate block for the dirty array and data masking.
     // The following logic is adapted from your dcache code.
     // You can instantiate the dirty array memories here (using a generate block as needed)
-    for (genvar i = 0; i < NUM_WAY; i++) begin : dirty_array
-      sp_bram #(
-          .DATA_WIDTH(1),
-          .NUM_SETS  (NUM_SET)
-      ) dirty_array (
-          .clk    (clk_i),
-          .chip_en(1'b1),
-          .addr   (drsram.idx),
-          .wr_en  (drsram.way[i]),
-          .wr_data(drsram.wdirty),
-          .rd_data(drsram.rdirty[i])
-      );
+
+    // ============================================================================
+    // FENCE.I Dirty Writeback State Machine
+    // ----------------------------------------------------------------------------
+    // When fence.i is issued (flush_i rises), dcache must:
+    // 1. Scan all sets and all ways for dirty lines
+    // 2. Write dirty lines back to memory
+    // 3. Mark written lines as clean
+    // 4. Assert fencei_stall_o until all dirty lines are written back
+    // 5. IMPORTANT: Dcache does NOT invalidate lines on fence.i, only writes back dirty data
+    // ============================================================================
+    // 3. Mark written lines as clean
+    // 4. Assert fencei_stall_o until all dirty lines are written back
+    // ============================================================================
+    typedef enum logic [2:0] {
+      FI_IDLE,            // Normal operation
+      FI_SCAN,            // Scanning sets for dirty lines
+      FI_CHECK_WAY,       // Check each way for dirty data
+      FI_WRITEBACK_REQ,   // Send writeback request to memory
+      FI_WRITEBACK_WAIT,  // Wait for writeback completion
+      FI_MARK_CLEAN,      // Mark the line as clean
+      FI_NEXT_WAY,        // Move to next way
+      FI_DONE             // Writeback complete
+    } fencei_state_e;
+
+    fencei_state_e fi_state_q, fi_state_d;
+    logic [IDX_WIDTH-1:0] fi_set_idx_q, fi_set_idx_d;
+    logic [$clog2(NUM_WAY)-1:0] fi_way_idx_q, fi_way_idx_d;
+    logic                fi_active;
+    logic                fi_writeback_req;
+    logic [TAG_SIZE-1:0] fi_evict_tag;
+    logic [BLK_SIZE-1:0] fi_evict_data;
+    logic [    XLEN-1:0] fi_evict_addr;
+    logic                fi_mark_clean;
+    logic [ NUM_WAY-1:0] fi_way_onehot;
+    logic                fi_has_dirty;
+    logic                flush_i_prev;  // To detect rising edge
+
+    // Detect rising edge of flush_i
+    always_ff @(posedge clk_i) begin
+      if (!rst_ni) flush_i_prev <= 1'b0;
+      else flush_i_prev <= flush_i;
+    end
+
+    wire fi_start = flush_i && !flush_i_prev && (fi_state_q == FI_IDLE);
+
+    // One-hot encoding of current way
+    always_comb begin
+      fi_way_onehot = '0;
+      fi_way_onehot[fi_way_idx_q] = 1'b1;
+    end
+
+    // Check if current way in current set is dirty and valid
+    assign fi_has_dirty = drsram.rdirty[fi_way_idx_q] && tsram.rtag[fi_way_idx_q][TAG_SIZE];
+
+    // Get eviction data for fence.i writeback
+    always_comb begin
+      fi_evict_tag  = tsram.rtag[fi_way_idx_q][TAG_SIZE-1:0];
+      fi_evict_data = dsram.rdata[fi_way_idx_q];
+      fi_evict_addr = {fi_evict_tag, fi_set_idx_q, {BOFFSET{1'b0}}};
+    end
+
+    // Fence.i state machine
+    always_ff @(posedge clk_i) begin
+      if (!rst_ni) begin
+        fi_state_q   <= FI_IDLE;
+        fi_set_idx_q <= '0;
+        fi_way_idx_q <= '0;
+      end else begin
+        fi_state_q   <= fi_state_d;
+        fi_set_idx_q <= fi_set_idx_d;
+        fi_way_idx_q <= fi_way_idx_d;
+      end
+    end
+
+    always_comb begin
+      fi_state_d       = fi_state_q;
+      fi_set_idx_d     = fi_set_idx_q;
+      fi_way_idx_d     = fi_way_idx_q;
+      fi_active        = 1'b0;
+      fi_writeback_req = 1'b0;
+      fi_mark_clean    = 1'b0;
+
+      unique case (fi_state_q)
+        FI_IDLE: begin
+          if (fi_start) begin
+            // fence.i detected (rising edge of flush_i), start scanning
+            // Set address for first set, wait one cycle for BRAM read
+            fi_state_d   = FI_SCAN;
+            fi_set_idx_d = '0;
+            fi_way_idx_d = '0;
+            fi_active    = 1'b1;
+          end
+        end
+
+        FI_SCAN: begin
+          fi_active  = 1'b1;
+          // Address is set, wait one cycle for BRAM to output data
+          // Then move to check ways
+          fi_state_d = FI_CHECK_WAY;
+        end
+
+        FI_CHECK_WAY: begin
+          fi_active = 1'b1;
+          // Now BRAM data is valid, check if dirty
+          if (fi_has_dirty) begin
+            // Found a dirty line, initiate writeback
+            fi_state_d = FI_WRITEBACK_REQ;
+          end else begin
+            // Not dirty, move to next way
+            fi_state_d = FI_NEXT_WAY;
+          end
+        end
+
+        FI_WRITEBACK_REQ: begin
+          fi_active = 1'b1;
+          fi_writeback_req = 1'b1;
+          // Wait for memory to accept our request
+          if (lowX_res_i.ready) begin
+            fi_state_d = FI_WRITEBACK_WAIT;
+          end
+        end
+
+        FI_WRITEBACK_WAIT: begin
+          fi_active = 1'b1;
+          fi_writeback_req = 1'b1;
+          // Wait for memory write to complete
+          if (lowX_res_i.valid) begin
+            // Writeback complete, mark line as clean
+            fi_state_d = FI_MARK_CLEAN;
+          end
+        end
+
+        FI_MARK_CLEAN: begin
+          fi_active = 1'b1;
+          fi_mark_clean = 1'b1;
+          fi_state_d = FI_NEXT_WAY;
+        end
+
+        FI_NEXT_WAY: begin
+          fi_active = 1'b1;
+          if (fi_way_idx_q == NUM_WAY - 1) begin
+            // All ways checked, move to next set
+            if (fi_set_idx_q == NUM_SET - 1) begin
+              // All sets done
+              fi_state_d = FI_DONE;
+            end else begin
+              fi_set_idx_d = fi_set_idx_q + 1'b1;
+              fi_way_idx_d = '0;
+              // Go to SCAN to wait for BRAM read latency
+              fi_state_d   = FI_SCAN;
+            end
+          end else begin
+            fi_way_idx_d = fi_way_idx_q + 1'b1;
+            // Same set, data already available, go directly to check
+            fi_state_d   = FI_CHECK_WAY;
+          end
+        end
+
+        FI_DONE: begin
+          // Writeback complete, no longer stalling
+          // Stay in DONE until flush_i goes low (will happen when pipeline advances)
+          fi_active = 1'b0;  // Release stall - this is the key!
+          if (!flush_i) begin
+            fi_state_d = FI_IDLE;
+          end
+        end
+
+        default: fi_state_d = FI_IDLE;
+      endcase
+    end
+
+    // fencei_stall_o: stall CPU while dirty writeback is in progress
+    // fi_active is 0 in FI_IDLE and FI_DONE states
+    assign fencei_stall_o = fi_active;
+
+    // ============================================================================
+    // Dirty Array as Register Array (not SRAM)
+    // ----------------------------------------------------------------------------
+    // Using registers allows instant visibility of all dirty bits in one cycle,
+    // which is essential for fence.i dirty writeback scanning.
+    // ============================================================================
+    logic [NUM_WAY-1:0] dirty_reg[NUM_SET];
+
+    // Register-based dirty array write
+    always_ff @(posedge clk_i) begin
+      if (!rst_ni) begin
+        for (int i = 0; i < NUM_SET; i++) dirty_reg[i] <= '0;
+      end else begin
+        for (int w = 0; w < NUM_WAY; w++) begin
+          if (drsram.way[w]) begin
+            dirty_reg[drsram.idx][w] <= drsram.wdirty;
+          end
+        end
+      end
+    end
+
+    // Register-based dirty array read (combinational - instant access)
+    always_comb begin
+      for (int w = 0; w < NUM_WAY; w++) begin
+        drsram.rdirty[w] = dirty_reg[drsram.idx][w];
+      end
     end
 
     // Additional d-cache logic: data masking, writeback, etc.
@@ -266,27 +460,38 @@ module cache
       write_back = cache_miss && (|(drsram.rdirty & evict_way & cache_valid_vec));
 
       data_array_wr_en = ((cache_hit && cache_req_q.rw) ||
-           (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !write_back;
-      tag_array_wr_en = (cache_miss && lowX_res_i.valid && !cache_req_q.uncached) && !write_back;
+           (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !write_back && !fi_active;
+      tag_array_wr_en = (cache_miss && lowX_res_i.valid && !cache_req_q.uncached) && !write_back && !fi_active;
 
       // Update dcache specific memories
-      drsram.wdirty = flush ? '0 : (write_back ? '0 : (cache_req_q.rw ? '1 : '0));
-      drsram.rw_en  = (cache_req_q.rw && (cache_hit || (cache_miss && lowX_res_i.valid))) ||
-                        (write_back && lowX_res_i.valid);
-      drsram.idx    = cache_idx;
-      for (int i = 0; i < NUM_WAY; i++) drsram.way[i] = flush ? '1 : (cache_wr_way[i] && drsram.rw_en) || flush;
+      // During fence.i writeback, we use fi_mark_clean to clear dirty bit
+      // IMPORTANT: During fi_active, we must NOT let flush invalidate tags/dirty bits
+      drsram.wdirty = fi_mark_clean ? 1'b0 : ((flush && !fi_active) ? '0 : (write_back ? '0 : (cache_req_q.rw ? '1 : '0)));
+      drsram.rw_en  = fi_mark_clean || ((cache_req_q.rw && (cache_hit || (cache_miss && lowX_res_i.valid))) ||
+                        (write_back && lowX_res_i.valid));
+      // During fence.i, use fi_set_idx_q for reading dirty bits
+      drsram.idx    = fi_active ? fi_set_idx_q : cache_idx;
+      for (int i = 0; i < NUM_WAY; i++) begin
+        if (fi_mark_clean) begin
+          drsram.way[i] = fi_way_onehot[i];
+        end else begin
+          // Don't let flush write during fi_active
+          drsram.way[i] = (flush && !fi_active) ? '1 : (cache_wr_way[i] && drsram.rw_en);
+        end
+      end
 
-      nsram.rw_en = flush || data_array_wr_en;
-      nsram.wnode = flush ? '0 : updated_node;
-      nsram.idx   = cache_idx;
+      nsram.rw_en = (flush && !fi_active) || data_array_wr_en;
+      nsram.wnode = (flush && !fi_active) ? '0 : updated_node;
+      nsram.idx   = fi_active ? fi_set_idx_q : cache_idx;
 
       tsram.way   = '0;
-      tsram.idx   = cache_idx;
-      tsram.wtag  = flush ? '0 : {1'b1, cache_req_q.addr[XLEN-1:IDX_WIDTH+BOFFSET]};
-      for (int i = 0; i < NUM_WAY; i++) tsram.way[i] = flush ? '1 : (cache_wr_way[i] && tag_array_wr_en);
+      tsram.idx   = fi_active ? fi_set_idx_q : cache_idx;
+      tsram.wtag  = (flush && !fi_active) ? '0 : {1'b1, cache_req_q.addr[XLEN-1:IDX_WIDTH+BOFFSET]};
+      // CRITICAL: Don't invalidate tags during fence.i - only writeback dirty data
+      for (int i = 0; i < NUM_WAY; i++) tsram.way[i] = (flush && !fi_active) ? '1 : (cache_wr_way[i] && tag_array_wr_en);
 
       dsram.way   = '0;
-      dsram.idx   = cache_idx;
+      dsram.idx   = fi_active ? fi_set_idx_q : cache_idx;
       dsram.wdata = cache_req_q.rw ? data_wr_pre : lowX_res_i.data;
       for (int i = 0; i < NUM_WAY; i++) dsram.way[i] = cache_wr_way[i] && data_array_wr_en;
 
@@ -301,21 +506,32 @@ module cache
     end
 
     always_comb begin
-      lowX_req_o.valid = !lookup_ack && cache_miss;
-      lowX_req_o.ready = !flush;
-      lowX_req_o.uncached = write_back ? '0 : cache_req_q.uncached;
-      lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}};
-      lowX_req_o.rw = write_back ? '1 : '0;
-      lowX_req_o.rw_size = write_back ? 2'b11 : cache_req_q.rw_size;
-      lowX_req_o.data = write_back ? evict_data : '0;
+      // During fence.i writeback, use fence.i state machine signals
+      if (fi_writeback_req) begin
+        lowX_req_o.valid = 1'b1;
+        lowX_req_o.ready = 1'b1;
+        lowX_req_o.uncached = 1'b0;
+        lowX_req_o.addr = fi_evict_addr;
+        lowX_req_o.rw = 1'b1;  // Write operation
+        lowX_req_o.rw_size = 2'b11;  // Full cache line
+        lowX_req_o.data = fi_evict_data;
+      end else begin
+        lowX_req_o.valid = !lookup_ack && cache_miss;
+        lowX_req_o.ready = !flush && !fi_active;
+        lowX_req_o.uncached = write_back ? '0 : cache_req_q.uncached;
+        lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}};
+        lowX_req_o.rw = write_back ? '1 : '0;
+        lowX_req_o.rw_size = write_back ? 2'b11 : cache_req_q.rw_size;
+        lowX_req_o.data = write_back ? evict_data : '0;
+      end
 
-      cache_res_o.valid   = !cache_req_q.rw ? (!write_back && cache_req_q.valid &&
+      cache_res_o.valid   = !fi_active && (!cache_req_q.rw ? (!write_back && cache_req_q.valid &&
                               (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid))) :
                               (!write_back && cache_req_q.valid && cache_req_i.ready &&
-                              (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid)));
-      cache_res_o.ready   = !cache_req_q.rw ? (!write_back && (!cache_miss || lowX_res_i.valid) && !flush && !tag_array_wr_en) :
+                              (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid))));
+      cache_res_o.ready   = !fi_active && (!cache_req_q.rw ? (!write_back && (!cache_miss || lowX_res_i.valid) && !flush && !tag_array_wr_en) :
                               (!write_back && !tag_array_wr_en && lowX_req_o.ready &&
-                              lowX_res_i.valid && !flush);
+                              lowX_res_i.valid && !flush));
       cache_res_o.miss = cache_miss;
       cache_res_o.data = (cache_miss && lowX_res_i.valid) ? lowX_res_i.data[word_idx*32+:32] : cache_select_data[word_idx*32+:32];
     end

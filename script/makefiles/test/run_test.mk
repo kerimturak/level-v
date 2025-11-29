@@ -4,6 +4,7 @@
 # Usage:
 #   make run TEST_NAME=median TEST_TYPE=bench
 #   make run TEST_NAME=rv32ui-p-add TEST_TYPE=isa
+#   make run TEST_NAME=I-ADD-01 TEST_TYPE=imperas
 # ============================================================
 
 # -----------------------------------------
@@ -15,19 +16,23 @@ else ifeq ($(TEST_TYPE),isa)
     TEST_ROOT := $(BUILD_DIR)/tests/riscv-tests
 else ifeq ($(TEST_TYPE),arch)
     TEST_ROOT := $(BUILD_DIR)/tests/riscv-arch-test
+else ifeq ($(TEST_TYPE),imperas)
+    TEST_ROOT := $(BUILD_DIR)/tests/imperas
 else
-    $(error Invalid TEST_TYPE="$(TEST_TYPE)". Use: isa, bench, or arch)
+    $(error Invalid TEST_TYPE="$(TEST_TYPE)". Use: isa, bench, arch, or imperas)
 endif
 
-# Derived paths from TEST_ROOT
-ELF_DIR  := $(TEST_ROOT)/elf
-MEM_DIR  := $(TEST_ROOT)/mem
-HEX_DIR  := $(TEST_ROOT)/hex
-DUMP_DIR := $(TEST_ROOT)/dump
-ADDR_DIR := $(TEST_ROOT)/pass_fail_addr
+# Derived paths from TEST_ROOT (can be overridden)
+ELF_DIR  ?= $(TEST_ROOT)/elf
+MEM_DIR  ?= $(TEST_ROOT)/mem
+HEX_DIR  ?= $(TEST_ROOT)/hex
+DUMP_DIR ?= $(TEST_ROOT)/dump
+ADDR_DIR ?= $(TEST_ROOT)/pass_fail_addr
 
-# ELF file extension (arch tests use .elf, others don't)
+# ELF file extension (arch and imperas tests use .elf, others don't)
 ifeq ($(TEST_TYPE),arch)
+    ELF_EXT := .elf
+else ifeq ($(TEST_TYPE),imperas)
     ELF_EXT := .elf
 else
     ELF_EXT :=

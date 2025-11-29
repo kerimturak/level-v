@@ -28,6 +28,9 @@ FLIST_ARCH      := $(TEST_LIST_DIR)/arch_test.flist
 # -----------------------------------------
 .PHONY: isa isa-tests
 
+# ISA test cycle limit (override with ISA_MAX_CYCLES=N)
+ISA_MAX_CYCLES ?= 10000
+
 isa isa-tests:
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Running RISC-V ISA Tests$(RESET)"
@@ -36,12 +39,15 @@ isa isa-tests:
 		FLIST=$(FLIST_ISA) \
 		TEST_TYPE=isa \
 		SIM=$(SIM) \
-		MAX_CYCLES=$(MAX_CYCLES)
+		MAX_CYCLES=$(ISA_MAX_CYCLES)
 
 # -----------------------------------------
 # CSR Tests (machine mode CSR)
 # -----------------------------------------
 .PHONY: csr csr-tests
+
+# CSR test cycle limit (override with CSR_MAX_CYCLES=N)
+CSR_MAX_CYCLES ?= 10000
 
 csr csr-tests:
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -51,12 +57,15 @@ csr csr-tests:
 		FLIST=$(FLIST_CSR) \
 		TEST_TYPE=isa \
 		SIM=$(SIM) \
-		MAX_CYCLES=$(MAX_CYCLES)
+		MAX_CYCLES=$(CSR_MAX_CYCLES)
 
 # -----------------------------------------
 # Benchmarks (NO_ADDR=1)
 # -----------------------------------------
 .PHONY: bench benchmarks
+
+# Benchmark cycle limit (override with BENCH_MAX_CYCLES=N)
+BENCH_MAX_CYCLES ?= 1000000
 
 bench benchmarks:
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -65,7 +74,7 @@ bench benchmarks:
 	@$(MAKE) --no-print-directory run_bench_flist \
 		FLIST=$(FLIST_BENCH) \
 		SIM=$(SIM) \
-		MAX_CYCLES=$(or $(MAX_CYCLES),1000000)
+		MAX_CYCLES=$(BENCH_MAX_CYCLES)
 
 # -----------------------------------------
 # All Tests
@@ -80,12 +89,15 @@ all_tests:
 		FLIST=$(FLIST_ALL) \
 		TEST_TYPE=isa \
 		SIM=$(SIM) \
-		MAX_CYCLES=$(MAX_CYCLES)
+		MAX_CYCLES=$(ISA_MAX_CYCLES)
 
 # -----------------------------------------
 # Exception Tests
 # -----------------------------------------
 .PHONY: exc exception-tests
+
+# Exception test cycle limit (override with EXC_MAX_CYCLES=N)
+EXC_MAX_CYCLES ?= 10000
 
 exc exception-tests:
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -95,12 +107,15 @@ exc exception-tests:
 		FLIST=$(FLIST_EXCEPTION) \
 		TEST_TYPE=isa \
 		SIM=$(SIM) \
-		MAX_CYCLES=$(MAX_CYCLES)
+		MAX_CYCLES=$(EXC_MAX_CYCLES)
 
 # -----------------------------------------
 # Architecture Tests (riscv-arch-test)
 # -----------------------------------------
 .PHONY: arch arch-tests
+
+# Arch test cycle limit (override with ARCH_MAX_CYCLES=N)
+ARCH_MAX_CYCLES ?= 100000
 
 arch arch-tests:
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -114,7 +129,7 @@ arch arch-tests:
 		FLIST=$(FLIST_ARCH) \
 		TEST_TYPE=arch \
 		SIM=$(SIM) \
-		MAX_CYCLES=$(MAX_CYCLES)
+		MAX_CYCLES=$(ARCH_MAX_CYCLES)
 
 # Generate arch test flist from built tests
 .PHONY: arch_gen_flist

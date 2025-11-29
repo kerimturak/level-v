@@ -18,6 +18,7 @@ include script/makefiles/sim/spike.mk
 include script/makefiles/test/run_test.mk
 include script/makefiles/test/isa_import.mk
 include script/makefiles/test/arch_test.mk
+include script/makefiles/test/imperas_test.mk
 include script/makefiles/test/coremark.mk
 include script/makefiles/test/test_lists.mk
 
@@ -61,6 +62,12 @@ help:
 	@echo -e "  cm_run          - Quick CoreMark run (skip rebuild)"
 	@echo -e "  coremark        - Build CoreMark only"
 	@echo -e "  coremark_help   - Show CoreMark help"
+	@echo -e ""
+	@echo -e "$(GREEN)Imperas RISC-V Tests:$(RESET)"
+	@echo -e "  imperas_auto    - Full pipeline (clone+build+import)"
+	@echo -e "  imperas         - Run all Imperas tests"
+	@echo -e "  ti T=<name>     - Quick single Imperas test"
+	@echo -e "  imperas_help    - Show Imperas test help"
 	@echo -e ""
 	@echo -e "$(YELLOW)Build Profiles:$(RESET)"
 	@echo -e "  MODE=debug      - Default, full tracing, assertions ON"
