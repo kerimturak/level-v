@@ -185,13 +185,23 @@ jobs:
       
       - name: Clone test repositories
         run: |
-          # riscv-tests is a submodule, but we need to ensure it's initialized
-          git submodule update --init --recursive || true
+          # Ensure subrepo directory exists
+          mkdir -p subrepo
+          
+          # Clone riscv-tests if not exists (primary test suite)
+          if [ ! -d "subrepo/riscv-tests" ] || [ -z "$(ls -A subrepo/riscv-tests 2>/dev/null)" ]; then
+            rm -rf subrepo/riscv-tests
+            git clone --depth 1 https://github.com/riscv-software-src/riscv-tests.git subrepo/riscv-tests
+          fi
           
           # Clone riscv-arch-test if not exists
-          if [ ! -d "subrepo/riscv-arch-test" ]; then
+          if [ ! -d "subrepo/riscv-arch-test" ] || [ -z "$(ls -A subrepo/riscv-arch-test 2>/dev/null)" ]; then
+            rm -rf subrepo/riscv-arch-test
             git clone --depth 1 https://github.com/riscv-non-isa/riscv-arch-test.git subrepo/riscv-arch-test
           fi
+          
+          # List what we have
+          ls -la subrepo/
 
       - name: Build ISA tests
         run: make isa_build RISCV_PREFIX=riscv-none-elf
@@ -257,16 +267,29 @@ jobs:
       
       - name: Clone test repositories
         run: |
-          # riscv-tests is a submodule
-          git submodule update --init --recursive || true
+          # Ensure subrepo directory exists
+          mkdir -p subrepo
           
-          # Clone additional test repos if not exists
-          if [ ! -d "subrepo/riscv-arch-test" ]; then
+          # Clone riscv-tests if not exists
+          if [ ! -d "subrepo/riscv-tests" ] || [ -z "$(ls -A subrepo/riscv-tests 2>/dev/null)" ]; then
+            rm -rf subrepo/riscv-tests
+            git clone --depth 1 https://github.com/riscv-software-src/riscv-tests.git subrepo/riscv-tests
+          fi
+          
+          # Clone riscv-arch-test if not exists
+          if [ ! -d "subrepo/riscv-arch-test" ] || [ -z "$(ls -A subrepo/riscv-arch-test 2>/dev/null)" ]; then
+            rm -rf subrepo/riscv-arch-test
             git clone --depth 1 https://github.com/riscv-non-isa/riscv-arch-test.git subrepo/riscv-arch-test
           fi
-          if [ ! -d "subrepo/imperas-riscv-tests" ]; then
+          
+          # Clone imperas tests if not exists
+          if [ ! -d "subrepo/imperas-riscv-tests" ] || [ -z "$(ls -A subrepo/imperas-riscv-tests 2>/dev/null)" ]; then
+            rm -rf subrepo/imperas-riscv-tests
             git clone --depth 1 https://github.com/riscv-ovpsim/imperas-riscv-tests.git subrepo/imperas-riscv-tests
           fi
+          
+          # List what we have
+          ls -la subrepo/
 
       - name: Build all tests
         run: |
