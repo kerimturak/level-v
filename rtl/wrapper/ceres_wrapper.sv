@@ -7,142 +7,270 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 Description:
-  Top-level wrapper using word-based RAM with burst support.
-  This version uses 32-bit word memory organization, supporting
-  standard .mem file formats while still providing cache-line
-  width data transfers.
+  CERES RISC-V SoC Top-Level Wrapper
+  
+  Modular, extensible SoC wrapper designed for future expansion.
+  
+  Memory Map:
+    0x8000_0000 : Main RAM (128KB default)
+    0x3000_0000 : CLINT (mtime, mtimecmp, msip)
+    0x2000_0000 : Peripherals
+      0x2000_0xxx : UART0
+      0x2000_1xxx : UART1
+      0x2000_2xxx : SPI0
+      0x2000_3xxx : I2C0
+      0x2000_4xxx : GPIO
+      0x2000_5xxx : PWM
+      0x2000_6xxx : Timer
+      0x2000_7xxx : PLIC
 */
 `timescale 1ns / 1ps
 
 module ceres_wrapper
   import ceres_param::*;
-(
-    input  logic clk_i,
-    input  logic rst_ni,
+#(
+    // System Configuration
+    parameter int unsigned CLK_FREQ_HZ = CPU_CLK,
+    parameter int unsigned BAUD_RATE   = 115200,
+
+    // Memory Configuration
+    parameter int unsigned RAM_SIZE_KB = 128,
+    parameter int unsigned RAM_LATENCY = 16,
+
+    // Peripheral Configuration
+    parameter int unsigned NUM_UART = 1,
+    parameter bit          SPI_EN   = 1'b0,
+    parameter bit          I2C_EN   = 1'b0,
+    parameter bit          GPIO_EN  = 1'b0,
+    parameter bit          PWM_EN   = 1'b0,
+    parameter bit          TIMER_EN = 1'b1,
+    parameter bit          PLIC_EN  = 1'b0,
+
+    // Programming Interface
+    parameter string PROG_SEQUENCE = PROGRAM_SEQUENCE
+) (
+    // Clock and Reset
+    input logic clk_i,
+    input logic rst_ni,
+
+    // UART Interface
+    output logic uart_tx_o,
+    input  logic uart_rx_i,
+
+    // SPI Interface (active when SPI_EN=1)
+    output logic       spi0_sclk_o,
+    output logic       spi0_mosi_o,
+    input  logic       spi0_miso_i,
+    output logic [3:0] spi0_ss_o,
+
+    // I2C Interface (active when I2C_EN=1)
+    inout wire i2c0_sda_io,
+    inout wire i2c0_scl_io,
+
+    // GPIO Interface (active when GPIO_EN=1)
+    input  logic [31:0] gpio_i,
+    output logic [31:0] gpio_o,
+    output logic [31:0] gpio_oe_o,
+
+    // External Interrupts
+    input logic [7:0] ext_irq_i,
+
+    // Programming Interface
     input  logic program_rx_i,
     output logic prog_mode_led_o,
-    output logic uart_tx_o,
-    input  logic uart_rx_i
+
+    // Debug/Status
+    output logic [3:0] status_led_o
 );
 
-  logic clk_o;
-  assign clk_o = clk_i;
+  // ==========================================================================
+  // Local Parameters
+  // ==========================================================================
+  localparam int RAM_DEPTH = (RAM_SIZE_KB * 1024) / 4;
+  localparam int CACHE_LINE_W = BLK_SIZE;
+  localparam int BYTE_OFFSET = 2;
 
-  // Memory parameters - 32-bit word based
-  localparam WORD_WIDTH       = 32;                        // 32-bit words
-  localparam CACHE_LINE_WIDTH = BLK_SIZE;                  // From ceres_param (128-bit)
-  localparam WORDS_PER_LINE   = CACHE_LINE_WIDTH / WORD_WIDTH;  // 4 words per cache line
-  localparam RAM_DEPTH        = 32 * 1024;                 // 32K words = 128KB
-  localparam BYTE_OFFSET      = $clog2(WORD_WIDTH / 8);    // 2 bits for word offset
-  localparam LINE_OFFSET      = $clog2(WORDS_PER_LINE);    // 2 bits for word-in-line
-  localparam RAM_DELAY        = 16;
+  // Address Regions
+  localparam logic [31:0] RAM_BASE = 32'h8000_0000;
+  localparam logic [31:0] RAM_MASK = 32'h000F_FFFF;
+  localparam logic [31:0] CLINT_BASE = 32'h3000_0000;
+  localparam logic [31:0] CLINT_MASK = 32'h0000_FFFF;
+  localparam logic [31:0] PBUS_BASE = 32'h2000_0000;
+  localparam logic [31:0] PBUS_MASK = 32'h00FF_FFFF;
 
-  // Address parameters
-  parameter [31:0] RAM_BASE_ADDR  = 32'h8000_0000;
-  parameter [31:0] RAM_MASK_ADDR  = 32'h000f_ffff;
-  parameter [31:0] TIMER_BASE     = 32'h3000_0000;
+  // CLINT Offsets
+  localparam logic [15:0] CLINT_MSIP = 16'h0000;
+  localparam logic [15:0] CLINT_MTIMECMP = 16'h4000;
+  localparam logic [15:0] CLINT_MTIME = 16'hBFF8;
 
-  // Internal signals
-  iomem_req_t                         iomem_req;
-  iomem_res_t                         iomem_res;
-  logic [CACHE_LINE_WIDTH-1:0]        ram_rdata;
-  logic [CACHE_LINE_WIDTH/8-1:0]      ram_wstrb;
-  logic                               ram_rd_en;
-  logic                               req_waited_q;
-  logic [63:0]                        timer;
-  logic                               prog_system_reset;
-  logic                               rst_n;
-  logic [$clog2(RAM_DEPTH)-1:0]       word_addr;
-  logic [RAM_DELAY-1:0]               ram_shift_q;
-  logic                               req_responsed;
-  logic                               req_waited;
-  logic                               is_ram_access;
-  logic                               is_timer_access;
+  // ==========================================================================
+  // Internal Signals
+  // ==========================================================================
 
-  // CPU instance
+  // CPU Interface
+  iomem_req_t cpu_mem_req;
+  iomem_res_t cpu_mem_res;
+
+  // Reset
+  logic       prog_reset;
+  logic       sys_rst_n;
+
+  // Address Decode
+  logic sel_ram, sel_clint, sel_pbus;
+  logic [                 15:0] clint_off;
+
+  // RAM
+  logic [     CACHE_LINE_W-1:0] ram_rdata;
+  logic [   CACHE_LINE_W/8-1:0] ram_wstrb;
+  logic                         ram_rd_en;
+  logic [$clog2(RAM_DEPTH)-1:0] ram_addr;
+  logic [      RAM_LATENCY-1:0] ram_delay_q;
+  logic                         ram_pending_q;
+
+  // CLINT
+  logic [                 63:0] mtime_q;
+  logic [                 63:0] mtimecmp_q;
+  logic                         msip_q;
+  logic                         timer_irq;
+
+  // ==========================================================================
+  // Reset
+  // ==========================================================================
+  assign sys_rst_n = rst_ni & prog_reset;
+
+  // ==========================================================================
+  // Address Decoder
+  // ==========================================================================
+  assign sel_ram   = (cpu_mem_req.addr & ~RAM_MASK) == RAM_BASE;
+  assign sel_clint = (cpu_mem_req.addr & ~CLINT_MASK) == CLINT_BASE;
+  assign sel_pbus  = (cpu_mem_req.addr & ~PBUS_MASK) == PBUS_BASE;
+  assign clint_off = cpu_mem_req.addr[15:0];
+
+  // ==========================================================================
+  // CPU Core (instance name 'soc' for tracer compatibility)
+  // ==========================================================================
   cpu soc (
       .clk_i      (clk_i),
-      .rst_ni     (rst_ni),
-      .iomem_req_o(iomem_req),
-      .iomem_res_i(iomem_res),
+      .rst_ni     (sys_rst_n),
+      .iomem_req_o(cpu_mem_req),
+      .iomem_res_i(cpu_mem_res),
       .uart_tx_o  (uart_tx_o),
       .uart_rx_i  (uart_rx_i)
   );
 
-  // Word-based RAM with burst support
+  // ==========================================================================
+  // Main RAM
+  // ==========================================================================
+  assign ram_addr  = cpu_mem_req.addr[BYTE_OFFSET+$clog2(RAM_DEPTH)-1 : BYTE_OFFSET];
+  assign ram_wstrb = (cpu_mem_req.valid & sel_ram) ? cpu_mem_req.rw : '0;
+  assign ram_rd_en = cpu_mem_req.valid & sel_ram & ~(|cpu_mem_req.rw);
+
   wrapper_ram #(
-      .WORD_WIDTH      (WORD_WIDTH),
+      .WORD_WIDTH      (32),
       .RAM_DEPTH       (RAM_DEPTH),
-      .CACHE_LINE_WIDTH(CACHE_LINE_WIDTH),
-      .CPU_CLK         (CPU_CLK),
-      .PROG_BAUD_RATE  (PROG_BAUD_RATE),
-      .PROGRAM_SEQUENCE(PROGRAM_SEQUENCE)
-  ) main_memory (
-      .clk_i          (clk_o),
+      .CACHE_LINE_WIDTH(CACHE_LINE_W),
+      .CPU_CLK         (CLK_FREQ_HZ),
+      .PROG_BAUD_RATE  (BAUD_RATE),
+      .PROGRAM_SEQUENCE(PROG_SEQUENCE)
+  ) u_main_ram (
+      .clk_i          (clk_i),
       .rst_ni         (rst_ni),
-      .addr_i         (word_addr),
-      .wdata_i        (iomem_req.data),
+      .addr_i         (ram_addr),
+      .wdata_i        (cpu_mem_req.data),
       .wstrb_i        (ram_wstrb),
       .rdata_o        (ram_rdata),
       .rd_en_i        (ram_rd_en),
       .ram_prog_rx_i  (program_rx_i),
-      .system_reset_o (prog_system_reset),
+      .system_reset_o (prog_reset),
       .prog_mode_led_o(prog_mode_led_o)
   );
 
-  // Address decode
-  assign is_ram_access   = (iomem_req.addr & ~RAM_MASK_ADDR) == RAM_BASE_ADDR;
-  assign is_timer_access = (iomem_req.addr & 32'hFFFF_FFF0) == TIMER_BASE;
-
-  // Word address extraction
-  // iomem_req.addr[1:0] = byte offset within word (ignored, handled by strobes)
-  // iomem_req.addr[3:2] = word offset within cache line (for 128-bit lines)
-  // iomem_req.addr[...] = word address in RAM
-  assign word_addr = iomem_req.addr[BYTE_OFFSET + $clog2(RAM_DEPTH) - 1 : BYTE_OFFSET];
-
-  // Combinational logic
-  always_comb begin
-    rst_n = prog_system_reset & rst_ni;
-
-    // Response valid when RAM delay complete or timer access
-    iomem_res.valid = ram_shift_q[RAM_DELAY-1] | (iomem_req.valid & is_timer_access);
-    iomem_res.ready = 1'b1;
-    
-    // Data mux: timer or RAM
-    if (iomem_req.valid & is_timer_access)
-      iomem_res.data = {64'b0, timer} >> (iomem_req.addr[3:2] * 32);
-    else
-      iomem_res.data = ram_rdata;
-
-    // RAM control signals
-    req_responsed = iomem_req.valid & iomem_res.valid & is_ram_access;
-    req_waited    = iomem_req.valid & !iomem_res.valid & is_ram_access;
-    
-    // Write strobes - pass through from request
-    ram_wstrb = (iomem_req.valid & is_ram_access) ? iomem_req.rw : '0;
-    
-    // Read enable
-    ram_rd_en = iomem_req.valid & is_ram_access & ~(|iomem_req.rw);
-  end
-
-  // Sequential logic
-  always_ff @(posedge clk_o) begin
+  // RAM Latency Pipeline
+  always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      ram_shift_q <= '0;
+      ram_delay_q   <= '0;
+      ram_pending_q <= 1'b0;
     end else begin
-      if (req_responsed) 
-        ram_shift_q <= '0;
-      else 
-        ram_shift_q <= {ram_shift_q[RAM_DELAY-2:0], req_waited_q};
-    end
+      if (cpu_mem_req.valid & cpu_mem_res.valid & sel_ram) ram_delay_q <= '0;
+      else ram_delay_q <= {ram_delay_q[RAM_LATENCY-2:0], ram_pending_q};
 
-    if (!rst_n) begin
-      req_waited_q <= 1'b0;
-      timer        <= 64'h0;
-    end else begin
-      req_waited_q <= req_waited;
-      timer        <= timer + 64'h1;
+      ram_pending_q <= cpu_mem_req.valid & ~cpu_mem_res.valid & sel_ram;
     end
   end
+
+  // ==========================================================================
+  // CLINT (Core-Local Interruptor)
+  // ==========================================================================
+  assign timer_irq = (mtime_q >= mtimecmp_q);
+
+  always_ff @(posedge clk_i or negedge sys_rst_n) begin
+    if (!sys_rst_n) begin
+      mtime_q    <= 64'h0;
+      mtimecmp_q <= 64'hFFFF_FFFF_FFFF_FFFF;
+      msip_q     <= 1'b0;
+    end else begin
+      mtime_q <= mtime_q + 64'h1;
+
+      if (cpu_mem_req.valid & sel_clint & (|cpu_mem_req.rw)) begin
+        case (clint_off)
+          CLINT_MSIP:         msip_q <= cpu_mem_req.data[0];
+          CLINT_MTIMECMP:     mtimecmp_q[31:0] <= cpu_mem_req.data[31:0];
+          CLINT_MTIMECMP + 4: mtimecmp_q[63:32] <= cpu_mem_req.data[31:0];
+          CLINT_MTIME:        mtime_q[31:0] <= cpu_mem_req.data[31:0];
+          CLINT_MTIME + 4:    mtime_q[63:32] <= cpu_mem_req.data[31:0];
+          default:            ;
+        endcase
+      end
+    end
+  end
+
+  // ==========================================================================
+  // Response Mux
+  // ==========================================================================
+  always_comb begin
+    cpu_mem_res.ready = 1'b1;
+    cpu_mem_res.valid = 1'b0;
+    cpu_mem_res.data  = '0;
+
+    if (cpu_mem_req.valid) begin
+      if (sel_ram) begin
+        cpu_mem_res.valid = ram_delay_q[RAM_LATENCY-1];
+        cpu_mem_res.data  = ram_rdata;
+      end else if (sel_clint) begin
+        cpu_mem_res.valid = 1'b1;
+        case (clint_off)
+          CLINT_MSIP:         cpu_mem_res.data = {96'b0, 31'b0, msip_q};
+          CLINT_MTIMECMP:     cpu_mem_res.data = {96'b0, mtimecmp_q[31:0]};
+          CLINT_MTIMECMP + 4: cpu_mem_res.data = {96'b0, mtimecmp_q[63:32]};
+          CLINT_MTIME:        cpu_mem_res.data = {96'b0, mtime_q[31:0]};
+          CLINT_MTIME + 4:    cpu_mem_res.data = {96'b0, mtime_q[63:32]};
+          default:            cpu_mem_res.data = '0;
+        endcase
+      end else if (sel_pbus) begin
+        cpu_mem_res.valid = 1'b1;
+        cpu_mem_res.data  = '0;  // Placeholder for peripherals
+      end else begin
+        cpu_mem_res.valid = 1'b1;
+        cpu_mem_res.data  = '0;  // Unmapped
+      end
+    end
+  end
+
+  // ==========================================================================
+  // Unused Peripheral Tie-offs
+  // ==========================================================================
+  generate
+    if (!SPI_EN) begin : gen_no_spi
+      assign spi0_sclk_o = 1'b0;
+      assign spi0_mosi_o = 1'b0;
+      assign spi0_ss_o   = 4'hF;
+    end
+    if (!GPIO_EN) begin : gen_no_gpio
+      assign gpio_o    = 32'h0;
+      assign gpio_oe_o = 32'h0;
+    end
+  endgenerate
+
+  assign status_led_o = {3'b0, prog_mode_led_o};
 
 endmodule
