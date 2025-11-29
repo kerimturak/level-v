@@ -1,0 +1,67 @@
+# =========================================
+# svlint Configuration for CERES RISC-V
+# https://github.com/dalance/svlint
+# =========================================
+
+[option]
+# Exclude external/generated code
+exclude_paths = ["subrepo/", "build/", "env/"]
+
+[rules]
+# =========================================
+# Naming Conventions (relaxed for RTL)
+# =========================================
+prefix_module = false
+prefix_interface = false
+prefix_package = false
+prefix_instance = false
+prefix_input = false
+prefix_output = false
+prefix_inout = false
+
+# =========================================
+# Style Rules
+# =========================================
+style_keyword_0or1space = true
+style_keyword_1space = true
+style_keyword_1or2space = true
+style_keyword_construct = true
+style_keyword_end = true
+style_keyword_maybelabel = true
+style_keyword_new = true
+style_keyword_newline = true
+tab_character = false
+
+# =========================================
+# Synthesis Rules
+# =========================================
+# Allow generate blocks
+generate_keyword_forbidden = false
+generate_keyword_required = false
+
+# Blocking/non-blocking checks
+blocking_assignment_in_always_ff = false
+non_blocking_assignment_in_always_comb = true
+
+# =========================================
+# Best Practices
+# =========================================
+# Case statements
+case_default = true
+explicit_case_default = false
+
+# Function/Task
+function_with_automatic = false
+function_same_as_system_function = true
+
+# =========================================
+# Code Quality
+# =========================================
+# Loop variables
+loop_variable_declaration = false
+genvar_declaration_in_loop = false
+genvar_declaration_out_loop = false
+
+# Operators
+multiline_if_begin = false
+multiline_for_begin = false

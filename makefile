@@ -29,6 +29,10 @@ include script/makefiles/synth/yosys.mk
 # Utility Tools
 include script/makefiles/tools/clean.mk
 include script/makefiles/tools/konata.mk
+include script/makefiles/tools/surfer.mk
+
+# Linting Tools
+include script/makefiles/lint/lint.mk
 
 .PHONY: all compile simulate simulate_gui lint verilate run_verilator yosys_check clean help
 
@@ -94,6 +98,18 @@ help:
 	@echo -e "  make arch                 # Run all arch tests"
 	@echo -e "  make cm                   # Run CoreMark"
 	@echo -e "  make help_lists           # Show detailed test commands"
+	@echo -e ""
+	@echo -e "$(GREEN)Linting Tools:$(RESET)"
+	@echo -e "  make svlint               # Run svlint (style checks)"
+	@echo -e "  make slang_lint           # Run Slang (semantic checks)"
+	@echo -e "  make lint_all             # Run all linters"
+	@echo -e "  make lint_install         # Install svlint & Slang"
+	@echo -e "  make lint_help            # Show lint help"
+	@echo -e ""
+	@echo -e "$(GREEN)Waveform Viewers:$(RESET)"
+	@echo -e "  make gtkwave              # Open with GTKWave"
+	@echo -e "  make surfer               # Open with Surfer (modern)"
+	@echo -e "  make surfer_install       # Install Surfer"
 	@echo -e ""
 	@echo -e "$(GREEN)Simulation Examples:$(RESET)"
 	@echo -e "  make simulate_gui MODE=debug"

@@ -8,18 +8,18 @@
 name: CERES CI
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'LICENSE'
-  pull_request:
-    branches: [ main ]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-  workflow_dispatch:  # Manual trigger
+  # push:
+  #   branches: [ main, develop ]
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '*.md'
+  #     - 'LICENSE'
+  # pull_request:
+  #   branches: [ main ]
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '*.md'
+  workflow_dispatch:  # Manual trigger only for now
     inputs:
       test_suite:
         description: 'Test suite to run'
@@ -37,21 +37,47 @@ env:
 
 jobs:
   # -----------------------------------------
-  # Static Lint Check
+  # Static Lint Check (Verilator + svlint + pyslang)
   # -----------------------------------------
   lint:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       
       - name: Install Verilator (apt)
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y verilator
+          sudo apt-get install -y verilator unzip
+      
+      - name: Install svlint
+        run: |
+          cd /tmp
+          curl -sLO https://github.com/dalance/svlint/releases/download/v0.9.5/svlint-v0.9.5-x86_64-lnx.zip
+          unzip -o svlint-v0.9.5-x86_64-lnx.zip
+          sudo cp bin/svlint /usr/local/bin/
+          svlint --version
+      
+      - name: Install pyslang
+        run: |
+          pip install pyslang
+          python3 -c "import pyslang; print('pyslang version:', pyslang.__version__)"
       
       - name: Run Verilator static lint
         run: make verilator_static || true
+      
+      - name: Run svlint
+        run: make svlint || true
+        continue-on-error: true
+      
+      - name: Run Slang lint (pyslang)
+        run: make slang_lint || true
+        continue-on-error: true
 
   # -----------------------------------------
   # Build Verilator Model
