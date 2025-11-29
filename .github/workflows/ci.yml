@@ -32,19 +32,19 @@ on:
           - nightly
 
 env:
-  VERILATOR_VERSION: "5.024"
+  VERILATOR_VERSION: "5.020"
 
 jobs:
   # -----------------------------------------
   # Static Lint Check
   # -----------------------------------------
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install system deps
+      - name: Install Verilator (apt)
         run: |
           sudo apt-get update -y
           sudo apt-get install -y verilator
@@ -56,8 +56,8 @@ jobs:
   # Build Verilator Model
   # -----------------------------------------
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     
     steps:
       - name: Checkout repository
@@ -65,41 +65,19 @@ jobs:
         with:
           submodules: recursive
       
-      - name: Cache Verilator
-        uses: actions/cache@v4
-        id: cache-verilator
-        with:
-          path: /opt/verilator
-          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
-      
-      - name: Install dependencies
+      # Use pre-built Verilator from apt (Ubuntu 24.04 has v5.020)
+      - name: Install Verilator and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            git make autoconf g++ flex bison \
-            libfl2 libfl-dev zlib1g zlib1g-dev \
-            python3 python3-pip
-      
-      - name: Install Verilator
-        if: steps.cache-verilator.outputs.cache-hit != 'true'
-        run: |
-          git clone https://github.com/verilator/verilator.git
-          cd verilator
-          git checkout v${{ env.VERILATOR_VERSION }}
-          autoconf
-          ./configure --prefix=/opt/verilator
-          make -j$(nproc)
-          sudo make install
-      
-      - name: Add Verilator to PATH
-        run: echo "/opt/verilator/bin" >> $GITHUB_PATH
+          sudo apt-get install -y verilator python3 python3-pip
+          verilator --version
       
       - name: Cache RISC-V Toolchain
         uses: actions/cache@v4
         id: cache-riscv
         with:
           path: /opt/riscv
-          key: riscv-toolchain-rv32imc-${{ runner.os }}
+          key: riscv-toolchain-rv32imc-v2-${{ runner.os }}
       
       - name: Install RISC-V Toolchain
         if: steps.cache-riscv.outputs.cache-hit != 'true'
@@ -131,7 +109,7 @@ jobs:
   # -----------------------------------------
   quick-tests:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     if: github.event.inputs.test_suite == 'quick' || github.event.inputs.test_suite == '' || github.event_name == 'push'
     
@@ -147,22 +125,19 @@ jobs:
           name: verilator-build
           path: build/obj_dir/
       
-      - name: Restore Verilator cache
-        uses: actions/cache@v4
-        with:
-          path: /opt/verilator
-          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
       
       - name: Restore RISC-V Toolchain cache
         uses: actions/cache@v4
         with:
           path: /opt/riscv
-          key: riscv-toolchain-rv32imc-${{ runner.os }}
+          key: riscv-toolchain-rv32imc-v2-${{ runner.os }}
       
       - name: Setup tools
-        run: |
-          echo "/opt/verilator/bin" >> $GITHUB_PATH
-          echo "/opt/riscv/bin" >> $GITHUB_PATH
+        run: echo "/opt/riscv/bin" >> $GITHUB_PATH
       
       - name: Build ISA tests
         run: make isa_build
@@ -183,7 +158,7 @@ jobs:
   # -----------------------------------------
   full-tests:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     if: github.event.inputs.test_suite == 'full' || github.event_name == 'pull_request'
     
@@ -199,22 +174,19 @@ jobs:
           name: verilator-build
           path: build/obj_dir/
       
-      - name: Restore Verilator cache
-        uses: actions/cache@v4
-        with:
-          path: /opt/verilator
-          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
       
       - name: Restore RISC-V Toolchain cache
         uses: actions/cache@v4
         with:
           path: /opt/riscv
-          key: riscv-toolchain-rv32imc-${{ runner.os }}
+          key: riscv-toolchain-rv32imc-v2-${{ runner.os }}
       
       - name: Setup tools
-        run: |
-          echo "/opt/verilator/bin" >> $GITHUB_PATH
-          echo "/opt/riscv/bin" >> $GITHUB_PATH
+        run: echo "/opt/riscv/bin" >> $GITHUB_PATH
       
       - name: Build all tests
         run: |
