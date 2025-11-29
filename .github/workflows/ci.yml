@@ -33,6 +33,7 @@ on:
 
 env:
   VERILATOR_VERSION: "5.020"
+  RISCV_PREFIX: "riscv-none-elf"
 
 jobs:
   # -----------------------------------------
@@ -77,25 +78,33 @@ jobs:
         id: cache-riscv
         with:
           path: /opt/riscv
-          key: riscv-toolchain-rv32imc-v2-${{ runner.os }}
+          key: riscv-toolchain-rv32imc-v3-${{ runner.os }}
       
       - name: Install RISC-V Toolchain
         if: steps.cache-riscv.outputs.cache-hit != 'true'
         run: |
-          wget -q https://github.com/stnolting/riscv-gcc-prebuilt/releases/download/rv32i-4.0.0/riscv32-unknown-elf.gcc-12.1.0.tar.gz
+          # Use xPack RISC-V toolchain (reliable pre-built)
+          TOOLCHAIN_URL="https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v13.2.0-2/xpack-riscv-none-elf-gcc-13.2.0-2-linux-x64.tar.gz"
+          wget -q "$TOOLCHAIN_URL" -O riscv-toolchain.tar.gz
           sudo mkdir -p /opt/riscv
-          sudo tar -xzf riscv32-unknown-elf.gcc-12.1.0.tar.gz -C /opt/riscv --strip-components=1
+          sudo tar -xzf riscv-toolchain.tar.gz -C /opt/riscv --strip-components=1
+          rm riscv-toolchain.tar.gz
       
       - name: Add RISC-V Toolchain to PATH
-        run: echo "/opt/riscv/bin" >> $GITHUB_PATH
+        run: |
+          echo "/opt/riscv/bin" >> $GITHUB_PATH
+          ls -la /opt/riscv/bin/ | head -10
       
       - name: Verify tools
         run: |
+          export PATH="/opt/riscv/bin:$PATH"
           verilator --version
-          riscv32-unknown-elf-gcc --version
+          riscv-none-elf-gcc --version
       
       - name: Build Verilator model
-        run: make verilator_build
+        run: |
+          export RISCV_PREFIX=riscv-none-elf
+          make verilator_build
       
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -132,18 +141,28 @@ jobs:
       
       - name: Restore RISC-V Toolchain cache
         uses: actions/cache@v4
+        id: cache-riscv-quick
         with:
           path: /opt/riscv
-          key: riscv-toolchain-rv32imc-v2-${{ runner.os }}
+          key: riscv-toolchain-rv32imc-v3-${{ runner.os }}
+      
+      - name: Install RISC-V Toolchain (if not cached)
+        if: steps.cache-riscv-quick.outputs.cache-hit != 'true'
+        run: |
+          TOOLCHAIN_URL="https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v13.2.0-2/xpack-riscv-none-elf-gcc-13.2.0-2-linux-x64.tar.gz"
+          wget -q "$TOOLCHAIN_URL" -O riscv-toolchain.tar.gz
+          sudo mkdir -p /opt/riscv
+          sudo tar -xzf riscv-toolchain.tar.gz -C /opt/riscv --strip-components=1
+          rm riscv-toolchain.tar.gz
       
       - name: Setup tools
         run: echo "/opt/riscv/bin" >> $GITHUB_PATH
       
       - name: Build ISA tests
-        run: make isa_build
+        run: make isa_build RISCV_PREFIX=riscv-none-elf
       
       - name: Run Quick Tests
-        run: make quick
+        run: make quick RISCV_PREFIX=riscv-none-elf
       
       - name: Upload test results
         if: always()
@@ -181,21 +200,31 @@ jobs:
       
       - name: Restore RISC-V Toolchain cache
         uses: actions/cache@v4
+        id: cache-riscv-full
         with:
           path: /opt/riscv
-          key: riscv-toolchain-rv32imc-v2-${{ runner.os }}
+          key: riscv-toolchain-rv32imc-v3-${{ runner.os }}
+      
+      - name: Install RISC-V Toolchain (if not cached)
+        if: steps.cache-riscv-full.outputs.cache-hit != 'true'
+        run: |
+          TOOLCHAIN_URL="https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v13.2.0-2/xpack-riscv-none-elf-gcc-13.2.0-2-linux-x64.tar.gz"
+          wget -q "$TOOLCHAIN_URL" -O riscv-toolchain.tar.gz
+          sudo mkdir -p /opt/riscv
+          sudo tar -xzf riscv-toolchain.tar.gz -C /opt/riscv --strip-components=1
+          rm riscv-toolchain.tar.gz
       
       - name: Setup tools
         run: echo "/opt/riscv/bin" >> $GITHUB_PATH
       
       - name: Build all tests
         run: |
-          make isa_build
-          make arch_auto
-          make imperas_auto
+          make isa_build RISCV_PREFIX=riscv-none-elf
+          make arch_auto RISCV_PREFIX=riscv-none-elf
+          make imperas_auto RISCV_PREFIX=riscv-none-elf
       
       - name: Run Full Regression
-        run: make full
+        run: make full RISCV_PREFIX=riscv-none-elf
       
       - name: Upload test results
         if: always()
