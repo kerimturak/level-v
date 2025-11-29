@@ -226,6 +226,15 @@ if [ -n "${SEED:-}" ]; then
 fi
 
 # -----------------------------------------
+# Coverage Support
+# -----------------------------------------
+COVERAGE_ARG=""
+if [ -n "${COVERAGE_FILE:-}" ]; then
+  COVERAGE_ARG="+COVERAGE_FILE=\"$COVERAGE_FILE\""
+  log_info "coverage  => $COVERAGE_FILE"
+fi
+
+# -----------------------------------------
 # Run Simulation
 # -----------------------------------------
 START_TIME=$(date +%s.%N)
@@ -240,7 +249,7 @@ SIM_CMD="\"$RUN_BIN\" \"$MAX_CYCLES\" \
   +uart_log_path=\"${VERILATOR_LOG_DIR}/uart_output.log\" \
   +DUMP_FILE=\"${VERILATOR_LOG_DIR}/waveform.fst\" \
   +BP_LOG_DIR=\"${VERILATOR_LOG_DIR}\" \
-  ${ADDR_ARG} ${VERILATOR_RUNTIME_ARGS} ${SIM_PLUSARGS}"
+  ${ADDR_ARG} ${COVERAGE_ARG} ${VERILATOR_RUNTIME_ARGS} ${SIM_PLUSARGS}"
 
 # Run with or without timeout
 if [ "$TIMEOUT" -gt 0 ]; then

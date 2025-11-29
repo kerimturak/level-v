@@ -1,39 +1,253 @@
-name: CI
+# ============================================================
+# CERES RISC-V — Continuous Integration Pipeline
+# ============================================================
+# Triggers on push and pull requests to main branch
+# Runs ISA tests, Architecture tests, and generates reports
+# ============================================================
+
+name: CERES CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - full
+          - nightly
+
+env:
+  VERILATOR_VERSION: "5.024"
 
 jobs:
-  lint-and-test:
+  # -----------------------------------------
+  # Static Lint Check
+  # -----------------------------------------
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
+      
       - name: Install system deps
         run: |
           sudo apt-get update -y
           sudo apt-get install -y verilator
-
-      - name: Install Python deps
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install -r script/requirements.txt || true
-          pip install -r script/requirements-dev.txt || true
-
+      
       - name: Run Verilator static lint
-        run: |
-          make verilator_static || true
+        run: make verilator_static || true
 
-      - name: Run Python tests
+  # -----------------------------------------
+  # Build Verilator Model
+  # -----------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Cache Verilator
+        uses: actions/cache@v4
+        id: cache-verilator
+        with:
+          path: /opt/verilator
+          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
+      
+      - name: Install dependencies
         run: |
-          source .venv/bin/activate
-          pytest -q
+          sudo apt-get update
+          sudo apt-get install -y \
+            git make autoconf g++ flex bison \
+            libfl2 libfl-dev zlib1g zlib1g-dev \
+            python3 python3-pip
+      
+      - name: Install Verilator
+        if: steps.cache-verilator.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/verilator/verilator.git
+          cd verilator
+          git checkout v${{ env.VERILATOR_VERSION }}
+          autoconf
+          ./configure --prefix=/opt/verilator
+          make -j$(nproc)
+          sudo make install
+      
+      - name: Add Verilator to PATH
+        run: echo "/opt/verilator/bin" >> $GITHUB_PATH
+      
+      - name: Cache RISC-V Toolchain
+        uses: actions/cache@v4
+        id: cache-riscv
+        with:
+          path: /opt/riscv
+          key: riscv-toolchain-rv32imc-${{ runner.os }}
+      
+      - name: Install RISC-V Toolchain
+        if: steps.cache-riscv.outputs.cache-hit != 'true'
+        run: |
+          wget -q https://github.com/stnolting/riscv-gcc-prebuilt/releases/download/rv32i-4.0.0/riscv32-unknown-elf.gcc-12.1.0.tar.gz
+          sudo mkdir -p /opt/riscv
+          sudo tar -xzf riscv32-unknown-elf.gcc-12.1.0.tar.gz -C /opt/riscv --strip-components=1
+      
+      - name: Add RISC-V Toolchain to PATH
+        run: echo "/opt/riscv/bin" >> $GITHUB_PATH
+      
+      - name: Verify tools
+        run: |
+          verilator --version
+          riscv32-unknown-elf-gcc --version
+      
+      - name: Build Verilator model
+        run: make verilator_build
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: verilator-build
+          path: build/obj_dir/
+          retention-days: 1
+
+  # -----------------------------------------
+  # Quick Smoke Tests (~5 min)
+  # -----------------------------------------
+  quick-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.inputs.test_suite == 'quick' || github.event.inputs.test_suite == '' || github.event_name == 'push'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: verilator-build
+          path: build/obj_dir/
+      
+      - name: Restore Verilator cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/verilator
+          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
+      
+      - name: Restore RISC-V Toolchain cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/riscv
+          key: riscv-toolchain-rv32imc-${{ runner.os }}
+      
+      - name: Setup tools
+        run: |
+          echo "/opt/verilator/bin" >> $GITHUB_PATH
+          echo "/opt/riscv/bin" >> $GITHUB_PATH
+      
+      - name: Build ISA tests
+        run: make isa_build
+      
+      - name: Run Quick Tests
+        run: make quick
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quick-test-results
+          path: results/
+          retention-days: 7
+
+  # -----------------------------------------
+  # Full Regression Tests (~30 min)
+  # -----------------------------------------
+  full-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event.inputs.test_suite == 'full' || github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: verilator-build
+          path: build/obj_dir/
+      
+      - name: Restore Verilator cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/verilator
+          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
+      
+      - name: Restore RISC-V Toolchain cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/riscv
+          key: riscv-toolchain-rv32imc-${{ runner.os }}
+      
+      - name: Setup tools
+        run: |
+          echo "/opt/verilator/bin" >> $GITHUB_PATH
+          echo "/opt/riscv/bin" >> $GITHUB_PATH
+      
+      - name: Build all tests
+        run: |
+          make isa_build
+          make arch_auto
+          make imperas_auto
+      
+      - name: Run Full Regression
+        run: make full
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-test-results
+          path: results/
+          retention-days: 14
+
+  # -----------------------------------------
+  # Report Status
+  # -----------------------------------------
+  report:
+    needs: [lint, quick-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check test results
+        run: |
+          echo "## CERES RISC-V Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quick Tests | ${{ needs.quick-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+

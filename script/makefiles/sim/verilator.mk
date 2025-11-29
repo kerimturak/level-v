@@ -415,6 +415,9 @@ rebuild-cpp: dirs
 # ============================================================
 # Run Simulation
 # ============================================================
+# Coverage data directory
+COVERAGE_DATA_DIR := $(LOG_DIR)/verilator/coverage_data
+
 run_verilator: verilate
 	@echo -e "$(GREEN)[RUNNING VERILATOR SIMULATION]$(RESET)"
 	@# Clean previous logs for this test
@@ -423,12 +426,14 @@ run_verilator: verilate
 		rm -rf "$(VERILATOR_LOG_DIR)"; \
 	fi
 	@mkdir -p "$(VERILATOR_LOG_DIR)"
+	@mkdir -p "$(COVERAGE_DATA_DIR)"
 	@VERILATOR_LOG_DIR="$(VERILATOR_LOG_DIR)" \
 		TEST_NAME="$(TEST_NAME)" \
 		MAX_CYCLES="$(MAX_CYCLES)" \
 		MEM_FILE="$(MEM_FILE)" \
 		NO_ADDR="$(NO_ADDR)" \
 		VERILATOR_THREADS="$(VERILATOR_THREADS)" \
+		COVERAGE_FILE="$(COVERAGE_DATA_DIR)/$(TEST_NAME).dat" \
 		"$(ROOT_DIR)/script/shell/run_verilator.sh"
 
 # Quick run - use verilate-fast
@@ -477,16 +482,104 @@ stats: dirs
 	@printf "$(GREEN)[DONE]$(RESET) Statistics saved to $(LOG_DIR)/verilator/\n"
 
 # ============================================================
-# Coverage Report (requires COVERAGE=1 during build)
+# Coverage Analysis
 # ============================================================
+# Build and run tests with coverage, then generate reports
+# Usage:
+#   make coverage          - Full coverage run (isa + arch tests)
+#   make coverage-quick    - Quick coverage (ISA tests only)
+#   make coverage-report   - Generate report from existing data
+#   make coverage-html     - Generate HTML coverage report
+# ============================================================
+
+.PHONY: coverage coverage-quick coverage-report coverage-html coverage-clean
+
+# Quick coverage with ISA tests only
+coverage-quick:
+	@echo -e "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(RESET)"
+	@echo -e "$(CYAN)║           CERES RISC-V — Quick Coverage Run                 ║$(RESET)"
+	@echo -e "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(RESET)"
+	@echo -e "$(YELLOW)[1/3] Building with coverage enabled...$(RESET)"
+	@$(MAKE) --no-print-directory clean_verilator
+	@$(MAKE) --no-print-directory verilate COVERAGE=1
+	@echo -e "$(YELLOW)[2/3] Running ISA tests...$(RESET)"
+	@$(MAKE) --no-print-directory isa COVERAGE=1
+	@echo -e "$(YELLOW)[3/3] Generating coverage report...$(RESET)"
+	@$(MAKE) --no-print-directory coverage-html
+	@echo -e "$(GREEN)✓ Coverage complete! Open results/coverage/index.html$(RESET)"
+
+# Full coverage with all compliance tests
+coverage:
+	@echo -e "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(RESET)"
+	@echo -e "$(CYAN)║           CERES RISC-V — Full Coverage Analysis             ║$(RESET)"
+	@echo -e "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(RESET)"
+	@echo -e "$(YELLOW)[1/4] Building with coverage enabled...$(RESET)"
+	@$(MAKE) --no-print-directory clean_verilator
+	@$(MAKE) --no-print-directory verilate COVERAGE=1
+	@echo -e "$(YELLOW)[2/4] Running ISA tests...$(RESET)"
+	@$(MAKE) --no-print-directory isa COVERAGE=1
+	@echo -e "$(YELLOW)[3/4] Running Architecture tests...$(RESET)"
+	@$(MAKE) --no-print-directory arch COVERAGE=1
+	@echo -e "$(YELLOW)[4/4] Generating coverage report...$(RESET)"
+	@$(MAKE) --no-print-directory coverage-html
+	@echo -e "$(GREEN)✓ Coverage complete! Open results/coverage/index.html$(RESET)"
+
+# Generate text-based coverage report
 coverage-report:
-	@if [ -d "$(LOG_DIR)/verilator" ]; then \
+	@if [ -f "$(LOG_DIR)/verilator/coverage.dat" ]; then \
+		mkdir -p "$(LOG_DIR)/verilator/coverage_annotated"; \
 		verilator_coverage --annotate "$(LOG_DIR)/verilator/coverage_annotated" \
-			"$(LOG_DIR)/verilator/coverage.dat" 2>/dev/null || \
-		echo -e "$(RED)[ERROR]$(RESET) No coverage data. Build with COVERAGE=1"; \
+			"$(LOG_DIR)/verilator/coverage.dat"; \
+		echo -e "$(GREEN)[OK]$(RESET) Coverage annotations: $(LOG_DIR)/verilator/coverage_annotated/"; \
 	else \
-		echo -e "$(RED)[ERROR]$(RESET) Run simulation with COVERAGE=1 first"; \
+		echo -e "$(RED)[ERROR]$(RESET) No coverage data. Run: make coverage"; \
 	fi
+
+# Generate HTML coverage report
+COVERAGE_HTML_DIR := $(RESULTS_DIR)/coverage
+
+coverage-html:
+	@mkdir -p $(COVERAGE_HTML_DIR)
+	@# First, merge all individual coverage files
+	@if [ -d "$(COVERAGE_DATA_DIR)" ] && [ -n "$$(ls -A $(COVERAGE_DATA_DIR)/*.dat 2>/dev/null)" ]; then \
+		echo -e "$(YELLOW)[COV] Merging coverage data files...$(RESET)"; \
+		verilator_coverage --write "$(LOG_DIR)/verilator/coverage.dat" \
+			$(COVERAGE_DATA_DIR)/*.dat 2>/dev/null; \
+		COV_COUNT=$$(ls -1 $(COVERAGE_DATA_DIR)/*.dat 2>/dev/null | wc -l); \
+		echo -e "$(GREEN)[OK]$(RESET) Merged $$COV_COUNT coverage files"; \
+	fi
+	@if [ -f "$(LOG_DIR)/verilator/coverage.dat" ]; then \
+		echo -e "$(YELLOW)[COV] Generating HTML coverage report...$(RESET)"; \
+		verilator_coverage --annotate-all --annotate-min 1 \
+			--write-info "$(COVERAGE_HTML_DIR)/coverage.info" \
+			"$(LOG_DIR)/verilator/coverage.dat" 2>/dev/null || true; \
+		if command -v genhtml >/dev/null 2>&1; then \
+			genhtml "$(COVERAGE_HTML_DIR)/coverage.info" \
+				--output-directory "$(COVERAGE_HTML_DIR)" \
+				--title "CERES RISC-V Coverage" \
+				--legend --highlight 2>/dev/null; \
+			echo -e "$(GREEN)[OK]$(RESET) HTML report: $(COVERAGE_HTML_DIR)/index.html"; \
+		else \
+			echo -e "$(YELLOW)[INFO]$(RESET) Install lcov for HTML reports: sudo apt install lcov"; \
+			verilator_coverage --annotate "$(COVERAGE_HTML_DIR)/annotated" \
+				"$(LOG_DIR)/verilator/coverage.dat"; \
+			echo -e "$(GREEN)[OK]$(RESET) Text annotations: $(COVERAGE_HTML_DIR)/annotated/"; \
+		fi; \
+		echo -e "$(CYAN)[COV] Coverage Summary:$(RESET)"; \
+		verilator_coverage --rank "$(LOG_DIR)/verilator/coverage.dat" 2>/dev/null | head -30 || true; \
+	else \
+		echo -e "$(RED)[ERROR]$(RESET) No coverage data found."; \
+		echo -e "$(YELLOW)[HINT]$(RESET) Run: make coverage-quick"; \
+	fi
+
+# Clean coverage data
+coverage-clean:
+	@echo -e "$(RED)[CLEAN]$(RESET) Removing coverage data..."
+	@$(RM) "$(LOG_DIR)/verilator/coverage.dat"
+	@$(RM) "$(LOG_DIR)/verilator/coverage_annotated"
+	@$(RM) "$(COVERAGE_DATA_DIR)"
+	@$(RM) "$(COVERAGE_HTML_DIR)"
+	@echo -e "$(GREEN)[OK]$(RESET) Coverage data cleaned"
 
 # ============================================================
 # Clean

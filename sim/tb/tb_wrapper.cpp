@@ -7,6 +7,10 @@
 #include "verilated_vcd_c.h"
 #endif
 
+#if VM_COVERAGE
+#include "verilated_cov.h"
+#endif
+
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
@@ -89,6 +93,18 @@ int main(int argc, char **argv) {
 #endif
 
     top->final();
+
+#if VM_COVERAGE
+    // Write coverage data
+    const char* coverage_file = "coverage.dat";
+    for (int i = 1; i < argc; ++i) {
+        if (strncmp(argv[i], "+COVERAGE_FILE=", 15) == 0)
+            coverage_file = argv[i] + 15;
+    }
+    VerilatedCov::write(coverage_file);
+    std::cout << "[COVERAGE] Data written to: " << coverage_file << std::endl;
+#endif
+
     Verilated::flushCall();
 
     std::cout << "[INFO] Simulation finished after " << (main_time / 2)

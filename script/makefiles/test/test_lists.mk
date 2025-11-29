@@ -8,7 +8,18 @@
 #   make csr          - Run CSR tests
 #   make bench        - Run benchmarks (NO_ADDR=1)
 #   make all_tests    - Run all tests
+#   make regression   - Full regression (isa + arch + imperas + csr)
+#   make quick        - Quick smoke test (~5 min)
+#   make full         - Full test suite (~30 min)
+#   make nightly      - Nightly build (full + CoreMark + benchmarks)
 # ============================================================
+
+# -----------------------------------------
+# Regression Results Directory
+# -----------------------------------------
+REGRESSION_DIR     := $(RESULTS_DIR)/regression
+REGRESSION_REPORT  := $(REGRESSION_DIR)/report_$(shell date +%Y%m%d_%H%M%S).txt
+REGRESSION_SUMMARY := $(REGRESSION_DIR)/latest_summary.txt
 
 # -----------------------------------------
 # Test List Paths
@@ -160,6 +171,170 @@ endif
 		TEST_TYPE=arch \
 		SIM=verilator
 
+# ============================================================
+# REGRESSION TEST SUITES
+# ============================================================
+# Farklı test coverage seviyeleri için komutlar
+# ============================================================
+
+# -----------------------------------------
+# Quick Smoke Test (~5 min)
+# -----------------------------------------
+# Kritik testlerin hızlı kontrolü
+.PHONY: quick smoke
+
+quick smoke:
+	@echo -e ""
+	@echo -e "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(RESET)"
+	@echo -e "$(CYAN)║           CERES RISC-V — Quick Smoke Test                   ║$(RESET)"
+	@echo -e "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(RESET)"
+	@echo -e ""
+	@mkdir -p $(REGRESSION_DIR)
+	@START_TIME=$$(date +%s); \
+	TOTAL_PASS=0; TOTAL_FAIL=0; \
+	echo -e "$(YELLOW)[1/2] Running ISA tests...$(RESET)"; \
+	if $(MAKE) --no-print-directory isa CLEAN_LOGS=1 2>&1 | tee $(REGRESSION_DIR)/quick_isa.log | tail -5; then \
+		ISA_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/quick_isa.log 2>/dev/null || echo 0); \
+		ISA_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/quick_isa.log 2>/dev/null || echo 0); \
+	else \
+		ISA_PASS=0; ISA_FAIL=1; \
+	fi; \
+	echo -e "$(YELLOW)[2/2] Running CSR tests...$(RESET)"; \
+	if $(MAKE) --no-print-directory csr 2>&1 | tee $(REGRESSION_DIR)/quick_csr.log | tail -5; then \
+		CSR_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/quick_csr.log 2>/dev/null || echo 0); \
+		CSR_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/quick_csr.log 2>/dev/null || echo 0); \
+	else \
+		CSR_PASS=0; CSR_FAIL=1; \
+	fi; \
+	END_TIME=$$(date +%s); \
+	DURATION=$$((END_TIME - START_TIME)); \
+	echo -e ""; \
+	echo -e "$(GREEN)╔══════════════════════════════════════════════════════════════╗$(RESET)"; \
+	echo -e "$(GREEN)║                    Quick Test Summary                        ║$(RESET)"; \
+	echo -e "$(GREEN)╠══════════════════════════════════════════════════════════════╣$(RESET)"; \
+	echo -e "$(GREEN)║$(RESET)  ISA Tests:  $$ISA_PASS passed, $$ISA_FAIL failed                       $(GREEN)║$(RESET)"; \
+	echo -e "$(GREEN)║$(RESET)  CSR Tests:  $$CSR_PASS passed, $$CSR_FAIL failed                       $(GREEN)║$(RESET)"; \
+	echo -e "$(GREEN)╠══════════════════════════════════════════════════════════════╣$(RESET)"; \
+	echo -e "$(GREEN)║$(RESET)  Duration: $${DURATION}s                                              $(GREEN)║$(RESET)"; \
+	echo -e "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(RESET)"; \
+	if [ $$ISA_FAIL -gt 0 ] || [ $$CSR_FAIL -gt 0 ]; then exit 1; fi
+
+# -----------------------------------------
+# Full Test Suite (~30 min)
+# -----------------------------------------
+# ISA + Arch + Imperas + CSR
+.PHONY: full regression
+
+full regression:
+	@echo -e ""
+	@echo -e "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(RESET)"
+	@echo -e "$(CYAN)║           CERES RISC-V — Full Regression Suite              ║$(RESET)"
+	@echo -e "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(RESET)"
+	@echo -e ""
+	@mkdir -p $(REGRESSION_DIR)
+	@REPORT=$(REGRESSION_DIR)/report_$$(date +%Y%m%d_%H%M%S).txt; \
+	echo "CERES RISC-V Regression Report" > $$REPORT; \
+	echo "Date: $$(date)" >> $$REPORT; \
+	echo "============================================" >> $$REPORT; \
+	START_TIME=$$(date +%s); \
+	ISA_PASS=0; ISA_FAIL=0; \
+	ARCH_PASS=0; ARCH_FAIL=0; \
+	IMP_PASS=0; IMP_FAIL=0; \
+	CSR_PASS=0; CSR_FAIL=0; \
+	echo -e "$(YELLOW)[1/4] Running ISA tests...$(RESET)"; \
+	if $(MAKE) --no-print-directory isa CLEAN_LOGS=1 2>&1 | tee $(REGRESSION_DIR)/reg_isa.log; then \
+		ISA_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_isa.log 2>/dev/null || echo 0); \
+		ISA_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_isa.log 2>/dev/null || echo 0); \
+	fi; \
+	echo "ISA: $$ISA_PASS passed, $$ISA_FAIL failed" >> $$REPORT; \
+	echo -e "$(YELLOW)[2/4] Running Architecture tests...$(RESET)"; \
+	if $(MAKE) --no-print-directory arch 2>&1 | tee $(REGRESSION_DIR)/reg_arch.log; then \
+		ARCH_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_arch.log 2>/dev/null || echo 0); \
+		ARCH_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_arch.log 2>/dev/null || echo 0); \
+	fi; \
+	echo "ARCH: $$ARCH_PASS passed, $$ARCH_FAIL failed" >> $$REPORT; \
+	echo -e "$(YELLOW)[3/4] Running Imperas tests...$(RESET)"; \
+	if $(MAKE) --no-print-directory imperas 2>&1 | tee $(REGRESSION_DIR)/reg_imperas.log; then \
+		IMP_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_imperas.log 2>/dev/null || echo 0); \
+		IMP_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_imperas.log 2>/dev/null || echo 0); \
+	fi; \
+	echo "IMPERAS: $$IMP_PASS passed, $$IMP_FAIL failed" >> $$REPORT; \
+	echo -e "$(YELLOW)[4/4] Running CSR tests...$(RESET)"; \
+	if $(MAKE) --no-print-directory csr 2>&1 | tee $(REGRESSION_DIR)/reg_csr.log; then \
+		CSR_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_csr.log 2>/dev/null || echo 0); \
+		CSR_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_csr.log 2>/dev/null || echo 0); \
+	fi; \
+	echo "CSR: $$CSR_PASS passed, $$CSR_FAIL failed" >> $$REPORT; \
+	END_TIME=$$(date +%s); \
+	DURATION=$$((END_TIME - START_TIME)); \
+	TOTAL_PASS=$$((ISA_PASS + ARCH_PASS + IMP_PASS + CSR_PASS)); \
+	TOTAL_FAIL=$$((ISA_FAIL + ARCH_FAIL + IMP_FAIL + CSR_FAIL)); \
+	echo "============================================" >> $$REPORT; \
+	echo "TOTAL: $$TOTAL_PASS passed, $$TOTAL_FAIL failed" >> $$REPORT; \
+	echo "Duration: $${DURATION}s" >> $$REPORT; \
+	cp $$REPORT $(REGRESSION_SUMMARY); \
+	echo -e ""; \
+	echo -e "$(GREEN)╔══════════════════════════════════════════════════════════════╗$(RESET)"; \
+	echo -e "$(GREEN)║                 Full Regression Summary                      ║$(RESET)"; \
+	echo -e "$(GREEN)╠══════════════════════════════════════════════════════════════╣$(RESET)"; \
+	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "ISA:" $$ISA_PASS $$ISA_FAIL; \
+	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "ARCH:" $$ARCH_PASS $$ARCH_FAIL; \
+	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "IMPERAS:" $$IMP_PASS $$IMP_FAIL; \
+	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "CSR:" $$CSR_PASS $$CSR_FAIL; \
+	echo -e "$(GREEN)╠══════════════════════════════════════════════════════════════╣$(RESET)"; \
+	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "TOTAL:" $$TOTAL_PASS $$TOTAL_FAIL; \
+	echo -e "$(GREEN)║$(RESET)  Duration: $${DURATION}s                                             $(GREEN)║$(RESET)"; \
+	echo -e "$(GREEN)║$(RESET)  Report: $$REPORT  $(GREEN)║$(RESET)"; \
+	echo -e "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(RESET)"; \
+	if [ $$TOTAL_FAIL -gt 0 ]; then \
+		echo -e "$(RED)⚠️  $$TOTAL_FAIL test(s) failed!$(RESET)"; \
+		exit 1; \
+	else \
+		echo -e "$(GREEN)🎉 All tests passed!$(RESET)"; \
+	fi
+
+# -----------------------------------------
+# Nightly Build (Full + Benchmarks + CoreMark)
+# -----------------------------------------
+.PHONY: nightly
+
+nightly:
+	@echo -e ""
+	@echo -e "$(CYAN)╔══════════════════════════════════════════════════════════════╗$(RESET)"
+	@echo -e "$(CYAN)║           CERES RISC-V — Nightly Build Suite                ║$(RESET)"
+	@echo -e "$(CYAN)╚══════════════════════════════════════════════════════════════╝$(RESET)"
+	@echo -e ""
+	@mkdir -p $(REGRESSION_DIR)
+	@REPORT=$(REGRESSION_DIR)/nightly_$$(date +%Y%m%d_%H%M%S).txt; \
+	START_TIME=$$(date +%s); \
+	echo "CERES RISC-V Nightly Build Report" > $$REPORT; \
+	echo "Date: $$(date)" >> $$REPORT; \
+	echo "============================================" >> $$REPORT; \
+	echo -e "$(YELLOW)[1/3] Running full regression...$(RESET)"; \
+	$(MAKE) --no-print-directory full 2>&1 | tee -a $$REPORT || true; \
+	echo -e "$(YELLOW)[2/3] Running benchmarks...$(RESET)"; \
+	$(MAKE) --no-print-directory bench 2>&1 | tee $(REGRESSION_DIR)/nightly_bench.log || true; \
+	BENCH_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/nightly_bench.log 2>/dev/null || echo 0); \
+	BENCH_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/nightly_bench.log 2>/dev/null || echo 0); \
+	echo "BENCH: $$BENCH_PASS passed, $$BENCH_FAIL failed" >> $$REPORT; \
+	echo -e "$(YELLOW)[3/3] Running CoreMark...$(RESET)"; \
+	$(MAKE) --no-print-directory cm MAX_CYCLES=10000000 2>&1 | tee $(REGRESSION_DIR)/nightly_coremark.log || true; \
+	if grep -q "CoreMark" $(REGRESSION_DIR)/nightly_coremark.log 2>/dev/null; then \
+		COREMARK_SCORE=$$(grep -oP "CoreMark.*?:\s*\K[\d.]+" $(REGRESSION_DIR)/nightly_coremark.log 2>/dev/null || echo "N/A"); \
+		echo "CoreMark Score: $$COREMARK_SCORE" >> $$REPORT; \
+	fi; \
+	END_TIME=$$(date +%s); \
+	DURATION=$$((END_TIME - START_TIME)); \
+	echo "============================================" >> $$REPORT; \
+	echo "Total Duration: $${DURATION}s" >> $$REPORT; \
+	echo -e ""; \
+	echo -e "$(GREEN)╔══════════════════════════════════════════════════════════════╗$(RESET)"; \
+	echo -e "$(GREEN)║                  Nightly Build Complete                      ║$(RESET)"; \
+	echo -e "$(GREEN)╠══════════════════════════════════════════════════════════════╣$(RESET)"; \
+	echo -e "$(GREEN)║$(RESET)  Duration: $${DURATION}s                                             $(GREEN)║$(RESET)"; \
+	echo -e "$(GREEN)║$(RESET)  Report: $$REPORT  $(GREEN)║$(RESET)"; \
+	echo -e "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(RESET)"
+
 # -----------------------------------------
 # Benchmark List Runner (NO_ADDR=1)
 # -----------------------------------------
@@ -261,47 +436,66 @@ endif
 help_lists:
 	@echo -e ""
 	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
-	@echo -e "$(GREEN)            CERES RISC-V — Test List Shortcuts                $(RESET)"
+	@echo -e "$(GREEN)            CERES RISC-V — Test Automation                    $(RESET)"
 	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
 	@echo -e ""
-	@echo -e "$(YELLOW)Test List Commands:$(RESET)"
-	@echo -e "  $(GREEN)make isa$(RESET)         – Run all ISA tests (rv32ui, rv32um, rv32uc)"
-	@echo -e "  $(GREEN)make csr$(RESET)         – Run machine CSR tests (rv32mi)"
-	@echo -e "  $(GREEN)make bench$(RESET)       – Run benchmarks (dhrystone, etc.) [NO_ADDR=1]"
-	@echo -e "  $(GREEN)make arch$(RESET)        – Run architecture tests (riscv-arch-test)"
-	@echo -e "  $(GREEN)make all_tests$(RESET)   – Run ALL tests"
-	@echo -e "  $(GREEN)make exc$(RESET)         – Run exception tests"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  REGRESSION SUITES$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  $(GREEN)make quick$(RESET)        – Quick smoke test (~5 min) [ISA + CSR]"
+	@echo -e "  $(GREEN)make full$(RESET)         – Full regression (~30 min) [ISA + Arch + Imperas + CSR]"
+	@echo -e "  $(GREEN)make regression$(RESET)   – Alias for 'make full'"
+	@echo -e "  $(GREEN)make nightly$(RESET)      – Nightly build (full + benchmarks + CoreMark)"
 	@echo -e ""
-	@echo -e "$(YELLOW)CoreMark Commands:$(RESET)"
-	@echo -e "  $(GREEN)make cm$(RESET)          – Build and run CoreMark"
-	@echo -e "  $(GREEN)make cm_run$(RESET)      – Quick CoreMark run (skip rebuild if exists)"
-	@echo -e "  $(GREEN)make coremark$(RESET)    – Build CoreMark only"
-	@echo -e "  $(GREEN)make coremark_help$(RESET)– Show detailed CoreMark help"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  INDIVIDUAL TEST SUITES$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  $(GREEN)make isa$(RESET)          – Run ISA tests (rv32ui, rv32um, rv32uc)"
+	@echo -e "  $(GREEN)make csr$(RESET)          – Run machine CSR tests (rv32mi)"
+	@echo -e "  $(GREEN)make arch$(RESET)         – Run architecture tests (I: 38, M: 8, C: 27)"
+	@echo -e "  $(GREEN)make imperas$(RESET)      – Run Imperas tests (45 tests)"
+	@echo -e "  $(GREEN)make bench$(RESET)        – Run benchmarks [NO_ADDR=1]"
+	@echo -e "  $(GREEN)make exc$(RESET)          – Run exception tests"
 	@echo -e ""
-	@echo -e "$(YELLOW)Quick Single Test:$(RESET)"
-	@echo -e "  $(GREEN)make t T=rv32ui-p-add$(RESET)     – Quick ISA test"
-	@echo -e "  $(GREEN)make tb T=dhrystone$(RESET)       – Quick benchmark [NO_ADDR=1]"
-	@echo -e "  $(GREEN)make ta T=I-add-01$(RESET)        – Quick arch test"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  COREMARK$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  $(GREEN)make cm$(RESET)           – Build and run CoreMark"
+	@echo -e "  $(GREEN)make cm_run$(RESET)       – Quick run (skip rebuild)"
+	@echo -e "  $(GREEN)make coremark_help$(RESET)– Detailed CoreMark help"
 	@echo -e ""
-	@echo -e "$(YELLOW)Options:$(RESET)"
-	@echo -e "  SIM=verilator|modelsim  – Simulator (default: verilator)"
-	@echo -e "  MAX_CYCLES=<n>          – Max cycles (default: 100000)"
-	@echo -e "  FAST_SIM=1              – Disable all logging for speed"
-	@echo -e "  CLEAN_LOGS=1            – Clear all logs before batch run"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  QUICK SINGLE TEST$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  $(GREEN)make t T=rv32ui-p-add$(RESET)   – Quick ISA test"
+	@echo -e "  $(GREEN)make ta T=I-add-01$(RESET)      – Quick arch test"
+	@echo -e "  $(GREEN)make ti T=I-ADD-01$(RESET)      – Quick Imperas test"
+	@echo -e "  $(GREEN)make tb T=dhrystone$(RESET)     – Quick benchmark [NO_ADDR=1]"
 	@echo -e ""
-	@echo -e "$(YELLOW)Architecture Test Pipeline:$(RESET)"
-	@echo -e "  $(GREEN)make arch_auto$(RESET)   – Full pipeline: Clone → Build → Import"
-	@echo -e "  $(GREEN)make arch_list$(RESET)   – List available arch test extensions"
-	@echo -e "  $(GREEN)make arch_help$(RESET)   – Show detailed arch test help"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  COVERAGE$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  $(GREEN)make coverage$(RESET)      – Full coverage (ISA + Arch tests)"
+	@echo -e "  $(GREEN)make coverage-quick$(RESET)– Quick coverage (ISA only)"
+	@echo -e "  $(GREEN)make coverage-html$(RESET) – Generate HTML report"
+	@echo -e ""
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  TEST PIPELINES$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  $(GREEN)make arch_auto$(RESET)     – Arch: Clone → Build → Import"
+	@echo -e "  $(GREEN)make imperas_auto$(RESET)  – Imperas: Clone → Build → Import"
+	@echo -e ""
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  OPTIONS$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  SIM=verilator|modelsim   – Simulator (default: verilator)"
+	@echo -e "  CLEAN_LOGS=1             – Clear logs before batch run"
+	@echo -e "  FAST_SIM=1               – Disable logging for speed"
+	@echo -e "  COVERAGE=1               – Enable coverage collection"
 	@echo -e ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
-	@echo -e "  make isa SIM=verilator"
-	@echo -e "  make bench MAX_CYCLES=5000000"
-	@echo -e "  make bench CLEAN_LOGS=1          # Clear old logs first"
-	@echo -e "  make t T=rv32ui-p-add"
-	@echo -e "  make tb T=median MAX_CYCLES=500000"
-	@echo -e "  make ta T=I-add-01"
-	@echo -e "  make t T=rv32ui-p-add FAST_SIM=1  # Fast simulation without logs"
-	@echo -e "  make cm                           # Run CoreMark"
-	@echo -e "  make cm MAX_CYCLES=10000000       # CoreMark with more cycles"
+	@echo -e "  make quick                        # Quick smoke test"
+	@echo -e "  make full CLEAN_LOGS=1            # Full regression, clean logs first"
+	@echo -e "  make coverage                     # Full coverage analysis"
+	@echo -e "  make t T=rv32ui-p-add FAST_SIM=1  # Single fast test"
 	@echo -e ""

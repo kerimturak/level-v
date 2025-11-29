@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-compare_logs.py — Ceres vs Spike Commit Log Comparator (Enhanced)
-===================================================================
+compare_logs.py — Ceres vs Spike Commit Log Comparator (Enhanced v2.0)
+======================================================================
 
 Features:
   ✅ Run test makefileı farkları göstermek için bunu kullanır
@@ -13,14 +13,29 @@ Features:
   ✅ Beautiful HTML report with disassembly integration
   ✅ Shows PASS/FAIL addresses and test info
   ✅ Always outputs comparison statistics
+  ✅ JSON output support (--json)
+  ✅ Verbose mode with progress indicator (--verbose)
+  ✅ Quiet mode for CI/CD pipelines (--quiet)
+  ✅ Maximum error limit (--max-errors)
+  ✅ Context lines around errors (--context)
+  ✅ Summary-only mode (--summary-only)
+  ✅ Exit code control (--no-fail)
 """
 import sys
 import re
+import os
 import argparse
+import json
+import time
+from datetime import datetime
 from colorama import Fore, Style, init
 from html_diff_generator import generate_html_diff
 
 init(autoreset=True)
+
+# Global verbosity level
+VERBOSE = False
+QUIET = False
 
 # ============================================================
 # Disassembly Parser
@@ -115,7 +130,7 @@ CSR_KEYWORDS = [
 ]
 
 
-def parse_log(path: str, skip_init=True, skip_csr=False):
+def parse_log(path: str, skip_init=True, skip_csr=False, show_progress=False):
     """
     Parse commit log file and return list of (pc, inst, rest, line) tuples.
     
@@ -123,13 +138,31 @@ def parse_log(path: str, skip_init=True, skip_csr=False):
         path: Path to log file
         skip_init: Skip initialization cycles (PC < 0x80000000 or INST=0x0)
         skip_csr: Skip CSR-related instructions
+        show_progress: Show progress indicator while parsing
     
     Returns:
         List of tuples: (pc, inst, rest, raw_line)
     """
     out = []
+    line_count = 0
+    
+    # Get file size for progress
+    file_size = os.path.getsize(path) if show_progress else 0
+    bytes_read = 0
+    last_progress = 0
+    
     with open(path, "r", errors="ignore") as f:
         for raw in f:
+            line_count += 1
+            bytes_read += len(raw)
+            
+            # Show progress every 10%
+            if show_progress and file_size > 0:
+                progress = int((bytes_read / file_size) * 100)
+                if progress >= last_progress + 10:
+                    print(f"\r  Parsing {os.path.basename(path)}: {progress}%", end="", flush=True)
+                    last_progress = progress
+            
             if "core" not in raw:
                 continue
             if skip_csr and any(kw in raw for kw in CSR_KEYWORDS):
@@ -141,6 +174,10 @@ def parse_log(path: str, skip_init=True, skip_csr=False):
             if skip_init and (pc < 0x80000000 or inst == 0x00000000):
                 continue
             out.append((pc, inst, rest, line))
+    
+    if show_progress:
+        print(f"\r  Parsing {os.path.basename(path)}: 100% ({len(out):,} entries from {line_count:,} lines)")
+    
     return out
 
 
@@ -194,16 +231,26 @@ def print_comparison_header(rtl_count, spike_count):
     print(f"{Fore.CYAN}{'─' * 80}{Style.RESET_ALL}\n")
 
 
-def print_summary(stats, has_errors):
+def print_summary(stats, has_errors, elapsed_time=None, test_name=None):
     """
     Print detailed comparison summary.
     
     Args:
         stats: Dictionary of comparison statistics
         has_errors: Boolean indicating if errors were found
+        elapsed_time: Time taken for comparison (optional)
+        test_name: Name of the test (optional)
     """
+    if QUIET:
+        # Minimal output for CI/CD
+        status = "FAIL" if has_errors else "PASS"
+        print(f"[{status}] {test_name or 'test'}: match={stats['match']}, mismatch={stats['pcinst_mismatch']+stats['reg_mismatch']}")
+        return
+    
     print(f"\n{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'COMPARISON SUMMARY':^80}{Style.RESET_ALL}")
+    if test_name:
+        print(f"{Fore.CYAN}{test_name:^80}{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
     
     total_compared = stats['match'] + stats['pcinst_mismatch'] + stats['reg_mismatch']
@@ -221,23 +268,23 @@ def print_summary(stats, has_errors):
     
     print(f"\n{status_color}{'  ' + status_icon + ' ' + status_text:^80}{Style.RESET_ALL}\n")
     
-    # Detailed statistics
-    print(f"{Fore.YELLOW}Match Statistics:{Style.RESET_ALL}")
-    print(f"  {Fore.GREEN}✅ Perfect matches      : {stats['match']:>8,} ({match_rate:.2f}%){Style.RESET_ALL}")
-    print(f"  {Fore.RED}❌ PC/INST mismatches   : {stats['pcinst_mismatch']:>8,}{Style.RESET_ALL}")
-    print(f"  {Fore.YELLOW}⚠️  Register mismatches : {stats['reg_mismatch']:>8,}{Style.RESET_ALL}")
-    
-    print(f"\n{Fore.YELLOW}Extra Entries:{Style.RESET_ALL}")
-    print(f"  {Fore.CYAN}RTL extra entries       : {stats['insert_rtl']:>8,}{Style.RESET_ALL}")
-    print(f"  {Fore.CYAN}Spike extra entries     : {stats['insert_spike']:>8,}{Style.RESET_ALL}")
-    
+    # Detailed statistics table
+    print(f"{Fore.YELLOW}┌{'─' * 40}┬{'─' * 20}┐{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}│{'Match Statistics':^40}│{'Count':^20}│{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}├{'─' * 40}┼{'─' * 20}┤{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}│ ✅ Perfect matches                     │{stats['match']:>18,} │{Style.RESET_ALL}")
+    print(f"{Fore.RED}│ ❌ PC/INST mismatches                  │{stats['pcinst_mismatch']:>18,} │{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}│ ⚠️  Register mismatches                │{stats['reg_mismatch']:>18,} │{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}│ ➕ RTL extra entries                   │{stats['insert_rtl']:>18,} │{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}│ ➕ Spike extra entries                 │{stats['insert_spike']:>18,} │{Style.RESET_ALL}")
     if stats.get('resyncs', 0) > 0:
-        print(f"\n{Fore.YELLOW}Resynchronization:{Style.RESET_ALL}")
-        print(f"  {Fore.MAGENTA}🔄 Resync events        : {stats['resyncs']:>8,}{Style.RESET_ALL}")
-    
-    print(f"\n{Fore.CYAN}{'─' * 80}{Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}Total cycles compared   : {total_compared:>8,}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}\n")
+        print(f"{Fore.MAGENTA}│ 🔄 Resync events                       │{stats['resyncs']:>18,} │{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}├{'─' * 40}┼{'─' * 20}┤{Style.RESET_ALL}")
+    print(f"{Fore.WHITE}│ {'Total cycles compared':40}│{total_compared:>18,} │{Style.RESET_ALL}")
+    print(f"{Fore.WHITE}│ {'Match rate':40}│{match_rate:>17.2f}% │{Style.RESET_ALL}")
+    if elapsed_time:
+        print(f"{Fore.WHITE}│ {'Elapsed time':40}│{elapsed_time:>16.2f}s │{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}└{'─' * 40}┴{'─' * 20}┘{Style.RESET_ALL}\n")
 
 
 def generate_visual_diff(rtl, spike, path, diffs):
@@ -278,13 +325,14 @@ def generate_visual_diff(rtl, spike, path, diffs):
                 mark = "➕ EXTRA SPIKE"
                 color = Fore.MAGENTA
 
-            #print(color + f"{mark:<18} | {rtl_str:<80} | {spk_str}" + Style.RESET_ALL)
             out.write(f"{mark:<18} | {rtl_str:<80} | {spk_str}\n")
 
-    print(f"{Fore.CYAN}📄 Visual diff written to {path}{Style.RESET_ALL}")
+    if not QUIET:
+        print(f"{Fore.CYAN}📄 Visual diff written to {path}{Style.RESET_ALL}")
 
 
-def write_diff_status(output_file, stats, has_errors):
+def write_diff_status(output_file, stats, has_errors, test_name=None, 
+                      elapsed_time=None, write_json=False):
     """
     Write comparison status to output file.
     
@@ -292,9 +340,20 @@ def write_diff_status(output_file, stats, has_errors):
         output_file: Path to output file
         stats: Statistics dictionary
         has_errors: Whether errors were found
+        test_name: Name of the test
+        elapsed_time: Time taken for comparison
+        write_json: Also write JSON format
     """
+    timestamp = datetime.now().isoformat()
+    total = stats['match'] + stats['pcinst_mismatch'] + stats['reg_mismatch']
+    match_rate = (stats['match'] / total * 100) if total > 0 else 0
+    
     with open(output_file, "w") as f:
-        f.write("=== CERES vs SPIKE Comparison Result ===\n\n")
+        f.write("=== CERES vs SPIKE Comparison Result ===\n")
+        f.write(f"Timestamp: {timestamp}\n")
+        if test_name:
+            f.write(f"Test Name: {test_name}\n")
+        f.write("\n")
         
         if has_errors:
             f.write("DIFF_STATUS=MISMATCH\n")
@@ -308,13 +367,43 @@ def write_diff_status(output_file, stats, has_errors):
         f.write(f"RTL Extra Entries   : {stats['insert_rtl']}\n")
         f.write(f"Spike Extra Entries : {stats['insert_spike']}\n")
         f.write(f"Resync Events       : {stats.get('resyncs', 0)}\n")
+        f.write(f"Match Rate          : {match_rate:.2f}%\n")
+        if elapsed_time:
+            f.write(f"Elapsed Time        : {elapsed_time:.2f}s\n")
+    
+    # Write JSON if requested
+    if write_json:
+        json_file = output_file.replace('.log', '.json')
+        json_data = {
+            "timestamp": timestamp,
+            "test_name": test_name,
+            "status": "MISMATCH" if has_errors else "MATCH",
+            "passed": not has_errors,
+            "statistics": {
+                "perfect_matches": stats['match'],
+                "pcinst_mismatches": stats['pcinst_mismatch'],
+                "register_mismatches": stats['reg_mismatch'],
+                "rtl_extra": stats['insert_rtl'],
+                "spike_extra": stats['insert_spike'],
+                "resyncs": stats.get('resyncs', 0),
+                "total_compared": total,
+                "match_rate": round(match_rate, 2)
+            },
+            "elapsed_time": round(elapsed_time, 2) if elapsed_time else None
+        }
+        with open(json_file, "w") as f:
+            json.dump(json_data, f, indent=2)
+        
+        if not QUIET:
+            print(f"{Fore.GREEN}✓{Style.RESET_ALL} JSON report   : {json_file}")
 
 
 # ============================================================
 # Main Comparison Function
 # ============================================================
 def compare_logs(rtl, spike, output_file, enable_resync=False, window=0, 
-                disasm_map=None, pass_addr=None, fail_addr=None, test_name=None):
+                disasm_map=None, pass_addr=None, fail_addr=None, test_name=None,
+                max_errors=None, no_fail=False, summary_only=False, write_json=False):
     """
     Compare RTL and Spike logs and generate reports.
     
@@ -328,7 +417,12 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
         pass_addr: Test pass address
         fail_addr: Test fail address
         test_name: Name of the test
+        max_errors: Stop after N errors (None = no limit)
+        no_fail: Don't exit with error code on mismatch
+        summary_only: Only generate summary, skip visual diff
+        write_json: Write JSON output file
     """
+    start_time = time.time()
     diffs = []
     stats = {
         "match": 0,
@@ -338,9 +432,27 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
         "pcinst_mismatch": 0,
         "resyncs": 0
     }
+    
+    error_count = 0
+    max_errors_reached = False
 
     i = j = 0
+    total_entries = max(len(rtl), len(spike))
+    last_progress = 0
+    
     while i < len(rtl) and j < len(spike):
+        # Show progress for verbose mode
+        if VERBOSE and total_entries > 0:
+            progress = int(((i + j) / (2 * total_entries)) * 100)
+            if progress >= last_progress + 5:
+                print(f"\r  Comparing: {progress}%", end="", flush=True)
+                last_progress = progress
+        
+        # Check max errors limit
+        if max_errors is not None and error_count >= max_errors:
+            max_errors_reached = True
+            break
+        
         r = rtl[i]
         s = spike[j]
 
@@ -348,6 +460,7 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
             if r[2].replace(" ","") != s[2].replace(" ",""):
                 diffs.append(("REG", r, s))
                 stats["reg_mismatch"] += 1
+                error_count += 1
             else:
                 stats["match"] += 1
             i += 1
@@ -361,29 +474,38 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
                     for jj in range(j, nj):
                         diffs.append(("INS_SPIKE", None, spike[jj]))
                         stats["insert_spike"] += 1
+                        error_count += 1
                 if ni > i:
                     for ii in range(i, ni):
                         diffs.append(("INS_RTL", rtl[ii], None))
                         stats["insert_rtl"] += 1
+                        error_count += 1
                 i, j = ni, nj
                 stats["resyncs"] += 1
                 continue
 
         diffs.append(("PCINST", r, s))
         stats["pcinst_mismatch"] += 1
+        error_count += 1
         i += 1
         j += 1
-
-    # Handle remaining entries
-    while i < len(rtl):
-        diffs.append(("TAIL_RTL", rtl[i], None))
-        stats["insert_rtl"] += 1
-        i += 1
     
-    while j < len(spike):
-        diffs.append(("TAIL_SPIKE", None, spike[j]))
-        stats["insert_spike"] += 1
-        j += 1
+    if VERBOSE:
+        print("\r  Comparing: 100%    ")
+
+    # Handle remaining entries (if not stopped by max_errors)
+    if not max_errors_reached:
+        while i < len(rtl):
+            diffs.append(("TAIL_RTL", rtl[i], None))
+            stats["insert_rtl"] += 1
+            i += 1
+        
+        while j < len(spike):
+            diffs.append(("TAIL_SPIKE", None, spike[j]))
+            stats["insert_spike"] += 1
+            j += 1
+
+    elapsed_time = time.time() - start_time
 
     # Determine if there are errors
     has_errors = (stats['pcinst_mismatch'] > 0 or 
@@ -391,18 +513,22 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
                   stats['insert_rtl'] > 0 or 
                   stats['insert_spike'] > 0)
 
-    # Generate all output files
-    print(f"\n{Fore.CYAN}{'─' * 80}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}Generating output files...{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'─' * 80}{Style.RESET_ALL}\n")
+    if not QUIET:
+        # Generate all output files
+        print(f"\n{Fore.CYAN}{'─' * 80}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}Generating output files...{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'─' * 80}{Style.RESET_ALL}\n")
     
     # 1. Write status file
-    write_diff_status(output_file, stats, has_errors)
-    print(f"{Fore.GREEN}✓{Style.RESET_ALL} Status file    : {output_file}")
+    write_diff_status(output_file, stats, has_errors, test_name, 
+                      elapsed_time, write_json)
+    if not QUIET:
+        print(f"{Fore.GREEN}✓{Style.RESET_ALL} Status file    : {output_file}")
     
-    # 2. Generate visual diff
-    visual_diff_path = output_file.replace(".log", "_visual_diff.log")
-    generate_visual_diff(rtl, spike, visual_diff_path, diffs)
+    # 2. Generate visual diff (unless summary_only)
+    if not summary_only:
+        visual_diff_path = output_file.replace(".log", "_visual_diff.log")
+        generate_visual_diff(rtl, spike, visual_diff_path, diffs)
     
     # 3. Generate HTML report with enhanced info
     html_path = output_file.replace(".log", ".html")
@@ -410,13 +536,21 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
                       pass_addr, fail_addr, test_name)
     
     # 4. Print summary to console
-    print_summary(stats, has_errors)
+    print_summary(stats, has_errors, elapsed_time, test_name)
+    
+    # Print max errors warning
+    if max_errors_reached and not QUIET:
+        print(f"{Fore.YELLOW}⚠️  Stopped after {max_errors} errors (use --max-errors to change){Style.RESET_ALL}\n")
     
     # Exit with appropriate status
-    if has_errors:
+    if has_errors and not no_fail:
         sys.exit(1)
     else:
-        print(f"{Fore.GREEN}✅ Comparison PASSED - Logs match perfectly!{Style.RESET_ALL}\n")
+        if not QUIET:
+            if has_errors:
+                print(f"{Fore.YELLOW}⚠️  Comparison has errors but --no-fail was specified{Style.RESET_ALL}\n")
+            else:
+                print(f"{Fore.GREEN}✅ Comparison PASSED - Logs match perfectly!{Style.RESET_ALL}\n")
         sys.exit(0)
 
 
@@ -425,78 +559,155 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
 # ============================================================
 def main():
     """Main entry point for command-line usage."""
+    global VERBOSE, QUIET
+    
     ap = argparse.ArgumentParser(
-        description="Compare CERES RTL vs Spike commit logs",
+        description="Compare CERES RTL vs Spike commit logs (v2.0)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Basic comparison
   %(prog)s --rtl rtl.log --spike spike.log --output diff.log
+  
+  # Skip CSR instructions
   %(prog)s --rtl rtl.log --spike spike.log --output diff.log --skip-csr
+  
+  # With disassembly and address info
   %(prog)s --rtl rtl.log --spike spike.log --output diff.log --dump test.dump --addr addr.txt
+  
+  # Enable resync with custom window
   %(prog)s --rtl rtl.log --spike spike.log --output diff.log --resync --window 16
+  
+  # CI/CD mode (quiet, JSON output, no fail)
+  %(prog)s --rtl rtl.log --spike spike.log --output diff.log --quiet --json --no-fail
+  
+  # Verbose mode with max errors limit
+  %(prog)s --rtl rtl.log --spike spike.log --output diff.log --verbose --max-errors 100
+
+Exit Codes:
+  0 - Logs match (or --no-fail specified)
+  1 - Logs have differences
+  2 - Error during execution
         """
     )
     
-    ap.add_argument("--rtl", required=True, help="Path to RTL commit log")
-    ap.add_argument("--spike", required=True, help="Path to Spike commit log")
-    ap.add_argument("--output", required=True, help="Output file path")
-    ap.add_argument("--dump", help="Path to disassembly dump file (.dump)")
-    ap.add_argument("--addr", help="Path to pass/fail address file")
-    ap.add_argument("--test-name", help="Test name (auto-detected from paths if not provided)")
-    ap.add_argument("--skip-csr", action="store_true", 
-                    help="Ignore CSR-related instructions")
-    ap.add_argument("--resync", action="store_true", 
-                    help="Enable resynchronization on mismatches")
-    ap.add_argument("--window", type=int, default=8, 
-                    help="Resync lookahead window size (default: 8)")
+    # Required arguments
+    req = ap.add_argument_group('Required arguments')
+    req.add_argument("--rtl", required=True, help="Path to RTL commit log")
+    req.add_argument("--spike", required=True, help="Path to Spike commit log")
+    req.add_argument("--output", required=True, help="Output file path")
+    
+    # Optional input files
+    inp = ap.add_argument_group('Input options')
+    inp.add_argument("--dump", help="Path to disassembly dump file (.dump)")
+    inp.add_argument("--addr", help="Path to pass/fail address file")
+    inp.add_argument("--test-name", help="Test name (auto-detected from paths if not provided)")
+    
+    # Comparison options
+    comp = ap.add_argument_group('Comparison options')
+    comp.add_argument("--skip-csr", action="store_true", 
+                      help="Ignore CSR-related instructions")
+    comp.add_argument("--resync", action="store_true", 
+                      help="Enable resynchronization on mismatches")
+    comp.add_argument("--window", type=int, default=8, 
+                      help="Resync lookahead window size (default: 8)")
+    comp.add_argument("--max-errors", type=int, metavar="N",
+                      help="Stop comparison after N errors")
+    
+    # Output options
+    out = ap.add_argument_group('Output options')
+    out.add_argument("--json", action="store_true",
+                     help="Generate JSON output file")
+    out.add_argument("--summary-only", action="store_true",
+                     help="Only generate summary (skip visual diff)")
+    out.add_argument("--no-fail", action="store_true",
+                     help="Don't exit with error code on mismatch")
+    
+    # Verbosity
+    verb = ap.add_argument_group('Verbosity options')
+    verb.add_argument("-v", "--verbose", action="store_true",
+                      help="Verbose output with progress indicators")
+    verb.add_argument("-q", "--quiet", action="store_true",
+                      help="Minimal output (for CI/CD pipelines)")
     
     args = ap.parse_args()
+    
+    # Set global verbosity
+    VERBOSE = args.verbose
+    QUIET = args.quiet
+    
+    if VERBOSE and QUIET:
+        print(f"{Fore.YELLOW}Warning: Both --verbose and --quiet specified, using --quiet{Style.RESET_ALL}")
+        VERBOSE = False
 
     # Auto-detect test name from file paths if not provided
     test_name = args.test_name
     if not test_name:
-        # Try to extract from output path: .../rv32ui-p-add/diff.log -> rv32ui-p-add
-        import os
         test_name = os.path.basename(os.path.dirname(args.output))
 
     # Parse optional files
     disasm_map = parse_disassembly(args.dump) if args.dump else {}
     pass_addr, fail_addr = parse_pass_fail_addresses(args.addr) if args.addr else (None, None)
 
-    # Print header
-    print(f"\n{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'CERES RISC-V — Log Comparison Tool':^80}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
-    print(f"\n{Fore.YELLOW}Configuration:{Style.RESET_ALL}")
-    print(f"  Test name    : {test_name or 'N/A'}")
-    print(f"  RTL log      : {args.rtl}")
-    print(f"  Spike log    : {args.spike}")
-    print(f"  Output       : {args.output}")
-    if args.dump:
-        print(f"  Disassembly  : {args.dump} ({len(disasm_map)} instructions)")
-    if args.addr:
-        if pass_addr is not None:
-            print(f"  Pass address : 0x{pass_addr:08x}")
-            print(f"  Fail address : 0x{fail_addr:08x}")
-        else:
-            print(f"  Address file : {args.addr} (failed to parse)")
-    print(f"  Skip CSR     : {args.skip_csr}")
-    print(f"  Resync       : {args.resync}")
-    if args.resync:
-        print(f"  Resync window: {args.window}")
+    if not QUIET:
+        # Print header
+        print(f"\n{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'CERES RISC-V — Log Comparison Tool v2.0':^80}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}Configuration:{Style.RESET_ALL}")
+        print(f"  Test name    : {test_name or 'N/A'}")
+        print(f"  RTL log      : {args.rtl}")
+        print(f"  Spike log    : {args.spike}")
+        print(f"  Output       : {args.output}")
+        if args.dump:
+            print(f"  Disassembly  : {args.dump} ({len(disasm_map)} instructions)")
+        if args.addr:
+            if pass_addr is not None:
+                print(f"  Pass address : 0x{pass_addr:08x}")
+                print(f"  Fail address : 0x{fail_addr:08x}")
+            else:
+                print(f"  Address file : {args.addr} (failed to parse)")
+        print(f"  Skip CSR     : {args.skip_csr}")
+        print(f"  Resync       : {args.resync}")
+        if args.resync:
+            print(f"  Resync window: {args.window}")
+        if args.max_errors:
+            print(f"  Max errors   : {args.max_errors}")
+        if args.json:
+            print(f"  JSON output  : enabled")
+        if args.no_fail:
+            print(f"  No-fail mode : enabled")
 
-    # Parse logs
-    print(f"\n{Fore.CYAN}Parsing log files...{Style.RESET_ALL}")
-    rtl   = parse_log(args.rtl, skip_init=True, skip_csr=args.skip_csr)
-    spike = parse_log(args.spike, skip_init=True, skip_csr=args.skip_csr)
-    
-    print_comparison_header(len(rtl), len(spike))
+    try:
+        # Parse logs
+        if not QUIET:
+            print(f"\n{Fore.CYAN}Parsing log files...{Style.RESET_ALL}")
+        
+        rtl = parse_log(args.rtl, skip_init=True, skip_csr=args.skip_csr, 
+                        show_progress=VERBOSE)
+        spike = parse_log(args.spike, skip_init=True, skip_csr=args.skip_csr,
+                          show_progress=VERBOSE)
+        
+        if not QUIET:
+            print_comparison_header(len(rtl), len(spike))
 
-    # Compare
-    compare_logs(rtl, spike, args.output, 
-                enable_resync=args.resync, window=args.window,
-                disasm_map=disasm_map, pass_addr=pass_addr, 
-                fail_addr=fail_addr, test_name=test_name)
+        # Compare
+        compare_logs(rtl, spike, args.output, 
+                    enable_resync=args.resync, window=args.window,
+                    disasm_map=disasm_map, pass_addr=pass_addr, 
+                    fail_addr=fail_addr, test_name=test_name,
+                    max_errors=args.max_errors, no_fail=args.no_fail,
+                    summary_only=args.summary_only, write_json=args.json)
+                    
+    except FileNotFoundError as e:
+        print(f"{Fore.RED}Error: File not found - {e}{Style.RESET_ALL}")
+        sys.exit(2)
+    except Exception as e:
+        print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+        if VERBOSE:
+            import traceback
+            traceback.print_exc()
+        sys.exit(2)
 
 
 if __name__ == "__main__":
