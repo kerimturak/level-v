@@ -21,61 +21,61 @@ module riscv_compressed_decoder
   // ============================================================================
   // Opcode Definitions (RV32I Base)
   // ============================================================================
-  localparam logic [6:0] OPCODE_LOAD   = 7'h03;
-  localparam logic [6:0] OPCODE_STORE  = 7'h23;
+  localparam logic [6:0] OPCODE_LOAD = 7'h03;
+  localparam logic [6:0] OPCODE_STORE = 7'h23;
   localparam logic [6:0] OPCODE_BRANCH = 7'h63;
-  localparam logic [6:0] OPCODE_JALR   = 7'h67;
-  localparam logic [6:0] OPCODE_JAL    = 7'h6f;
-  localparam logic [6:0] OPCODE_OPIMM  = 7'h13;
-  localparam logic [6:0] OPCODE_OP     = 7'h33;
-  localparam logic [6:0] OPCODE_LUI    = 7'h37;
+  localparam logic [6:0] OPCODE_JALR = 7'h67;
+  localparam logic [6:0] OPCODE_JAL = 7'h6f;
+  localparam logic [6:0] OPCODE_OPIMM = 7'h13;
+  localparam logic [6:0] OPCODE_OP = 7'h33;
+  localparam logic [6:0] OPCODE_LUI = 7'h37;
   localparam logic [6:0] OPCODE_SYSTEM = 7'h73;
 
   // Funct3 definitions for clarity
-  localparam logic [2:0] FUNCT3_ADD  = 3'b000;
-  localparam logic [2:0] FUNCT3_SLL  = 3'b001;
-  localparam logic [2:0] FUNCT3_LW   = 3'b010;
-  localparam logic [2:0] FUNCT3_SW   = 3'b010;
-  localparam logic [2:0] FUNCT3_XOR  = 3'b100;
-  localparam logic [2:0] FUNCT3_SRL  = 3'b101;
-  localparam logic [2:0] FUNCT3_OR   = 3'b110;
-  localparam logic [2:0] FUNCT3_AND  = 3'b111;
-  localparam logic [2:0] FUNCT3_BEQ  = 3'b000;
-  localparam logic [2:0] FUNCT3_BNE  = 3'b001;
+  localparam logic [2:0] FUNCT3_ADD = 3'b000;
+  localparam logic [2:0] FUNCT3_SLL = 3'b001;
+  localparam logic [2:0] FUNCT3_LW = 3'b010;
+  localparam logic [2:0] FUNCT3_SW = 3'b010;
+  localparam logic [2:0] FUNCT3_XOR = 3'b100;
+  localparam logic [2:0] FUNCT3_SRL = 3'b101;
+  localparam logic [2:0] FUNCT3_OR = 3'b110;
+  localparam logic [2:0] FUNCT3_AND = 3'b111;
+  localparam logic [2:0] FUNCT3_BEQ = 3'b000;
+  localparam logic [2:0] FUNCT3_BNE = 3'b001;
 
   // Funct7 definitions
   localparam logic [6:0] FUNCT7_ZERO = 7'b0000000;
-  localparam logic [6:0] FUNCT7_SUB  = 7'b0100000;  // SUB, SRA
+  localparam logic [6:0] FUNCT7_SUB = 7'b0100000;  // SUB, SRA
 
   // Special register addresses
   localparam logic [4:0] REG_ZERO = 5'h00;  // x0
-  localparam logic [4:0] REG_RA   = 5'h01;  // x1 - return address
-  localparam logic [4:0] REG_SP   = 5'h02;  // x2 - stack pointer
+  localparam logic [4:0] REG_RA = 5'h01;  // x1 - return address
+  localparam logic [4:0] REG_SP = 5'h02;  // x2 - stack pointer
 
   // ============================================================================
   // Instruction Field Extraction
   // ============================================================================
-  
+
   // Quadrant and funct3 fields
-  logic [1:0]  quadrant;
-  logic [2:0]  funct3;
-  
+  logic [1:0] quadrant;
+  logic [2:0] funct3;
+
   assign quadrant = instr_i[1:0];
   assign funct3   = instr_i[15:13];
 
   // Full register addresses (5-bit) - for C2 quadrant
-  logic [4:0] rd_rs1_full;   // rd/rs1 field [11:7]
-  logic [4:0] rs2_full;      // rs2 field [6:2]
-  
+  logic [4:0] rd_rs1_full;  // rd/rs1 field [11:7]
+  logic [4:0] rs2_full;  // rs2 field [6:2]
+
   assign rd_rs1_full = instr_i[11:7];
   assign rs2_full    = instr_i[6:2];
 
   // Compressed register addresses (3-bit -> 5-bit) - for C0/C1 quadrant
   // Registers x8-x15 are encoded as 0-7
-  logic [4:0] rd_prime;      // rd' = 8 + instr_i[4:2]
-  logic [4:0] rs1_prime;     // rs1' = 8 + instr_i[9:7]
-  logic [4:0] rs2_prime;     // rs2' = 8 + instr_i[4:2]
-  
+  logic [4:0] rd_prime;  // rd' = 8 + instr_i[4:2]
+  logic [4:0] rs1_prime;  // rs1' = 8 + instr_i[9:7]
+  logic [4:0] rs2_prime;  // rs2' = 8 + instr_i[4:2]
+
   assign rd_prime  = {2'b01, instr_i[4:2]};
   assign rs1_prime = {2'b01, instr_i[9:7]};
   assign rs2_prime = {2'b01, instr_i[4:2]};
@@ -114,15 +114,13 @@ module riscv_compressed_decoder
   function automatic logic [31:0] gen_c_jal(input logic [4:0] rd);
     // offset[11|4|9:8|10|6|7|3:1|5] from compressed instruction
     // maps directly to JAL format: imm[20|10:1|11|19:12]
-    return {instr_i[12], instr_i[8], instr_i[10:9], instr_i[6], instr_i[7], 
-            instr_i[2], instr_i[11], instr_i[5:3], {9{instr_i[12]}}, rd, OPCODE_JAL};
+    return {instr_i[12], instr_i[8], instr_i[10:9], instr_i[6], instr_i[7], instr_i[2], instr_i[11], instr_i[5:3], {9{instr_i[12]}}, rd, OPCODE_JAL};
   endfunction
 
   // C.BEQZ/C.BNEZ: Generate the 32-bit Branch instruction directly
   // offset[8|4:3|7:6|2:1|5] from compressed instruction
   function automatic logic [31:0] gen_c_branch(input logic [2:0] f3);
-    return {{4{instr_i[12]}}, instr_i[6:5], instr_i[2], REG_ZERO, rs1_prime, 
-            f3, instr_i[11:10], instr_i[4:3], instr_i[12], OPCODE_BRANCH};
+    return {{4{instr_i[12]}}, instr_i[6:5], instr_i[2], REG_ZERO, rs1_prime, f3, instr_i[11:10], instr_i[4:3], instr_i[12], OPCODE_BRANCH};
   endfunction
 
   // C.LWSP immediate: uimm[5] | imm[4:2|7:6] scaled by 4
@@ -145,54 +143,31 @@ module riscv_compressed_decoder
   // ============================================================================
 
   // R-type: funct7[6:0] | rs2[4:0] | rs1[4:0] | funct3[2:0] | rd[4:0] | opcode[6:0]
-  function automatic logic [31:0] gen_r_type(
-    input logic [6:0] funct7,
-    input logic [4:0] rs2,
-    input logic [4:0] rs1,
-    input logic [2:0] f3,
-    input logic [4:0] rd,
-    input logic [6:0] opcode
-  );
+  function automatic logic [31:0] gen_r_type(input logic [6:0] funct7, input logic [4:0] rs2, input logic [4:0] rs1, input logic [2:0] f3, input logic [4:0] rd, input logic [6:0] opcode);
     return {funct7, rs2, rs1, f3, rd, opcode};
   endfunction
 
   // I-type: imm[11:0] | rs1[4:0] | funct3[2:0] | rd[4:0] | opcode[6:0]
-  function automatic logic [31:0] gen_i_type(
-    input logic [11:0] imm,
-    input logic [4:0]  rs1,
-    input logic [2:0]  f3,
-    input logic [4:0]  rd,
-    input logic [6:0]  opcode
-  );
+  function automatic logic [31:0] gen_i_type(input logic [11:0] imm, input logic [4:0] rs1, input logic [2:0] f3, input logic [4:0] rd, input logic [6:0] opcode);
     return {imm, rs1, f3, rd, opcode};
   endfunction
 
   // S-type: imm[11:5] | rs2[4:0] | rs1[4:0] | funct3[2:0] | imm[4:0] | opcode[6:0]
-  function automatic logic [31:0] gen_s_type(
-    input logic [11:0] imm,
-    input logic [4:0]  rs2,
-    input logic [4:0]  rs1,
-    input logic [2:0]  f3,
-    input logic [6:0]  opcode
-  );
+  function automatic logic [31:0] gen_s_type(input logic [11:0] imm, input logic [4:0] rs2, input logic [4:0] rs1, input logic [2:0] f3, input logic [6:0] opcode);
     return {imm[11:5], rs2, rs1, f3, imm[4:0], opcode};
   endfunction
 
   // U-type: imm[31:12] | rd[4:0] | opcode[6:0]
-  function automatic logic [31:0] gen_u_type(
-    input logic [19:0] imm,
-    input logic [4:0]  rd,
-    input logic [6:0]  opcode
-  );
+  function automatic logic [31:0] gen_u_type(input logic [19:0] imm, input logic [4:0] rd, input logic [6:0] opcode);
     return {imm, rd, opcode};
   endfunction
 
   // ============================================================================
   // Quadrant Decode Results
   // ============================================================================
-  
+
   logic [31:0] c0_instr, c1_instr, c2_instr;
-  logic        c0_illegal, c1_illegal, c2_illegal;
+  logic c0_illegal, c1_illegal, c2_illegal;
 
   // ============================================================================
   // C0 Quadrant Decoder (opcode = 2'b00)
@@ -273,14 +248,14 @@ module riscv_compressed_decoder
           2'b00: begin
             // C.SRLI: srli rd', rd', shamt
             c1_instr = gen_i_type({7'b0, get_shamt()}, rs1_prime, FUNCT3_SRL, rs1_prime, OPCODE_OPIMM);
-            if (instr_i[12]) c1_illegal = 1'b1;    // shamt[5] must be 0 for RV32
+            if (instr_i[12]) c1_illegal = 1'b1;  // shamt[5] must be 0 for RV32
             if (get_shamt() == 5'b0) c1_illegal = 1'b1;  // shamt=0 is reserved
           end
 
           2'b01: begin
             // C.SRAI: srai rd', rd', shamt
             c1_instr = gen_i_type({FUNCT7_SUB, get_shamt()}, rs1_prime, FUNCT3_SRL, rs1_prime, OPCODE_OPIMM);
-            if (instr_i[12]) c1_illegal = 1'b1;    // shamt[5] must be 0 for RV32
+            if (instr_i[12]) c1_illegal = 1'b1;  // shamt[5] must be 0 for RV32
             if (get_shamt() == 5'b0) c1_illegal = 1'b1;  // shamt=0 is reserved
           end
 
@@ -291,7 +266,9 @@ module riscv_compressed_decoder
 
           2'b11: begin
             // Register-register operations
-            case ({instr_i[12], instr_i[6:5]})
+            case ({
+              instr_i[12], instr_i[6:5]
+            })
               3'b000: begin
                 // C.SUB: sub rd', rd', rs2'
                 c1_instr = gen_r_type(FUNCT7_SUB, rs2_prime, rs1_prime, FUNCT3_ADD, rs1_prime, OPCODE_OP);
