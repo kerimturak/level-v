@@ -55,28 +55,28 @@ module alu
   // ------------------------------------------------------------
   // Ortak sinyaller
   // ------------------------------------------------------------
-  logic    [XLEN-1:0] abs_A;
-  logic    [XLEN-1:0] abs_B;
+  logic    [  XLEN-1:0] abs_A;
+  logic    [  XLEN-1:0] abs_B;
 
-  logic               mul_type;
-  logic               div_type;
+  logic                 mul_type;
+  logic                 div_type;
 
   // signed/unsigned için ayrı sign bitleri
-  logic               mul_sign;       // çarpımın işareti
-  logic               div_sign_quot;  // bölümün işareti (DIV)
-  logic               div_sign_rem;   // kalanın işareti (REM)
+  logic                 mul_sign;  // çarpımın işareti
+  logic                 div_sign_quot;  // bölümün işareti (DIV)
+  logic                 div_sign_rem;  // kalanın işareti (REM)
 
-  logic               mul_start;
-  logic               div_start;
+  logic                 mul_start;
+  logic                 div_start;
 
-  logic    [XLEN-1:0] mul_op_A;
-  logic    [XLEN-1:0] mul_op_B;
-  logic    [XLEN-1:0] div_op_A;
-  logic    [XLEN-1:0] div_op_B;
+  logic    [  XLEN-1:0] mul_op_A;
+  logic    [  XLEN-1:0] mul_op_B;
+  logic    [  XLEN-1:0] div_op_A;
+  logic    [  XLEN-1:0] div_op_B;
 
   logic    [2*XLEN-1:0] product;
-  logic    [XLEN-1:0]   quotient;
-  logic    [XLEN-1:0]   remainder;
+  logic    [  XLEN-1:0] quotient;
+  logic    [  XLEN-1:0] remainder;
 
   logic                 mul_stall;
   logic                 div_stall;
@@ -87,27 +87,27 @@ module alu
   logic                 div_valid;
 
   logic    [2*XLEN-1:0] unsigned_prod;
-  logic    [XLEN-1:0]   unsigned_quo;
-  logic    [XLEN-1:0]   unsigned_rem;
+  logic    [  XLEN-1:0] unsigned_quo;
+  logic    [  XLEN-1:0] unsigned_rem;
 
   logic                 mul_done;
   logic                 div_done;
   logic                 div_dbz;
 
   // sonrasında RISC-V kurallarına göre düzeltilmiş bölüm/kalan
-  logic [XLEN-1:0]      div_quot_final;
-  logic [XLEN-1:0]      div_rem_final;
+  logic    [  XLEN-1:0] div_quot_final;
+  logic    [  XLEN-1:0] div_rem_final;
 
   // ------------------------------------------------------------
   // Ortak abs ve type hesapları
   // ------------------------------------------------------------
   always_comb begin
     // Mutlak değerler (signed için)
-    abs_A = alu_a_i[XLEN-1] ? ~alu_a_i + 1'b1 : alu_a_i;
-    abs_B = alu_b_i[XLEN-1] ? ~alu_b_i + 1'b1 : alu_b_i;
+    abs_A         = alu_a_i[XLEN-1] ? ~alu_a_i + 1'b1 : alu_a_i;
+    abs_B         = alu_b_i[XLEN-1] ? ~alu_b_i + 1'b1 : alu_b_i;
 
-    mul_type = (op_sel_i inside {[OP_MUL : OP_MULHU]});
-    div_type = (op_sel_i inside {[OP_DIV : OP_REMU]});
+    mul_type      = (op_sel_i inside {[OP_MUL : OP_MULHU]});
+    div_type      = (op_sel_i inside {[OP_DIV : OP_REMU]});
 
     // Varsayılanlar
     mul_sign      = 1'b0;
@@ -115,10 +115,10 @@ module alu
     div_sign_rem  = 1'b0;
 
     // Varsayılan operandlar
-    mul_op_A = abs_A;
-    mul_op_B = abs_B;
-    div_op_A = abs_A;
-    div_op_B = abs_B;
+    mul_op_A      = abs_A;
+    mul_op_B      = abs_B;
+    div_op_A      = abs_A;
+    div_op_B      = abs_B;
 
     // ------------------------
     // MUL / MULH / MULHSU / MULHU
@@ -126,8 +126,7 @@ module alu
     if (mul_type) begin
       unique case (op_sel_i)
         // rs1, rs2 signed → sign = rs1^rs2
-        OP_MUL,
-        OP_MULH: begin
+        OP_MUL, OP_MULH: begin
           mul_op_A = abs_A;
           mul_op_B = abs_B;
           mul_sign = alu_a_i[XLEN-1] ^ alu_b_i[XLEN-1];
@@ -135,8 +134,8 @@ module alu
 
         // rs1 signed, rs2 unsigned → sign = rs1[MSB]
         OP_MULHSU: begin
-          mul_op_A = abs_A;          // |rs1|
-          mul_op_B = alu_b_i;        // rs2 zaten unsigned
+          mul_op_A = abs_A;  // |rs1|
+          mul_op_B = alu_b_i;  // rs2 zaten unsigned
           mul_sign = alu_a_i[XLEN-1];
         end
 
@@ -161,17 +160,15 @@ module alu
     if (div_type) begin
       unique case (op_sel_i)
         // rs1, rs2 signed
-        OP_DIV,
-        OP_REM: begin
+        OP_DIV, OP_REM: begin
           div_op_A      = abs_A;
           div_op_B      = abs_B;
-          div_sign_quot = alu_a_i[XLEN-1] ^ alu_b_i[XLEN-1]; // quotient sign
-          div_sign_rem  = alu_a_i[XLEN-1];                   // remainder sign = sign(rs1)
+          div_sign_quot = alu_a_i[XLEN-1] ^ alu_b_i[XLEN-1];  // quotient sign
+          div_sign_rem  = alu_a_i[XLEN-1];  // remainder sign = sign(rs1)
         end
 
         // rs1, rs2 unsigned → sign yok
-        OP_DIVU,
-        OP_REMU: begin
+        OP_DIVU, OP_REMU: begin
           div_op_A      = alu_a_i;
           div_op_B      = alu_b_i;
           div_sign_quot = 1'b0;
@@ -193,16 +190,16 @@ module alu
 
     // ÇARPMA sign düzeltmesi (two's complement)
     // unsigned_prod = |opA| * |opB| / veya unsigned*unsigned
-    product = mul_sign ? -unsigned_prod : unsigned_prod;
+    product   = mul_sign ? -unsigned_prod : unsigned_prod;
 
     // BÖLME sign düzeltmesi (two's complement) — sadece signed ops için
     quotient  = div_sign_quot ? -unsigned_quo : unsigned_quo;
-    remainder = div_sign_rem  ? -unsigned_rem : unsigned_rem;
+    remainder = div_sign_rem ? -unsigned_rem : unsigned_rem;
 
     // Stall mantığı (senin mantığını koruyorum)
-    mul_stall   = (mul_type && !mul_valid) || (mul_valid && mul_start);
-    div_stall   = (div_type && !div_valid) || (div_valid && div_start);
-    div_stall   &= !div_dbz;
+    mul_stall = (mul_type && !mul_valid) || (mul_valid && mul_start);
+    div_stall = (div_type && !div_valid) || (div_valid && div_start);
+    div_stall &= !div_dbz;
     alu_stall_o = mul_stall || div_stall;
   end
 
@@ -210,16 +207,15 @@ module alu
   // Stall register
   // ------------------------------------------------------------
   always_ff @(posedge clk_i) begin
-    if (!rst_ni)
-      alu_stall_q <= 1'b0;
-    else
-      alu_stall_q <= alu_stall_o;
+    if (!rst_ni) alu_stall_q <= 1'b0;
+    else alu_stall_q <= alu_stall_o;
   end
 
   // ------------------------------------------------------------
   // Multiplication unit
+  // Select one: FEAT_WALLACE_SINGLE, FEAT_WALLACE_MULTI, FEAT_DSP_MUL
   // ------------------------------------------------------------
-`ifdef WALLACE_SINGLE_CYCLE
+`ifdef FEAT_WALLACE_SINGLE
 
   assign mul_valid = 1'b1;
   assign mul_busy  = 1'b0;
@@ -234,7 +230,7 @@ module alu
       .c(unsigned_prod)
   );
 
-`elsif DSP_MUL
+`elsif FEAT_DSP_MUL
 
   always_comb begin
     unsigned_prod = mul_op_A * mul_op_B;
@@ -266,17 +262,17 @@ module alu
   divu_int #(
       .WIDTH(32)
   ) divu_int_inst (
-      .clk_i      (clk_i),
-      .rst_ni     (rst_ni),
-      .start_i    (div_start),
-      .busy_o     (div_busy),
-      .done_o     (div_done),
-      .valid_o    (div_valid),
-      .dbz_o      (div_dbz),
-      .dividend_i (div_op_A),
-      .divisor_i  (div_op_B),
-      .quotient_o (unsigned_quo),
-      .reminder_o (unsigned_rem)
+      .clk_i     (clk_i),
+      .rst_ni    (rst_ni),
+      .start_i   (div_start),
+      .busy_o    (div_busy),
+      .done_o    (div_done),
+      .valid_o   (div_valid),
+      .dbz_o     (div_dbz),
+      .dividend_i(div_op_A),
+      .divisor_i (div_op_B),
+      .quotient_o(unsigned_quo),
+      .reminder_o(unsigned_rem)
   );
 
   // ------------------------------------------------------------
@@ -286,16 +282,12 @@ module alu
     // QUOTIENT
     if (div_dbz) begin
       // DIV/DIVU by zero → quotient = -1 (0xFFFFFFFF)
-      if (op_sel_i inside {OP_DIV, OP_DIVU})
-        div_quot_final = 32'hFFFF_FFFF;
-      else
-        div_quot_final = unsigned_quo; // undefined; çok önemli değil
-    end
-    else if (op_sel_i == OP_DIVU || op_sel_i == OP_REMU) begin
+      if (op_sel_i inside {OP_DIV, OP_DIVU}) div_quot_final = 32'hFFFF_FFFF;
+      else div_quot_final = unsigned_quo;  // undefined; çok önemli değil
+    end else if (op_sel_i == OP_DIVU || op_sel_i == OP_REMU) begin
       // Unsigned ops
       div_quot_final = unsigned_quo;
-    end
-    else begin
+    end else begin
       // Signed DIV
       div_quot_final = quotient;
     end
@@ -304,12 +296,10 @@ module alu
     if (div_dbz) begin
       // DIV/REM by zero → remainder = rs1 (spec)
       div_rem_final = alu_a_i;
-    end
-    else if (op_sel_i == OP_DIVU || op_sel_i == OP_REMU) begin
+    end else if (op_sel_i == OP_DIVU || op_sel_i == OP_REMU) begin
       div_rem_final = unsigned_rem;
-    end
-    else begin
-      div_rem_final = remainder; // sign(rs1) ile düzeltilmiş
+    end else begin
+      div_rem_final = remainder;  // sign(rs1) ile düzeltilmiş
     end
   end
 
@@ -330,41 +320,41 @@ module alu
     rslt.LUI    = alu_b_i;
 
     // MULTIPLY sonuçları
-    rslt.MUL    = product[31:0];        // low 32 bit
-    rslt.MULH   = product;              // signed×signed (üstten alınacak)
-    rslt.MULHSU = product;              // signed×unsigned
-    rslt.MULHU  = unsigned_prod;        // pure unsigned çarpım
+    rslt.MUL    = product[31:0];  // low 32 bit
+    rslt.MULH   = product;  // signed×signed (üstten alınacak)
+    rslt.MULHSU = product;  // signed×unsigned
+    rslt.MULHU  = unsigned_prod;  // pure unsigned çarpım
 
     // DIV/REM sonuçları
     rslt.DIV    = div_quot_final;
-    rslt.DIVU   = div_dbz ? '1: unsigned_quo;
+    rslt.DIVU   = div_dbz ? '1 : unsigned_quo;
     rslt.REM    = div_rem_final;
     rslt.REMU   = unsigned_rem;
 
     // Sonuç mux
     unique case (op_sel_i)
-      OP_ADD:    alu_o = rslt.ADD;
-      OP_SUB:    alu_o = rslt.SUB;
-      OP_SLL:    alu_o = rslt.SLL;
-      OP_SLT:    alu_o = rslt.SLT;
-      OP_SLTU:   alu_o = rslt.SLTU;
-      OP_XOR:    alu_o = rslt.XOR;
-      OP_SRL:    alu_o = rslt.SRL;
-      OP_SRA:    alu_o = rslt.SRA;
-      OP_OR:     alu_o = rslt.OR;
-      OP_AND:    alu_o = rslt.AND;
+      OP_ADD:  alu_o = rslt.ADD;
+      OP_SUB:  alu_o = rslt.SUB;
+      OP_SLL:  alu_o = rslt.SLL;
+      OP_SLT:  alu_o = rslt.SLT;
+      OP_SLTU: alu_o = rslt.SLTU;
+      OP_XOR:  alu_o = rslt.XOR;
+      OP_SRL:  alu_o = rslt.SRL;
+      OP_SRA:  alu_o = rslt.SRA;
+      OP_OR:   alu_o = rslt.OR;
+      OP_AND:  alu_o = rslt.AND;
 
       OP_MUL:    alu_o = rslt.MUL;
       OP_MULH:   alu_o = rslt.MULH[2*XLEN-1:XLEN];
       OP_MULHSU: alu_o = rslt.MULHSU[2*XLEN-1:XLEN];
       OP_MULHU:  alu_o = rslt.MULHU[2*XLEN-1:XLEN];
 
-      OP_DIV:    alu_o = rslt.DIV;
-      OP_DIVU:   alu_o = rslt.DIVU;
-      OP_REM:    alu_o = rslt.REM;
-      OP_REMU:   alu_o = rslt.REMU;
+      OP_DIV:  alu_o = rslt.DIV;
+      OP_DIVU: alu_o = rslt.DIVU;
+      OP_REM:  alu_o = rslt.REM;
+      OP_REMU: alu_o = rslt.REMU;
 
-      OP_LUI:    alu_o = rslt.LUI;
+      OP_LUI: alu_o = rslt.LUI;
 
       OP_CSRRW:  alu_o = alu_a_i;
       OP_CSRRS:  alu_o = csr_rdata_i | alu_a_i;
@@ -373,12 +363,12 @@ module alu
       OP_CSRRSI: alu_o = csr_rdata_i | alu_b_i;
       OP_CSRRCI: alu_o = csr_rdata_i & ~alu_b_i;
 
-      default:   alu_o = '0;
+      default: alu_o = '0;
     endcase
 
     // Flags
     zero_o = ($signed(alu_a_i) == $signed(alu_b_i));
-    slt_o  = ($signed(alu_a_i) <  $signed(alu_b_i));
+    slt_o  = ($signed(alu_a_i) < $signed(alu_b_i));
     sltu_o = ($unsigned(alu_a_i) < $unsigned(alu_b_i));
   end
 

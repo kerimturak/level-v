@@ -206,7 +206,7 @@ module gshare_bp
   // ============================================================================
   ras #(
       .RAS_SIZE(RAS_SIZE)
-  ) ras (
+  ) i_ras (
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
       .restore_i    (restore),
@@ -268,9 +268,10 @@ module gshare_bp
   end
 
   // ============================================================================
-  // BRANCH PREDICTION LOGGER (ifdef ile açılır)
+  // BRANCH PREDICTION LOGGER
+  // Enable with: +define+LOG_BP
   // ============================================================================
-`ifdef BP_LOGGER_EN
+`ifdef LOG_BP
   // İstatistik sayaçları
   logic [63:0] total_branches;
   logic [63:0] correct_predictions;
@@ -435,7 +436,8 @@ module gshare_bp
   end
 
   // Real-time misprediction log (opsiyonel, çok verbose)
-`ifdef BP_VERBOSE_LOG
+  // Enable with: +define+LOG_BP_VERBOSE
+`ifdef LOG_BP_VERBOSE
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       // nothing
@@ -444,7 +446,7 @@ module gshare_bp
                ex_info_i.spec.taken ? "NOT_TAKEN" : "TAKEN", pc_target_i);
     end
   end
-`endif
-`endif
+`endif  // LOG_BP_VERBOSE
+`endif  // LOG_BP
 
 endmodule

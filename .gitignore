@@ -9,4 +9,4 @@ build
 tests
 results
 *.tmp
-*.cmdscript/config/verilator.local.json
+coremark

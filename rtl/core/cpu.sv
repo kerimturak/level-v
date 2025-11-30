@@ -39,7 +39,7 @@ module cpu
   instr_type_e              fe_instr_type;
   logic                     fencei_flush;
   logic         [XLEN-1:0]  flush_pc;
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
   fe_tracer_info_t fe_tracer;
 `endif
   logic                  fe_trap_active;
@@ -87,7 +87,7 @@ module cpu
   logic                  ex_valid_csr;
   logic       [XLEN-1:0] ex_trap_cause;
   logic       [XLEN-1:0] ex_trap_mepc;
-    `ifdef TRACER_EN
+    `ifdef COMMIT_TRACER
   logic       [XLEN-1:0] ex_csr_wr_data;
     `endif
   data_req_t ex_data_req;
@@ -135,7 +135,7 @@ module cpu
   fetch #(
       .RESET_VECTOR(RESET_VECTOR)
   ) fetch (
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
       .fe_tracer_o  (fe_tracer),
 `endif
       .clk_i        (clk_i),
@@ -182,7 +182,7 @@ module cpu
       pipe1 <= '{exc_type: NO_EXCEPTION, instr_type: instr_invalid, default: 0};
     end else if (de_enable) begin
       pipe1 <= '{
-      `ifdef TRACER_EN
+      `ifdef COMMIT_TRACER
         fe_tracer: fe_tracer,
       `endif
         pc      : fe_pc, pc_incr : fe_pc_incr, inst : fe_inst, exc_type: fe_active_exc_type, instr_type : fe_instr_type, spec: fe_spec};
@@ -255,7 +255,7 @@ module cpu
       pipe2 <= '{instr_type: instr_invalid, alu_ctrl: OP_ADD, pc_sel: NO_BJ, default: 0};
     end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL})) begin
       pipe2 <= '{
-        `ifdef TRACER_EN
+        `ifdef COMMIT_TRACER
             fe_tracer   : pipe1.fe_tracer,
         `endif
           pc           : pipe1.pc,
@@ -330,7 +330,7 @@ module cpu
   end
 
   execution execution (
-    `ifdef TRACER_EN
+    `ifdef COMMIT_TRACER
       .csr_wr_data_o(ex_csr_wr_data),
     `endif
       .clk_i        (clk_i),
@@ -420,10 +420,14 @@ module cpu
   
   always_ff @(posedge clk_i) begin
     if (!rst_ni || priority_flush == 3) begin
+      `ifdef COMMIT_TRACER
       pipe3 <= '{instr_type:instr_invalid, default: 0};
+      `else
+      pipe3 <= '0;
+      `endif
     end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active)) begin
       pipe3 <= '{
-        `ifdef TRACER_EN
+        `ifdef COMMIT_TRACER
           fe_tracer    : pipe2.fe_tracer,
           rd_en_csr    : ex_rd_csr,
           wr_en_csr    : ex_valid_csr & ex_wr_csr,
@@ -493,10 +497,14 @@ module cpu
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
+      `ifdef COMMIT_TRACER
       pipe4 <= '{instr_type:instr_invalid, default: 0};
+      `else
+      pipe4 <= '0;
+      `endif
     end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active)) begin
       pipe4 <= '{
-        `ifdef TRACER_EN
+        `ifdef COMMIT_TRACER
           fe_tracer   : pipe3.fe_tracer,
           wr_en       : pipe3.wr_en,
           rw_size     : pipe3.rw_size,
@@ -520,7 +528,7 @@ module cpu
   end
 
   writeback writeback (
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
       .fe_tracer_i     (pipe4.fe_tracer),
       .wr_en_i         (pipe4.wr_en),
       .rw_size_i       (pipe4.rw_size),
@@ -620,8 +628,11 @@ module cpu
     unique case (ex_exc_type)
       ILLEGAL_INSTRUCTION: begin
         // EX aşamasında illegal yakalıyorsan, buradaki inst'i kullan
-        // pipe2.fe_tracer.inst yerine doğrudan EX inst sinyalin varsa onu koy.
+        `ifdef COMMIT_TRACER
         trap_tval = pipe2.fe_tracer.inst;
+        `else
+        trap_tval = '0; // COMMIT_TRACER kapalıysa instruction bilgisi yok
+        `endif
       end
       LOAD_MISALIGNED,
       STORE_MISALIGNED: begin
@@ -668,7 +679,9 @@ module cpu
 
   end
 
-`ifdef KONATA_TRACE
-  pipeline_logger pipeline_logger_inst ();
+  // Pipeline visualizer (KONATA format)
+  // Enable with: +define+KONATA_TRACER
+`ifdef KONATA_TRACER
+  konata_logger i_konata_logger ();
 `endif
 endmodule

@@ -48,69 +48,141 @@ VERILATOR_THREADS  ?= $(shell nproc 2>/dev/null || echo 4)
 BUILD_JOBS         ?= $(VERILATOR_THREADS)
 
 # -----------------------------------------
-# Verilator Defines
+# Verilator Defines (New naming convention)
 # -----------------------------------------
-ifeq ($(TEST_TYPE),bench)
-  SV_DEFINES += +define+CERES_UART_TX_MONITOR
+
+# ===========================================
+# LOG CONTROLS (LOG_XXX=1 to enable)
+# ===========================================
+
+# Commit trace (Spike-compatible) - LOG_COMMIT=1
+ifeq ($(LOG_COMMIT),1)
+  SV_DEFINES += +define+LOG_COMMIT
 endif
 
-# Branch Predictor Logger - aktivasyon: BP_LOG=1
-ifeq ($(BP_LOG),1)
-  SV_DEFINES += +define+BP_LOGGER_EN
+# Pipeline trace (KONATA format) - LOG_PIPELINE=1
+ifeq ($(LOG_PIPELINE),1)
+  SV_DEFINES += +define+LOG_PIPELINE
 endif
 
-# Verbose BP Logger - aktivasyon: BP_VERBOSE=1
-ifeq ($(BP_VERBOSE),1)
-  SV_DEFINES += +define+BP_LOGGER_EN +define+BP_VERBOSE_LOG
+# RAM init messages - LOG_RAM=1
+ifeq ($(LOG_RAM),1)
+  SV_DEFINES += +define+LOG_RAM
 endif
 
-# Coverage mode - aktivasyon: COVERAGE=1
-ifeq ($(COVERAGE),1)
+# UART file logging - LOG_UART=1
+ifeq ($(LOG_UART),1)
+  SV_DEFINES += +define+LOG_UART
+endif
+
+# Branch Predictor stats - LOG_BP=1
+ifeq ($(LOG_BP),1)
+  SV_DEFINES += +define+LOG_BP
+endif
+
+# Verbose BP logging - LOG_BP_VERBOSE=1
+ifeq ($(LOG_BP_VERBOSE),1)
+  SV_DEFINES += +define+LOG_BP +define+LOG_BP_VERBOSE
+endif
+
+# ===========================================
+# TRACE CONTROLS
+# ===========================================
+
+# KONATA pipeline visualizer - KONATA_TRACER=1
+ifeq ($(KONATA_TRACER),1)
+  SV_DEFINES += +define+KONATA_TRACER
+endif
+
+# ===========================================
+# SIMULATION CONTROLS
+# ===========================================
+
+# Fast simulation mode - SIM_FAST=1
+ifeq ($(SIM_FAST),1)
+  SV_DEFINES += +define+SIM_FAST
+  TRACE_FLAGS :=
+  TRACE_DEFINE :=
+endif
+
+# UART monitoring + auto-stop - SIM_UART_MONITOR=1
+ifeq ($(SIM_UART_MONITOR),1)
+  SV_DEFINES += +define+SIM_UART_MONITOR
+endif
+
+# Coverage collection - SIM_COVERAGE=1
+ifeq ($(SIM_COVERAGE),1)
   COVERAGE_FLAGS := --coverage --coverage-line --coverage-toggle
-  SV_DEFINES += +define+COVERAGE_EN
+  SV_DEFINES += +define+SIM_COVERAGE
 else
   COVERAGE_FLAGS :=
 endif
 
-# VPI support - aktivasyon: VPI=1
+# ===========================================
+# BACKWARD COMPATIBILITY (old names)
+# ===========================================
+
+# BP_LOG -> LOG_BP
+ifeq ($(BP_LOG),1)
+  SV_DEFINES += +define+LOG_BP
+endif
+
+# BP_VERBOSE -> LOG_BP_VERBOSE  
+ifeq ($(BP_VERBOSE),1)
+  SV_DEFINES += +define+LOG_BP +define+LOG_BP_VERBOSE
+endif
+
+# FAST_SIM -> SIM_FAST
+ifeq ($(FAST_SIM),1)
+  SV_DEFINES += +define+SIM_FAST
+  TRACE_FLAGS :=
+  TRACE_DEFINE :=
+endif
+
+# COVERAGE -> SIM_COVERAGE
+ifeq ($(COVERAGE),1)
+  COVERAGE_FLAGS := --coverage --coverage-line --coverage-toggle
+  SV_DEFINES += +define+SIM_COVERAGE
+endif
+
+# Auto-enable for benchmark tests
+ifeq ($(TEST_TYPE),bench)
+  SV_DEFINES += +define+SIM_UART_MONITOR
+endif
+
+# ===========================================
+# OTHER FLAGS
+# ===========================================
+
+# VPI support - VPI=1
 ifeq ($(VPI),1)
   VPI_FLAGS := --vpi
 else
   VPI_FLAGS :=
 endif
 
-# Hierarchical build for large designs - aktivasyon: HIERARCHICAL=1
+# Hierarchical build - HIERARCHICAL=1
 ifeq ($(HIERARCHICAL),1)
   HIER_FLAGS := --hierarchical
 else
   HIER_FLAGS :=
 endif
 
-# Fast simulation mode - disable all loggers for speed
-ifeq ($(FAST_SIM),1)
-  SV_DEFINES += +define+FAST_SIM
-  SV_DEFINES += +define+NO_COMMIT_TRACE
-  SV_DEFINES += +define+NO_PIPELINE_LOG
-  SV_DEFINES += +define+NO_RAM_LOG
-  SV_DEFINES += +define+NO_UART_LOG
-  VERILATOR_DEFINE = $(SV_DEFINES)
-  # Disable tracing in fast mode
-  TRACE_FLAGS :=
-  TRACE_DEFINE :=
-else
-  # Normal mode with tracing
+# Setup trace flags if not in fast mode
+ifndef TRACE_FLAGS
   TRACE_FLAGS := --trace-fst --trace-structs --trace-params
-  TRACE_DEFINE := +define+KONATA_TRACE +define+VM_TRACE_FST
-  VERILATOR_DEFINE = $(TRACE_DEFINE) $(SV_DEFINES)
+  TRACE_DEFINE := +define+VM_TRACE_FST
 endif
 
-# Trace depth control - limit signal hierarchy depth
+VERILATOR_DEFINE = $(TRACE_DEFINE) $(SV_DEFINES)
+
+# Trace depth control
 TRACE_DEPTH ?= 99
 ifneq ($(TRACE_FLAGS),)
   TRACE_FLAGS += --trace-depth $(TRACE_DEPTH)
 endif
 
-# Multi-threaded FST writing for faster waveform dumps
+# Multi-threaded FST writing
 ifeq ($(TRACE_THREADS),1)
   TRACE_FLAGS += --trace-threads 2
 endif

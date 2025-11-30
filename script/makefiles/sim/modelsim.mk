@@ -117,7 +117,7 @@ VLOG_LINT_FULL_OPTS := $(MODELSIM_SV_MODE) $(MODELSIM_MFCU) \
 VSIM_FLAGS_BASE := -t $(MODELSIM_TIME_RES) -voptargs=$(MODELSIM_VOPTARGS) \
                    $(MODELSIM_NOTIMINGCHECKS) $(MODELSIM_NOSPECIFY) \
                    $(MODELSIM_DELAY_MODE) \
-                   +define+TRACER_EN=1 +test_name=$(TEST_NAME) \
+                   +define+COMMIT_TRACER=1 +test_name=$(TEST_NAME) \
                    +sim=modelsim +define+KONATA_TRACE $(SV_DEFINES) \
                    +simulator=modelsim $(MODELSIM_QUIET)
 

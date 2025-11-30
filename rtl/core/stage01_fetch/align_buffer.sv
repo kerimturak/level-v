@@ -448,17 +448,4 @@ module align_buffer
 
   end
 
-`ifdef ALIGN_LOGGER
-  // Disable with +define+ALIGN_LOGGER (default off)
-  initial begin
-    $display("[align_buffer] LowX response monitor initialized at time %0t", $time);
-  end
-
-  always @(posedge clk_i) begin
-    if (lowX_res_i.valid) begin
-      $display("[%0t] lowX_res_i.valid=1 | blk = %h", $time, lowX_res_i.blk);
-    end
-  end
-`endif
-
 endmodule

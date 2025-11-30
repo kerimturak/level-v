@@ -8,7 +8,7 @@
 //   3. Register writeback
 //   4. No-write instruction
 // 
-// Use +define+NO_COMMIT_TRACE or FAST_SIM=1 to disable for faster simulation
+// Enable with: +define+LOG_COMMIT
 // ============================================================================
 
 // Define SOC path based on top module name
@@ -18,7 +18,7 @@
   `define SOC tb_wrapper.ceres_wrapper.soc
 `endif
 
-`ifndef NO_COMMIT_TRACE
+`ifdef LOG_COMMIT
 
 integer trace_fd;
 string  trace_path;
@@ -189,7 +189,7 @@ final begin
   if (trace_fd != 0) $fclose(trace_fd);
 end
 
-`endif // NO_COMMIT_TRACE
+`endif // LOG_COMMIT
 
 // ==========================================================
 // PASS/FAIL Address Detector (from per-test addr.txt file)
@@ -198,7 +198,7 @@ end
 // ==========================================================
 
 string addr_file;
-`ifdef NO_COMMIT_TRACE
+`ifndef LOG_COMMIT
 string test_name;  // Needed for legacy check below
 `endif
 logic [31:0] pass_addr, fail_addr;
@@ -245,7 +245,7 @@ initial begin
 end
 
 // Writeback veya memory stage içinde:
-`ifndef CERES_UART_TX_MONITOR
+`ifndef SIM_UART_MONITOR
 always_comb begin
   if (addr_check_enabled && pc_i == pass_addr && pass_addr != 32'h0) begin
     $display("🎯 PASS address reached at PC=0x%08h", pc_i);

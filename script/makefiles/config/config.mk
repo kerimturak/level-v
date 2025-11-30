@@ -78,6 +78,12 @@ include $(dir $(lastword $(MAKEFILE_LIST)))colors.mk
 include $(dir $(lastword $(MAKEFILE_LIST)))profiles.mk
 
 # -----------------------------------------
+# Test Configuration (JSON-based)
+# -----------------------------------------
+# Merkezi test konfigürasyonu - TEST_TYPE'a göre otomatik yüklenir
+include $(dir $(lastword $(MAKEFILE_LIST)))test_config.mk
+
+# -----------------------------------------
 # OS Detection
 # -----------------------------------------
 SHELL := /bin/bash

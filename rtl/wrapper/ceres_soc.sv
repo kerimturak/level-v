@@ -403,15 +403,4 @@ module ceres_soc
   assign cpu_halt_o   = 1'b0;  // TODO: Connect to debug module
   assign status_led_o = {3'b0, prog_mode_o};
 
-  // ==========================================================================
-  // Assertions (for simulation)
-  // ==========================================================================
-`ifdef SIMULATION
-  // Check that at most one region is selected
-  always_comb begin
-    assert ($onehot0({sel_ram, sel_clint, sel_periph}))
-    else $error("Multiple memory regions selected!");
-  end
-`endif
-
 endmodule

@@ -1,5 +1,5 @@
 // ============================================================================
-// Ceres Pipeline Logger — Kanata v0004
+// Ceres Pipeline Logger — KONATA v0004
 //  - Front (F/D) ve Back (X/M/Wb) için ayrı advance mantığı
 //  - Stage başı:  S
 //  - Stage sonu:  E
@@ -11,15 +11,15 @@
 //      * stall_cycles=N   (instr pipeline'da toplam kaç cycle stall gördü)
 //      * mem_latency=N    (LOAD/STORE için M stage'de kaç cycle bekledi)
 //
-// Disable with +define+NO_PIPELINE_LOG or FAST_SIM=1
+// Enable with: +define+KONATA_TRACER
 // ============================================================================
 
 `timescale 1ns / 1ps
 `include "ceres_defines.svh"
 
-`ifndef NO_PIPELINE_LOG
+`ifdef KONATA_TRACER
 
-module pipeline_logger;
+module konata_logger;
 
   integer fd;
   string  log_path;
@@ -34,18 +34,18 @@ module pipeline_logger;
   // Dosya açma & header
   // ----------------------------------------------------------------------------
   initial begin
-    if (!$value$plusargs("log_path=%s", log_path)) log_path = "/home/kerim/github/riscv/ceres-riscv/results/logs/rtl/ceres.kanata";
+    if (!$value$plusargs("log_path=%s", log_path)) log_path = "/home/kerim/github/riscv/ceres-riscv/results/logs/rtl/ceres.KONATA";
 
     void'($system($sformatf("mkdir -p $(dirname %s)", log_path)));
 
     fd = $fopen(log_path, "w");
     if (fd == 0) begin
-      $display("❌ [pipeline_logger] Cannot open %s", log_path);
+      $display("❌ [konata_logger] Cannot open %s", log_path);
       $finish;
     end
 
-    $fwrite(fd, "Kanata\t0004\n");
-    $display("✅ [pipeline_logger] Started: %s", log_path);
+    $fwrite(fd, "KONATA\t0004\n");
+    $display("✅ [konata_logger] Started: %s", log_path);
   end
 
   // ----------------------------------------------------------------------------
@@ -399,11 +399,11 @@ module pipeline_logger;
   // ----------------------------------------------------------------------------
   final begin
     if (fd != 0) begin
-      $display("✅ [pipeline_logger] File: %s  Cycles: %0d", log_path, cycle_cnt);
+      $display("✅ [konata_logger] File: %s  Cycles: %0d", log_path, cycle_cnt);
       $fclose(fd);
     end
   end
 
 endmodule
 
-`endif  // NO_PIPELINE_LOG
+`endif  // KONATA_TRACER

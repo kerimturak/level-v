@@ -14,7 +14,7 @@ module fetch
 #(
     parameter RESET_VECTOR = 32'h8000_0000
 ) (
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
     output fe_tracer_info_t            fe_tracer_o,
 `endif
     input  logic                       clk_i,
@@ -227,7 +227,7 @@ module fetch
   // Physical Memory Attributes (PMA) Module: Bellek bölgesinin özelliklerini
   // belirler (cached/uncached, erişim izni vb.)
   // ============================================================================
-  pma ipma (
+  pma i_pma (
       .addr_i     (pc_o),
       .uncached_o (uncached),
       .memregion_o(memregion),  // TODO:Şu an kullanılmıyor
@@ -237,7 +237,7 @@ module fetch
   // ============================================================================
   // Branch Prediction Unit: Dallanma tahminlerini yapar (GShare algoritması)
   // ============================================================================
-  gshare_bp branch_prediction (
+  gshare_bp i_gshare_bp (
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
       .spec_hit_i   (spec_hit_i),
@@ -256,7 +256,7 @@ module fetch
   // Align Buffer: Misaligned instruction'ları hizalar ve compressed
   // instruction desteği sağlar
   // ============================================================================
-  align_buffer align_buffer (
+  align_buffer i_align_buffer (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
       .flush_i   (flush_i),
@@ -282,7 +282,7 @@ module fetch
       .BLK_SIZE   (BLK_SIZE),
       .XLEN       (XLEN),
       .NUM_WAY    (IC_WAY)
-  ) icache (
+  ) i_cache (
       .clk_i         (clk_i),
       .rst_ni        (rst_ni),
       .flush_i       (flush_i),
@@ -304,47 +304,7 @@ module fetch
       .illegal_instr_o(illegal_instr)
   );
 
-`ifdef FETCH_LOGGER
-  // Simple fetch-stage logger to aid cross-simulator comparison (ModelSim vs Verilator)
-  // Enable with +define+FETCH_LOGGER and optionally set path with +fetch_log=/path/to/log
-  string  fetch_trace_path;
-  integer fetch_fd;
-  string  simulator;
-  string  test_name;
-
-  initial begin
-    // Try to get an explicit path from plusargs
-    if (!$value$plusargs("fetch_log=%s", fetch_trace_path)) begin
-      // Fallback to results/logs/<sim>/<test>/fetch_trace.log using plusargs if provided
-      if (!$value$plusargs("simulator=%s", simulator)) simulator = "sim";
-      if (!$value$plusargs("test_name=%s", test_name)) test_name = "unknown_test";
-      fetch_trace_path = $sformatf("results/logs/%0s/%0s/fetch_trace.log", simulator, test_name);
-    end
-
-    // Ensure directory exists (system call) and open file
-    void'($system($sformatf("mkdir -p %s", $sformatf("results/logs/%0s/%0s", simulator, test_name))));
-    fetch_fd = $fopen(fetch_trace_path, "w");
-    if (fetch_fd == 0) begin
-      $display("[FETCH_LOGGER] Failed to open fetch log: %s", fetch_trace_path);
-    end else begin
-      $display("[FETCH_LOGGER] Logging fetches to %s", fetch_trace_path);
-      $fwrite(fetch_fd, "#time,pc,raw_inst,is_compressed\n");
-    end
-  end
-
-  // Log when buffer response is valid (an instruction is delivered to pipeline)
-  always_ff @(posedge clk_i) begin
-    if (fetch_fd != 0 && buff_res.valid) begin
-      $fwrite(fetch_fd, "%0t,0x%08h,0x%08h,%0d\n", $time, pc_o, buff_res.blk, is_comp);
-    end
-  end
-
-  final begin
-    if (fetch_fd != 0) $fclose(fetch_fd);
-  end
-`endif
-
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
   always_comb begin
     fe_tracer_o.inst = '0;
     if ((stall_i == NO_STALL) && buff_res.valid) begin

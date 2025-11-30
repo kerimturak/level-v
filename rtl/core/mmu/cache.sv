@@ -50,16 +50,16 @@ module cache
   // 2-state simulation may evaluate them in wrong order without this directive.
   // See: docs/verilator/bugs/002_combinational_loop_instruction_corruption.md
   // ============================================================================
-  logic       [IDX_WIDTH-1:0] cache_idx /*verilator split_var*/;
-  logic                       cache_miss /*verilator split_var*/;
-  logic                       cache_hit /*verilator split_var*/;
-  logic       [  NUM_WAY-2:0] updated_node /*verilator split_var*/;
-  logic       [  NUM_WAY-1:0] cache_valid_vec /*verilator split_var*/;
+  logic       [IDX_WIDTH-1:0] cache_idx  /*verilator split_var*/;
+  logic                       cache_miss  /*verilator split_var*/;
+  logic                       cache_hit  /*verilator split_var*/;
+  logic       [  NUM_WAY-2:0] updated_node  /*verilator split_var*/;
+  logic       [  NUM_WAY-1:0] cache_valid_vec  /*verilator split_var*/;
   logic       [  NUM_WAY-1:0] cache_hit_vec;
-  logic       [  NUM_WAY-1:0] evict_way /*verilator split_var*/;
-  logic       [ BLK_SIZE-1:0] cache_select_data /*verilator split_var*/;
-  logic       [  NUM_WAY-1:0] cache_wr_way /*verilator split_var*/;
-  logic                       cache_wr_en /*verilator split_var*/;
+  logic       [  NUM_WAY-1:0] evict_way  /*verilator split_var*/;
+  logic       [ BLK_SIZE-1:0] cache_select_data  /*verilator split_var*/;
+  logic       [  NUM_WAY-1:0] cache_wr_way  /*verilator split_var*/;
+  logic                       cache_wr_en  /*verilator split_var*/;
   logic                       lookup_ack;
 
   // Shared memory structures (used by both caches)
@@ -85,9 +85,9 @@ module cache
   } nsram_t;
 
   // VERILATOR FIX: Struct types also need split_var for circular dependency resolution
-  dsram_t dsram /*verilator split_var*/;
-  tsram_t tsram /*verilator split_var*/;
-  nsram_t nsram /*verilator split_var*/;
+  dsram_t dsram  /*verilator split_var*/;
+  tsram_t tsram  /*verilator split_var*/;
+  nsram_t nsram  /*verilator split_var*/;
 
   typedef struct packed {
     logic [IDX_WIDTH-1:0] idx;
@@ -97,7 +97,7 @@ module cache
     logic [NUM_WAY-1:0]   rdirty;
   } drsram_t;
 
-  drsram_t                drsram /*verilator split_var*/;
+  drsram_t                drsram  /*verilator split_var*/;
 
   // Additional wires for dcache writeback, mask data, etc.
   logic    [BLK_SIZE-1:0] mask_data;
@@ -142,7 +142,7 @@ module cache
     sp_bram #(
         .DATA_WIDTH(BLK_SIZE),
         .NUM_SETS  (NUM_SET)
-    ) data_array (
+    ) i_data_array (
         .clk    (clk_i),
         .chip_en(1'b1),
         .addr   (dsram.idx),
@@ -156,7 +156,7 @@ module cache
     sp_bram #(
         .DATA_WIDTH(TAG_SIZE + 1),
         .NUM_SETS  (NUM_SET)
-    ) tag_array (
+    ) i_tag_array (
         .clk    (clk_i),
         .chip_en(1'b1),
         .addr   (tsram.idx),
@@ -169,7 +169,7 @@ module cache
   sp_bram #(
       .DATA_WIDTH(NUM_WAY - 1),
       .NUM_SETS  (NUM_SET)
-  ) node_array (
+  ) i_node_array (
       .clk    (clk_i),
       .chip_en(1'b1),
       .addr   (nsram.idx),

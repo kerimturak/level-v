@@ -88,7 +88,7 @@ module wrapper_ram
 
   initial begin
     if ($value$plusargs("INIT_FILE=%s", init_file)) begin
-`ifndef NO_RAM_LOG
+`ifdef LOG_RAM
       $display("┌────────────────────────────────────────────────────┐");
       $display("│            RAM INITIALIZATION                      │");
       $display("├────────────────────────────────────────────────────┤");
@@ -104,11 +104,11 @@ module wrapper_ram
       end
       $fclose(fd);
       $readmemh(init_file, ram, 0, RAM_DEPTH - 1);
-`ifndef NO_RAM_LOG
+`ifdef LOG_RAM
       $display("[INFO] Memory loaded successfully.");
 `endif
     end else begin
-`ifndef NO_RAM_LOG
+`ifdef LOG_RAM
       $display("[INFO] No INIT_FILE -> RAM initialized to zero");
 `endif
       ram = '{default: '0};

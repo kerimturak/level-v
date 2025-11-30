@@ -355,7 +355,7 @@ package ceres_param;
     exc_type_e       exc_type;
     instr_type_e     instr_type;
     predict_info_t   spec;
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
 `endif
   } pipe1_t;
@@ -392,7 +392,7 @@ package ceres_param;
     instr_type_e     instr_type;
     predict_info_t   spec;
     logic            dcache_valid;
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
 `endif
   } pipe2_t;
@@ -410,7 +410,7 @@ package ceres_param;
     logic [XLEN-1:0] write_data;
     logic            dcache_valid;
     logic [XLEN-1:0] read_data;
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
     logic            rd_en_csr;
     logic            wr_en_csr;
@@ -428,7 +428,7 @@ package ceres_param;
     logic [4:0]      rd_addr;
     logic [XLEN-1:0] alu_result;
     logic [XLEN-1:0] read_data;
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
     logic            wr_en;
     logic [1:0]      rw_size;

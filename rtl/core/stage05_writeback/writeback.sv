@@ -26,7 +26,7 @@
 module writeback
   import ceres_param::*;
 (
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
     input  fe_tracer_info_t            fe_tracer_i,
     input  logic                       wr_en_i,
     input  logic            [     1:0] rw_size_i,
@@ -58,7 +58,7 @@ module writeback
     wb_data_o  = data_sel_i[1] ? pc_incr_i : (data_sel_i[0] ? read_data_i : alu_result_i);
   end
 
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
   `include "writeback_log.svh"
 `endif
 

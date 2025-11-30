@@ -12,7 +12,7 @@ TOP_LEVEL     ?= $(RTL_LEVEL)
 # -----------------------------------------
 # Logger Source (for Verilator)
 # -----------------------------------------
-LOGGER_SRC    ?= $(RTL_DIR)/tracer/pipeline_logger.sv
+LOGGER_SRC    ?= $(RTL_DIR)/tracer/konata_logger.sv
 
 # -----------------------------------------
 # RTL Source Files

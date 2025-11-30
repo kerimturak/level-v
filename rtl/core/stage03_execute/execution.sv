@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 module execution
   import ceres_param::*;
 (
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
     output logic        [XLEN-1:0] csr_wr_data_o,
 `endif
     input  logic                   clk_i,
@@ -120,7 +120,7 @@ module execution
 
   assign alu_result_o = rd_data;
 
-`ifdef TRACER_EN
+`ifdef COMMIT_TRACER
   always_comb begin
     if (instr_type_i == mret) begin
       // cs_reg_file içindeki pack_mstatus sonucu loglanmalı

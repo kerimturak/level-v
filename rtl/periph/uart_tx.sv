@@ -95,10 +95,10 @@ module uart_tx #(  // counter
   // ============================================================================
   // UART OUTPUT FILE LOGGER
   // Logs each character written to UART TX to a file (uart_output.log)
-  // Disabled when NO_UART_LOG is defined (for FAST_SIM mode)
+  // Enable with: +define+LOG_UART
   // ============================================================================
 
-`ifndef NO_UART_LOG
+`ifdef LOG_UART
   integer uart_fd;
   string  uart_log_path;
 
@@ -128,14 +128,15 @@ module uart_tx #(  // counter
       $fclose(uart_fd);
     end
   end
-`endif
+`endif  // LOG_UART
 
   // ============================================================================
   // SIMULATION MONITORING BLOCK (Optional - for threshold-based termination)
   // Dumps UART TX buffer contents as ASCII and stops simulation when threshold met
+  // Enable with: +define+SIM_UART_MONITOR
   // ============================================================================
 
-`ifdef CERES_UART_TX_MONITOR
+`ifdef SIM_UART_MONITOR
   logic   [7:0] shadow_buf    [0:4095];  // 4KB buffer for longer outputs
   integer       shadow_wr_ptr;
   parameter int MONITOR_THRESHOLD = 2000;  // Wait for more output before stopping
@@ -167,6 +168,6 @@ module uart_tx #(  // counter
       end
     end
   end
-`endif
+`endif  // SIM_UART_MONITOR
 
 endmodule
