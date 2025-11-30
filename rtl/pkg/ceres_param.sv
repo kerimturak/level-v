@@ -727,6 +727,7 @@ package ceres_param;
       12'h7A1: csr_name = "tdata1";  // read-zero
       12'h7A2: csr_name = "tdata2";  // read-zero
       12'h7A3: csr_name = "tdata3";  // read-zero
+      12'h7A5: csr_name = "tcontrol";  // trigger control
 
       default: csr_name = $sformatf("csr_%03h", idx);
     endcase

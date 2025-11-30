@@ -62,7 +62,7 @@ module execution
   logic        [XLEN-1:0] csr_rdata;
   logic        [XLEN-1:0] mepc;
   logic                   misa_c;
-  
+
   assign misa_c_o = misa_c;
 
   always_comb begin
@@ -154,6 +154,8 @@ module execution
       .instr_type_i    (instr_type_i),
       .mtvec_o         (mtvec_o),
       .mepc_o          (mepc),
-      .misa_c_o        (misa_c)
+      .misa_c_o        (misa_c),
+      .tdata1_o        (),  // Trigger outputs - not used yet
+      .tdata2_o        ()   // Breakpoint address - not used yet
   );
 endmodule

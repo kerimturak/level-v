@@ -26,7 +26,7 @@ module fetch
     input  logic            [XLEN-1:0] pc_target_i,
     input  logic            [XLEN-1:0] ex_mtvec_i,
     input  logic                       trap_active_i,
-    input  logic                       misa_c_i,        // C extension enabled
+    input  logic                       misa_c_i,       // C extension enabled
     input  logic                       spec_hit_i,
     output predict_info_t              spec_o,
     output ilowX_req_t                 lx_ireq_o,

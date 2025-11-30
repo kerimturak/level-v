@@ -30,7 +30,10 @@ module cs_reg_file
     input  logic        [XLEN-1:0] trap_tval_i,
     output logic        [XLEN-1:0] mtvec_o,
     output logic        [XLEN-1:0] mepc_o,
-    output logic                   misa_c_o
+    output logic                   misa_c_o,
+    // Trigger/Debug outputs for hardware breakpoint
+    output logic        [XLEN-1:0] tdata1_o,
+    output logic        [XLEN-1:0] tdata2_o
 );
 
   /*
@@ -194,6 +197,7 @@ module cs_reg_file
   logic     [XLEN-1:0] pmpaddr0;
   logic     [XLEN-1:0] tcontrol_reg;  // Trigger control register
   logic     [XLEN-1:0] tdata1_reg;    // Trigger data 1 register
+  logic     [XLEN-1:0] tdata2_reg;    // Trigger data 2 register (breakpoint address)
   // ============================================================================
   // OUTPUT ASSIGNMENTS
   // ============================================================================
@@ -203,6 +207,9 @@ module cs_reg_file
     // mtvec write bypass (benchmark için)
     mtvec_o  = (csr_idx_i == 12'h305 && wr_en_i && de_trap_active_i) ? csr_wdata_i : mtvec;
     mepc_o   = mepc;
+    // Trigger outputs for hardware breakpoint detection
+    tdata1_o = tdata1_reg;
+    tdata2_o = tdata2_reg;
   end
 
   // ============================================================================
@@ -231,6 +238,7 @@ module cs_reg_file
       pmpaddr0  <= '0;
       tcontrol_reg <= '0;
       tdata1_reg <= 32'h20000044;  // Default: mcontrol type
+      tdata2_reg <= '0;
 
     end else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
       
@@ -315,9 +323,9 @@ module cs_reg_file
           //PMPCFG0,
           //PMPADDR0,
           TSELECT,
-          TDATA2,
           TDATA3: ;  // No-op
           TDATA1:   tdata1_reg <= csr_wdata_i;  // Trigger data 1 (writable)
+          TDATA2:   tdata2_reg <= csr_wdata_i;  // Trigger data 2 (breakpoint address)
           TCONTROL: tcontrol_reg <= csr_wdata_i;  // Trigger control (writable)
           PMPCFG0:  pmpcfg0  <= csr_wdata_i;  // şimdilik düz RW
           PMPADDR0: pmpaddr0 <= csr_wdata_i;  // şimdilik düz RW
@@ -378,10 +386,10 @@ module cs_reg_file
         //PMPCFG0,
         //PMPADDR0,
         TSELECT,
-        TDATA2,
         TDATA3: csr_rdata_o = 32'd0;
         // tdata1: Return written value (writable trigger data)
         TDATA1:   csr_rdata_o = tdata1_reg;
+        TDATA2:   csr_rdata_o = tdata2_reg;  // Breakpoint address
         TCONTROL: csr_rdata_o = tcontrol_reg;  // Return written value
         PMPCFG0:  csr_rdata_o = pmpcfg0;
         PMPADDR0: csr_rdata_o = pmpaddr0;
