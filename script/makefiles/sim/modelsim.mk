@@ -207,21 +207,24 @@ compile_lint: $(WORK_DIR)
 
 # ============================================================
 # Lint — Full lint analysis with detailed report
+# Output: results/lint/modelsim/
 # ============================================================
+MODELSIM_LINT_DIR := $(LINT_DIR)/modelsim
+
 lint_modelsim: $(WORK_DIR)
 	@echo -e "$(YELLOW)[MODELSIM LINT ANALYSIS]$(RESET)"
-	@$(MKDIR) "$(LOG_DIR)/modelsim"
+	@$(MKDIR) "$(MODELSIM_LINT_DIR)"
 	@echo -e "$(CYAN)[INFO]$(RESET) Lint Mode: $(MODELSIM_LINT_MODE)"
-	@echo -e "$(CYAN)[INFO]$(RESET) Log: $(LOG_DIR)/modelsim/lint.log"
+	@echo -e "$(CYAN)[INFO]$(RESET) Output: $(MODELSIM_LINT_DIR)/"
 	@($(VLOG) $(VLOG_LINT_FULL_OPTS) \
-		$(SV_SOURCES) 2>&1 | tee "$(LOG_DIR)/modelsim/lint.log"); \
+		$(SV_SOURCES) 2>&1 | tee "$(MODELSIM_LINT_DIR)/lint.log"); \
 	echo ""; \
 	echo -e "$(CYAN)════════════════════════════════════════$(RESET)"; \
 	echo -e "$(CYAN)        ModelSim Lint Summary$(RESET)"; \
 	echo -e "$(CYAN)════════════════════════════════════════$(RESET)"; \
-	ERR=$$(grep -c "^\\*\\* Error" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null) || ERR=0; \
-	WARN=$$(grep -c "^\\*\\* Warning" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null) || WARN=0; \
-	NOTE=$$(grep -c "^\\*\\* Note" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null) || NOTE=0; \
+	ERR=$$(grep -c "^\\*\\* Error" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null) || ERR=0; \
+	WARN=$$(grep -c "^\\*\\* Warning" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null) || WARN=0; \
+	NOTE=$$(grep -c "^\\*\\* Note" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null) || NOTE=0; \
 	if [ "$$ERR" != "0" ]; then \
 		echo -e "  $(RED)Errors:   $$ERR$(RESET)"; \
 	else \
@@ -236,13 +239,14 @@ lint_modelsim: $(WORK_DIR)
 		echo -e "  $(CYAN)Notes:    $$NOTE$(RESET)"; \
 	fi; \
 	echo -e "$(CYAN)════════════════════════════════════════$(RESET)"; \
-	echo ""
+	echo -e "  Log: $(MODELSIM_LINT_DIR)/lint.log"; \
+	echo -e "$(CYAN)════════════════════════════════════════$(RESET)"
 
 # ============================================================
 # Lint Report — Categorized lint findings
 # ============================================================
 lint_report_modelsim:
-	@if [ ! -f "$(LOG_DIR)/modelsim/lint.log" ]; then \
+	@if [ ! -f "$(MODELSIM_LINT_DIR)/lint.log" ]; then \
 		echo -e "$(RED)[ERROR]$(RESET) No lint log found. Run 'make lint_modelsim' first."; \
 		exit 1; \
 	fi
@@ -251,23 +255,23 @@ lint_report_modelsim:
 	@echo -e "$(CYAN)════════════════════════════════════════════════════════════$(RESET)"
 	@echo ""
 	@echo -e "$(RED)═══ ERRORS ═══$(RESET)"
-	@grep "^\\*\\* Error" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null || echo "  None"
+	@grep "^\\*\\* Error" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null || echo "  None"
 	@echo ""
 	@echo -e "$(YELLOW)═══ WARNINGS (by category) ═══$(RESET)"
 	@echo -e "$(YELLOW)--- Width Issues ---$(RESET)"
-	@grep -i "width" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null | head -20 || echo "  None"
+	@grep -i "width" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null | head -20 || echo "  None"
 	@echo ""
 	@echo -e "$(YELLOW)--- Unconnected/Unused ---$(RESET)"
-	@grep -iE "unconnected|unused|undriven" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null | head -20 || echo "  None"
+	@grep -iE "unconnected|unused|undriven" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null | head -20 || echo "  None"
 	@echo ""
 	@echo -e "$(YELLOW)--- Timing Issues ---$(RESET)"
-	@grep -iE "timing|delay|latch" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null | head -20 || echo "  None"
+	@grep -iE "timing|delay|latch" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null | head -20 || echo "  None"
 	@echo ""
 	@echo -e "$(YELLOW)--- Case/Default ---$(RESET)"
-	@grep -iE "case|default" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null | head -20 || echo "  None"
+	@grep -iE "case|default" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null | head -20 || echo "  None"
 	@echo ""
 	@echo -e "$(CYAN)═══ NOTES ═══$(RESET)"
-	@grep "^\\*\\* Note" "$(LOG_DIR)/modelsim/lint.log" 2>/dev/null | head -10 || echo "  None"
+	@grep "^\\*\\* Note" "$(MODELSIM_LINT_DIR)/lint.log" 2>/dev/null | head -10 || echo "  None"
 	@echo ""
 	@echo -e "$(CYAN)════════════════════════════════════════════════════════════$(RESET)"
 

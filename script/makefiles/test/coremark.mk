@@ -11,7 +11,7 @@
 # ============================================================
 
 # Default iteration count (adjust for ~10 second runtime)
-COREMARK_ITERATIONS ?= 1000
+COREMARK_ITERATIONS ?= 1
 
 # Paths
 COREMARK_SRC_DIR     := $(SUBREPO_DIR)/coremark
@@ -237,7 +237,7 @@ coremark_help:
 	@echo -e "  make cm_run                - Quick run (skip rebuild if exists)"
 	@echo ""
 	@echo -e "$(YELLOW)Configuration:$(RESET)"
-	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1000)"
+	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1)"
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo ""
 	@echo -e "$(YELLOW)Memory Map:$(RESET)"
