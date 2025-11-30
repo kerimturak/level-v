@@ -1,0 +1,22 @@
+{
+  "$schema": "./tests.schema.json",
+  "_comment": "CoreMark benchmark",
+  "extends": "default",
+  "test_list": "sim/test/coremark_test_list.flist",
+  "simulation": {
+    "max_cycles": 50000000,
+    "timeout_seconds": 30
+  },
+
+  "defines": {
+    "COMMIT_TRACER": true,
+    "TRACE_KONATA": false,
+    "LOG_COMMIT": true,
+    "LOG_RAM": false,
+    "LOG_UART": false,
+    "LOG_BP": true,
+    "SIM_FAST": false,
+    "SIM_UART_MONITOR": false
+  }
+  "defines": { "LOG_COMMIT": false, "TRACE_KONATA": false, "SIM_FAST": true, "SIM_UART_MONITOR": true }
+}

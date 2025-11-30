@@ -1,0 +1,202 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CERES RISC-V Test Configuration",
+  "description": "Configuration schema for test suites",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "_comment": { "type": "string" },
+    "_description": { "type": "string" },
+
+    "test_list": {
+      "type": "string",
+      "description": "Path to the test list file (.flist) relative to project root"
+    },
+
+    "simulation": {
+      "type": "object",
+      "properties": {
+        "max_cycles": { 
+          "type": "integer", 
+          "minimum": 1,
+          "description": "Maximum simulation cycles before timeout"
+        },
+        "timeout_seconds": { 
+          "type": "integer", 
+          "minimum": 0,
+          "description": "Wall-clock timeout in seconds (0 = disabled)"
+        },
+        "parallel_jobs": {
+          "oneOf": [{"type": "integer", "minimum": 1}, {"const": "auto"}],
+          "description": "Number of parallel test jobs"
+        }
+      }
+    },
+
+    "comparison": {
+      "type": "object",
+      "description": "RTL vs Spike comparison settings",
+      "properties": {
+        "enabled": { 
+          "type": "boolean",
+          "description": "Enable RTL vs Spike comparison"
+        },
+        "use_pass_fail_addr": { 
+          "type": "boolean",
+          "description": "Use pass/fail address detection (NO_ADDR=0 when true)"
+        },
+        "spike_enabled": {
+          "type": "boolean",
+          "description": "Run Spike golden model"
+        }
+      }
+    },
+
+    "defines": {
+      "type": "object",
+      "description": "SystemVerilog `define macros to enable",
+      "properties": {
+        "SIM_FAST": { 
+          "type": "boolean",
+          "description": "Fast simulation mode (disables all logs)"
+        },
+        "LOG_COMMIT": { 
+          "type": "boolean",
+          "description": "Enable Spike-compatible commit trace"
+        },
+        "LOG_PIPELINE": { 
+          "type": "boolean",
+          "description": "Enable Kanata pipeline trace"
+        },
+        "LOG_RAM": { 
+          "type": "boolean",
+          "description": "Enable RAM initialization messages"
+        },
+        "LOG_UART": { 
+          "type": "boolean",
+          "description": "Enable UART TX file logging"
+        },
+        "LOG_BP": { 
+          "type": "boolean",
+          "description": "Enable branch predictor statistics"
+        },
+        "LOG_BP_VERBOSE": { 
+          "type": "boolean",
+          "description": "Enable per-branch verbose logging"
+        },
+        "TRACE_KANATA": { 
+          "type": "boolean",
+          "description": "Enable Kanata pipeline visualizer"
+        },
+        "TRACE_INTERNAL": { 
+          "type": "boolean",
+          "description": "Enable internal debug signals"
+        },
+        "SIM_UART_MONITOR": { 
+          "type": "boolean",
+          "description": "UART monitoring + auto-stop (for benchmarks)"
+        },
+        "SIM_COVERAGE": { 
+          "type": "boolean",
+          "description": "Enable coverage collection"
+        }
+      },
+      "additionalProperties": { "type": "boolean" }
+    },
+
+    "trace": {
+      "type": "object",
+      "description": "Waveform tracing settings",
+      "properties": {
+        "enabled": { 
+          "type": "boolean",
+          "description": "Enable waveform tracing"
+        },
+        "format": { 
+          "enum": ["fst", "vcd"],
+          "description": "Trace file format"
+        },
+        "depth": { 
+          "type": "integer", 
+          "minimum": 1,
+          "description": "Signal hierarchy depth to trace"
+        }
+      }
+    },
+
+    "logging": {
+      "type": "object",
+      "description": "Runtime logging configuration",
+      "properties": {
+        "commit_trace": { 
+          "type": "boolean",
+          "description": "Log committed instructions"
+        },
+        "pipeline_log": { 
+          "type": "boolean",
+          "description": "Log pipeline stages"
+        },
+        "ram_log": { 
+          "type": "boolean",
+          "description": "Log memory accesses"
+        },
+        "uart_log": { 
+          "type": "boolean",
+          "description": "Log UART transactions"
+        },
+        "bp_log": { 
+          "type": "boolean",
+          "description": "Log branch predictions"
+        },
+        "verbose": { 
+          "type": "boolean",
+          "description": "Enable verbose output"
+        }
+      }
+    },
+
+    "build": {
+      "type": "object",
+      "description": "Build/compilation settings",
+      "properties": {
+        "mode": { 
+          "enum": ["debug", "release", "profile"],
+          "description": "Build optimization mode"
+        },
+        "opt_level": { 
+          "enum": ["-O0", "-O1", "-O2", "-O3"],
+          "description": "Compiler optimization level"
+        },
+        "rebuild": { 
+          "type": "boolean",
+          "description": "Force rebuild before running tests"
+        }
+      }
+    },
+
+    "report": {
+      "type": "object",
+      "description": "Test reporting settings",
+      "properties": {
+        "html_report": { 
+          "type": "boolean",
+          "description": "Generate HTML test report"
+        },
+        "save_logs": { 
+          "type": "boolean",
+          "description": "Preserve log files after test"
+        },
+        "save_waveform": { 
+          "type": "boolean",
+          "description": "Preserve waveform files after test"
+        }
+      }
+    },
+
+    "extends": {
+      "type": "string",
+      "description": "Inherit from another config file (e.g., 'default')"
+    }
+  },
+  "additionalProperties": false
+}

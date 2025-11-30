@@ -341,8 +341,8 @@ module gshare_bp
         if (spec_hit_i) ibtc_correct <= ibtc_correct + 1;
       end
 
-      // BTB/Branch istatistikleri
-      if (ex_info_i.spec.spectype == BRANCH) begin
+      // Conditional Branch istatistikleri (BEQ, BNE, BLT, BGE, BLTU, BGEU)
+      if (ex_info_i.bjtype inside {BEQ, BNE, BLT, BGE, BLTU, BGEU}) begin
         if (spec_hit_i) begin
           btb_hits <= btb_hits + 1;
         end else begin
@@ -415,9 +415,10 @@ module gshare_bp
       $fwrite(bp_log_file, "  JALR Correct: %0d (%.2f%%)\n", jalr_correct, jalr_count > 0 ? (real'(jalr_correct) * 100.0 / real'(jalr_count)) : 0.0);
       $fwrite(bp_log_file, "  - RAS Predictions : %0d (%.2f%% accurate)\n", ras_predictions, ras_predictions > 0 ? (real'(ras_correct) * 100.0 / real'(ras_predictions)) : 0.0);
       $fwrite(bp_log_file, "  - IBTC Predictions: %0d (%.2f%% accurate)\n", ibtc_predictions, ibtc_predictions > 0 ? (real'(ibtc_correct) * 100.0 / real'(ibtc_predictions)) : 0.0);
-      $fwrite(bp_log_file, "\nConditional Branch Statistics:\n");
-      $fwrite(bp_log_file, "  Branch Hits  : %0d\n", btb_hits);
-      $fwrite(bp_log_file, "  Branch Misses: %0d\n", btb_misses);
+      $fwrite(bp_log_file, "\nConditional Branch (BEQ/BNE/BLT/BGE/BLTU/BGEU):\n");
+      $fwrite(bp_log_file, "  Total    : %0d\n", btb_hits + btb_misses);
+      $fwrite(bp_log_file, "  Correct  : %0d (%.2f%%)\n", btb_hits, (btb_hits + btb_misses) > 0 ? (real'(btb_hits) * 100.0 / real'(btb_hits + btb_misses)) : 0.0);
+      $fwrite(bp_log_file, "  Mispred  : %0d (%.2f%%)\n", btb_misses, (btb_hits + btb_misses) > 0 ? (real'(btb_misses) * 100.0 / real'(btb_hits + btb_misses)) : 0.0);
       $fclose(bp_log_file);
     end
 
@@ -432,6 +433,7 @@ module gshare_bp
     $display("JALR : %0d total, %0d correct (%.2f%%)", jalr_count, jalr_correct, jalr_count > 0 ? (real'(jalr_correct) * 100.0 / real'(jalr_count)) : 0.0);
     $display("  RAS : %0d (%.2f%% accurate)", ras_predictions, ras_predictions > 0 ? (real'(ras_correct) * 100.0 / real'(ras_predictions)) : 0.0);
     $display("  IBTC: %0d (%.2f%% accurate)", ibtc_predictions, ibtc_predictions > 0 ? (real'(ibtc_correct) * 100.0 / real'(ibtc_predictions)) : 0.0);
+    $display("BRANCH: %0d total, %0d correct (%.2f%%)", btb_hits + btb_misses, btb_hits, (btb_hits + btb_misses) > 0 ? (real'(btb_hits) * 100.0 / real'(btb_hits + btb_misses)) : 0.0);
     $display("========================================\n");
   end
 

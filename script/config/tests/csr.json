@@ -1,0 +1,21 @@
+{
+  "$schema": "./tests.schema.json",
+  "_comment": "CSR register tests",
+  "extends": "default",
+  "test_list": "sim/test/csr_test_list.flist",
+  "simulation": {
+    "max_cycles": 10000,
+    "timeout_seconds": 30
+  },
+
+  "defines": {
+    "COMMIT_TRACER": true,
+    "TRACE_KONATA": true,
+    "LOG_COMMIT": true,
+    "LOG_RAM": false,
+    "LOG_UART": false,
+    "LOG_BP": true,
+    "SIM_FAST": false,
+    "SIM_UART_MONITOR": false
+  }
+}

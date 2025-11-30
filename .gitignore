@@ -6,7 +6,7 @@ wlf*
 *.vstf
 *.txt
 build
-tests
+/tests
 results
 *.tmp
 coremark

@@ -1,0 +1,34 @@
+{
+  "$schema": "./tests.schema.json",
+  "_comment": "CERES RISC-V Default Test Configuration",
+
+  "simulation": {
+    "max_cycles": 10000,
+    "timeout_seconds": 60
+  },
+
+  "comparison": {
+    "enabled": true,
+    "spike_enabled": true
+  },
+
+  "defines": {
+    "COMMIT_TRACER": true,
+    "KONATA_TRACER": true,
+    "LOG_COMMIT": true,
+    "LOG_RAM": false,
+    "LOG_UART": false,
+    "LOG_BP": false,
+    "SIM_FAST": false,
+    "SIM_UART_MONITOR": false
+  },
+
+  "trace": {
+    "enabled": true,
+    "format": "fst"
+  },
+
+  "build": {
+    "mode": "debug"
+  }
+}
