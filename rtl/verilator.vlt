@@ -1,0 +1,53 @@
+`verilator_config
+
+// Align Buffer Combinational Loops
+lint_off -rule UNOPTFLAT -file "*/align_buffer.sv" -match "*even*"
+lint_off -rule UNOPTFLAT -file "*/align_buffer.sv" -match "*odd*"
+lint_off -rule UNOPTFLAT -file "*/align_buffer.sv" -match "*miss_state*"
+lint_off -rule UNOPTFLAT -file "*/align_buffer.sv" -match "*hit_state*"
+lint_off -rule UNOPTFLAT -file "*/align_buffer.sv" -match "*word_sel*"
+lint_off -rule UNOPTFLAT -file "*/align_buffer.sv" -match "*half_sel*"
+
+// Cache Combinational Loops
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*cache_select_data*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*cache_idx*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*cache_hit*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*cache_miss*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*cache_wr_way*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*evict_way*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*evict_data*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*cache_valid_vec*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*dsram*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*tsram*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*drsram*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*updated_node*"
+lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*fi_active*"
+
+// CPU Top-Level Signal Loops
+lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_pc*"
+lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_inst*"
+lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_spec*"
+lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_exc_type*"
+lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_imiss_stall*"
+lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*ex_spec_hit*"
+lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*de_active_exc_type*"
+
+// Fetch Stage Combinational Loops
+lint_off -rule UNOPTFLAT -file "*/fetch.sv" -match "*buff_res*"
+lint_off -rule UNOPTFLAT -file "*/fetch.sv" -match "*icache_res*"
+lint_off -rule UNOPTFLAT -file "*/fetch.sv" -match "*icache_req*"
+lint_off -rule UNOPTFLAT -file "*/fetch.sv" -match "*buff_lowX_res*"
+
+// Execution Stage - ALU Combinational Loops
+lint_off -rule UNOPTFLAT -file "*/execution.sv" -match "*ex_zero*"
+lint_off -rule UNOPTFLAT -file "*/execution.sv" -match "*ex_slt*"
+lint_off -rule UNOPTFLAT -file "*/execution.sv" -match "*ex_sltu*"
+lint_off -rule UNOPTFLAT -file "*/execution.sv" -match "*operant_a*"
+
+// Wallace Tree Multiplier Combinational Loops
+lint_off -rule UNOPTFLAT -file "*/dadda.sv" -match "*"
+lint_off -rule UNOPTFLAT -file "*/fa.sv" -match "*"
+lint_off -rule UNOPTFLAT -file "*/ha.sv" -match "*"
+lint_off -rule UNOPTFLAT -file "*/mul.sv" -match "*"
+lint_off -rule UNOPTFLAT -file "*/alu.sv" -match "*mul_op_*"
+lint_off -rule UNOPTFLAT -file "*/alu.sv" -match "*unsigned_prod*"

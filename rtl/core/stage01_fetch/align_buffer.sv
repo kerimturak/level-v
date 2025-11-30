@@ -53,10 +53,16 @@ module align_buffer
     logic [PARCEL_BITS-1:0]                    parcel;
     logic [PARCEL_BITS-1:0]                    deviceX_parcel;
   } bank_t;
-  bank_t even, odd;
+  // VERILATOR FIX: split_var directive helps Verilator optimize circular 
+  // combinational logic in even/odd structs. Without this, Verilator's 2-state
+  // simulation may evaluate signals in wrong order causing instruction corruption.
+  // See: docs/verilator/bugs/002_combinational_loop_instruction_corruption.md
+  bank_t even /*verilator split_var*/, odd /*verilator split_var*/;
 
-  logic [               1:0] miss_state;
-  logic [               1:0] hit_state;
+  // VERILATOR FIX: These signals are part of circular dependency chain.
+  // split_var helps break the UNOPTFLAT warning cycle.
+  logic [               1:0] miss_state /*verilator split_var*/;
+  logic [               1:0] hit_state /*verilator split_var*/;
   logic [     IDX_WIDTH-1:0] wr_idx;
   logic                      tag_wr_en;
   logic                      data_wr_en;
@@ -64,8 +70,10 @@ module align_buffer
   logic [   PARCEL_BITS-1:0] ebram                                                                                 [NUM_PARCELS/2-1:0] [NUM_SET-1:0];
   logic [   PARCEL_BITS-1:0] obram                                                                                 [NUM_PARCELS/2-1:0] [NUM_SET-1:0];
   logic [        TAG_SIZE:0] tag_ram                                                                               [      NUM_SET-1:0];
-  logic [WORD_SEL_WIDTH-1:0] word_sel;
-  logic                      half_sel;
+  // VERILATOR FIX: word_sel and half_sel are used in dynamic array indexing
+  // which creates circular paths in Verilator's analysis.
+  logic [WORD_SEL_WIDTH-1:0] word_sel /*verilator split_var*/;
+  logic                      half_sel /*verilator split_var*/;
   logic                      overflow;  // Overflow flag when unaligned access causes index wrap-around
   logic                      unalign;  // Signal indicating an unaligned access (instruction spans two cache lines)
   logic [      TAG_SIZE-1:0] tag_plus1;
@@ -210,19 +218,61 @@ module align_buffer
   // Even bank (ebram): stores lower 16-bits of each word  (E0, E1, E2, E3)
   // Odd bank (obram):  stores upper 16-bits of each word  (O0, O1, O2, O3)
   // ============================================================================
+  
+  // Intermediate signals to break combinational loops for Verilator
+  logic [PARCEL_BITS-1:0] even_parcel_sel;
+  logic [PARCEL_BITS-1:0] odd_parcel_sel;
+  logic [PARCEL_BITS-1:0] even_deviceX_sel;
+  logic [PARCEL_BITS-1:0] odd_deviceX_sel;
+  logic [WORD_SEL_WIDTH:0] parcel_idx;  // word_sel + half_sel
+  
   always_comb begin : PARCEL_SELECT
-    // For unaligned access (addr = 0x...E), even parcel comes from next cache line's first parcel
-    // For normal access, even parcel is selected by word_sel + half_sel
-    even.parcel = unalign ? even.rd_parcel[0] : even.rd_parcel[word_sel+half_sel];
-
-    // Odd parcel always from current word
-    odd.parcel = odd.rd_parcel[word_sel];
+    // Calculate parcel index (for even bank selection)
+    parcel_idx = {1'b0, word_sel} + {2'b0, half_sel};
+    
+    // Even parcel selection - use case to avoid dynamic indexing issues
+    if (unalign) begin
+      even_parcel_sel = even.rd_parcel[0];
+    end else begin
+      case (parcel_idx[WORD_SEL_WIDTH-1:0])
+        2'd0: even_parcel_sel = even.rd_parcel[0];
+        2'd1: even_parcel_sel = even.rd_parcel[1];
+        2'd2: even_parcel_sel = even.rd_parcel[2];
+        2'd3: even_parcel_sel = even.rd_parcel[3];
+        default: even_parcel_sel = even.rd_parcel[0];
+      endcase
+    end
+    
+    // Odd parcel selection - use case to avoid dynamic indexing issues
+    case (word_sel)
+      2'd0: odd_parcel_sel = odd.rd_parcel[0];
+      2'd1: odd_parcel_sel = odd.rd_parcel[1];
+      2'd2: odd_parcel_sel = odd.rd_parcel[2];
+      2'd3: odd_parcel_sel = odd.rd_parcel[3];
+      default: odd_parcel_sel = odd.rd_parcel[0];
+    endcase
+    
+    // Assign to struct members
+    even.parcel = even_parcel_sel;
+    odd.parcel = odd_parcel_sel;
 
     // Memory response parcels for miss cases
     // odd.deviceX_parcel:  upper 16-bit of selected word from memory response
     // even.deviceX_parcel: for unalign -> first parcel, else -> upper 16-bit of word
-    odd.deviceX_parcel = lowX_res_i.blk[((32'(word_sel)+1)*WORD_BITS)-1-:PARCEL_BITS];
-    even.deviceX_parcel = unalign ? lowX_res_i.blk[PARCEL_BITS-1:0] : lowX_res_i.blk[((32'(word_sel)+1)*WORD_BITS)-1-:PARCEL_BITS];
+    case (word_sel)
+      2'd0: odd_deviceX_sel = lowX_res_i.blk[1*WORD_BITS-1-:PARCEL_BITS];
+      2'd1: odd_deviceX_sel = lowX_res_i.blk[2*WORD_BITS-1-:PARCEL_BITS];
+      2'd2: odd_deviceX_sel = lowX_res_i.blk[3*WORD_BITS-1-:PARCEL_BITS];
+      2'd3: odd_deviceX_sel = lowX_res_i.blk[4*WORD_BITS-1-:PARCEL_BITS];
+      default: odd_deviceX_sel = lowX_res_i.blk[1*WORD_BITS-1-:PARCEL_BITS];
+    endcase
+    odd.deviceX_parcel = odd_deviceX_sel;
+    
+    if (unalign) begin
+      even.deviceX_parcel = lowX_res_i.blk[PARCEL_BITS-1:0];
+    end else begin
+      even.deviceX_parcel = odd_deviceX_sel;  // Same as odd for non-unaligned
+    end
   end
 
   // ============================================================================

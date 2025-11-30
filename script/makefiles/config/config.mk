@@ -10,8 +10,42 @@
 # -----------------------------------------
 MODE          ?= debug
 TEST_NAME     ?= rv32ui-p-add
-TEST_TYPE     ?= isa
 SIM_TIME      := 20000ns
+
+# -----------------------------------------
+# Auto-detect TEST_TYPE from TEST_NAME pattern
+# -----------------------------------------
+# Priority: User-specified TEST_TYPE > Auto-detection
+#
+# Detection patterns:
+#   - rv32*-p-*, rv64*-p-*           → isa      (riscv-tests)
+#   - *-01 (e.g., C-ADDI-01)         → arch     (riscv-arch-test)  
+#   - I-*, M-*, A-*, C-*, F-*, D-*   → imperas  (Imperas tests)
+#   - median, dhrystone, coremark    → bench    (benchmarks)
+#
+ifndef TEST_TYPE
+  # Check for riscv-tests ISA pattern: rv32ui-p-add, rv32um-p-mul, etc.
+  ifneq ($(filter rv32%-p-% rv64%-p-% rv32%-v-% rv64%-v-%,$(TEST_NAME)),)
+    TEST_TYPE := isa
+  # Check for arch-test pattern: ends with -01, -02, etc. (e.g., C-ADDI-01)
+  else ifneq ($(filter %-01 %-02 %-03 %-04 %-05,$(TEST_NAME)),)
+    TEST_TYPE := arch
+  # Check for Imperas pattern: starts with I-, M-, A-, C-, F-, D- (uppercase)
+  else ifneq ($(filter I-% M-% A-% C-% F-% D-% Zifencei-%,$(TEST_NAME)),)
+    # Could be arch or imperas - check if it ends with -01 pattern
+    ifneq ($(filter %-01 %-02 %-03,$(TEST_NAME)),)
+      TEST_TYPE := arch
+    else
+      TEST_TYPE := imperas
+    endif
+  # Check for common benchmark names
+  else ifneq ($(filter median dhrystone coremark multiply qsort rsort towers vvadd,$(TEST_NAME)),)
+    TEST_TYPE := bench
+  # Default to ISA if no pattern matches
+  else
+    TEST_TYPE := isa
+  endif
+endif
 SIM           ?= verilator
 GUI           ?= 0
 TRACE         ?= 0

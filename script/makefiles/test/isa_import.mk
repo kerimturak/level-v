@@ -25,13 +25,10 @@ isa_clone:
 		if grep -q "path = $${ISA_ROOT}" .gitmodules 2>/dev/null; then \
 			echo -e "$(YELLOW)[SUBMODULE] riscv-tests found in .gitmodules$(RESET)"; \
 			\
-			echo -e "$(YELLOW)[INIT] git submodule init$(RESET)"; \
-			git submodule init; \
+			echo -e "$(YELLOW)[INIT+UPDATE] git submodule update --init --recursive$(RESET)"; \
+			git submodule update --init --recursive -- "$${ISA_ROOT}"; \
 			\
-			echo -e "$(YELLOW)[UPDATE] git submodule update --recursive$(RESET)"; \
-			git submodule update --recursive; \
-			\
-			echo -e "$(GREEN)[OK] Submodule ready.$(RESET)"; \
+			echo -e "$(GREEN)[OK] Submodule ready (with nested submodules).$(RESET)"; \
 			exit 0; \
 		fi; \
 		\

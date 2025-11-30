@@ -2,10 +2,31 @@
 # CERES RISC-V Test Runner
 # ============================================================
 # Usage:
-#   make run TEST_NAME=median TEST_TYPE=bench
-#   make run TEST_NAME=rv32ui-p-add TEST_TYPE=isa
-#   make run TEST_NAME=I-ADD-01 TEST_TYPE=imperas
+#   make run T=rv32ui-p-add         # Auto-detects TEST_TYPE=isa
+#   make run T=C-ADDI-01            # Auto-detects TEST_TYPE=arch
+#   make run T=median               # Auto-detects TEST_TYPE=bench
+#   make run T=I-ADD-01             # Auto-detects TEST_TYPE=imperas
+#   make run TEST_NAME=xxx TEST_TYPE=yyy  # Manual override
 # ============================================================
+
+# -----------------------------------------
+# File-based TEST_TYPE Auto-detection
+# -----------------------------------------
+# If TEST_TYPE was auto-detected (not user-specified), verify by checking
+# if the test file actually exists in the expected directory.
+# This provides a fallback if pattern matching fails.
+
+define DETECT_TEST_TYPE_FROM_FILES
+$(if $(wildcard $(BUILD_DIR)/tests/riscv-tests/elf/$(TEST_NAME)),isa,\
+$(if $(wildcard $(BUILD_DIR)/tests/riscv-tests/elf/$(TEST_NAME).elf),isa,\
+$(if $(wildcard $(BUILD_DIR)/tests/riscv-arch-test/elf/$(TEST_NAME).elf),arch,\
+$(if $(wildcard $(BUILD_DIR)/tests/imperas/elf/$(TEST_NAME).elf),imperas,\
+$(if $(wildcard $(BUILD_DIR)/tests/riscv-benchmarks/elf/$(TEST_NAME)),bench,\
+$(TEST_TYPE))))))
+endef
+
+# Apply file-based detection as a verification/fallback
+TEST_TYPE := $(strip $(call DETECT_TEST_TYPE_FROM_FILES))
 
 # -----------------------------------------
 # Test Type Based Paths

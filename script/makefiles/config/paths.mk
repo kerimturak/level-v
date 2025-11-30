@@ -21,6 +21,7 @@ WORK_DIR      := $(BUILD_DIR)/work
 OBJ_DIR       := $(BUILD_DIR)/obj_dir
 LOG_DIR       := $(RESULTS_DIR)/logs
 REPORT_DIR    := $(RESULTS_DIR)/reports
+LINT_DIR      := $(RESULTS_DIR)/lint
 
 # -----------------------------------------
 # RTL Paths

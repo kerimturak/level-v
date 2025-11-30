@@ -171,6 +171,74 @@ endif
 		TEST_TYPE=arch \
 		SIM=verilator
 
+# -----------------------------------------
+# Universal Test Shortcut with Auto-Detection
+# -----------------------------------------
+# make test T=<test_name>   - Auto-detects test type and runs with Spike comparison
+# 
+# Detection patterns:
+#   rv32*-p-*, rv64*-p-*  → ISA tests
+#   *-01, *-02, etc.      → Arch tests
+#   I-*, M-*, A-*, C-*    → Could be Imperas or Arch (file-based detection)
+#   median, dhrystone     → Benchmarks
+#
+.PHONY: test
+test:
+ifndef T
+	$(error Usage: make test T=<test_name>  (auto-detects type))
+endif
+	@echo -e "$(CYAN)[AUTO-DETECT]$(RESET) Searching for test: $(T)"
+	@# File-based detection with priority: arch > imperas > isa > bench
+	@if [ -f "$(BUILD_DIR)/tests/riscv-arch-test/elf/$(T).elf" ]; then \
+		echo -e "$(GREEN)[DETECTED]$(RESET) Type: arch (riscv-arch-test)"; \
+		$(MAKE) --no-print-directory run TEST_NAME=$(T) TEST_TYPE=arch; \
+	elif [ -f "$(BUILD_DIR)/tests/imperas/elf/$(T).elf" ]; then \
+		echo -e "$(GREEN)[DETECTED]$(RESET) Type: imperas"; \
+		$(MAKE) --no-print-directory run TEST_NAME=$(T) TEST_TYPE=imperas; \
+	elif [ -f "$(BUILD_DIR)/tests/riscv-tests/elf/$(T)" ]; then \
+		echo -e "$(GREEN)[DETECTED]$(RESET) Type: isa (riscv-tests)"; \
+		$(MAKE) --no-print-directory run TEST_NAME=$(T) TEST_TYPE=isa; \
+	elif [ -f "$(BUILD_DIR)/tests/riscv-benchmarks/elf/$(T)" ]; then \
+		echo -e "$(GREEN)[DETECTED]$(RESET) Type: bench (riscv-benchmarks)"; \
+		$(MAKE) --no-print-directory run TEST_NAME=$(T) TEST_TYPE=bench NO_ADDR=1; \
+	else \
+		echo -e "$(RED)[ERROR]$(RESET) Test '$(T)' not found in any test directory."; \
+		echo -e "$(YELLOW)Searched in:$(RESET)"; \
+		echo -e "  - $(BUILD_DIR)/tests/riscv-arch-test/elf/$(T).elf"; \
+		echo -e "  - $(BUILD_DIR)/tests/imperas/elf/$(T).elf"; \
+		echo -e "  - $(BUILD_DIR)/tests/riscv-tests/elf/$(T)"; \
+		echo -e "  - $(BUILD_DIR)/tests/riscv-benchmarks/elf/$(T)"; \
+		echo -e "$(YELLOW)Available tests:$(RESET)"; \
+		echo -e "  make list_tests    - List all ISA tests"; \
+		echo -e "  make list_arch     - List all arch tests"; \
+		echo -e "  make list_imperas  - List all Imperas tests"; \
+		exit 1; \
+	fi
+
+# Quick version (Verilator only, no Spike comparison)
+.PHONY: qt
+qt:
+ifndef T
+	$(error Usage: make qt T=<test_name>  (quick test, auto-detects type))
+endif
+	@echo -e "$(CYAN)[AUTO-DETECT]$(RESET) Quick test: $(T)"
+	@if [ -f "$(BUILD_DIR)/tests/riscv-arch-test/elf/$(T).elf" ]; then \
+		echo -e "$(GREEN)[DETECTED]$(RESET) Type: arch"; \
+		$(MAKE) --no-print-directory run_verilator TEST_NAME=$(T) TEST_TYPE=arch; \
+	elif [ -f "$(BUILD_DIR)/tests/imperas/elf/$(T).elf" ]; then \
+		echo -e "$(GREEN)[DETECTED]$(RESET) Type: imperas"; \
+		$(MAKE) --no-print-directory run_verilator TEST_NAME=$(T) TEST_TYPE=imperas; \
+	elif [ -f "$(BUILD_DIR)/tests/riscv-tests/elf/$(T)" ]; then \
+		echo -e "$(GREEN)[DETECTED]$(RESET) Type: isa"; \
+		$(MAKE) --no-print-directory run_verilator TEST_NAME=$(T) TEST_TYPE=isa; \
+	elif [ -f "$(BUILD_DIR)/tests/riscv-benchmarks/elf/$(T)" ]; then \
+		echo -e "$(GREEN)[DETECTED]$(RESET) Type: bench"; \
+		$(MAKE) --no-print-directory run_verilator TEST_NAME=$(T) TEST_TYPE=bench NO_ADDR=1; \
+	else \
+		echo -e "$(RED)[ERROR]$(RESET) Test '$(T)' not found."; \
+		exit 1; \
+	fi
+
 # ============================================================
 # REGRESSION TEST SUITES
 # ============================================================

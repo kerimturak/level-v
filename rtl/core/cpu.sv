@@ -30,9 +30,9 @@ module cpu
   logic                     fe_stall;
   ilowX_res_t               fe_lx_ires;
   logic                     fe_imiss_stall;
-  logic          [XLEN-1:0] fe_pc;
+  logic          [XLEN-1:0] fe_pc /*verilator split_var*/;
   logic          [XLEN-1:0] fe_pc_incr;
-  logic          [XLEN-1:0] fe_inst;
+  logic          [XLEN-1:0] fe_inst /*verilator split_var*/;
   predict_info_t            fe_spec;
   exc_type_e                fe_exc_type;
   exc_type_e                fe_active_exc_type;
@@ -76,7 +76,7 @@ module cpu
   logic       [XLEN-1:0] ex_wdata;
   logic                  ex_pc_sel;
   logic                  ex_alu_stall;
-  logic                  ex_spec_hit;
+  logic                  ex_spec_hit /*verilator split_var*/;
   exc_type_e             ex_exc_type;
   exc_type_e             ex_alu_exc_type;
   logic                  ex_rd_csr;

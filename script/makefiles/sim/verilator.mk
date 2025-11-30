@@ -37,6 +37,9 @@ endif
 VERILATOR_LOG_DIR  := $(LOG_DIR)/verilator/$(TEST_NAME)
 VERILATOR_INCLUDES := $(addprefix -I, $(INC_DIRS))
 
+# Waiver file for suppressing known UNOPTFLAT warnings
+VERILATOR_WAIVER   := $(RTL_DIR)/verilator.vlt
+
 # -----------------------------------------
 # Threading Configuration
 # -----------------------------------------
@@ -144,7 +147,10 @@ UNROLL_STMTS       ?= 30000
 
 # X-state handling
 X_ASSIGN           ?= fast
-X_INITIAL          ?= fast
+X_INITIAL          ?= 0
+
+# Use x-initial-edge to better match event-driven simulators
+X_INITIAL_EDGE     ?= 1
 
 # -----------------------------------------
 # Warning Suppressions (organized by category)
@@ -227,13 +233,18 @@ LINT_FLAGS  = --lint-only -Wall -I$(INC_DIRS) --top-module $(RTL_LEVEL)
 RUN_BIN     := $(OBJ_DIR)/V$(RTL_LEVEL)
 
 # Common verilator flags
+# --converge-limit: Allows more iterations for combinational loops
+# --x-initial-edge: Triggers initial blocks on the edge for better compatibility
 VERILATOR_COMMON_FLAGS = \
     --top-module $(RTL_LEVEL) \
     $(VERILATOR_INCLUDES) \
     --timing \
     --x-assign $(X_ASSIGN) \
     --x-initial $(X_INITIAL) \
+    $(if $(filter 1,$(X_INITIAL_EDGE)),--x-initial-edge,) \
+    --converge-limit 100 \
     --error-limit 100 \
+    $(if $(wildcard $(VERILATOR_WAIVER)),$(VERILATOR_WAIVER),) \
     --Mdir $(OBJ_DIR)
 
 # Build-specific flags
@@ -266,12 +277,14 @@ dirs:
 # ============================================================
 # Lint — Full lint check with all warnings enabled
 # ============================================================
-# Log output: $(LOG_DIR)/verilator/lint.log
-# Waiver output: $(LOG_DIR)/verilator/lint_waiver.vlt
+# Log output: $(LINT_DIR)/verilator/lint.log
+# Waiver output: $(LINT_DIR)/verilator/lint_waiver.vlt
+VERILATOR_LINT_DIR := $(LINT_DIR)/verilator
+
 lint: dirs
 	@printf "$(GREEN)[VERILATOR LINT]$(RESET)\n"
-	@mkdir -p "$(LOG_DIR)/verilator"
-	@printf "$(CYAN)[INFO]$(RESET) Log: $(LOG_DIR)/verilator/lint.log\n"
+	@mkdir -p "$(VERILATOR_LINT_DIR)"
+	@printf "$(CYAN)[INFO]$(RESET) Output: $(VERILATOR_LINT_DIR)/\n"
 	-@$(VERILATOR) \
 		$(LINT_FLAGS) $(VERILATOR_INCLUDES) \
 		$(SV_SOURCES) \
@@ -280,34 +293,34 @@ lint: dirs
 		--bbox-unsup \
 		--report-unoptflat \
 		--Mdir "$(OBJ_DIR)" \
-		--waiver-output "$(LOG_DIR)/verilator/lint_waiver.vlt" \
-		2>&1 | tee "$(LOG_DIR)/verilator/lint.log"
+		--waiver-output "$(VERILATOR_LINT_DIR)/lint_waiver.vlt" \
+		2>&1 | tee "$(VERILATOR_LINT_DIR)/lint.log"
 	@echo ""
 	@printf "$(CYAN)════════════════════════════════════════$(RESET)\n"
 	@printf "$(CYAN)  Lint Summary$(RESET)\n"
 	@printf "$(CYAN)════════════════════════════════════════$(RESET)\n"
-	@ERR=$$(grep -c "%Error" "$(LOG_DIR)/verilator/lint.log" 2>/dev/null) || ERR=0; \
+	@ERR=$$(grep -c "%Error" "$(VERILATOR_LINT_DIR)/lint.log" 2>/dev/null) || ERR=0; \
 		if [ "$$ERR" != "0" ] && [ -n "$$ERR" ]; then \
 			printf "  $(RED)Errors:   $$ERR$(RESET)\n"; \
 		else \
 			printf "  $(GREEN)Errors:   0$(RESET)\n"; \
 		fi
-	@WARN=$$(grep -c "%Warning" "$(LOG_DIR)/verilator/lint.log" 2>/dev/null) || WARN=0; \
+	@WARN=$$(grep -c "%Warning" "$(VERILATOR_LINT_DIR)/lint.log" 2>/dev/null) || WARN=0; \
 		if [ "$$WARN" != "0" ] && [ -n "$$WARN" ]; then \
 			printf "  $(YELLOW)Warnings: $$WARN$(RESET)\n"; \
 		else \
 			printf "  $(GREEN)Warnings: 0$(RESET)\n"; \
 		fi
 	@printf "$(CYAN)════════════════════════════════════════$(RESET)\n"
-	@printf "  Log:    $(LOG_DIR)/verilator/lint.log\n"
-	@printf "  Waiver: $(LOG_DIR)/verilator/lint_waiver.vlt\n"
+	@printf "  Log:    $(VERILATOR_LINT_DIR)/lint.log\n"
+	@printf "  Waiver: $(VERILATOR_LINT_DIR)/lint_waiver.vlt\n"
 	@printf "$(CYAN)════════════════════════════════════════$(RESET)\n"
 
 # Lint with detailed report and statistics
 lint-report: dirs
 	@printf "$(GREEN)[VERILATOR LINT REPORT]$(RESET)\n"
-	@mkdir -p "$(LOG_DIR)/verilator"
-	@printf "$(CYAN)[INFO]$(RESET) Log: $(LOG_DIR)/verilator/lint_report.log\n"
+	@mkdir -p "$(VERILATOR_LINT_DIR)"
+	@printf "$(CYAN)[INFO]$(RESET) Log: $(VERILATOR_LINT_DIR)/lint_report.log\n"
 	-@$(VERILATOR) \
 		$(LINT_FLAGS) $(VERILATOR_INCLUDES) \
 		$(SV_SOURCES) \
@@ -318,31 +331,34 @@ lint-report: dirs
 		--report-unoptflat \
 		--Mdir "$(OBJ_DIR)" \
 		--bbox-unsup \
-		2>&1 | tee "$(LOG_DIR)/verilator/lint_report.log"
+		2>&1 | tee "$(VERILATOR_LINT_DIR)/lint_report.log"
 	@echo ""
-	@printf "$(GREEN)[DONE]$(RESET) Report: $(LOG_DIR)/verilator/lint_report.log\n"
+	@printf "$(GREEN)[DONE]$(RESET) Report: $(VERILATOR_LINT_DIR)/lint_report.log\n"
 
 # Lint specific category
 lint-width: dirs
 	@printf "$(GREEN)[LINT: WIDTH WARNINGS]$(RESET)\n"
+	@mkdir -p "$(VERILATOR_LINT_DIR)"
 	-@$(VERILATOR) --lint-only -Wall -Wno-fatal \
 		$(VERILATOR_INCLUDES) $(SV_SOURCES) \
 		--timing --bbox-unsup --Mdir "$(OBJ_DIR)" \
-		--top-module $(RTL_LEVEL) 2>&1 | grep -E "WIDTH|width" || echo "No width issues found"
+		--top-module $(RTL_LEVEL) 2>&1 | tee "$(VERILATOR_LINT_DIR)/lint_width.log" | grep -E "WIDTH|width" || echo "No width issues found"
 
 lint-unused: dirs
 	@printf "$(GREEN)[LINT: UNUSED SIGNALS]$(RESET)\n"
+	@mkdir -p "$(VERILATOR_LINT_DIR)"
 	-@$(VERILATOR) --lint-only -Wall -Wno-fatal \
 		$(VERILATOR_INCLUDES) $(SV_SOURCES) \
 		--timing --bbox-unsup --Mdir "$(OBJ_DIR)" \
-		--top-module $(RTL_LEVEL) 2>&1 | grep -E "UNUSED|UNDRIVEN" || echo "No unused signals found"
+		--top-module $(RTL_LEVEL) 2>&1 | tee "$(VERILATOR_LINT_DIR)/lint_unused.log" | grep -E "UNUSED|UNDRIVEN" || echo "No unused signals found"
 
 lint-loops: dirs
 	@printf "$(GREEN)[LINT: COMBINATIONAL LOOPS]$(RESET)\n"
+	@mkdir -p "$(VERILATOR_LINT_DIR)"
 	-@$(VERILATOR) --lint-only -Wall -Wno-fatal \
 		$(VERILATOR_INCLUDES) $(SV_SOURCES) \
 		--timing --bbox-unsup --report-unoptflat --Mdir "$(OBJ_DIR)" \
-		--top-module $(RTL_LEVEL) 2>&1 | grep -E "UNOPTFLAT|loop|circular" || printf "$(GREEN)No combinational loops found$(RESET)\n"
+		--top-module $(RTL_LEVEL) 2>&1 | tee "$(VERILATOR_LINT_DIR)/lint_loops.log" | grep -E "UNOPTFLAT|loop|circular" || printf "$(GREEN)No combinational loops found$(RESET)\n"
 	@if ls $(OBJ_DIR)/*_unoptflat.dot 1>/dev/null 2>&1; then \
 		printf "$(CYAN)[INFO]$(RESET) Loop diagrams available in $(OBJ_DIR)/*.dot\n"; \
 		printf "$(CYAN)[TIP]$(RESET)  Run 'make lint-loops-view' to generate PDF\n"; \
@@ -351,7 +367,7 @@ lint-loops: dirs
 # View combinational loop diagrams as PDF
 lint-loops-view: lint-loops
 	@printf "$(GREEN)[GENERATING LOOP DIAGRAMS]$(RESET)\n"
-	@mkdir -p "$(LOG_DIR)/verilator/loops"
+	@mkdir -p "$(VERILATOR_LINT_DIR)/loops"
 	@if ! command -v dot &>/dev/null; then \
 		printf "$(RED)[ERROR]$(RESET) Graphviz not installed. Run: sudo apt install graphviz\n"; \
 		exit 1; \
@@ -360,15 +376,15 @@ lint-loops-view: lint-loops
 		if [ -f "$$dotfile" ]; then \
 			name=$$(basename "$$dotfile" .dot); \
 			printf "  $(CYAN)→$(RESET) Converting $$name.dot to PDF...\n"; \
-			dot -Tpdf -o "$(LOG_DIR)/verilator/loops/$$name.pdf" "$$dotfile"; \
-			dot -Tsvg -o "$(LOG_DIR)/verilator/loops/$$name.svg" "$$dotfile"; \
+			dot -Tpdf -o "$(VERILATOR_LINT_DIR)/loops/$$name.pdf" "$$dotfile"; \
+			dot -Tsvg -o "$(VERILATOR_LINT_DIR)/loops/$$name.svg" "$$dotfile"; \
 		fi; \
 	done
-	@if ls $(LOG_DIR)/verilator/loops/*.pdf 1>/dev/null 2>&1; then \
-		printf "$(GREEN)[DONE]$(RESET) Diagrams saved to: $(LOG_DIR)/verilator/loops/\n"; \
+	@if ls $(VERILATOR_LINT_DIR)/loops/*.pdf 1>/dev/null 2>&1; then \
+		printf "$(GREEN)[DONE]$(RESET) Diagrams saved to: $(VERILATOR_LINT_DIR)/loops/\n"; \
 		printf "$(CYAN)[INFO]$(RESET) Opening first diagram...\n"; \
-		xdg-open "$$(ls $(LOG_DIR)/verilator/loops/*.pdf | head -1)" 2>/dev/null || \
-		printf "$(YELLOW)[TIP]$(RESET) Open manually: $(LOG_DIR)/verilator/loops/\n"; \
+		xdg-open "$$(ls $(VERILATOR_LINT_DIR)/loops/*.pdf | head -1)" 2>/dev/null || \
+		printf "$(YELLOW)[TIP]$(RESET) Open manually: $(VERILATOR_LINT_DIR)/loops/\n"; \
 	else \
 		printf "$(GREEN)[INFO]$(RESET) No loop diagrams to display (no UNOPTFLAT warnings)\n"; \
 	fi
