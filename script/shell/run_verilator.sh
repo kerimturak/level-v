@@ -228,9 +228,9 @@ fi
 # -----------------------------------------
 # Coverage Support
 # -----------------------------------------
-COVERAGE_ARG=""
+COVERAGE_FILE_ARG=""
 if [ -n "${COVERAGE_FILE:-}" ]; then
-  COVERAGE_ARG="+COVERAGE_FILE=\"$COVERAGE_FILE\""
+  COVERAGE_FILE_ARG="+COVERAGE_FILE=${COVERAGE_FILE}"
   log_info "coverage  => $COVERAGE_FILE"
 fi
 
@@ -239,28 +239,43 @@ fi
 # -----------------------------------------
 START_TIME=$(date +%s.%N)
 
-# Build command
-SIM_CMD="\"$RUN_BIN\" \"$MAX_CYCLES\" \
-  +INIT_FILE=\"$MEM_PATH\" \
-  +simulator=verilator \
-  +test_name=\"${TEST_NAME}\" \
-  +trace_file=\"${VERILATOR_LOG_DIR}/commit_trace.log\" \
-  +log_path=\"${VERILATOR_LOG_DIR}/ceres.log\" \
-  +uart_log_path=\"${VERILATOR_LOG_DIR}/uart_output.log\" \
-  +DUMP_FILE=\"${VERILATOR_LOG_DIR}/waveform.fst\" \
-  +BP_LOG_DIR=\"${VERILATOR_LOG_DIR}\" \
-  ${ADDR_ARG} ${COVERAGE_ARG} ${VERILATOR_RUNTIME_ARGS} ${SIM_PLUSARGS}"
+# Build command as array to preserve proper quoting
+SIM_ARGS=(
+  "$MAX_CYCLES"
+  "+INIT_FILE=$MEM_PATH"
+  "+simulator=verilator"
+  "+test_name=${TEST_NAME}"
+  "+trace_file=${VERILATOR_LOG_DIR}/commit_trace.log"
+  "+log_path=${VERILATOR_LOG_DIR}/ceres.log"
+  "+uart_log_path=${VERILATOR_LOG_DIR}/uart_output.log"
+  "+DUMP_FILE=${VERILATOR_LOG_DIR}/waveform.fst"
+  "+BP_LOG_DIR=${VERILATOR_LOG_DIR}"
+)
 
-# Run with or without timeout
+# Add conditional arguments
+if [ -n "${ADDR_ARG:-}" ]; then
+  SIM_ARGS+=("$ADDR_ARG")
+fi
+if [ -n "${COVERAGE_FILE_ARG:-}" ]; then
+  SIM_ARGS+=("$COVERAGE_FILE_ARG")
+fi
+if [ -n "${VERILATOR_RUNTIME_ARGS:-}" ]; then
+  SIM_ARGS+=("${VERILATOR_RUNTIME_ARGS}")
+fi
+if [ -n "${SIM_PLUSARGS:-}" ]; then
+  SIM_ARGS+=("${SIM_PLUSARGS}")
+fi
+
+# Run with or without timeout (in log directory to avoid polluting project root)
 if [ "$TIMEOUT" -gt 0 ]; then
   log_info "timeout   => ${TIMEOUT}s"
-  timeout --signal=TERM "$TIMEOUT" bash -c "$SIM_CMD" 2>&1 | tee "${VERILATOR_LOG_DIR}/verilator_run.log"
+  (cd "${VERILATOR_LOG_DIR}" && timeout --signal=TERM "$TIMEOUT" "$RUN_BIN" "${SIM_ARGS[@]}" 2>&1 | tee verilator_run.log)
   EXIT_CODE=${PIPESTATUS[0]:-0}
   if [ "$EXIT_CODE" -eq 124 ]; then
     log_warn "Simulation timed out after ${TIMEOUT}s"
   fi
 else
-  eval "$SIM_CMD" 2>&1 | tee "${VERILATOR_LOG_DIR}/verilator_run.log"
+  (cd "${VERILATOR_LOG_DIR}" && "$RUN_BIN" "${SIM_ARGS[@]}" 2>&1 | tee verilator_run.log)
   EXIT_CODE=${PIPESTATUS[0]:-0}
 fi
 

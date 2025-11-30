@@ -22,6 +22,7 @@ include script/makefiles/test/arch_test.mk
 include script/makefiles/test/imperas_test.mk
 include script/makefiles/test/coremark.mk
 include script/makefiles/test/test_lists.mk
+include script/makefiles/custom_test.mk
 
 # Synthesis Tools
 include script/makefiles/synth/yosys.mk

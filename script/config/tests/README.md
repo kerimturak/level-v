@@ -13,7 +13,9 @@ script/config/tests/
 ├── imperas.json        # Imperas RISC-V testleri
 ├── bench.json          # Benchmark testleri
 ├── coremark.json       # CoreMark benchmark
-└── csr.json            # Machine CSR testleri
+├── csr.json            # Machine CSR testleri
+├── custom.json         # Kustom UART testleri (kullanıcı yazılı C testleri)
+└── README.md           # Bu dosya
 ```
 
 ## 🚀 Kullanım
@@ -25,10 +27,15 @@ script/config/tests/
 make isa                    # isa.json kullanır
 make bench                  # bench.json kullanır
 make arch                   # arch.json kullanır
+make custom_test TEST=x     # custom.json kullanır
 
 # Manuel konfigürasyon seçimi
 make run TEST_CONFIG=isa
 make run TEST_CONFIG=bench T=dhrystone
+
+# Kustom test konfigürasyonu
+make custom_config          # custom.json göster
+make custom_list            # Mevcut testler listele
 
 # Mevcut konfigürasyonu göster
 make show-config

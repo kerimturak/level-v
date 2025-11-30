@@ -1,0 +1,47 @@
+{
+  "$schema": "./tests.schema.json",
+  "_comment": "CERES RISC-V Custom UART Test Configuration",
+  "_description": "Configuration for user-written custom C tests with UART output",
+
+  "test_list": "custom",
+
+  "simulation": {
+    "max_cycles": 10000,
+    "timeout_seconds": 30,
+    "build_threads": "auto",
+    "sim_threads": 1
+  },
+
+  "comparison": {
+    "enabled": false,
+    "spike_enabled": false
+  },
+
+  "defines": {
+    "COMMIT_TRACER": false,
+    "KONATA_TRACER": false,
+    "LOG_COMMIT": false,
+    "LOG_RAM": false,
+    "LOG_UART": true,
+    "LOG_BP": false,
+    "SIM_FAST": false,
+    "SIM_UART_MONITOR": true
+  },
+
+  "trace": {
+    "enabled": true,
+    "format": "fst"
+  },
+
+  "build": {
+    "mode": "debug"
+  },
+
+  "custom_options": {
+    "description": "Custom test-specific options",
+    "uart_log_enabled": true,
+    "uart_log_path": "uart_output.log",
+    "test_directory": "sim/test/custom",
+    "build_directory": "build/tests/custom"
+  }
+}

@@ -27,7 +27,7 @@
   },
 
   "coverage": {
-    "enabled": false,
+    "enabled": true,
     "line": true,
     "toggle": true,
     "user": false
