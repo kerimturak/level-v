@@ -23,6 +23,7 @@ module control_unit
   logic csr_supported;
   logic csr_write_intent;
   logic instr_is_csr;
+  logic csr_read_only;
 
   always_comb begin
     illegal_shift = 1'b0;
@@ -40,6 +41,8 @@ module control_unit
     // CSR adresi core tarafından destekleniyor mu?
     csr_supported = is_supported_csr(inst_i[31:20]);
     // Yazma niyeti var mı?
+    // CSR read-only mı? (CSR address bits [11:10] == 2'b11 means read-only)
+    csr_read_only = (inst_i[31:30] == 2'b11);
     csr_write_intent =
        (instr_type_i == CSR_RW)  ||
        (instr_type_i == CSR_RWI) ||
@@ -53,9 +56,10 @@ module control_unit
     end else if (instr_is_csr && !csr_supported) begin
       // cycle/cycleh/instret alias (C00/C02/C80/C82) burada yakalanacak
       ctrl_o.exc_type = ILLEGAL_INSTRUCTION;
+    end else if (instr_is_csr && csr_read_only && csr_write_intent) begin
+      // Read-only CSR'ye yazma girişimi illegal instruction
+      ctrl_o.exc_type = ILLEGAL_INSTRUCTION;
     end
-    // CSR supported olsa bile READ-ONLY ise ve write-intent varsa illegal olabilir.
-    // (Şu anda OK, çünkü senin desteklediğin CSR’lerin hepsi writable.)
 
 
     ctrl_o.alu_in1_sel = instr_type_i == u_auipc ? 2'd2 : (instr_type_i == i_jalr ? 2'b1 : 2'b0);

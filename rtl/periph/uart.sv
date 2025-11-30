@@ -33,7 +33,7 @@ module uart
   logic        rx_empty;
   logic        rx_re;
 
-  uart_tx uart_tx (
+  uart_tx i_uart_tx (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
       .baud_div_i(baud_div),
@@ -45,7 +45,7 @@ module uart
       .tx_bit_o  (uart_tx_o)
   );
 
-  uart_rx uart_rx (
+  uart_rx i_uart_rx (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
       .baud_div_i(baud_div),

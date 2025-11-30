@@ -93,7 +93,7 @@ module execution
     exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
   end
 
-  alu alu (
+  alu i_alu (
       .clk_i      (clk_i),
       .rst_ni     (rst_ni),
       .alu_a_i    (operant_a),
@@ -134,7 +134,7 @@ module execution
   end
 `endif
 
-  cs_reg_file u_cs_reg_file (
+  cs_reg_file i_cs_reg_file (
       .clk_i           (clk_i),
       .rst_ni          (rst_ni),
       .stall_i         (stall_i),

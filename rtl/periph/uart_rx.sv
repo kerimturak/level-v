@@ -39,7 +39,7 @@ module uart_rx #(  // counter
   wbit_fifo #(
       .DATA_WIDTH(DATA_WIDTH),
       .FIFO_DEPTH(FIFO_DEPTH)
-  ) rx_buffer (
+  ) i_rx_buffer (
       .clk       (clk_i),
       .rst       (!rst_ni),
       .write_en  (rx_we),

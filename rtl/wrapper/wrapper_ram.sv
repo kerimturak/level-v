@@ -164,7 +164,7 @@ module wrapper_ram
       .MAGIC_SEQ   (PROGRAM_SEQUENCE),
       .SEQ_LENGTH  (9),
       .BREAK_CYCLES(1_000_000)
-  ) u_programmer (
+  ) i_programmer (
       .clk_i         (clk_i),
       .rst_ni        (rst_ni),
       .uart_rx_i     (ram_prog_rx_i),

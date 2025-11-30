@@ -13,9 +13,9 @@
 
 // Define SOC path based on top module name
 `ifdef VERILATOR
-  `define SOC $root.ceres_wrapper.soc
+  `define SOC $root.ceres_wrapper.i_soc
 `else
-  `define SOC tb_wrapper.ceres_wrapper.soc
+  `define SOC tb_wrapper.ceres_wrapper.i_soc
 `endif
 
 `ifdef LOG_COMMIT
@@ -79,7 +79,7 @@ always @(posedge clk_i) begin
 
 // ============================================================
 // SPECIAL CASE — MRET implicit CSR writes
-// Spike logs both mstatus (0x300) and mstatush (0x310) on MRET.
+// Spike logs mstatus (0x300), mstatush (0x310), and tcontrol (0x7A5) on MRET.
 // ============================================================
 else if (instr_type_i == mret) begin : mret_commit
 
@@ -93,8 +93,14 @@ else if (instr_type_i == mret) begin : mret_commit
 
     // mstatush
     $fwrite(trace_fd,
-      "c%0d_mstatush 0x00000000\n",
+      "c%0d_mstatush 0x00000000 ",
       784         // <<2 doğru
+    );
+
+    // tcontrol (read-only zero in M-mode only systems)
+    $fwrite(trace_fd,
+      "c%0d_tcontrol 0x00000000\n",
+      1957        // 0x7A5
     );
 
     disable mret_commit;

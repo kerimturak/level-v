@@ -653,12 +653,20 @@ package ceres_param;
       12'h344,  // mip
 
       // ============================
-      // Counters
+      // Counters (Machine)
       // ============================
       12'hB00,  // mcycle
       12'hB02,  // minstret
       12'hB80,  // mcycleh (RV32)
       12'hB82,  // minstreth (RV32)
+
+      // ============================
+      // User-mode Counter Shadows (read-only)
+      // ============================
+      12'hC00,  // cycle (alias to mcycle)
+      12'hC02,  // instret (alias to minstret)
+      12'hC80,  // cycleh (alias to mcycleh)
+      12'hC82,  // instreth (alias to minstreth)
 
       12'h3A0,  // pmpcfg0
       12'h3B0,  // pmpaddr0
@@ -670,7 +678,8 @@ package ceres_param;
       12'h7A0,  // tselect
       12'h7A1,  // tdata1
       12'h7A2,  // tdata2
-      12'h7A3:  // tdata3
+      12'h7A3,  // tdata3
+      12'h7A5:  // tcontrol
 
       is_supported_csr = 1'b1;
 

@@ -224,7 +224,7 @@ module alu
       .XLEN(32),
       .YLEN(32),
       .TYP (Mul_Type)
-  ) u_mul (
+  ) i_mul (
       .a(mul_op_A),
       .b(mul_op_B),
       .c(unsigned_prod)
@@ -242,7 +242,7 @@ module alu
 
   seq_multiplier #(
       .SIZE(32)
-  ) seq_multiplier_inst (
+  ) i_seq_multiplier (
       .clk_i         (clk_i),
       .rst_ni        (rst_ni),
       .start_i       (mul_start),
@@ -261,7 +261,7 @@ module alu
   // ------------------------------------------------------------
   divu_int #(
       .WIDTH(32)
-  ) divu_int_inst (
+  ) i_divu_int (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
       .start_i   (div_start),

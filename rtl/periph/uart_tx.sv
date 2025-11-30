@@ -39,7 +39,7 @@ module uart_tx #(  // counter
   wbit_fifo #(
       .DATA_WIDTH(DATA_WIDTH),
       .FIFO_DEPTH(FIFO_DEPTH)
-  ) tx_buffer (
+  ) i_tx_buffer (
       .clk       (clk_i),
       .rst       (!rst_ni),
       .write_en  (tx_we_i),

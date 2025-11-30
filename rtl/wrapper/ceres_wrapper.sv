@@ -154,7 +154,7 @@ module ceres_wrapper
   // ==========================================================================
   // CPU Core (instance name 'soc' for tracer compatibility)
   // ==========================================================================
-  cpu soc (
+  cpu i_soc (
       .clk_i      (clk_i),
       .rst_ni     (sys_rst_n),
       .iomem_req_o(cpu_mem_req),
@@ -177,7 +177,7 @@ module ceres_wrapper
       .CPU_CLK         (CLK_FREQ_HZ),
       .PROG_BAUD_RATE  (BAUD_RATE),
       .PROGRAM_SEQUENCE(PROG_SEQUENCE)
-  ) u_main_ram (
+  ) i_main_ram (
       .clk_i          (clk_i),
       .rst_ni         (rst_ni),
       .addr_i         (ram_addr),

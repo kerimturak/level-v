@@ -282,7 +282,7 @@ module fetch
       .BLK_SIZE   (BLK_SIZE),
       .XLEN       (XLEN),
       .NUM_WAY    (IC_WAY)
-  ) i_cache (
+  ) i_icache (
       .clk_i         (clk_i),
       .rst_ni        (rst_ni),
       .flush_i       (flush_i),
@@ -297,7 +297,7 @@ module fetch
   // RISC-V Compressed Decoder: 16-bit compressed instruction'ları 32-bit
   // formata çevirir ve illegal instruction tespiti yapar
   // ============================================================================
-  compressed_decoder compressed_decoder (
+  compressed_decoder i_compressed_decoder (
       .instr_i        (buff_res.blk),
       .instr_o        (inst_o),
       .is_compressed_o(is_comp),

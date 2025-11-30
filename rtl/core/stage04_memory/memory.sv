@@ -98,7 +98,7 @@ module memory
     end
   end
 
-  pma dpma (
+  pma i_dpma (
       .addr_i     (ex_data_req_i.addr),
       .uncached_o (uncached),
       .memregion_o(memregion),
@@ -115,7 +115,7 @@ module memory
       .BLK_SIZE   (BLK_SIZE),
       .XLEN       (XLEN),
       .NUM_WAY    (DC_WAY)
-  ) dcache (
+  ) i_dcache (
       .clk_i         (clk_i),
       .rst_ni        (rst_ni),
       .flush_i       (fe_flush_cache_i),
@@ -153,7 +153,7 @@ module memory
     pherip_wdata = !memregion ? ex_data_req_i.data : '0;
   end
 
-  uart uart_inst (
+  uart i_uart (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
       .stb_i     (pherip_valid),

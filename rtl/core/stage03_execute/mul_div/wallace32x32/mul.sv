@@ -15,14 +15,14 @@ module mul #(
 
   generate
     if (TYP == 0) begin : gen_dadda
-      dadda dadda_comp (
+      dadda i_dadda (
           a,
           b,
           z0,
           z1
       );
     end else begin : gen_wallace
-      wallace wallace_comp (
+      wallace i_wallace (
           a,
           b,
           z0,

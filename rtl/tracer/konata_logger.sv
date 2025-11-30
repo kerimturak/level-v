@@ -25,9 +25,9 @@ module konata_logger;
   string  log_path;
 
 `ifdef VERILATOR
-  `define SOC $root.ceres_wrapper.soc
+  `define SOC $root.ceres_wrapper.i_soc
 `else
-  `define SOC tb_wrapper.ceres_wrapper.soc
+  `define SOC tb_wrapper.ceres_wrapper.i_soc
 `endif
 
   // ----------------------------------------------------------------------------
@@ -181,7 +181,7 @@ module konata_logger;
   logic wb_enter_now;
 
   always @(posedge `SOC.clk_i) begin
-    flush_fe  = `SOC.fetch.flush_i;
+    flush_fe  = `SOC.i_fetch.flush_i;
 
     // CPU tarafı ile birebir:
     //  - Front: FETCH & pipe1 sadece NO_STALL iken ilerliyor
@@ -253,8 +253,8 @@ module konata_logger;
       // ----------------------------------------------------------------------
       // 4) FETCH ENTER
       // ----------------------------------------------------------------------
-      fetch_valid_int = `SOC.fetch.fetch_valid;
-      fetch_buf_valid = `SOC.fetch.buff_res.valid;
+      fetch_valid_int = `SOC.i_fetch.fetch_valid;
+      fetch_buf_valid = `SOC.i_fetch.buff_res.valid;
 
       fetch_enter = adv_front && !flush_fe && fetch_valid_int && fetch_buf_valid;
 
@@ -263,25 +263,25 @@ module konata_logger;
         string            g_str;
 
         log_issue(fid);
-        log_line_pc_inst(fid, `SOC.fetch.pc_o, `SOC.fetch.inst_o);
+        log_line_pc_inst(fid, `SOC.i_fetch.pc_o, `SOC.i_fetch.inst_o);
 
         // Instr grup etiketi (tek seferlik, issue sırasında)
-        g_str = instr_group(`SOC.fetch.instr_type_o);
+        g_str = instr_group(`SOC.i_fetch.instr_type_o);
         if (fd) $fwrite(fd, "L\t%0d\t1\tgrp=%s\n", fid, g_str);
 
         log_stage_start(fid, "F");
 
         fetch_s <= '{
             id              : fid,
-            pc              : `SOC.fetch.pc_o,
-            inst            : `SOC.fetch.inst_o,
+            pc              : `SOC.i_fetch.pc_o,
+            inst            : `SOC.i_fetch.inst_o,
             valid           : 1'b1,
             started_f       : 1'b1,
             started_d       : 1'b0,
             started_x       : 1'b0,
             started_m       : 1'b0,
             started_wb      : 1'b0,
-            instr_type      : `SOC.fetch.instr_type_o,
+            instr_type      : `SOC.i_fetch.instr_type_o,
             stall_cycles    : 0,
             mem_stall_cycles: 0,
             first_stall     : NO_STALL,

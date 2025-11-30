@@ -38,13 +38,13 @@ module decode
     exc_type_o = ctrl_o.exc_type;
   end
 
-  control_unit control_unit (
+  control_unit i_control_unit (
       .inst_i      (inst_i),
       .instr_type_i(instr_type_i),
       .ctrl_o      (ctrl_o)
   );
 
-  reg_file reg_file (
+  reg_file i_reg_file (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
       .rw_en_i  (rf_rw_en_i),
@@ -56,7 +56,7 @@ module decode
       .r2_data_o(r2_data)
   );
 
-  extend extend (
+  extend i_extend (
       .imm_i(inst_i[31:7]),
       .sel_i(ctrl_o.imm_sel),
       .imm_o(imm_o)

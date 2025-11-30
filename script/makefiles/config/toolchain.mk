@@ -24,9 +24,10 @@ RISCV_OBJCOPY  ?= $(RISCV_PREFIX)-objcopy
 # Spike Simulator
 # -----------------------------------------
 SPIKE          ?= $(HOME)/tools/spike/bin/spike
-SPIKE_ISA      ?= RV32IMC
+SPIKE_ISA      ?= rv32imc_zicntr
 SPIKE_PC       ?= 0x80000000
-SPIKE_FLAGS    := --isa=$(SPIKE_ISA) --pc=$(SPIKE_PC) --log-commits
+SPIKE_PRIV     ?= m
+SPIKE_FLAGS    := --isa=$(SPIKE_ISA) --pc=$(SPIKE_PC) --priv=$(SPIKE_PRIV) --log-commits
 
 # -----------------------------------------
 # EDA Tools

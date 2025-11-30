@@ -134,7 +134,7 @@ module cpu
 
   fetch #(
       .RESET_VECTOR(RESET_VECTOR)
-  ) fetch (
+  ) i_fetch (
 `ifdef COMMIT_TRACER
       .fe_tracer_o  (fe_tracer),
 `endif
@@ -214,7 +214,7 @@ module cpu
     de_info.pc          = pipe1.pc;
   end
 
-  decode decode (
+  decode i_decode (
       .clk_i       (clk_i),
       .rst_ni      (rst_ni),
       .fwd_a_i     (de_fwd_a),
@@ -329,7 +329,7 @@ module cpu
     ex_wr_csr = pipe2.wr_csr;
   end
 
-  execution execution (
+  execution i_execution (
     `ifdef COMMIT_TRACER
       .csr_wr_data_o(ex_csr_wr_data),
     `endif
@@ -466,7 +466,7 @@ module cpu
     me_data_req.ld_op_sign = pipe3.ld_op_sign;
   end
 
-  memory memory (
+  memory i_memory (
       // data req starts from execute and continue in mem for correct stall beignning
       .clk_i            (clk_i),
       .rst_ni           (rst_ni),
@@ -527,7 +527,7 @@ module cpu
     end
   end
 
-  writeback writeback (
+  writeback i_writeback (
 `ifdef COMMIT_TRACER
       .fe_tracer_i     (pipe4.fe_tracer),
       .wr_en_i         (pipe4.wr_en),
@@ -559,7 +559,7 @@ module cpu
   // MULTIPLE STAGE
   // ============================================================================
 
-  hazard_unit hazard_unit (
+  hazard_unit i_hazard_unit (
       .r1_addr_de_i (pipe1.inst.r1_addr),
       .r2_addr_de_i (pipe1.inst.r2_addr),
       .r1_addr_ex_i (pipe2.r1_addr),
@@ -581,7 +581,7 @@ module cpu
       .fwd_b_de_o   (de_fwd_b)
   );
 
-  memory_arbiter memory_arbiter (
+  memory_arbiter i_memory_arbiter (
       .clk_i       (clk_i),
       .rst_ni      (rst_ni),
       .icache_req_i(lx_ireq),

@@ -79,6 +79,12 @@ module cs_reg_file
   localparam logic [11:0] MCYCLEH   = 12'hB80;
   localparam logic [11:0] MINSTRETH = 12'hB82;
 
+  // User-mode Counter Shadow Registers (read-only aliases)
+  localparam logic [11:0] CYCLE     = 12'hC00;
+  localparam logic [11:0] INSTRET   = 12'hC02;
+  localparam logic [11:0] CYCLEH    = 12'hC80;
+  localparam logic [11:0] INSTRETH  = 12'hC82;
+
   // Optional CSRs (read-only-zero for test compatibility)
   localparam logic [11:0] SCOUNTEREN    = 12'h106;
   localparam logic [11:0] MCOUNTINHIBIT = 12'h320;
@@ -88,6 +94,7 @@ module cs_reg_file
   localparam logic [11:0] TDATA1        = 12'h7A1;
   localparam logic [11:0] TDATA2        = 12'h7A2;
   localparam logic [11:0] TDATA3        = 12'h7A3;
+  localparam logic [11:0] TCONTROL      = 12'h7A5;
 
   // ============================================================================
   // MISA CONFIGURATION (RV32IMC)
@@ -201,7 +208,7 @@ module cs_reg_file
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       // Reset all CSRs
-      mstatus   <= '{mie: 1'b0, mpie: 1'b0, mpp: 2'b00};
+      mstatus   <= '{mie: 1'b0, mpie: 1'b0, mpp: 2'b11};  // M-mode only: start in M-mode
       misa      <= CERES_MISA;
       mie       <= '0;
       mtvec     <= '0;
@@ -261,7 +268,7 @@ module cs_reg_file
       else if (instr_type_i == mret) begin
         mstatus.mie  <= mstatus.mpie;
         mstatus.mpie <= 1'b1;
-        mstatus.mpp  <= 2'b00;  // Return to User mode (not used in M-only)
+        mstatus.mpp  <= 2'b11;  // M-mode only: always return to M-mode
       end
       
       // ------------------------------------------------------------------------
@@ -347,11 +354,17 @@ module cs_reg_file
         MCAUSE:   csr_rdata_o = mcause;
         MTVAL:    csr_rdata_o = mtval_reg;
 
-        // Performance Counters
+        // Performance Counters (Machine)
         MCYCLE:    csr_rdata_o = mcycle;
         MCYCLEH:   csr_rdata_o = mcycleh;
         MINSTRET:  csr_rdata_o = minstret;
         MINSTRETH: csr_rdata_o = minstreth;
+
+        // User-mode Counter Shadows (read-only aliases to M-mode counters)
+        CYCLE:     csr_rdata_o = mcycle;
+        CYCLEH:    csr_rdata_o = mcycleh;
+        INSTRET:   csr_rdata_o = minstret;
+        INSTRETH:  csr_rdata_o = minstreth;
 
         // Optional CSRs (read-only-zero)
         MCOUNTEREN,
@@ -362,7 +375,8 @@ module cs_reg_file
         TSELECT,
         TDATA1,
         TDATA2,
-        TDATA3: csr_rdata_o = 32'd0;
+        TDATA3,
+        TCONTROL: csr_rdata_o = 32'd0;
         PMPCFG0:  csr_rdata_o = pmpcfg0;
         PMPADDR0: csr_rdata_o = pmpaddr0;
         default: csr_rdata_o = 32'd0;  // Unsupported CSR
@@ -371,7 +385,7 @@ module cs_reg_file
     end else begin
       // Special case: MRET needs to read updated mstatus value
       if (instr_type_i == mret) begin
-        csr_rdata_o = pack_mstatus('{mie: mstatus.mpie, mpie: 1'b1, mpp: 2'b00});
+        csr_rdata_o = pack_mstatus('{mie: mstatus.mpie, mpie: 1'b1, mpp: 2'b11});  // M-mode only
       end else begin
         csr_rdata_o = 32'd0;
       end
