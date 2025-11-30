@@ -28,8 +28,113 @@ def entries_equal(a, b):
     return a[0] == b[0] and a[1] == b[1]
 
 
+def parse_bp_stats(bp_stats_path):
+    """
+    Parse bp_stats.log file and extract branch predictor statistics.
+    
+    Args:
+        bp_stats_path: Path to bp_stats.log file
+    
+    Returns:
+        Dictionary with BP statistics or None if file doesn't exist
+    """
+    import re
+    import os
+    
+    if not bp_stats_path or not os.path.exists(bp_stats_path):
+        return None
+    
+    stats = {
+        "total_branches": 0,
+        "correct": 0,
+        "mispred": 0,
+        "accuracy": 0.0,
+        "jal_total": 0,
+        "jal_correct": 0,
+        "jal_accuracy": 0.0,
+        "jalr_total": 0,
+        "jalr_correct": 0,
+        "jalr_accuracy": 0.0,
+        "ras_total": 0,
+        "ras_correct": 0,
+        "ras_accuracy": 0.0,
+        "ibtc_total": 0,
+        "ibtc_correct": 0,
+        "ibtc_accuracy": 0.0,
+        "cond_total": 0,
+        "cond_correct": 0,
+        "cond_mispred": 0,
+        "cond_accuracy": 0.0,
+    }
+    
+    try:
+        with open(bp_stats_path, 'r', errors='ignore') as f:
+            content = f.read()
+            
+            # Parse Total Control Transfers
+            match = re.search(r'Total Control Transfers\s*:\s*(\d+)', content)
+            if match:
+                stats["total_branches"] = int(match.group(1))
+            
+            # Parse Correct Predictions with percentage
+            match = re.search(r'Correct Predictions\s*:\s*(\d+)\s*\(\s*([\d.]+)%\)', content)
+            if match:
+                stats["correct"] = int(match.group(1))
+                stats["accuracy"] = float(match.group(2))
+            
+            # Parse Mispredictions
+            match = re.search(r'Mispredictions\s*:\s*(\d+)', content)
+            if match:
+                stats["mispred"] = int(match.group(1))
+            
+            # Parse JAL statistics - Total and Correct on separate lines
+            jal_section = re.search(r'JAL \(Direct Jump\).*?Total\s*:\s*(\d+).*?Correct\s*:\s*(\d+)\s*\(\s*([\d.]+)%\)', content, re.DOTALL)
+            if jal_section:
+                stats["jal_total"] = int(jal_section.group(1))
+                stats["jal_correct"] = int(jal_section.group(2))
+                stats["jal_accuracy"] = float(jal_section.group(3))
+            
+            # Parse JALR statistics
+            jalr_section = re.search(r'JALR \(Indirect Jump\).*?Total\s*:\s*(\d+).*?Correct\s*:\s*(\d+)\s*\(\s*([\d.]+)%\)', content, re.DOTALL)
+            if jalr_section:
+                stats["jalr_total"] = int(jalr_section.group(1))
+                stats["jalr_correct"] = int(jalr_section.group(2))
+                stats["jalr_accuracy"] = float(jalr_section.group(3))
+            
+            # Parse RAS Predictions
+            match = re.search(r'RAS Predictions\s*:\s*(\d+)\s*\(\s*([\d.]+)%\s*accurate\)', content)
+            if match:
+                stats["ras_total"] = int(match.group(1))
+                stats["ras_accuracy"] = float(match.group(2))
+                if stats["ras_total"] > 0:
+                    stats["ras_correct"] = int(stats["ras_total"] * stats["ras_accuracy"] / 100)
+            
+            # Parse IBTC Predictions
+            match = re.search(r'IBTC Predictions\s*:\s*(\d+)\s*\(\s*([\d.]+)%\s*accurate\)', content)
+            if match:
+                stats["ibtc_total"] = int(match.group(1))
+                stats["ibtc_accuracy"] = float(match.group(2))
+                if stats["ibtc_total"] > 0:
+                    stats["ibtc_correct"] = int(stats["ibtc_total"] * stats["ibtc_accuracy"] / 100)
+            
+            # Parse Conditional Branch statistics
+            cond_section = re.search(r'Conditional Branch.*?Total\s*:\s*(\d+).*?Correct\s*:\s*(\d+)\s*\(\s*([\d.]+)%\).*?Mispredicted\s*:\s*(\d+)', content, re.DOTALL)
+            if cond_section:
+                stats["cond_total"] = int(cond_section.group(1))
+                stats["cond_correct"] = int(cond_section.group(2))
+                stats["cond_accuracy"] = float(cond_section.group(3))
+                stats["cond_mispred"] = int(cond_section.group(4))
+            
+    except Exception as e:
+        if not QUIET:
+            print(f"Warning: Could not parse bp_stats.log: {e}")
+        return None
+    
+    return stats
+
+
 def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None, 
-                      pass_addr=None, fail_addr=None, test_name=None):
+                      pass_addr=None, fail_addr=None, test_name=None, bp_stats_path=None):
     """
     Generate beautiful interactive HTML diff report with enhanced information.
     
@@ -42,8 +147,12 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
         pass_addr: Test pass address (hex value)
         fail_addr: Test fail address (hex value)
         test_name: Name of the test being compared
+        bp_stats_path: Path to bp_stats.log file for branch predictor statistics
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Parse branch predictor stats if available
+    bp_stats = parse_bp_stats(bp_stats_path)
     
     # Calculate detailed statistics
     total_cycles = max(len(rtl), len(spike))
@@ -125,6 +234,7 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
     rows_json = json.dumps(rows_data)
     stats_json = json.dumps(stats)
     error_indices_json = json.dumps(error_indices[:100])  # First 100 errors
+    bp_stats_json = json.dumps(bp_stats) if bp_stats else "null"
     
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -287,6 +397,188 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
         .stat-mismatch {{ color: var(--mismatch); }}
         .stat-warning {{ color: var(--warning); }}
         .stat-info {{ color: var(--info); }}
+        
+        /* BP Stats Section */
+        .bp-stats-section {{
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--border-color);
+        }}
+        
+        .bp-stats-header {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            cursor: pointer;
+        }}
+        
+        .bp-stats-header h3 {{
+            color: var(--info);
+            font-size: 1.1em;
+            margin: 0;
+        }}
+        
+        .bp-stats-toggle {{
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }}
+        
+        .bp-stats-toggle.collapsed {{
+            transform: rotate(-90deg);
+        }}
+        
+        .bp-stats-content {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }}
+        
+        .bp-stats-content.collapsed {{
+            display: none;
+        }}
+        
+        .bp-chart-container {{
+            background: var(--bg-primary);
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid var(--border-color);
+        }}
+        
+        .bp-chart-title {{
+            font-size: 1em;
+            color: var(--text-primary);
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 600;
+        }}
+        
+        .bp-donut-container {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }}
+        
+        .bp-donut {{
+            position: relative;
+            width: 160px;
+            height: 160px;
+        }}
+        
+        .bp-donut svg {{
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }}
+        
+        .bp-donut-center {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }}
+        
+        .bp-donut-value {{
+            font-size: 1.8em;
+            font-weight: bold;
+            color: var(--match);
+        }}
+        
+        .bp-donut-label {{
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }}
+        
+        .bp-bar-chart {{
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+        
+        .bp-bar-item {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .bp-bar-label {{
+            width: 100px;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            text-align: right;
+        }}
+        
+        .bp-bar-container {{
+            flex: 1;
+            height: 24px;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }}
+        
+        .bp-bar {{
+            height: 100%;
+            border-radius: 12px;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+        }}
+        
+        .bp-bar-value {{
+            font-size: 0.75em;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }}
+        
+        .bp-bar.jal {{ background: linear-gradient(90deg, #00d26a, #00f2a0); }}
+        .bp-bar.jalr {{ background: linear-gradient(90deg, #667eea, #764ba2); }}
+        .bp-bar.cond {{ background: linear-gradient(90deg, #f093fb, #f5576c); }}
+        .bp-bar.ras {{ background: linear-gradient(90deg, #4facfe, #00f2fe); }}
+        
+        .bp-stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+        }}
+        
+        .bp-stat-card {{
+            background: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        
+        .bp-stat-value {{
+            font-size: 1.3em;
+            font-weight: bold;
+            color: var(--text-primary);
+        }}
+        
+        .bp-stat-label {{
+            font-size: 0.7em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }}
+        
+        @media (max-width: 768px) {{
+            .bp-stats-content {{
+                grid-template-columns: 1fr;
+            }}
+        }}
         
         /* Chart Container */
         .chart-container {{
@@ -936,6 +1228,40 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
             </div>
         </div>
         
+        <!-- Branch Predictor Stats Section -->
+        <div class="bp-stats-section" id="bpStatsSection" style="display: none;">
+            <div class="bp-stats-header" onclick="toggleBpStats()">
+                <button class="bp-stats-toggle" id="bpToggle">▼</button>
+                <h3>🎯 Branch Predictor Statistics</h3>
+            </div>
+            <div class="bp-stats-content" id="bpStatsContent">
+                <div class="bp-chart-container">
+                    <div class="bp-chart-title">Overall Prediction Accuracy</div>
+                    <div class="bp-donut-container">
+                        <div class="bp-donut">
+                            <svg viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--bg-tertiary)" stroke-width="3"></circle>
+                                <circle id="bpAccuracyCircle" cx="18" cy="18" r="15.9" fill="none" stroke="var(--match)" stroke-width="3" stroke-dasharray="0, 100" stroke-linecap="round"></circle>
+                            </svg>
+                            <div class="bp-donut-center">
+                                <div class="bp-donut-value" id="bpAccuracyValue">--%</div>
+                                <div class="bp-donut-label">Accuracy</div>
+                            </div>
+                        </div>
+                        <div class="bp-stats-grid" id="bpOverviewStats">
+                            <!-- Filled by JS -->
+                        </div>
+                    </div>
+                </div>
+                <div class="bp-chart-container">
+                    <div class="bp-chart-title">Branch Type Breakdown</div>
+                    <div class="bp-bar-chart" id="bpBarChart">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Controls -->
         <div class="controls">
             <div class="search-box">
@@ -1077,6 +1403,7 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
         const stats = {stats_json};
         const errorIndices = {error_indices_json};
         const hasDisasm = {'true' if disasm_map else 'false'};
+        const bpStats = {bp_stats_json};
         
         // State
         let filteredRows = [...allRows];
@@ -1091,12 +1418,91 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
             renderTable();
             drawPieChart();
             setupKeyboardShortcuts();
+            renderBpStats();
             
             // Auto-scroll to first error if exists
             if (errorIndices.length > 0) {{
                 setTimeout(() => jumpToError(0), 500);
             }}
         }});
+        
+        // Render Branch Predictor Stats
+        function renderBpStats() {{
+            if (!bpStats || bpStats.total_branches === 0) {{
+                return;
+            }}
+            
+            // Show the BP stats section
+            document.getElementById('bpStatsSection').style.display = 'block';
+            
+            // Update accuracy donut
+            const accuracy = bpStats.accuracy || 0;
+            const circle = document.getElementById('bpAccuracyCircle');
+            circle.setAttribute('stroke-dasharray', `${{accuracy}}, 100`);
+            circle.setAttribute('stroke', accuracy >= 90 ? 'var(--match)' : accuracy >= 70 ? 'var(--warning)' : 'var(--mismatch)');
+            document.getElementById('bpAccuracyValue').textContent = accuracy.toFixed(1) + '%';
+            document.getElementById('bpAccuracyValue').style.color = 
+                accuracy >= 90 ? 'var(--match)' : accuracy >= 70 ? 'var(--warning)' : 'var(--mismatch)';
+            
+            // Overview stats grid
+            const overviewHtml = `
+                <div class="bp-stat-card">
+                    <div class="bp-stat-value">${{bpStats.total_branches.toLocaleString()}}</div>
+                    <div class="bp-stat-label">Total Branches</div>
+                </div>
+                <div class="bp-stat-card">
+                    <div class="bp-stat-value" style="color: var(--match);">${{bpStats.correct.toLocaleString()}}</div>
+                    <div class="bp-stat-label">Correct</div>
+                </div>
+                <div class="bp-stat-card">
+                    <div class="bp-stat-value" style="color: var(--mismatch);">${{bpStats.mispred.toLocaleString()}}</div>
+                    <div class="bp-stat-label">Mispredicted</div>
+                </div>
+            `;
+            document.getElementById('bpOverviewStats').innerHTML = overviewHtml;
+            
+            // Bar chart for branch types
+            const barData = [
+                {{ label: 'JAL (Direct)', total: bpStats.jal_total, correct: bpStats.jal_correct, accuracy: bpStats.jal_accuracy, class: 'jal' }},
+                {{ label: 'JALR (Indirect)', total: bpStats.jalr_total, correct: bpStats.jalr_correct, accuracy: bpStats.jalr_accuracy, class: 'jalr' }},
+                {{ label: 'Conditional', total: bpStats.cond_total, correct: bpStats.cond_correct, accuracy: bpStats.cond_accuracy, class: 'cond' }},
+                {{ label: 'RAS', total: bpStats.ras_total, correct: bpStats.ras_correct, accuracy: bpStats.ras_accuracy, class: 'ras' }}
+            ];
+            
+            let barHtml = '';
+            barData.forEach(item => {{
+                if (item.total > 0) {{
+                    const pct = item.accuracy || 0;
+                    barHtml += `
+                        <div class="bp-bar-item">
+                            <div class="bp-bar-label">${{item.label}}</div>
+                            <div class="bp-bar-container">
+                                <div class="bp-bar ${{item.class}}" style="width: ${{Math.max(pct, 5)}}%;">
+                                    <span class="bp-bar-value">${{pct.toFixed(1)}}%</span>
+                                </div>
+                            </div>
+                            <div style="width: 80px; font-size: 0.75em; color: var(--text-secondary);">
+                                ${{item.correct}}/${{item.total}}
+                            </div>
+                        </div>
+                    `;
+                }}
+            }});
+            
+            if (barHtml === '') {{
+                barHtml = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No branch type data available</div>';
+            }}
+            
+            document.getElementById('bpBarChart').innerHTML = barHtml;
+        }}
+        
+        // Toggle BP Stats Section
+        function toggleBpStats() {{
+            const content = document.getElementById('bpStatsContent');
+            const toggle = document.getElementById('bpToggle');
+            content.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed');
+        }}
         
         // Render table
         function renderTable() {{

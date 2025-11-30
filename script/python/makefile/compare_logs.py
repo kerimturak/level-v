@@ -532,8 +532,15 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
     
     # 3. Generate HTML report with enhanced info
     html_path = output_file.replace(".log", ".html")
+    
+    # Check for bp_stats.log in the same directory
+    output_dir = os.path.dirname(output_file)
+    bp_stats_path = os.path.join(output_dir, "bp_stats.log")
+    if not os.path.exists(bp_stats_path):
+        bp_stats_path = None
+    
     generate_html_diff(rtl, spike, html_path, stats, disasm_map, 
-                      pass_addr, fail_addr, test_name)
+                      pass_addr, fail_addr, test_name, bp_stats_path)
     
     # 4. Print summary to console
     print_summary(stats, has_errors, elapsed_time, test_name)
