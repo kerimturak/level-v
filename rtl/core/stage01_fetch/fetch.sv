@@ -26,6 +26,7 @@ module fetch
     input  logic            [XLEN-1:0] pc_target_i,
     input  logic            [XLEN-1:0] ex_mtvec_i,
     input  logic                       trap_active_i,
+    input  logic                       misa_c_i,        // C extension enabled
     input  logic                       spec_hit_i,
     output predict_info_t              spec_o,
     output ilowX_req_t                 lx_ireq_o,
@@ -156,8 +157,10 @@ module fetch
     if (!fetch_valid) begin
       exc_type_o = NO_EXCEPTION;
 
-    end else if (pc_o[0]) begin
+    end else if (misa_c_i ? pc_o[0] : (pc_o[1:0] != 2'b00)) begin
       // 1) Highest priority: instruction address misaligned
+      // If C extension enabled: halfword aligned (pc[0]=0)
+      // If C extension disabled: word aligned (pc[1:0]=00)
       exc_type_o = INSTR_MISALIGNED;
 
     end else if (!grand) begin

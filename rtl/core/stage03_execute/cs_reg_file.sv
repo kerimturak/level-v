@@ -192,6 +192,8 @@ module cs_reg_file
 
   logic     [XLEN-1:0] pmpcfg0;
   logic     [XLEN-1:0] pmpaddr0;
+  logic     [XLEN-1:0] tcontrol_reg;  // Trigger control register
+  logic     [XLEN-1:0] tdata1_reg;    // Trigger data 1 register
   // ============================================================================
   // OUTPUT ASSIGNMENTS
   // ============================================================================
@@ -227,6 +229,8 @@ module cs_reg_file
       minstreth <= '0;
       pmpcfg0   <= '0;
       pmpaddr0  <= '0;
+      tcontrol_reg <= '0;
+      tdata1_reg <= 32'h20000044;  // Default: mcontrol type
 
     end else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
       
@@ -311,9 +315,10 @@ module cs_reg_file
           //PMPCFG0,
           //PMPADDR0,
           TSELECT,
-          TDATA1,
           TDATA2,
           TDATA3: ;  // No-op
+          TDATA1:   tdata1_reg <= csr_wdata_i;  // Trigger data 1 (writable)
+          TCONTROL: tcontrol_reg <= csr_wdata_i;  // Trigger control (writable)
           PMPCFG0:  pmpcfg0  <= csr_wdata_i;  // şimdilik düz RW
           PMPADDR0: pmpaddr0 <= csr_wdata_i;  // şimdilik düz RW
           default: ;  // Unsupported CSR: ignore write
@@ -373,10 +378,11 @@ module cs_reg_file
         //PMPCFG0,
         //PMPADDR0,
         TSELECT,
-        TDATA1,
         TDATA2,
-        TDATA3,
-        TCONTROL: csr_rdata_o = 32'd0;
+        TDATA3: csr_rdata_o = 32'd0;
+        // tdata1: Return written value (writable trigger data)
+        TDATA1:   csr_rdata_o = tdata1_reg;
+        TCONTROL: csr_rdata_o = tcontrol_reg;  // Return written value
         PMPCFG0:  csr_rdata_o = pmpcfg0;
         PMPADDR0: csr_rdata_o = pmpaddr0;
         default: csr_rdata_o = 32'd0;  // Unsupported CSR

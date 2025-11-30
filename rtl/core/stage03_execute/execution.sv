@@ -46,7 +46,8 @@ module execution
     output logic                   pc_sel_o,
     output logic                   alu_stall_o,
     output exc_type_e              exc_type_o,
-    output logic        [XLEN-1:0] mtvec_o
+    output logic        [XLEN-1:0] mtvec_o,
+    output logic                   misa_c_o
 
 );
 
@@ -61,6 +62,8 @@ module execution
   logic        [XLEN-1:0] csr_rdata;
   logic        [XLEN-1:0] mepc;
   logic                   misa_c;
+  
+  assign misa_c_o = misa_c;
 
   always_comb begin
     data_a = fwd_a_i[1] ? alu_result_i : (fwd_a_i[0] ? wb_data_i : r1_data_i);

@@ -82,6 +82,7 @@ module cpu
   logic                  ex_rd_csr;
   logic                  ex_wr_csr;
   logic       [XLEN-1:0] ex_mtvec;
+  logic                  ex_misa_c;
   //logic       [XLEN-1:0] ex_mepc;
   pipe_info_t            ex_info;
   logic                  ex_valid_csr;
@@ -148,6 +149,7 @@ module cpu
       .spec_hit_i   (ex_spec_hit),
       .ex_mtvec_i   (ex_mtvec),
       .trap_active_i(fe_trap_active),
+      .misa_c_i     (ex_misa_c),
       .spec_o       (fe_spec),
       .lx_ireq_o    (lx_ireq),
       .pc_o         (fe_pc),
@@ -205,7 +207,9 @@ module cpu
   always_comb begin
     fe_active_exc_type  = ex_spec_hit ? fe_exc_type : NO_EXCEPTION;
     de_active_exc_type  = ex_spec_hit ? pipe1.exc_type != NO_EXCEPTION ? pipe1.exc_type : de_exc_type : NO_EXCEPTION;
-    fencei_flush        = (pipe2.instr_type == fence_i);
+    // Flush on fence.i OR misa write (misa.C change affects instruction decoding)
+    fencei_flush        = (pipe2.instr_type == fence_i) || 
+                          (ex_wr_csr && pipe2.csr_idx == 12'h301);  // misa write
     flush_pc            = pipe2.pc_incr;
     de_enable           = (stall_cause == NO_STALL); // to synch spike and core log stall on fetch flush
     de_flush_en         = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) ? 1'b0 : de_flush; //(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) && de_flush;
@@ -365,7 +369,8 @@ module cpu
       .pc_sel_o     (ex_pc_sel),
       .alu_stall_o  (ex_alu_stall),
       .exc_type_o   (ex_alu_exc_type),
-      .mtvec_o      (ex_mtvec)
+      .mtvec_o      (ex_mtvec),
+      .misa_c_o     (ex_misa_c)
   );
 
   // ============================================================================
