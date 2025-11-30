@@ -74,9 +74,17 @@ int main(int argc, char **argv) {
     // --- Simulation setup ---
     uint64_t MAX_CYCLES = (argc > 1) ? std::strtoull(argv[1], nullptr, 10) : 100000ULL;
     std::cout << "[INFO] Starting Verilator simulation (" << MAX_CYCLES << " cycles max)" << std::endl;
+    
+    // Calculate progress interval (every 10% of total cycles, minimum 1000)
+    uint64_t progress_interval = (MAX_CYCLES > 10000) ? (MAX_CYCLES / 10) : 1000;
 
     // --- Main simulation loop ---
     while (!contextp->gotFinish() && (main_time / 2) < MAX_CYCLES) {
+        // Print progress at regular intervals
+        if (((main_time / 2) % progress_interval) == 0 && (main_time / 2) > 0) {
+            std::cout << "[CYCLE] " << (main_time / 2) << "/" << MAX_CYCLES << std::endl;
+        }
+        
         top->clk_i = 0; top->eval();
 #if defined(VM_TRACE_FST) || defined(VM_TRACE)
         tfp->dump(main_time++);
