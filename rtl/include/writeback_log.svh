@@ -196,12 +196,11 @@ end
   end
 end
 
-// Periyodik flush - her 10000 cycle'da bir buffer'ı diske yaz
-logic [15:0] flush_counter;
+// Periyodik flush - her 65536 cycle'da bir buffer'ı diske yaz
+// Reset-independent: initialization syntax kullanılıyor
+logic [15:0] flush_counter = '0;
 always @(posedge clk_i) begin
-  if (!rst_ni) begin
-    flush_counter <= '0;
-  end else begin
+  if (rst_ni) begin
     flush_counter <= flush_counter + 1;
     if (flush_counter == 0 && trace_fd != 0) begin
       $fflush(trace_fd);
