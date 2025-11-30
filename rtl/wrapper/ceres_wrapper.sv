@@ -136,7 +136,12 @@ module ceres_wrapper
   // ==========================================================================
   // Reset
   // ==========================================================================
+  // In Verilator simulation, bypass prog_reset to prevent floating UART issues
+`ifdef VERILATOR
+  assign sys_rst_n = rst_ni;  // Programming reset bypass for simulation
+`else
   assign sys_rst_n = rst_ni & prog_reset;
+`endif
 
   // ==========================================================================
   // Address Decoder

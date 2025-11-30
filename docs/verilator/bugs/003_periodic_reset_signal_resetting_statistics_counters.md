@@ -70,7 +70,23 @@ This is normal behavior for the CPU, but diagnostic/logging logic should be **re
 
 ## Solution
 
-### Fix 1: Reset-Independent Statistics Counters
+### Fix 1: Bypass Programming Reset in Verilator Simulation
+
+The root cause was discovered: the `ram_programmer` module monitors UART for a magic sequence. In Verilator simulation, the floating/unused programming UART input could trigger spurious resets.
+
+**Solution**: Bypass `prog_reset` when compiling with Verilator:
+
+```systemverilog
+// ceres_wrapper.sv - Reset section
+// In Verilator simulation, bypass prog_reset to prevent floating UART issues
+`ifdef VERILATOR
+  assign sys_rst_n = rst_ni;  // Programming reset bypass for simulation
+`else
+  assign sys_rst_n = rst_ni & prog_reset;
+`endif
+```
+
+### Fix 2: Reset-Independent Statistics Counters
 
 Changed from reset-based initialization to declaration-time initialization:
 
@@ -134,8 +150,10 @@ end
 
 | File | Change Description |
 |------|-------------------|
+| `rtl/wrapper/ceres_wrapper.sv` | Added `ifdef VERILATOR` to bypass `prog_reset` in simulation |
 | `rtl/core/stage01_fetch/gshare_bp.sv` | Statistics counters now use initialization syntax; always_ff condition changed from `if (!rst_ni)` to `if (rst_ni && !stall_i)` |
 | `rtl/include/writeback_log.svh` | Removed file reopen on reset; added periodic flush with `FLUSH_INTERVAL` |
+| `rtl/periph/uart_tx.sv` | `SIM_UART_MONITOR` shadow buffer pointer now uses initialization syntax and is reset-independent |
 
 ## Verification
 

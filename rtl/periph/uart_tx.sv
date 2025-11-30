@@ -137,14 +137,13 @@ module uart_tx #(  // counter
   // ============================================================================
 
 `ifdef SIM_UART_MONITOR
-  logic   [7:0] shadow_buf    [0:4095];  // 4KB buffer for longer outputs
-  integer       shadow_wr_ptr;
+  logic   [7:0] shadow_buf                                             [0:4095];  // 4KB buffer for longer outputs
+  integer       shadow_wr_ptr = 0;  // Reset-independent initialization
   parameter int MONITOR_THRESHOLD = 2000;  // Wait for more output before stopping
 
   always_ff @(posedge clk_i) begin
-    if (!rst_ni) begin
-      shadow_wr_ptr <= 0;
-    end else begin
+    // Reset-independent: only operate when rst_ni is active
+    if (rst_ni) begin
       if (tx_we_i && !full_o) begin
         shadow_buf[shadow_wr_ptr] <= din_i;
         shadow_wr_ptr <= shadow_wr_ptr + 1;
