@@ -4,7 +4,9 @@
 
   "simulation": {
     "max_cycles": 10000,
-    "timeout_seconds": 60
+    "timeout_seconds": 60,
+    "build_threads": "auto",
+    "sim_threads": 1
   },
 
   "comparison": {

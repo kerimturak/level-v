@@ -176,6 +176,23 @@ MAKEVARS
     echo "CFG_PARALLEL_JOBS := $parallel"
   fi
   
+  # Thread settings
+  local build_threads
+  build_threads=$(echo "$config" | jq -r '.simulation.build_threads // "auto"')
+  if [ "$build_threads" = "auto" ]; then
+    echo "CFG_BUILD_THREADS := \$(shell nproc 2>/dev/null || echo 4)"
+  else
+    echo "CFG_BUILD_THREADS := $build_threads"
+  fi
+  
+  local sim_threads
+  sim_threads=$(echo "$config" | jq -r '.simulation.sim_threads // 1')
+  if [ "$sim_threads" = "auto" ]; then
+    echo "CFG_SIM_THREADS := \$(shell nproc 2>/dev/null || echo 4)"
+  else
+    echo "CFG_SIM_THREADS := $sim_threads"
+  fi
+  
   echo ""
   
   # Comparison settings

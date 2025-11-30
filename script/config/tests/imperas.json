@@ -10,7 +10,7 @@
 
   "defines": {
     "COMMIT_TRACER": true,
-    "TRACE_KONATA": true,
+    "KONATA_TRACER": true,
     "LOG_COMMIT": true,
     "LOG_RAM": false,
     "LOG_UART": false,

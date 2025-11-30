@@ -4,5 +4,11 @@
   "extends": "default",
   "test_list": "sim/test/bench_test_list.flist",
   "simulation": { "max_cycles": 500000 },
-  "defines": { "LOG_COMMIT": false, "TRACE_KONATA": false, "SIM_FAST": true, "LOG_UART": true }
+  "defines": {
+    "COMMIT_TRACER": false,
+    "KONATA_TRACER": false,
+    "LOG_COMMIT": false,
+    "SIM_FAST": true,
+    "LOG_UART": true
+  }
 }

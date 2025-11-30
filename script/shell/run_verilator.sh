@@ -157,7 +157,7 @@ log_info "INIT_FILE => ${MEM_PATH:-<none>}"
 log_info "test_name => ${TEST_NAME:-<none>}"
 log_info "log dir   => $VERILATOR_LOG_DIR"
 log_info "MAX_CYCLES => $MAX_CYCLES"
-[[ "$VERILATOR_THREADS" -gt 1 ]] && log_info "threads   => $VERILATOR_THREADS"
+log_info "sim_threads => $VERILATOR_THREADS"
 
 # -----------------------------------------
 # Binary Check

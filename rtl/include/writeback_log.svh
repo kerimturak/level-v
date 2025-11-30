@@ -41,10 +41,12 @@ initial begin
 
   void'($system($sformatf("mkdir -p $(dirname %s)", trace_path)));
 
-  trace_fd = $fopen(trace_path, "wb");
+  trace_fd = $fopen(trace_path, "w");
   if (trace_fd == 0) begin
     $display("[ERROR] Failed to open trace file: %s", trace_path);
     $finish;
+  end else begin
+    $display("[COMMIT_LOG] Writing to: %s", trace_path);
   end
 end
 
@@ -52,12 +54,8 @@ end
 // MAIN TRACE LOGIC (Spike EXACT behavior)
 // ============================================================================
 always @(posedge clk_i) begin
-  if (!rst_ni) begin
-    if (trace_fd != 0) $fclose(trace_fd);
-    trace_fd <= $fopen(trace_path, "w");
-  end
-  
-  else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
+  // Not: Reset sırasında dosyayı yeniden açmıyoruz - sadece initial'da açıldı
+  if (rst_ni && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
 
     // ============================================================
     // 1) SPIKE-STYLE: CSR + RD WRITE IN SAME INSTRUCTION (CSRRW / CSRRS / CSRRC)
@@ -181,6 +179,19 @@ end
         "core   0: 3 0x%08h (0x%08h)\n",
         pc_i, fe_tracer_i.inst
       );
+    end
+  end
+end
+
+// Periyodik flush - her 10000 cycle'da bir buffer'ı diske yaz
+logic [15:0] flush_counter;
+always @(posedge clk_i) begin
+  if (!rst_ni) begin
+    flush_counter <= '0;
+  end else begin
+    flush_counter <= flush_counter + 1;
+    if (flush_counter == 0 && trace_fd != 0) begin
+      $fflush(trace_fd);
     end
   end
 end

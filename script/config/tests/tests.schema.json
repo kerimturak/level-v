@@ -29,6 +29,14 @@
         "parallel_jobs": {
           "oneOf": [{"type": "integer", "minimum": 1}, {"const": "auto"}],
           "description": "Number of parallel test jobs"
+        },
+        "build_threads": {
+          "oneOf": [{"type": "integer", "minimum": 1}, {"const": "auto"}],
+          "description": "Number of threads for Verilator build (default: auto = nproc)"
+        },
+        "sim_threads": {
+          "oneOf": [{"type": "integer", "minimum": 1}, {"const": "auto"}],
+          "description": "Number of threads for simulation runtime (default: 1)"
         }
       }
     },

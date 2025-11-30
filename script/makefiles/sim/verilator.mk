@@ -44,8 +44,10 @@ VERILATOR_WAIVER   := $(RTL_DIR)/verilator.vlt
 # Threading Configuration
 # -----------------------------------------
 # Auto-detect CPU cores if not specified
-VERILATOR_THREADS  ?= $(shell nproc 2>/dev/null || echo 4)
+# Can be overridden by JSON config (CFG_BUILD_THREADS, CFG_SIM_THREADS)
+VERILATOR_THREADS  ?= $(or $(CFG_BUILD_THREADS),$(shell nproc 2>/dev/null || echo 4))
 BUILD_JOBS         ?= $(VERILATOR_THREADS)
+SIM_THREADS        ?= $(or $(CFG_SIM_THREADS),1)
 
 # -----------------------------------------
 # Verilator Defines (New naming convention)
@@ -521,7 +523,7 @@ run_verilator: verilate
 		MAX_CYCLES="$(MAX_CYCLES)" \
 		MEM_FILE="$(MEM_FILE)" \
 		NO_ADDR="$(NO_ADDR)" \
-		VERILATOR_THREADS="$(VERILATOR_THREADS)" \
+		VERILATOR_THREADS="$(SIM_THREADS)" \
 		COVERAGE_FILE="$(COVERAGE_DATA_DIR)/$(TEST_NAME).dat" \
 		"$(ROOT_DIR)/script/shell/run_verilator.sh"
 

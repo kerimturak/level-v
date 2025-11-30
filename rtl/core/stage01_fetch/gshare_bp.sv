@@ -272,39 +272,27 @@ module gshare_bp
   // Enable with: +define+LOG_BP
   // ============================================================================
 `ifdef LOG_BP
-  // İstatistik sayaçları
-  logic [63:0] total_branches;
-  logic [63:0] correct_predictions;
-  logic [63:0] mispredictions;
-  logic [63:0] ras_predictions;
-  logic [63:0] ras_correct;
-  logic [63:0] btb_hits;
-  logic [63:0] btb_misses;
+  // İstatistik sayaçları (reset'ten bağımsız - kümülatif)
+  // ressette verilator sorun çıkarıyor
+  logic [63:0] total_branches = '0;
+  logic [63:0] correct_predictions = '0;
+  logic [63:0] mispredictions = '0;
+  logic [63:0] ras_predictions = '0;
+  logic [63:0] ras_correct = '0;
+  logic [63:0] btb_hits = '0;
+  logic [63:0] btb_misses = '0;
   // JAL/JALR için ek sayaçlar
-  logic [63:0] jal_count;
-  logic [63:0] jal_correct;
-  logic [63:0] jalr_count;
-  logic [63:0] jalr_correct;
+  logic [63:0] jal_count = '0;
+  logic [63:0] jal_correct = '0;
+  logic [63:0] jalr_count = '0;
+  logic [63:0] jalr_correct = '0;
   // IBTC sayaçları
-  logic [63:0] ibtc_predictions;
-  logic [63:0] ibtc_correct;
+  logic [63:0] ibtc_predictions = '0;
+  logic [63:0] ibtc_correct = '0;
 
+  // İstatistik güncelleme (reset'ten bağımsız)
   always_ff @(posedge clk_i) begin
-    if (!rst_ni) begin
-      total_branches      <= '0;
-      correct_predictions <= '0;
-      mispredictions      <= '0;
-      ras_predictions     <= '0;
-      ras_correct         <= '0;
-      btb_hits            <= '0;
-      btb_misses          <= '0;
-      jal_count           <= '0;
-      jal_correct         <= '0;
-      jalr_count          <= '0;
-      jalr_correct        <= '0;
-      ibtc_predictions    <= '0;
-      ibtc_correct        <= '0;
-    end else if (!stall_i) begin
+    if (rst_ni && !stall_i) begin
       // Tüm control transfer istatistikleri
       if (ex_info_i.bjtype != NO_BJ) begin
         total_branches <= total_branches + 1;
@@ -402,39 +390,85 @@ module gshare_bp
 
   // Simülasyon sonunda özet yazdır
   final begin
+    automatic real    total_accuracy = total_branches > 0 ? (real'(correct_predictions) * 100.0 / real'(total_branches)) : 0.0;
+    automatic real    mispred_rate = total_branches > 0 ? (real'(mispredictions) * 100.0 / real'(total_branches)) : 0.0;
+    automatic real    jal_accuracy = jal_count > 0 ? (real'(jal_correct) * 100.0 / real'(jal_count)) : 0.0;
+    automatic real    jalr_accuracy = jalr_count > 0 ? (real'(jalr_correct) * 100.0 / real'(jalr_count)) : 0.0;
+    automatic real    ras_accuracy = ras_predictions > 0 ? (real'(ras_correct) * 100.0 / real'(ras_predictions)) : 0.0;
+    automatic real    ibtc_accuracy = ibtc_predictions > 0 ? (real'(ibtc_correct) * 100.0 / real'(ibtc_predictions)) : 0.0;
+    automatic longint cond_total = btb_hits + btb_misses;
+    automatic real    cond_accuracy = cond_total > 0 ? (real'(btb_hits) * 100.0 / real'(cond_total)) : 0.0;
+    automatic real    cond_mispred = cond_total > 0 ? (real'(btb_misses) * 100.0 / real'(cond_total)) : 0.0;
+
     if (bp_log_file != 0) begin
-      $fwrite(bp_log_file, "\n=== Final Statistics ===\n");
-      $fwrite(bp_log_file, "Total Control Transfers: %0d\n", total_branches);
-      $fwrite(bp_log_file, "Correct Predictions    : %0d (%.2f%%)\n", correct_predictions, total_branches > 0 ? (real'(correct_predictions) * 100.0 / real'(total_branches)) : 0.0);
-      $fwrite(bp_log_file, "Mispredictions         : %0d (%.2f%%)\n", mispredictions, total_branches > 0 ? (real'(mispredictions) * 100.0 / real'(total_branches)) : 0.0);
-      $fwrite(bp_log_file, "\nJAL Statistics:\n");
-      $fwrite(bp_log_file, "  Total JAL  : %0d\n", jal_count);
-      $fwrite(bp_log_file, "  JAL Correct: %0d (%.2f%%)\n", jal_correct, jal_count > 0 ? (real'(jal_correct) * 100.0 / real'(jal_count)) : 0.0);
-      $fwrite(bp_log_file, "\nJALR Statistics:\n");
-      $fwrite(bp_log_file, "  Total JALR  : %0d\n", jalr_count);
-      $fwrite(bp_log_file, "  JALR Correct: %0d (%.2f%%)\n", jalr_correct, jalr_count > 0 ? (real'(jalr_correct) * 100.0 / real'(jalr_count)) : 0.0);
-      $fwrite(bp_log_file, "  - RAS Predictions : %0d (%.2f%% accurate)\n", ras_predictions, ras_predictions > 0 ? (real'(ras_correct) * 100.0 / real'(ras_predictions)) : 0.0);
-      $fwrite(bp_log_file, "  - IBTC Predictions: %0d (%.2f%% accurate)\n", ibtc_predictions, ibtc_predictions > 0 ? (real'(ibtc_correct) * 100.0 / real'(ibtc_predictions)) : 0.0);
-      $fwrite(bp_log_file, "\nConditional Branch (BEQ/BNE/BLT/BGE/BLTU/BGEU):\n");
-      $fwrite(bp_log_file, "  Total    : %0d\n", btb_hits + btb_misses);
-      $fwrite(bp_log_file, "  Correct  : %0d (%.2f%%)\n", btb_hits, (btb_hits + btb_misses) > 0 ? (real'(btb_hits) * 100.0 / real'(btb_hits + btb_misses)) : 0.0);
-      $fwrite(bp_log_file, "  Mispred  : %0d (%.2f%%)\n", btb_misses, (btb_hits + btb_misses) > 0 ? (real'(btb_misses) * 100.0 / real'(btb_hits + btb_misses)) : 0.0);
+      $fwrite(bp_log_file, "\n");
+      $fwrite(
+          bp_log_file,
+          "╔══════════════════════════════════════════════════════════════╗\n");
+      $fwrite(bp_log_file, "║          GSHARE Branch Predictor - Final Statistics          ║\n");
+      $fwrite(
+          bp_log_file,
+          "╠══════════════════════════════════════════════════════════════╣\n");
+      $fwrite(bp_log_file, "║  Total Control Transfers : %10d                         ║\n", total_branches);
+      $fwrite(bp_log_file, "║  Correct Predictions     : %10d  (%6.2f%%)              ║\n", correct_predictions, total_accuracy);
+      $fwrite(bp_log_file, "║  Mispredictions          : %10d  (%6.2f%%)              ║\n", mispredictions, mispred_rate);
+      $fwrite(
+          bp_log_file,
+          "╠══════════════════════════════════════════════════════════════╣\n");
+      $fwrite(bp_log_file, "║  JAL (Direct Jump)                                           ║\n");
+      $fwrite(bp_log_file, "║    Total                 : %10d                         ║\n", jal_count);
+      $fwrite(bp_log_file, "║    Correct               : %10d  (%6.2f%%)              ║\n", jal_correct, jal_accuracy);
+      $fwrite(
+          bp_log_file,
+          "╠══════════════════════════════════════════════════════════════╣\n");
+      $fwrite(bp_log_file, "║  JALR (Indirect Jump)                                        ║\n");
+      $fwrite(bp_log_file, "║    Total                 : %10d                         ║\n", jalr_count);
+      $fwrite(bp_log_file, "║    Correct               : %10d  (%6.2f%%)              ║\n", jalr_correct, jalr_accuracy);
+      $fwrite(bp_log_file, "║    - RAS Predictions     : %10d  (%6.2f%% accurate)     ║\n", ras_predictions, ras_accuracy);
+      $fwrite(bp_log_file, "║    - IBTC Predictions    : %10d  (%6.2f%% accurate)     ║\n", ibtc_predictions, ibtc_accuracy);
+      $fwrite(
+          bp_log_file,
+          "╠══════════════════════════════════════════════════════════════╣\n");
+      $fwrite(bp_log_file, "║  Conditional Branch (BEQ/BNE/BLT/BGE/BLTU/BGEU)               ║\n");
+      $fwrite(bp_log_file, "║    Total                 : %10d                         ║\n", cond_total);
+      $fwrite(bp_log_file, "║    Correct               : %10d  (%6.2f%%)              ║\n", btb_hits, cond_accuracy);
+      $fwrite(bp_log_file, "║    Mispredicted          : %10d  (%6.2f%%)              ║\n", btb_misses, cond_mispred);
+      $fwrite(
+          bp_log_file,
+          "╚══════════════════════════════════════════════════════════════╝\n");
       $fclose(bp_log_file);
     end
 
-    $display("\n========================================");
-    $display("   GSHARE Branch Predictor Summary");
-    $display("========================================");
-    $display("Total Control Transfers: %0d", total_branches);
-    $display("Correct Predictions    : %0d (%.2f%%)", correct_predictions, total_branches > 0 ? (real'(correct_predictions) * 100.0 / real'(total_branches)) : 0.0);
-    $display("Mispredictions         : %0d (%.2f%%)", mispredictions, total_branches > 0 ? (real'(mispredictions) * 100.0 / real'(total_branches)) : 0.0);
-    $display("----------------------------------------");
-    $display("JAL  : %0d total, %0d correct (%.2f%%)", jal_count, jal_correct, jal_count > 0 ? (real'(jal_correct) * 100.0 / real'(jal_count)) : 0.0);
-    $display("JALR : %0d total, %0d correct (%.2f%%)", jalr_count, jalr_correct, jalr_count > 0 ? (real'(jalr_correct) * 100.0 / real'(jalr_count)) : 0.0);
-    $display("  RAS : %0d (%.2f%% accurate)", ras_predictions, ras_predictions > 0 ? (real'(ras_correct) * 100.0 / real'(ras_predictions)) : 0.0);
-    $display("  IBTC: %0d (%.2f%% accurate)", ibtc_predictions, ibtc_predictions > 0 ? (real'(ibtc_correct) * 100.0 / real'(ibtc_predictions)) : 0.0);
-    $display("BRANCH: %0d total, %0d correct (%.2f%%)", btb_hits + btb_misses, btb_hits, (btb_hits + btb_misses) > 0 ? (real'(btb_hits) * 100.0 / real'(btb_hits + btb_misses)) : 0.0);
-    $display("========================================\n");
+    $display("");
+    $display(
+        "╔══════════════════════════════════════════════════════════════╗");
+    $display("║          GSHARE Branch Predictor - Final Statistics          ║");
+    $display(
+        "╠══════════════════════════════════════════════════════════════╣");
+    $display("║  Total Control Transfers : %10d                         ║", total_branches);
+    $display("║  Correct Predictions     : %10d  (%6.2f%%)              ║", correct_predictions, total_accuracy);
+    $display("║  Mispredictions          : %10d  (%6.2f%%)              ║", mispredictions, mispred_rate);
+    $display(
+        "╠══════════════════════════════════════════════════════════════╣");
+    $display("║  JAL (Direct Jump)                                           ║");
+    $display("║    Total                 : %10d                         ║", jal_count);
+    $display("║    Correct               : %10d  (%6.2f%%)              ║", jal_correct, jal_accuracy);
+    $display(
+        "╠══════════════════════════════════════════════════════════════╣");
+    $display("║  JALR (Indirect Jump)                                        ║");
+    $display("║    Total                 : %10d                         ║", jalr_count);
+    $display("║    Correct               : %10d  (%6.2f%%)              ║", jalr_correct, jalr_accuracy);
+    $display("║    - RAS Predictions     : %10d  (%6.2f%% accurate)     ║", ras_predictions, ras_accuracy);
+    $display("║    - IBTC Predictions    : %10d  (%6.2f%% accurate)     ║", ibtc_predictions, ibtc_accuracy);
+    $display(
+        "╠══════════════════════════════════════════════════════════════╣");
+    $display("║  Conditional Branch (BEQ/BNE/BLT/BGE/BLTU/BGEU)               ║");
+    $display("║    Total                 : %10d                         ║", cond_total);
+    $display("║    Correct               : %10d  (%6.2f%%)              ║", btb_hits, cond_accuracy);
+    $display("║    Mispredicted          : %10d  (%6.2f%%)              ║", btb_misses, cond_mispred);
+    $display(
+        "╚══════════════════════════════════════════════════════════════╝");
+    $display("");
   end
 
   // Real-time misprediction log (opsiyonel, çok verbose)

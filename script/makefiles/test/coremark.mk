@@ -162,7 +162,7 @@ run_coremark: coremark
 	@echo -e "$(YELLOW)[INFO]$(RESET) Max Cycles: $(or $(MAX_CYCLES),5000000)"
 	@$(MAKE) --no-print-directory run_verilator \
 		TEST_NAME=coremark \
-		TEST_TYPE=bench \
+		TEST_CONFIG=coremark \
 		MEM_FILE=$(COREMARK_MEM) \
 		NO_ADDR=1 \
 		MAX_CYCLES=$(or $(MAX_CYCLES),5000000) \
@@ -194,7 +194,7 @@ cm_run:
 	@$(MKDIR) "$(COREMARK_LOG_DIR)"
 	@$(MAKE) --no-print-directory run_verilator \
 		TEST_NAME=coremark \
-		TEST_TYPE=bench \
+		TEST_CONFIG=coremark \
 		MEM_FILE=$(COREMARK_MEM) \
 		NO_ADDR=1 \
 		MAX_CYCLES=$(or $(MAX_CYCLES),5000000) \
