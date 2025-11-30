@@ -6,7 +6,7 @@
   "test_list": "custom",
 
   "simulation": {
-    "max_cycles": 10000,
+    "max_cycles": 1000,
     "timeout_seconds": 30,
     "build_threads": "auto",
     "sim_threads": 1
