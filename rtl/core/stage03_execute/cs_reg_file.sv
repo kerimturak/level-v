@@ -33,7 +33,8 @@ module cs_reg_file
     output logic                   misa_c_o,
     // Trigger/Debug outputs for hardware breakpoint
     output logic        [XLEN-1:0] tdata1_o,
-    output logic        [XLEN-1:0] tdata2_o
+    output logic        [XLEN-1:0] tdata2_o,
+    output logic        [XLEN-1:0] tcontrol_o
 );
 
   /*
@@ -210,6 +211,13 @@ module cs_reg_file
     // Trigger outputs for hardware breakpoint detection
     tdata1_o = tdata1_reg;
     tdata2_o = tdata2_reg;
+    // tcontrol: when trap happens, mpte <= mte (combinational bypass)
+    if (trap_active_i || de_trap_active_i) begin
+      tcontrol_o[7] = tcontrol_reg[3];  // mpte = mte
+      tcontrol_o[3] = tcontrol_reg[3];  // mte unchanged
+    end else begin
+      tcontrol_o = tcontrol_reg;
+    end
   end
 
   // ============================================================================
@@ -266,6 +274,8 @@ module cs_reg_file
         mstatus.mpie <= mstatus.mie;
         mstatus.mie  <= 1'b0;
         mstatus.mpp  <= 2'b11;  // M-mode
+        // Trigger control: save mte to mpte
+        tcontrol_reg[7] <= tcontrol_reg[3];  // mpte = mte
       end else if (trap_active_i && !de_trap_active_i) begin
         mepc         <= trap_mepc_i;
         mcause       <= trap_cause_i;
@@ -273,6 +283,8 @@ module cs_reg_file
         mstatus.mpie <= mstatus.mie;
         mstatus.mie  <= 1'b0;
         mstatus.mpp  <= 2'b11;  // M-mode
+        // Trigger control: save mte to mpte
+        tcontrol_reg[7] <= tcontrol_reg[3];  // mpte = mte
       end
       
       // ------------------------------------------------------------------------
@@ -283,6 +295,9 @@ module cs_reg_file
         mstatus.mie  <= mstatus.mpie;
         mstatus.mpie <= 1'b1;
         mstatus.mpp  <= 2'b11;  // M-mode only: always return to M-mode
+        // Trigger control: mte = mpte, mpte = 0
+        tcontrol_reg[3] <= tcontrol_reg[7];  // mte = mpte
+        tcontrol_reg[7] <= 1'b0;             // mpte = 0
       end
       
       // ------------------------------------------------------------------------

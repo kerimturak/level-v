@@ -103,10 +103,11 @@ else if (instr_type_i == mret) begin : mret_commit
       784         // <<2 doğru
     );
 
-    // tcontrol (read-only zero in M-mode only systems)
+    // tcontrol - log actual value from CSR file
     $fwrite(trace_fd,
-      "c%0d_tcontrol 0x00000000\n",
-      1957        // 0x7A5
+      "c%0d_tcontrol 0x%08h\n",
+      1957,       // 0x7A5
+      tcontrol_i
     );
 
     disable mret_commit;

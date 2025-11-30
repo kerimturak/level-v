@@ -38,6 +38,7 @@ module writeback
     input  logic                       trap_active_i,
     input  logic            [    11:0] csr_idx_i,
     input  instr_type_e                instr_type_i,
+    input  logic            [XLEN-1:0] tcontrol_i,
 `endif
     input  logic                       clk_i,
     input  logic                       rst_ni,

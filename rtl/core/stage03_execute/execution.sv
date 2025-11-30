@@ -47,7 +47,10 @@ module execution
     output logic                   alu_stall_o,
     output exc_type_e              exc_type_o,
     output logic        [XLEN-1:0] mtvec_o,
-    output logic                   misa_c_o
+    output logic                   misa_c_o,
+    output logic        [XLEN-1:0] tdata1_o,
+    output logic        [XLEN-1:0] tdata2_o,
+    output logic        [XLEN-1:0] tcontrol_o
 
 );
 
@@ -58,6 +61,9 @@ module execution
   logic                   ex_zero;
   logic                   ex_slt;
   logic                   ex_sltu;
+  logic        [XLEN-1:0] tdata1;
+  logic        [XLEN-1:0] tdata2;
+  logic        [XLEN-1:0] tcontrol;
   logic        [XLEN-1:0] alu_result;
   logic        [XLEN-1:0] csr_rdata;
   logic        [XLEN-1:0] mepc;
@@ -155,7 +161,12 @@ module execution
       .mtvec_o         (mtvec_o),
       .mepc_o          (mepc),
       .misa_c_o        (misa_c),
-      .tdata1_o        (),  // Trigger outputs - not used yet
-      .tdata2_o        ()   // Breakpoint address - not used yet
+      .tdata1_o        (tdata1),
+      .tdata2_o        (tdata2),
+      .tcontrol_o      (tcontrol)
   );
+
+  assign tdata1_o   = tdata1;
+  assign tdata2_o   = tdata2;
+  assign tcontrol_o = tcontrol;
 endmodule

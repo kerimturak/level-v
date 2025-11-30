@@ -83,6 +83,8 @@ module cpu
   logic                  ex_wr_csr;
   logic       [XLEN-1:0] ex_mtvec;
   logic                  ex_misa_c;
+  logic       [XLEN-1:0] ex_tdata1;
+  logic       [XLEN-1:0] ex_tdata2;
   //logic       [XLEN-1:0] ex_mepc;
   pipe_info_t            ex_info;
   logic                  ex_valid_csr;
@@ -150,6 +152,8 @@ module cpu
       .ex_mtvec_i   (ex_mtvec),
       .trap_active_i(fe_trap_active),
       .misa_c_i     (ex_misa_c),
+      .tdata1_i     (ex_tdata1),
+      .tdata2_i     (ex_tdata2),
       .spec_o       (fe_spec),
       .lx_ireq_o    (lx_ireq),
       .pc_o         (fe_pc),
@@ -370,7 +374,10 @@ module cpu
       .alu_stall_o  (ex_alu_stall),
       .exc_type_o   (ex_alu_exc_type),
       .mtvec_o      (ex_mtvec),
-      .misa_c_o     (ex_misa_c)
+      .misa_c_o     (ex_misa_c),
+      .tdata1_o     (ex_tdata1),
+      .tdata2_o     (ex_tdata2),
+      .tcontrol_o   (ex_tcontrol)
   );
 
   // ============================================================================
@@ -546,6 +553,7 @@ module cpu
       .instr_type_i    (pipe4.instr_type),
       .csr_wr_data_i   (pipe4.csr_wr_data),
       .trap_active_i   (trap_active),
+      .tcontrol_i      (ex_tcontrol),
 `endif
       .clk_i           (clk_i),
       .rst_ni          (rst_ni),

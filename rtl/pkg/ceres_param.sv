@@ -18,6 +18,42 @@ package ceres_param;
   localparam XLEN = 32;
   localparam BLK_SIZE = 128;
 
+  // ============================================================================
+  // PARAMETRIC EXCEPTION PRIORITY CONFIGURATION
+  // ============================================================================
+  // This allows testing different exception priority orders against Spike.
+  // Default follows RISC-V Privileged Spec Section 3.1.15:
+  // Priority: INSTR_MISALIGNED > INSTR_ACCESS_FAULT > ILLEGAL > EBREAK > ECALL
+  // Hardware breakpoints (debug mode) have higher priority than INSTR_MISALIGNED
+  //
+  // Priority levels (lower enum value = higher priority when evaluated)
+  // ============================================================================
+  typedef enum logic [4:0] {
+    PRIORITY_1,  // Highest priority (checked first)
+    PRIORITY_2,
+    PRIORITY_3,
+    PRIORITY_4,
+    PRIORITY_5,
+    PRIORITY_6,
+    PRIORITY_7,  // Lowest priority (checked last)
+    PRIORITY_DISABLED
+  } exc_priority_t;
+
+  // Exception priority assignment (parametric - can be overridden via verilog defines)
+  // Default: Follow RISC-V specification
+  localparam exc_priority_t EXC_PRIORITY_DEBUG_BREAKPOINT = PRIORITY_1;  // Highest: Hardware breakpoint
+  localparam exc_priority_t EXC_PRIORITY_INSTR_MISALIGNED = PRIORITY_2;  // Instruction misaligned
+  localparam exc_priority_t EXC_PRIORITY_INSTR_ACCESS_FAULT = PRIORITY_3;  // Instruction access fault
+  localparam exc_priority_t EXC_PRIORITY_ILLEGAL = PRIORITY_4;  // Illegal instruction
+  localparam exc_priority_t EXC_PRIORITY_EBREAK = PRIORITY_5;  // EBREAK/C.EBREAK
+  localparam exc_priority_t EXC_PRIORITY_ECALL = PRIORITY_6;  // ECALL (lowest)
+
+  // Helper function to check if exception should be taken based on priority
+  // Returns 1 if exception priority is enabled and higher than minimum
+  function automatic logic check_exc_priority(input exc_priority_t exc_pri, input exc_priority_t min_pri);
+    return (exc_pri <= min_pri) && (exc_pri != PRIORITY_DISABLED);
+  endfunction
+
   localparam [6:0] system = 7'b11100_11;
   localparam [6:0] op_fence_i = 7'b00011_11;
   localparam [6:0] op_r_type = 7'b01100_11;  // 51, add, sub, sll, slt, sltu, xor, srl, sra, or, and,
@@ -260,6 +296,7 @@ package ceres_param;
     INSTR_ACCESS_FAULT,
     ILLEGAL_INSTRUCTION,
     EBREAK,
+    BREAKPOINT,  // Hardware breakpoint (same mcause as EBREAK = 3)
     LOAD_MISALIGNED,
     LOAD_ACCESS_FAULT,
     STORE_MISALIGNED,
@@ -612,6 +649,7 @@ package ceres_param;
       INSTR_ACCESS_FAULT:  trap_cause_decode = 1;
       ILLEGAL_INSTRUCTION: trap_cause_decode = 2;
       EBREAK:              trap_cause_decode = 3;
+      BREAKPOINT:          trap_cause_decode = 3;  // Hardware breakpoint (same as EBREAK)
       LOAD_MISALIGNED:     trap_cause_decode = 4;
       LOAD_ACCESS_FAULT:   trap_cause_decode = 5;
       STORE_MISALIGNED:    trap_cause_decode = 6;

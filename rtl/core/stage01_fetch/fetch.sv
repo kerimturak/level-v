@@ -27,6 +27,8 @@ module fetch
     input  logic            [XLEN-1:0] ex_mtvec_i,
     input  logic                       trap_active_i,
     input  logic                       misa_c_i,       // C extension enabled
+    input  logic            [XLEN-1:0] tdata1_i,       // Trigger data 1 (config)
+    input  logic            [XLEN-1:0] tdata2_i,       // Trigger data 2 (breakpoint addr)
     input  logic                       spec_hit_i,
     output predict_info_t              spec_o,
     output ilowX_req_t                 lx_ireq_o,
@@ -59,6 +61,14 @@ module fetch
   icache_req_t            icache_req;  // Gated request to cache
   blowX_res_t             buff_lowX_res;
   logic                   buf_lookup_ack;
+
+  // Exception priority detection signals
+  logic                   has_debug_breakpoint;
+  logic                   has_instr_misaligned;
+  logic                   has_instr_access_fault;
+  logic                   has_illegal_instr;
+  logic                   has_ebreak;
+  logic                   has_ecall;
 
   // ============================================================================
   // PC Register: Program Counter yönetimi
@@ -132,12 +142,12 @@ module fetch
     // ============================================================================
     // Instruction Type Detection: Gelen instruction'ın tipini belirler
     // ============================================================================
-    instr_type_o  = resolved_instr_type(inst_o);
+    instr_type_o           = resolved_instr_type(inst_o);
 
     // ============================================================================
     // Buffer Request Formation: Align buffer'a gönderilecek istek oluşturulur
     // ============================================================================
-    buff_req      = '{valid    : fetch_valid, ready    : !flush_i && rst_ni,  // Sadece PC güncellenebiliyorsa ready
+    buff_req               = '{valid    : fetch_valid, ready    : !flush_i && rst_ni,  // Sadece PC güncellenebiliyorsa ready
  addr     : pc_o, uncached : uncached};
 
     // ============================================================================
@@ -146,38 +156,48 @@ module fetch
     // Valid cevabı valid istekle aynı cycle da üretildiği için.
     // TODO: Belki handshake kurulabilir, olası çoğu comp loop sebebi burası
     // ============================================================================
-    imiss_stall_o = (buff_req.valid && !buff_res.valid);
+    imiss_stall_o          = (buff_req.valid && !buff_res.valid);
 
     // ============================================================================
-    // Exception Type Detection: Öncelik sırasına göre exception tipini belirler
-    // Öncelik: ACCESS_FAULT > ILLEGAL_INSTR > EBREAK > ECALL
+    // Exception Type Detection: Parametric priority-based exception selection
+    // Follows RISC-V Privileged Specification Section 3.1.15
+    // Priority can be configured via parameters in ceres_param.sv
+    // 
+    // Exception detection with parametric priority:
+    // 1. Hardware breakpoint (debug trigger) - highest priority
+    // 2. Instruction address misaligned
+    // 3. Instruction access fault
+    // 4. Illegal instruction
+    // 5. EBREAK/C.EBREAK instruction
+    // 6. ECALL instruction - lowest priority
     // ============================================================================
-    exc_type_o    = NO_EXCEPTION;
 
-    if (!fetch_valid) begin
-      exc_type_o = NO_EXCEPTION;
+    // Detect all exceptions present
+    has_debug_breakpoint   = fetch_valid && tdata1_i[2] && (pc_o == tdata2_i);
+    has_instr_misaligned   = fetch_valid && (misa_c_i ? pc_o[0] : (pc_o[1:0] != 2'b00));
+    has_instr_access_fault = fetch_valid && !grand;
+    has_illegal_instr      = fetch_valid && illegal_instr && buff_res.valid;
+    has_ebreak             = fetch_valid && (instr_type_o == ebreak);
+    has_ecall              = fetch_valid && (instr_type_o == ecall);
 
-    end else if (misa_c_i ? pc_o[0] : (pc_o[1:0] != 2'b00)) begin
-      // 1) Highest priority: instruction address misaligned
-      // If C extension enabled: halfword aligned (pc[0]=0)
-      // If C extension disabled: word aligned (pc[1:0]=00)
+    // Parametric priority-based selection
+    // Check in order of priority and take first one that's enabled and present
+    exc_type_o             = NO_EXCEPTION;
+
+    if (has_debug_breakpoint && check_exc_priority(EXC_PRIORITY_DEBUG_BREAKPOINT, PRIORITY_7)) begin
+      exc_type_o = BREAKPOINT;
+    end else if (has_instr_misaligned && check_exc_priority(EXC_PRIORITY_INSTR_MISALIGNED, PRIORITY_7)) begin
       exc_type_o = INSTR_MISALIGNED;
-
-    end else if (!grand) begin
-      // 2) Access fault (PMA)
+    end else if (has_instr_access_fault && check_exc_priority(EXC_PRIORITY_INSTR_ACCESS_FAULT, PRIORITY_7)) begin
       exc_type_o = INSTR_ACCESS_FAULT;
-
-    end else if (illegal_instr && buff_res.valid) begin
-      // 3) Illegal instruction
+    end else if (has_illegal_instr && check_exc_priority(EXC_PRIORITY_ILLEGAL, PRIORITY_7)) begin
       exc_type_o = ILLEGAL_INSTRUCTION;
-
+    end else if (has_ebreak && check_exc_priority(EXC_PRIORITY_EBREAK, PRIORITY_7)) begin
+      exc_type_o = EBREAK;
+    end else if (has_ecall && check_exc_priority(EXC_PRIORITY_ECALL, PRIORITY_7)) begin
+      exc_type_o = ECALL;
     end else begin
-      // 4) Other synchronous exceptions
-      case (instr_type_o)
-        ebreak:  exc_type_o = EBREAK;
-        ecall:   exc_type_o = ECALL;
-        default: exc_type_o = NO_EXCEPTION;
-      endcase
+      exc_type_o = NO_EXCEPTION;
     end
 
     // ============================================================================
