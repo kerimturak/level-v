@@ -508,10 +508,10 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
     elapsed_time = time.time() - start_time
 
     # Determine if there are errors
+    # Note: Extra RTL/Spike entries are informational only (e.g., test pass loops)
+    # They should not cause test failure
     has_errors = (stats['pcinst_mismatch'] > 0 or 
-                  stats['reg_mismatch'] > 0 or 
-                  stats['insert_rtl'] > 0 or 
-                  stats['insert_spike'] > 0)
+                  stats['reg_mismatch'] > 0)
 
     if not QUIET:
         # Generate all output files

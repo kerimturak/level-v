@@ -627,12 +627,8 @@ module cpu
   if (ex_exc_type != NO_EXCEPTION) begin
     unique case (ex_exc_type)
       ILLEGAL_INSTRUCTION: begin
-        // EX aşamasında illegal yakalıyorsan, buradaki inst'i kullan
-        `ifdef COMMIT_TRACER
-        trap_tval = pipe2.fe_tracer.inst;
-        `else
-        trap_tval = '0; // COMMIT_TRACER kapalıysa instruction bilgisi yok
-        `endif
+        // RISC-V spec: mtval can be 0 for illegal (impl-defined, Spike uses 0)
+        trap_tval = '0;
       end
       LOAD_MISALIGNED,
       STORE_MISALIGNED: begin
@@ -648,8 +644,8 @@ module cpu
   end else if (de_active_exc_type != NO_EXCEPTION) begin
     unique case (de_active_exc_type)
       ILLEGAL_INSTRUCTION: begin
-        // Decode aşamasında gördüğün illegal inst
-        trap_tval = pipe1.inst;
+        // RISC-V spec: mtval can be 0 for illegal (impl-defined, Spike uses 0)
+        trap_tval = '0;
       end
       INSTR_MISALIGNED: begin
         // mtval = faulting PC
@@ -669,7 +665,8 @@ module cpu
         trap_tval = fe_pc;
       end
       ILLEGAL_INSTRUCTION: begin
-        trap_tval = fe_inst;
+        // RISC-V spec: mtval can be 0 for illegal (impl-defined, Spike uses 0)
+        trap_tval = '0;
       end
       default: begin
         trap_tval = '0;

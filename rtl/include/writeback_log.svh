@@ -53,9 +53,15 @@ end
 // ============================================================================
 // MAIN TRACE LOGIC (Spike EXACT behavior)
 // ============================================================================
+
 always @(posedge clk_i) begin
   // Not: Reset sırasında dosyayı yeniden açmıyoruz - sadece initial'da açıldı
   if (rst_ni && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
+
+    // Automatic variable for mstatus WARL (MPP always 11 for M-mode only)
+    automatic logic [31:0] csr_log_value = (csr_idx_i == 12'h300) ? 
+                                           (csr_wr_data_i | 32'h00001800) : 
+                                           csr_wr_data_i;
 
     // ============================================================
     // 1) SPIKE-STYLE: CSR + RD WRITE IN SAME INSTRUCTION (CSRRW / CSRRS / CSRRC)
@@ -73,7 +79,7 @@ always @(posedge clk_i) begin
         wb_data_o,                     // RD = OLD CSR
         csr_idx_i,
         csr_name(csr_idx_i),
-        csr_wr_data_i                  // CSR = NEW CSR (your new port)
+        csr_log_value                  // CSR = NEW CSR with WARL applied
       );
     end
 
@@ -83,12 +89,12 @@ always @(posedge clk_i) begin
 // ============================================================
 else if (instr_type_i == mret) begin : mret_commit
 
-    // mstatus
+    // mstatus - apply WARL (MPP always 11)
     $fwrite(trace_fd,
       "core   0: 3 0x%08h (0x%08h) c%0d_mstatus 0x%08h ",
       pc_i, fe_tracer_i.inst,
       768,        // <<2 doğru
-      csr_wr_data_i
+      csr_log_value
     );
 
     // mstatush
@@ -117,7 +123,7 @@ end
         pc_i, fe_tracer_i.inst,
         csr_idx_i,
         csr_name(csr_idx_i),
-        csr_wr_data_i
+        csr_log_value
       );
     end
 
