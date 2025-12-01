@@ -10,3 +10,5 @@ build
 results
 *.tmp
 coremark
+riscv-privileged.pdf
+riscv-unprivileged.pdf
