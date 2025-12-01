@@ -18,6 +18,17 @@ make full
 make coverage
 ```
 
+## 📚 Dökümantasyon
+
+**Detaylı dökümantasyon için**: [📖 Ceres Dökümantasyon Index](docs/INDEX.md)
+
+### Önemli Belgeler
+- **[Mimari Tasarım](docs/architecture.md)** ⭐ **YENİ** - Tüm bileşenlerin detaylı açıklaması
+- **[Test Otomasyonu](docs/test/test-automation-summary.md)** - Test pipeline ve test yazma kılavuzu
+- **[RISC-V ISA Testleri](docs/riscv-test.md)** - ISA test kurulum ve çalıştırma
+- **[Exception Priority Sistem](docs/PARAMETRIC_EXCEPTION_PRIORITY.md)** - Parametrik exception handling
+- **[İmplementasyon Özeti](docs/IMPLEMENTATION_SUMMARY.md)** - Teknik implementasyon detayları
+
 ## 📊 Test Automation
 
 Comprehensive test suite with 215+ tests:
@@ -25,8 +36,6 @@ Comprehensive test suite with 215+ tests:
 - **Arch Tests:** 91 (I: 38, M: 8, C: 27, Priv: 18)
 - **Imperas Tests:** 45 (I extension)
 - **Benchmarks:** 13 + CoreMark
-
-📖 **[Full Test Automation Guide](docs/test/test-automation-summary.md)**
 
 ### Available Commands
 ```bash
