@@ -180,8 +180,8 @@ run_spike:
 	echo -e "$(GREEN)✓ Using PASS address: $$PASS_ADDR$(RESET)"; \
 	DEBUG_CMD="$(BUILD_DIR)/test_work/$(TEST_NAME)_spike.cmd"; \
 	echo -e "until pc 0 $$PASS_ADDR\nquit" > "$$DEBUG_CMD"; \
-	$(SPIKE) -d --isa=$(SPIKE_ISA) --pc=$(SPIKE_PC) --priv=$(SPIKE_PRIV) --log-commits \
-		--triggers=1 \
+	echo -e "$(CYAN)[DEBUG]$(RESET) Spike args: $(SPIKE_ARGS)"; \
+	$(SPIKE) -d $(SPIKE_ARGS) \
 		--debug-cmd="$$DEBUG_CMD" \
 		$(ELF_FILE) \
 		2>&1 | tee $(SPIKE_LOG); \

@@ -14,6 +14,48 @@
     "spike_enabled": true
   },
 
+  "spike": {
+    "_comment": "Spike ISA Simulator Configuration - All available parameters",
+    "enabled": true,
+    "isa": "rv32imc_zicsr_zicntr_zifencei",
+    "priv": "m",
+    "pc": "0x80000000",
+    "processors": 1,
+    "memory_mb": 256,
+    "triggers": 1,
+    "pmp_regions": 0,
+    "pmp_granularity": 4,
+    "misaligned": false,
+    "big_endian": false,
+    "halted": false,
+    "log_commits": true,
+    "log_cache_miss": false,
+    "debug_mode": true,
+    "instructions_limit": 0,
+    "real_time_clint": false,
+    "blocksz": 64,
+    "debug_module": {
+      "enabled": false,
+      "progsize": 2,
+      "datacount": 2,
+      "sba_bits": 0,
+      "auth": false,
+      "dmi_rti": 0,
+      "abstract_rti": 0,
+      "no_hasel": false,
+      "no_abstract_csr": false,
+      "no_abstract_fpr": false,
+      "no_halt_groups": false,
+      "no_impebreak": false
+    },
+    "cache": {
+      "enabled": false,
+      "icache": "",
+      "dcache": "",
+      "l2cache": ""
+    }
+  },
+
   "defines": {
     "COMMIT_TRACER": true,
     "KONATA_TRACER": true,

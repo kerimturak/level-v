@@ -255,6 +255,155 @@ MAKEVARS
   
   echo ""
   
+  # Spike Configuration
+  echo "# Spike ISA Simulator Configuration"
+  
+  local spike_enabled
+  spike_enabled=$(echo "$config" | jq -r '.spike.enabled // true')
+  [ "$spike_enabled" = "true" ] && echo "CFG_SPIKE_ENABLED := 1" || echo "CFG_SPIKE_ENABLED := 0"
+  
+  local spike_isa
+  spike_isa=$(echo "$config" | jq -r '.spike.isa // "rv32im_zicsr_zicntr_zifencei"')
+  echo "CFG_SPIKE_ISA := $spike_isa"
+  
+  local spike_priv
+  spike_priv=$(echo "$config" | jq -r '.spike.priv // "m"')
+  echo "CFG_SPIKE_PRIV := $spike_priv"
+  
+  local spike_pc
+  spike_pc=$(echo "$config" | jq -r '.spike.pc // "0x80000000"')
+  echo "CFG_SPIKE_PC := $spike_pc"
+  
+  local spike_processors
+  spike_processors=$(echo "$config" | jq -r '.spike.processors // 1')
+  echo "CFG_SPIKE_PROCESSORS := $spike_processors"
+  
+  local spike_memory
+  spike_memory=$(echo "$config" | jq -r '.spike.memory_mb // 256')
+  echo "CFG_SPIKE_MEMORY_MB := $spike_memory"
+  
+  local spike_triggers
+  spike_triggers=$(echo "$config" | jq -r '.spike.triggers // 1')
+  echo "CFG_SPIKE_TRIGGERS := $spike_triggers"
+  
+  local spike_pmp_regions
+  spike_pmp_regions=$(echo "$config" | jq -r '.spike.pmp_regions // 0')
+  echo "CFG_SPIKE_PMP_REGIONS := $spike_pmp_regions"
+  
+  local spike_pmp_granularity
+  spike_pmp_granularity=$(echo "$config" | jq -r '.spike.pmp_granularity // 4')
+  echo "CFG_SPIKE_PMP_GRANULARITY := $spike_pmp_granularity"
+  
+  local spike_misaligned
+  spike_misaligned=$(echo "$config" | jq -r '.spike.misaligned // false')
+  [ "$spike_misaligned" = "true" ] && echo "CFG_SPIKE_MISALIGNED := 1" || echo "CFG_SPIKE_MISALIGNED := 0"
+  
+  local spike_big_endian
+  spike_big_endian=$(echo "$config" | jq -r '.spike.big_endian // false')
+  [ "$spike_big_endian" = "true" ] && echo "CFG_SPIKE_BIG_ENDIAN := 1" || echo "CFG_SPIKE_BIG_ENDIAN := 0"
+  
+  local spike_halted
+  spike_halted=$(echo "$config" | jq -r '.spike.halted // false')
+  [ "$spike_halted" = "true" ] && echo "CFG_SPIKE_HALTED := 1" || echo "CFG_SPIKE_HALTED := 0"
+  
+  local spike_log_commits
+  spike_log_commits=$(echo "$config" | jq -r '.spike.log_commits // true')
+  [ "$spike_log_commits" = "true" ] && echo "CFG_SPIKE_LOG_COMMITS := 1" || echo "CFG_SPIKE_LOG_COMMITS := 0"
+  
+  local spike_log_cache_miss
+  spike_log_cache_miss=$(echo "$config" | jq -r '.spike.log_cache_miss // false')
+  [ "$spike_log_cache_miss" = "true" ] && echo "CFG_SPIKE_LOG_CACHE_MISS := 1" || echo "CFG_SPIKE_LOG_CACHE_MISS := 0"
+  
+  local spike_debug_mode
+  spike_debug_mode=$(echo "$config" | jq -r '.spike.debug_mode // true')
+  [ "$spike_debug_mode" = "true" ] && echo "CFG_SPIKE_DEBUG_MODE := 1" || echo "CFG_SPIKE_DEBUG_MODE := 0"
+  
+  local spike_instructions
+  spike_instructions=$(echo "$config" | jq -r '.spike.instructions_limit // 0')
+  echo "CFG_SPIKE_INSTRUCTIONS := $spike_instructions"
+  
+  local spike_real_time_clint
+  spike_real_time_clint=$(echo "$config" | jq -r '.spike.real_time_clint // false')
+  [ "$spike_real_time_clint" = "true" ] && echo "CFG_SPIKE_REAL_TIME_CLINT := 1" || echo "CFG_SPIKE_REAL_TIME_CLINT := 0"
+  
+  local spike_blocksz
+  spike_blocksz=$(echo "$config" | jq -r '.spike.blocksz // 64')
+  echo "CFG_SPIKE_BLOCKSZ := $spike_blocksz"
+  
+  # Debug Module Settings
+  echo ""
+  echo "# Spike Debug Module Configuration"
+  
+  local dm_enabled
+  dm_enabled=$(echo "$config" | jq -r '.spike.debug_module.enabled // false')
+  [ "$dm_enabled" = "true" ] && echo "CFG_SPIKE_DM_ENABLED := 1" || echo "CFG_SPIKE_DM_ENABLED := 0"
+  
+  local dm_progsize
+  dm_progsize=$(echo "$config" | jq -r '.spike.debug_module.progsize // 2')
+  echo "CFG_SPIKE_DM_PROGSIZE := $dm_progsize"
+  
+  local dm_datacount
+  dm_datacount=$(echo "$config" | jq -r '.spike.debug_module.datacount // 2')
+  echo "CFG_SPIKE_DM_DATACOUNT := $dm_datacount"
+  
+  local dm_sba_bits
+  dm_sba_bits=$(echo "$config" | jq -r '.spike.debug_module.sba_bits // 0')
+  echo "CFG_SPIKE_DM_SBA_BITS := $dm_sba_bits"
+  
+  local dm_auth
+  dm_auth=$(echo "$config" | jq -r '.spike.debug_module.auth // false')
+  [ "$dm_auth" = "true" ] && echo "CFG_SPIKE_DM_AUTH := 1" || echo "CFG_SPIKE_DM_AUTH := 0"
+  
+  local dm_dmi_rti
+  dm_dmi_rti=$(echo "$config" | jq -r '.spike.debug_module.dmi_rti // 0')
+  echo "CFG_SPIKE_DM_DMI_RTI := $dm_dmi_rti"
+  
+  local dm_abstract_rti
+  dm_abstract_rti=$(echo "$config" | jq -r '.spike.debug_module.abstract_rti // 0')
+  echo "CFG_SPIKE_DM_ABSTRACT_RTI := $dm_abstract_rti"
+  
+  local dm_no_hasel
+  dm_no_hasel=$(echo "$config" | jq -r '.spike.debug_module.no_hasel // false')
+  [ "$dm_no_hasel" = "true" ] && echo "CFG_SPIKE_DM_NO_HASEL := 1" || echo "CFG_SPIKE_DM_NO_HASEL := 0"
+  
+  local dm_no_abstract_csr
+  dm_no_abstract_csr=$(echo "$config" | jq -r '.spike.debug_module.no_abstract_csr // false')
+  [ "$dm_no_abstract_csr" = "true" ] && echo "CFG_SPIKE_DM_NO_ABSTRACT_CSR := 1" || echo "CFG_SPIKE_DM_NO_ABSTRACT_CSR := 0"
+  
+  local dm_no_abstract_fpr
+  dm_no_abstract_fpr=$(echo "$config" | jq -r '.spike.debug_module.no_abstract_fpr // false')
+  [ "$dm_no_abstract_fpr" = "true" ] && echo "CFG_SPIKE_DM_NO_ABSTRACT_FPR := 1" || echo "CFG_SPIKE_DM_NO_ABSTRACT_FPR := 0"
+  
+  local dm_no_halt_groups
+  dm_no_halt_groups=$(echo "$config" | jq -r '.spike.debug_module.no_halt_groups // false')
+  [ "$dm_no_halt_groups" = "true" ] && echo "CFG_SPIKE_DM_NO_HALT_GROUPS := 1" || echo "CFG_SPIKE_DM_NO_HALT_GROUPS := 0"
+  
+  local dm_no_impebreak
+  dm_no_impebreak=$(echo "$config" | jq -r '.spike.debug_module.no_impebreak // false')
+  [ "$dm_no_impebreak" = "true" ] && echo "CFG_SPIKE_DM_NO_IMPEBREAK := 1" || echo "CFG_SPIKE_DM_NO_IMPEBREAK := 0"
+  
+  # Cache Settings
+  echo ""
+  echo "# Spike Cache Configuration"
+  
+  local cache_enabled
+  cache_enabled=$(echo "$config" | jq -r '.spike.cache.enabled // false')
+  [ "$cache_enabled" = "true" ] && echo "CFG_SPIKE_CACHE_ENABLED := 1" || echo "CFG_SPIKE_CACHE_ENABLED := 0"
+  
+  local icache
+  icache=$(echo "$config" | jq -r '.spike.cache.icache // ""')
+  echo "CFG_SPIKE_ICACHE := $icache"
+  
+  local dcache
+  dcache=$(echo "$config" | jq -r '.spike.cache.dcache // ""')
+  echo "CFG_SPIKE_DCACHE := $dcache"
+  
+  local l2cache
+  l2cache=$(echo "$config" | jq -r '.spike.cache.l2cache // ""')
+  echo "CFG_SPIKE_L2CACHE := $l2cache"
+  
+  echo ""
+  
   # SV Defines
   echo "# SystemVerilog Defines"
   local defines

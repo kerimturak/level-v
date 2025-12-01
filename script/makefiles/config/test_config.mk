@@ -124,6 +124,71 @@ ifdef CFG_SV_DEFINES
 endif
 
 # -----------------------------------------
+# Spike Configuration from JSON
+# -----------------------------------------
+# Override toolchain.mk defaults with JSON config values
+
+# ISA: Default from toolchain.mk, can be overridden by JSON config
+ifdef CFG_SPIKE_ISA
+  SPIKE_ISA := $(CFG_SPIKE_ISA)
+endif
+
+# Privilege level
+ifdef CFG_SPIKE_PRIV
+  SPIKE_PRIV := $(CFG_SPIKE_PRIV)
+endif
+
+# PC start address
+ifdef CFG_SPIKE_PC
+  SPIKE_PC := $(CFG_SPIKE_PC)
+endif
+
+# Triggers count
+ifdef CFG_SPIKE_TRIGGERS
+  SPIKE_TRIGGERS := $(CFG_SPIKE_TRIGGERS)
+else
+  SPIKE_TRIGGERS := 1
+endif
+
+# PMP regions
+ifdef CFG_SPIKE_PMP_REGIONS
+  SPIKE_PMP_REGIONS := $(CFG_SPIKE_PMP_REGIONS)
+else
+  SPIKE_PMP_REGIONS := 0
+endif
+
+# PMP granularity
+ifdef CFG_SPIKE_PMP_GRANULARITY
+  SPIKE_PMP_GRANULARITY := $(CFG_SPIKE_PMP_GRANULARITY)
+else
+  SPIKE_PMP_GRANULARITY := 4
+endif
+
+# Build SPIKE_ARGS from config values
+SPIKE_ARGS := --isa=$(SPIKE_ISA) --pc=$(SPIKE_PC) --priv=$(SPIKE_PRIV)
+SPIKE_ARGS += --triggers=$(SPIKE_TRIGGERS)
+
+# Add optional PMP configuration
+ifneq ($(SPIKE_PMP_REGIONS),0)
+  SPIKE_ARGS += --pmpregions=$(SPIKE_PMP_REGIONS)
+  SPIKE_ARGS += --pmpgranularity=$(SPIKE_PMP_GRANULARITY)
+endif
+
+# Misaligned access support
+ifeq ($(CFG_SPIKE_MISALIGNED),1)
+  SPIKE_ARGS += --misaligned
+endif
+
+# Log commits (usually always enabled for comparison)
+ifeq ($(CFG_SPIKE_LOG_COMMITS),1)
+  SPIKE_ARGS += --log-commits
+else ifdef CFG_SPIKE_LOG_COMMITS
+  # Not set in config, use default (enabled)
+else
+  SPIKE_ARGS += --log-commits
+endif
+
+# -----------------------------------------
 # Debug: Show loaded config
 # -----------------------------------------
 .PHONY: show-config config-info
@@ -140,6 +205,15 @@ show-config config-info:
 	@echo -e "  NO_ADDR         = $(NO_ADDR)"
 	@echo -e "  MODE            = $(MODE)"
 	@echo -e "  TRACE           = $(TRACE)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  Spike Configuration$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  SPIKE_ISA       = $(SPIKE_ISA)"
+	@echo -e "  SPIKE_PC        = $(SPIKE_PC)"
+	@echo -e "  SPIKE_PRIV      = $(SPIKE_PRIV)"
+	@echo -e "  SPIKE_TRIGGERS  = $(SPIKE_TRIGGERS)"
+	@echo -e "  SPIKE_PMP_REGIONS= $(SPIKE_PMP_REGIONS)"
+	@echo -e "  SPIKE_ARGS      = $(SPIKE_ARGS)"
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 ifdef JQ_EXISTS
 	@echo ""

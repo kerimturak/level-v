@@ -163,6 +163,120 @@
       }
     },
 
+    "spike": {
+      "type": "object",
+      "description": "Spike ISA Simulator configuration",
+      "properties": {
+        "_comment": { "type": "string" },
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Spike simulation"
+        },
+        "isa": {
+          "type": "string",
+          "description": "RISC-V ISA string (e.g., rv32im_zicsr_zicntr_zifencei)"
+        },
+        "priv": {
+          "enum": ["m", "mu", "msu"],
+          "description": "RISC-V privilege modes supported"
+        },
+        "pc": {
+          "type": "string",
+          "description": "Override ELF entry point (hex address)"
+        },
+        "processors": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of processors to simulate"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Target memory size in MiB"
+        },
+        "triggers": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of supported triggers"
+        },
+        "pmp_regions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of PMP regions"
+        },
+        "pmp_granularity": {
+          "type": "integer",
+          "minimum": 4,
+          "description": "PMP granularity in bytes"
+        },
+        "misaligned": {
+          "type": "boolean",
+          "description": "Support misaligned memory accesses"
+        },
+        "big_endian": {
+          "type": "boolean",
+          "description": "Use big-endian memory system"
+        },
+        "halted": {
+          "type": "boolean",
+          "description": "Start halted for debugger connection"
+        },
+        "log_commits": {
+          "type": "boolean",
+          "description": "Generate log of commit info"
+        },
+        "log_cache_miss": {
+          "type": "boolean",
+          "description": "Generate log of cache misses"
+        },
+        "debug_mode": {
+          "type": "boolean",
+          "description": "Enable interactive debug mode (-d)"
+        },
+        "instructions_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Stop after n instructions (0 = unlimited)"
+        },
+        "real_time_clint": {
+          "type": "boolean",
+          "description": "Increment CLINT time at real-time rate"
+        },
+        "blocksz": {
+          "type": "integer",
+          "description": "Cache block size for CMO operations"
+        },
+        "debug_module": {
+          "type": "object",
+          "description": "Debug module configuration",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "progsize": { "type": "integer", "minimum": 0 },
+            "datacount": { "type": "integer", "minimum": 0 },
+            "sba_bits": { "type": "integer", "minimum": 0 },
+            "auth": { "type": "boolean" },
+            "dmi_rti": { "type": "integer", "minimum": 0 },
+            "abstract_rti": { "type": "integer", "minimum": 0 },
+            "no_hasel": { "type": "boolean" },
+            "no_abstract_csr": { "type": "boolean" },
+            "no_abstract_fpr": { "type": "boolean" },
+            "no_halt_groups": { "type": "boolean" },
+            "no_impebreak": { "type": "boolean" }
+          }
+        },
+        "cache": {
+          "type": "object",
+          "description": "Cache model configuration (format: S:W:B)",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "icache": { "type": "string" },
+            "dcache": { "type": "string" },
+            "l2cache": { "type": "string" }
+          }
+        }
+      }
+    },
+
     "build": {
       "type": "object",
       "description": "Build/compilation settings",
