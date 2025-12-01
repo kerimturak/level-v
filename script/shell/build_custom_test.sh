@@ -9,6 +9,10 @@
 
 set -e  # Exit on error
 
+# Ensure we're in the project root to avoid .lo files in unexpected places
+PROJ_ROOT="/home/kerim/level-v"
+cd "$PROJ_ROOT"
+
 # Renkli çıktı için tanımlamalar
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -19,7 +23,6 @@ NC='\033[0m' # No Color
 # ============================================================================
 # Konfigürasyon
 # ============================================================================
-PROJ_ROOT="/home/kerim/level-v"
 TEST_NAME="${1:-uart_hello_test}"
 TEST_SOURCE="${PROJ_ROOT}/sim/test/custom/${TEST_NAME}.c"
 TEST_BUILD_DIR="${PROJ_ROOT}/build/tests/custom"
@@ -261,7 +264,7 @@ show_disassembly
 
 # Auto-run simulation (unless -n flag)
 AUTO_RUN=1
-if [[ "$1" == "-n" || "$1" == "--no-run" ]]; then
+if [[ "$2" == "-n" || "$2" == "--no-run" ]]; then
     AUTO_RUN=0
 fi
 

@@ -92,7 +92,7 @@ endif
 		echo -e "$(RED)[ERROR]$(RESET) Test not found: $(CUSTOM_TEST_DIR)/$(TEST).c"; \
 		exit 1; \
 	fi
-	@bash $(CUSTOM_SCRIPT) "$(TEST)"
+	@bash $(CUSTOM_SCRIPT) "$(TEST)" -n
 
 # Run simulation
 custom_run:
@@ -105,7 +105,7 @@ endif
 		echo -e "$(RED)[ERROR]$(RESET) Memory file not found. Run 'make custom_build TEST=$(TEST)' first."; \
 		exit 1; \
 	fi
-	@$(MAKE) run_verilator MEM_FILE="$(CUSTOM_BUILD_DIR)/$(TEST).mem" TEST_NAME="$(TEST)" MAX_CYCLES=$(MAX_CYCLES) LOG_UART=1 SIM_UART_MONITOR=1 COVERAGE_FILE="$(COVERAGE_DATA_DIR)/$(TEST).dat" 2>&1 | tee "$(CUSTOM_BUILD_DIR)/sim.log"
+	@cd $(ROOT_DIR) && $(MAKE) run_verilator MEM_FILE="$(CUSTOM_BUILD_DIR)/$(TEST).mem" TEST_NAME="$(TEST)" MAX_CYCLES=$(MAX_CYCLES) LOG_UART=1 SIM_UART_MONITOR=1 COVERAGE_FILE="$(COVERAGE_DATA_DIR)/$(TEST).dat" 2>&1 | tee "$(CUSTOM_BUILD_DIR)/sim.log"
 	@UART_LOG="$(LOG_DIR)/verilator/$(TEST)/uart_output.log"; \
 	if [ -f "$$UART_LOG" ]; then \
 		cp "$$UART_LOG" "$(CUSTOM_BUILD_DIR)/$(TEST)_uart.log"; \
@@ -116,8 +116,13 @@ endif
 		cat "$$UART_LOG"; \
 	fi
 
-# Build and Run
-custom_test: custom_build
+# Build and Run (avoid double build)
+custom_test:
+ifndef TEST
+	@echo -e "$(RED)[ERROR]$(RESET) Usage: make custom_test TEST=<test_name>"
+	@exit 1
+endif
+	@$(MAKE) custom_build TEST=$(TEST)
 	@$(MAKE) custom_run TEST=$(TEST) MAX_CYCLES=$(MAX_CYCLES)
 
 # Clean
