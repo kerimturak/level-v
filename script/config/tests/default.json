@@ -6,7 +6,7 @@
     "max_cycles": 10000,
     "timeout_seconds": 60,
     "build_threads": "auto",
-    "sim_threads": 1
+    "sim_threads": 16
   },
 
   "comparison": {
