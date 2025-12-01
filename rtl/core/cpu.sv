@@ -85,6 +85,7 @@ module cpu
   logic                  ex_misa_c;
   logic       [XLEN-1:0] ex_tdata1;
   logic       [XLEN-1:0] ex_tdata2;
+  logic       [XLEN-1:0] ex_tcontrol;
   //logic       [XLEN-1:0] ex_mepc;
   pipe_info_t            ex_info;
   logic                  ex_valid_csr;
@@ -154,6 +155,7 @@ module cpu
       .misa_c_i     (ex_misa_c),
       .tdata1_i     (ex_tdata1),
       .tdata2_i     (ex_tdata2),
+      .tcontrol_i   (ex_tcontrol),
       .spec_o       (fe_spec),
       .lx_ireq_o    (lx_ireq),
       .pc_o         (fe_pc),
@@ -464,7 +466,8 @@ module cpu
   end
 
   always_comb begin
-    ex_data_req.valid      = pipe2.dcache_valid;
+    // Disable memory request on exception to prevent spurious memory access
+    ex_data_req.valid      = pipe2.dcache_valid && (ex_exc_type == NO_EXCEPTION);
     ex_data_req.addr       = ex_alu_result;
     ex_data_req.rw         = pipe2.wr_en;
     ex_data_req.rw_size    = pipe2.rw_size;

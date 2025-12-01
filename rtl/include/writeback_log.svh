@@ -58,9 +58,12 @@ always @(posedge clk_i) begin
   // Not: Reset sırasında dosyayı yeniden açmıyoruz - sadece initial'da açıldı
   if (rst_ni && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
 
-    // Automatic variable for mstatus WARL (MPP always 11 for M-mode only)
+    // Automatic variable for CSR WARL behavior:
+    // - mstatus (0x300): MPP always 11 for M-mode only
+    // - tselect (0x7A0): Read-only-zero (single trigger implementation)
     automatic logic [31:0] csr_log_value = (csr_idx_i == 12'h300) ? 
                                            (csr_wr_data_i | 32'h00001800) : 
+                                           (csr_idx_i == 12'h7A0) ? 32'h0 :  // tselect: always 0
                                            csr_wr_data_i;
 
     // ============================================================

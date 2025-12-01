@@ -99,7 +99,31 @@ module execution
     pc_sel_o |= (pc_sel_i == JAL);
     pc_sel_o |= (instr_type_i == mret);
 
-    exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
+    // LOAD/STORE breakpoint detection
+    // tdata1[0] = LOAD match enable, tdata1[1] = STORE match enable
+    // tdata1[6] = M-mode match, tdata1[31:28] = type (2 = mcontrol)
+    // tcontrol[3] = MTE (M-mode Trigger Enable)
+    if (tcontrol[3] && tdata1[6] && (tdata1[31:28] == 4'h2)) begin
+      // Check LOAD breakpoint
+      if (tdata1[0] && (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu})) begin
+        if (alu_result == tdata2) begin
+          exc_type_o = BREAKPOINT;
+        end else begin
+          exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
+        end
+        // Check STORE breakpoint
+      end else if (tdata1[1] && (instr_type_i inside {s_sb, s_sh, s_sw})) begin
+        if (alu_result == tdata2) begin
+          exc_type_o = BREAKPOINT;
+        end else begin
+          exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
+        end
+      end else begin
+        exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
+      end
+    end else begin
+      exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
+    end
   end
 
   alu i_alu (

@@ -203,20 +203,46 @@ module cs_reg_file
   // OUTPUT ASSIGNMENTS
   // ============================================================================
   
+  // ============================================================================
+  // Write-through bypass for trigger registers
+  // Allows same-cycle visibility of written values
+  // ============================================================================
+  logic [XLEN-1:0] tdata1_bypass;
+  logic [XLEN-1:0] tdata2_bypass;
+  logic [XLEN-1:0] tcontrol_bypass;
+  
+  always_comb begin
+    // Write-through bypass: if writing this cycle, use write data, else use register
+    tdata1_bypass   = (wr_en_i && csr_idx_i == TDATA1)   ? csr_wdata_i : tdata1_reg;
+    tdata2_bypass   = (wr_en_i && csr_idx_i == TDATA2)   ? csr_wdata_i : tdata2_reg;
+    tcontrol_bypass = (wr_en_i && csr_idx_i == TCONTROL) ? csr_wdata_i : tcontrol_reg;
+  end
+
   always_comb begin
     misa_c_o = misa.C;
     // mtvec write bypass (benchmark için)
     mtvec_o  = (csr_idx_i == 12'h305 && wr_en_i && de_trap_active_i) ? csr_wdata_i : mtvec;
     mepc_o   = mepc;
-    // Trigger outputs for hardware breakpoint detection
-    tdata1_o = tdata1_reg;
-    tdata2_o = tdata2_reg;
-    // tcontrol: when trap happens, mpte <= mte (combinational bypass)
+    // Trigger outputs for hardware breakpoint detection (with write-through bypass)
+    tdata1_o = tdata1_bypass;
+    tdata2_o = tdata2_bypass;
+    // tcontrol: handle trap entry and MRET (with write-through bypass as base)
     if (trap_active_i || de_trap_active_i) begin
-      tcontrol_o[7] = tcontrol_reg[3];  // mpte = mte
-      tcontrol_o[3] = tcontrol_reg[3];  // mte unchanged
+      // On trap entry: mpte <= mte (combinational bypass)
+      tcontrol_o[7]   = tcontrol_bypass[3];  // mpte = mte
+      tcontrol_o[3]   = tcontrol_bypass[3];  // mte unchanged
+      tcontrol_o[6:4] = '0;
+      tcontrol_o[2:0] = '0;
+      tcontrol_o[31:8] = '0;
+    end else if (instr_type_i == mret) begin
+      // On MRET: mte = mpte (mpte is NOT cleared per spec)
+      tcontrol_o[7]   = tcontrol_bypass[7];  // mpte unchanged
+      tcontrol_o[3]   = tcontrol_bypass[7];  // mte = mpte
+      tcontrol_o[6:4] = '0;
+      tcontrol_o[2:0] = '0;
+      tcontrol_o[31:8] = '0;
     end else begin
-      tcontrol_o = tcontrol_reg;
+      tcontrol_o = tcontrol_bypass;
     end
   end
 
@@ -295,9 +321,9 @@ module cs_reg_file
         mstatus.mie  <= mstatus.mpie;
         mstatus.mpie <= 1'b1;
         mstatus.mpp  <= 2'b11;  // M-mode only: always return to M-mode
-        // Trigger control: mte = mpte, mpte = 0
+        // Trigger control: mte = mpte (mpte is NOT cleared on MRET per spec)
         tcontrol_reg[3] <= tcontrol_reg[7];  // mte = mpte
-        tcontrol_reg[7] <= 1'b0;             // mpte = 0
+        // mpte remains unchanged
       end
       
       // ------------------------------------------------------------------------

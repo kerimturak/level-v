@@ -29,6 +29,7 @@ module fetch
     input  logic                       misa_c_i,       // C extension enabled
     input  logic            [XLEN-1:0] tdata1_i,       // Trigger data 1 (config)
     input  logic            [XLEN-1:0] tdata2_i,       // Trigger data 2 (breakpoint addr)
+    input  logic            [XLEN-1:0] tcontrol_i,     // Trigger control (mte bit[3] enables triggers)
     input  logic                       spec_hit_i,
     output predict_info_t              spec_o,
     output ilowX_req_t                 lx_ireq_o,
@@ -173,7 +174,8 @@ module fetch
     // ============================================================================
 
     // Detect all exceptions present
-    has_debug_breakpoint   = fetch_valid && tdata1_i[2] && (pc_o == tdata2_i);
+    // Breakpoint trigger requires: mte bit enabled (tcontrol[3]) + execute bit (tdata1[2]) + address match
+    has_debug_breakpoint   = fetch_valid && tcontrol_i[3] && tdata1_i[2] && (pc_o == tdata2_i);
     has_instr_misaligned   = fetch_valid && (misa_c_i ? pc_o[0] : (pc_o[1:0] != 2'b00));
     has_instr_access_fault = fetch_valid && !grand;
     has_illegal_instr      = fetch_valid && illegal_instr && buff_res.valid;
