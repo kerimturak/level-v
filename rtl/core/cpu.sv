@@ -14,9 +14,7 @@ module cpu
     input  logic       clk_i,
     input  logic       rst_ni,
     output iomem_req_t iomem_req_o,
-    input  iomem_res_t iomem_res_i,
-    output logic       uart_tx_o,
-    input  logic       uart_rx_i
+    input  iomem_res_t iomem_res_i
 );
 
   stall_e                   stall_cause;
@@ -493,9 +491,7 @@ module cpu
       .lx_dreq_o        (lx_dreq),
       .me_data_o        (me_rdata),
       .dmiss_stall_o    (me_dmiss_stall),
-      .fencei_stall_o   (me_fencei_stall),
-      .uart_rx_i        (uart_rx_i),
-      .uart_tx_o        (uart_tx_o)
+      .fencei_stall_o   (me_fencei_stall)
   );
 
   // ============================================================================

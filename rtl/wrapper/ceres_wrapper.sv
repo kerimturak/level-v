@@ -133,6 +133,9 @@ module ceres_wrapper
   logic                         msip_q;
   logic                         timer_irq;
 
+  // UART (directly connected to iomem bus)
+  logic [                 31:0] uart_rdata;
+
   // ==========================================================================
   // Reset
   // ==========================================================================
@@ -158,9 +161,7 @@ module ceres_wrapper
       .clk_i      (clk_i),
       .rst_ni     (sys_rst_n),
       .iomem_req_o(cpu_mem_req),
-      .iomem_res_i(cpu_mem_res),
-      .uart_tx_o  (uart_tx_o),
-      .uart_rx_i  (uart_rx_i)
+      .iomem_res_i(cpu_mem_res)
   );
 
   // ==========================================================================
@@ -252,8 +253,9 @@ module ceres_wrapper
           default:            cpu_mem_res.data = '0;
         endcase
       end else if (sel_pbus) begin
+        // Peripheral Bus - UART at 0x2000_0xxx
         cpu_mem_res.valid = 1'b1;
-        cpu_mem_res.data  = '0;  // Placeholder for peripherals
+        cpu_mem_res.data  = {96'b0, uart_rdata};
       end else begin
         cpu_mem_res.valid = 1'b1;
         cpu_mem_res.data  = '0;  // Unmapped
@@ -277,5 +279,22 @@ module ceres_wrapper
   endgenerate
 
   assign status_led_o = {3'b0, prog_mode_led_o};
+
+  // ==========================================================================
+  // UART (Peripheral Bus 0x2000_0xxx)
+  // Connected via iomem bus - directly accessible from CPU
+  // ==========================================================================
+  uart i_uart (
+      .clk_i     (clk_i),
+      .rst_ni    (sys_rst_n),
+      .stb_i     (cpu_mem_req.valid & sel_pbus),
+      .adr_i     (cpu_mem_req.addr[3:2]),
+      .byte_sel_i(4'b1111),
+      .we_i      (|cpu_mem_req.rw),
+      .dat_i     (cpu_mem_req.data[31:0]),
+      .dat_o     (uart_rdata),
+      .uart_rx_i (uart_rx_i),
+      .uart_tx_o (uart_tx_o)
+  );
 
 endmodule

@@ -44,8 +44,8 @@ ARCH_ROOT     := $(SUBREPO_DIR)/riscv-arch-test
 # -----------------------------------------
 # Automatic MEM Directory Discovery
 # -----------------------------------------
-# riscv-tests uses */mem subdirectory, coremark uses direct folder
-MEM_DIRS := $(wildcard $(BUILD_DIR)/tests/*/mem) $(BUILD_DIR)/tests/coremark
+# riscv-tests uses */mem subdirectory, coremark and custom tests use direct folder
+MEM_DIRS := $(wildcard $(BUILD_DIR)/tests/*/mem) $(BUILD_DIR)/tests/coremark $(BUILD_DIR)/tests/custom
 
 # -----------------------------------------
 # Clean Targets

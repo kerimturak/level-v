@@ -13,8 +13,6 @@ module memory
     output logic       [XLEN-1:0] me_data_o,
     output logic                  dmiss_stall_o,
     output logic                  fencei_stall_o,    // Dcache dirty writeback stall for fence.i
-    output logic                  uart_tx_o,
-    input  logic                  uart_rx_i,
     // MEM stage view (pipe3)
     input  data_req_t             me_data_req_i,
     // EX stage view (pipe2)
@@ -23,15 +21,8 @@ module memory
 
   dcache_req_t            dcache_req;
   dcache_res_t            dcache_res;
-  logic        [XLEN-1:0] pherip_addr;
-  logic        [XLEN-1:0] pherip_wdata;
-  logic        [     3:0] pherip_sel;
-  logic        [XLEN-1:0] pherip_rdata;
-  logic                   pherip_valid;
   logic        [XLEN-1:0] rd_data;
   logic                   uncached;
-  logic                   memregion;
-  logic                   grand;
   logic                   mem_txn_active;  // "request in flight" flag
   logic                   mem_req_fire;  // this cycle we start a new cache request
 
@@ -67,7 +58,7 @@ module memory
   // which depends on dmiss_stall which depends on mem_req_fire.
   logic req_changed;
   assign req_changed  = (ex_data_req_i.addr != ex_addr_q) || (ex_data_req_i.rw != ex_rw_q) || (ex_data_req_i.rw_size != ex_rw_size_q) || (ex_data_req_i.valid && !ex_valid_q);
-  assign mem_req_fire = ex_data_req_i.valid && req_changed && memregion && !mem_txn_active;
+  assign mem_req_fire = ex_data_req_i.valid && req_changed && !mem_txn_active;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
@@ -91,18 +82,14 @@ module memory
     dcache_req.data     = ex_data_req_i.data;
     dcache_req.uncached = uncached;
 
-    if (memregion) begin
-      dmiss_stall_o = mem_req_fire || (mem_txn_active && !dcache_res.valid);
-    end else begin
-      dmiss_stall_o = 1'b0;
-    end
+    dmiss_stall_o       = mem_req_fire || (mem_txn_active && !dcache_res.valid);
   end
 
   pma i_dpma (
       .addr_i     (ex_data_req_i.addr),
       .uncached_o (uncached),
-      .memregion_o(memregion),
-      .grand_o    (grand)
+      .memregion_o(),                    // Not used - all accesses go through dcache
+      .grand_o    ()                     // Not used
   );
 
   cache #(
@@ -130,7 +117,7 @@ module memory
   logic [15:0] selected_halfword;
 
   always_comb begin : read_data_size_handler
-    rd_data           = !memregion ? pherip_rdata : dcache_res.data;
+    rd_data           = dcache_res.data;
     me_data_o         = '0;
 
     // adresin low bitlerine göre byte/halfword seçimi
@@ -145,25 +132,5 @@ module memory
       default: me_data_o = '0;
     endcase
   end
-
-  always_comb begin
-    pherip_valid = !memregion && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
-    pherip_addr  = !memregion ? ex_data_req_i.addr : '0;
-    pherip_sel   = !memregion && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) ? 4'b1111 : 4'b0000;
-    pherip_wdata = !memregion ? ex_data_req_i.data : '0;
-  end
-
-  uart i_uart (
-      .clk_i     (clk_i),
-      .rst_ni    (rst_ni),
-      .stb_i     (pherip_valid),
-      .adr_i     (pherip_addr[3:2]),
-      .byte_sel_i(pherip_sel),
-      .we_i      (ex_data_req_i.rw),
-      .dat_i     (pherip_wdata),
-      .dat_o     (pherip_rdata),
-      .uart_rx_i (uart_rx_i),
-      .uart_tx_o (uart_tx_o)
-  );
 
 endmodule

@@ -1,16 +1,12 @@
 ##################################################################################
-#                     CERES RISC-V — Advanced Debug Waveform                   #
-#                           Questa Simulation Script                            #
+#                     CERES RISC-V - Debug Waveform                            #
+#                        Questa Simulation Script                              #
 ##################################################################################
 # Features:
-#   - Hierarchical grouping by pipeline stage
-#   - Color-coded signal categories
+#   - Hierarchical grouping by module
+#   - Input/Output separation for each module
 #   - Automatic radix selection (hex/decimal/binary)
 #   - Collapsible groups for easy navigation
-#   - Critical path signals highlighted
-#   - Exception/Interrupt debugging section
-#   - Performance counter monitoring
-#   - Memory transaction tracking
 ##################################################################################
 
 ################## Global Settings ##################
@@ -40,282 +36,617 @@ configure wave -timeline 0
 configure wave -timelineunits ns
 
 ################## Hierarchy Paths ##################
-set TB        "sim:/tb_wrapper"
-set WRAPPER   "$TB/ceres_wrapper"
-set SOC       "$WRAPPER/i_soc"
-set FETCH     "$SOC/i_fetch"
-set DECODE    "$SOC/i_decode"
-set EXECUTE   "$SOC/i_execution"
-set MEMORY    "$SOC/i_memory"
-set WRITEBACK "$SOC/i_writeback"
-set HAZARD    "$SOC/i_hazard_unit"
-set ARBITER   "$SOC/i_memory_arbiter"
+set TB            "sim:/tb_wrapper"
+set WRAPPER       "$TB/ceres_wrapper"
+set CPU           "$WRAPPER/i_soc"
+set FETCH         "$CPU/i_fetch"
+set DECODE        "$CPU/i_decode"
+set EXECUTE       "$CPU/i_execution"
+set MEMORY        "$CPU/i_memory"
+set WRITEBACK     "$CPU/i_writeback"
+set HAZARD        "$CPU/i_hazard_unit"
+set ARBITER       "$CPU/i_memory_arbiter"
+
+# Fetch submodules
+set ICACHE        "$FETCH/i_icache"
+set ALIGN_BUFFER  "$FETCH/i_align_buffer"
+set COMP_DECODER  "$FETCH/i_compressed_decoder"
+set GSHARE        "$FETCH/i_gshare_bp"
+set RAS           "$GSHARE/i_ras"
+set IPMA          "$FETCH/i_pma"
+
+# Decode submodules
+set CTRL_UNIT     "$DECODE/i_control_unit"
+set REG_FILE      "$DECODE/i_reg_file"
+set EXTEND        "$DECODE/i_extend"
+
+# Execute submodules
+set ALU           "$EXECUTE/i_alu"
+set CSR_FILE      "$EXECUTE/i_cs_reg_file"
+
+# Memory submodules
+set DCACHE        "$MEMORY/i_dcache"
+set DPMA          "$MEMORY/i_dpma"
+
+# Wrapper submodules
+set MAIN_RAM      "$WRAPPER/i_main_ram"
+set UART          "$WRAPPER/i_uart"
+set UART_TX       "$UART/i_uart_tx"
+set UART_RX       "$UART/i_uart_rx"
 
 ##################################################################################
-#                              🎯 QUICK DEBUG VIEW                               #
+#                              TESTBENCH                                         #
 ##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ QUICK DEBUG ═══════════}
+add wave -noupdate -divider -height 20 {=============== TESTBENCH ===============}
 
-# Clock & Reset
-add wave -noupdate -group "⏱️ CLK/RST" -color Gold      $TB/clk_i
-add wave -noupdate -group "⏱️ CLK/RST" -color Orange    $TB/rst_ni
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" -color Gold $TB/clk_i
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" -color Orange $TB/rst_ni
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" $TB/program_rx_i
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" $TB/uart_rx_i
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" $TB/spi0_miso_i
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" -radix hexadecimal $TB/gpio_i
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" -radix hexadecimal $TB/ext_irq_i
 
-# Pipeline Progress (Critical Signals)
-add wave -noupdate -group "🔄 PIPELINE" -color Cyan     -radix hexadecimal $SOC/fe_pc
-add wave -noupdate -group "🔄 PIPELINE" -color Cyan     -radix hexadecimal $SOC/fe_inst
-add wave -noupdate -group "🔄 PIPELINE" -color Green    -radix hexadecimal $SOC/pipe1.pc
-add wave -noupdate -group "🔄 PIPELINE" -color Green    -radix hexadecimal $SOC/pipe1.inst
-add wave -noupdate -group "🔄 PIPELINE" -color Yellow   -radix hexadecimal $SOC/pipe2.pc
-add wave -noupdate -group "🔄 PIPELINE" -color Magenta  -radix hexadecimal $SOC/pipe3.pc
-add wave -noupdate -group "🔄 PIPELINE" -color Red      -radix hexadecimal $SOC/pipe4.pc
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/prog_mode_led_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/uart_tx_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/spi0_sclk_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/spi0_mosi_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" -radix hexadecimal $TB/spi0_ss_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" -radix hexadecimal $TB/gpio_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" -radix hexadecimal $TB/gpio_oe_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" -radix hexadecimal $TB/status_led_o
 
-# Stall & Flush (Debug Critical)
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Red       $SOC/stall_cause
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Orange    $SOC/fe_imiss_stall
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Orange    $SOC/me_dmiss_stall
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Orange    $SOC/ex_alu_stall
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Yellow    $SOC/me_fencei_stall
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Magenta   $SOC/de_flush
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Magenta   $SOC/ex_flush
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Magenta   $SOC/fencei_flush
-add wave -noupdate -group "⚠️ STALL/FLUSH" -color Red       $SOC/priority_flush
-
-# Register File Quick View
-add wave -noupdate -group "📝 REGFILE" -radix hexadecimal $DECODE/i_reg_file/registers
+add wave -noupdate -group "TB_WRAPPER" -group "Bidirectional" $TB/i2c0_sda_io
+add wave -noupdate -group "TB_WRAPPER" -group "Bidirectional" $TB/i2c0_scl_io
 
 ##################################################################################
-#                            🚨 EXCEPTION DEBUGGING                              #
+#                              CERES_WRAPPER                                     #
 ##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ EXCEPTIONS ═══════════}
+add wave -noupdate -divider -height 20 {=============== CERES_WRAPPER ===============}
 
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Red    $SOC/trap_active
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Red    $SOC/fe_trap_active
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Red    $SOC/de_trap_active
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Orange $SOC/fe_exc_type
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Orange $SOC/de_exc_type
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Orange $SOC/ex_exc_type
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Orange $SOC/ex_alu_exc_type
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Yellow -radix hexadecimal $SOC/trap_tval
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Yellow -radix hexadecimal $SOC/ex_trap_cause
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Yellow -radix hexadecimal $SOC/ex_trap_mepc
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Cyan   -radix hexadecimal $SOC/ex_mtvec
-add wave -noupdate -group "🚨 EXCEPTIONS" -color Green  $SOC/excp_mask
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" -color Gold $WRAPPER/clk_i
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" -color Orange $WRAPPER/rst_ni
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" $WRAPPER/uart_rx_i
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" $WRAPPER/program_rx_i
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" $WRAPPER/spi0_miso_i
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" -radix hexadecimal $WRAPPER/gpio_i
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" -radix hexadecimal $WRAPPER/ext_irq_i
 
-##################################################################################
-#                          🎯 BRANCH PREDICTION DEBUG                            #
-##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ BRANCH PRED ═══════════}
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/uart_tx_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/prog_mode_led_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/spi0_sclk_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/spi0_mosi_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" -radix hexadecimal $WRAPPER/spi0_ss_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" -radix hexadecimal $WRAPPER/gpio_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" -radix hexadecimal $WRAPPER/gpio_oe_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" -radix hexadecimal $WRAPPER/status_led_o
 
-add wave -noupdate -group "🎯 BRANCH PRED" -group "Outcome" -color Green  $SOC/ex_spec_hit
-add wave -noupdate -group "🎯 BRANCH PRED" -group "Outcome" -color Red    $SOC/ex_pc_sel
-add wave -noupdate -group "🎯 BRANCH PRED" -group "Outcome" -radix hexadecimal $SOC/ex_pc_target
-add wave -noupdate -group "🎯 BRANCH PRED" -group "Outcome" -radix hexadecimal $SOC/ex_pc_target_last
-
-add wave -noupdate -group "🎯 BRANCH PRED" -group "Speculation" $SOC/fe_spec.taken
-add wave -noupdate -group "🎯 BRANCH PRED" -group "Speculation" $SOC/fe_spec.spectype
-add wave -noupdate -group "🎯 BRANCH PRED" -group "Speculation" -radix hexadecimal $SOC/fe_spec.pc
-
-add wave -noupdate -group "🎯 BRANCH PRED" -group "GShare" -radix hexadecimal $FETCH/i_gshare_bp/*
-add wave -noupdate -group "🎯 BRANCH PRED" -group "RAS"    -radix hexadecimal $FETCH/i_gshare_bp/i_ras/*
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" -radix hexadecimal $WRAPPER/cpu_mem_req
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" -radix hexadecimal $WRAPPER/cpu_mem_res
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sys_rst_n
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/prog_reset
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sel_ram
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sel_clint
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sel_pbus
 
 ##################################################################################
-#                           📥 STAGE 1: FETCH                                    #
+#                              WRAPPER_RAM                                       #
 ##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ FETCH ═══════════}
+add wave -noupdate -divider -height 20 {=============== WRAPPER_RAM ===============}
 
-add wave -noupdate -group "📥 FETCH" -group "PC Logic" -color Cyan -radix hexadecimal $FETCH/pc_o
-add wave -noupdate -group "📥 FETCH" -group "PC Logic" -radix hexadecimal $FETCH/pc_incr_o
-add wave -noupdate -group "📥 FETCH" -group "PC Logic" -radix hexadecimal $FETCH/pc_next
-add wave -noupdate -group "📥 FETCH" -group "PC Logic" $FETCH/pc_en
+add wave -noupdate -group "WRAPPER_RAM" -group "Inputs" -color Gold $MAIN_RAM/clk_i
+add wave -noupdate -group "WRAPPER_RAM" -group "Inputs" -color Orange $MAIN_RAM/rst_ni
+add wave -noupdate -group "WRAPPER_RAM" -group "Inputs" -radix hexadecimal $MAIN_RAM/addr_i
+add wave -noupdate -group "WRAPPER_RAM" -group "Inputs" -radix hexadecimal $MAIN_RAM/wdata_i
+add wave -noupdate -group "WRAPPER_RAM" -group "Inputs" -radix hexadecimal $MAIN_RAM/wstrb_i
+add wave -noupdate -group "WRAPPER_RAM" -group "Inputs" $MAIN_RAM/rd_en_i
+add wave -noupdate -group "WRAPPER_RAM" -group "Inputs" $MAIN_RAM/ram_prog_rx_i
 
-add wave -noupdate -group "📥 FETCH" -group "Instruction" -radix hexadecimal $FETCH/inst_o
-add wave -noupdate -group "📥 FETCH" -group "Instruction" $FETCH/is_comp
-add wave -noupdate -group "📥 FETCH" -group "Instruction" $FETCH/illegal_instr
-add wave -noupdate -group "📥 FETCH" -group "Instruction" $FETCH/instr_type_o
+add wave -noupdate -group "WRAPPER_RAM" -group "Outputs" -radix hexadecimal $MAIN_RAM/rdata_o
+add wave -noupdate -group "WRAPPER_RAM" -group "Outputs" $MAIN_RAM/system_reset_o
+add wave -noupdate -group "WRAPPER_RAM" -group "Outputs" $MAIN_RAM/prog_mode_led_o
 
-add wave -noupdate -group "📥 FETCH" -group "Control" $FETCH/flush_i
-add wave -noupdate -group "📥 FETCH" -group "Control" $FETCH/stall_i
-add wave -noupdate -group "📥 FETCH" -group "Control" $FETCH/imiss_stall_o
-add wave -noupdate -group "📥 FETCH" -group "Control" $FETCH/exc_type_o
-
-add wave -noupdate -group "📥 FETCH" -group "ICache" -radix hexadecimal $FETCH/i_icache/*
-add wave -noupdate -group "📥 FETCH" -group "Align Buffer" -radix hexadecimal $FETCH/i_align_buffer/*
-add wave -noupdate -group "📥 FETCH" -group "Comp Decoder" -radix hexadecimal $FETCH/i_compressed_decoder/*
-add wave -noupdate -group "📥 FETCH" -group "PMA" -radix hexadecimal $FETCH/i_pma/*
+add wave -noupdate -group "WRAPPER_RAM" -group "Internal" -radix hexadecimal $MAIN_RAM/*
 
 ##################################################################################
-#                           📋 STAGE 2: DECODE                                   #
+#                              UART                                              #
 ##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ DECODE ═══════════}
+add wave -noupdate -divider -height 20 {=============== UART ===============}
 
-add wave -noupdate -group "📋 DECODE" -group "Input" -radix hexadecimal $SOC/pipe1.pc
-add wave -noupdate -group "📋 DECODE" -group "Input" -radix hexadecimal $SOC/pipe1.inst
-add wave -noupdate -group "📋 DECODE" -group "Input" $SOC/pipe1.instr_type
+add wave -noupdate -group "UART" -group "Inputs" -color Gold $UART/clk_i
+add wave -noupdate -group "UART" -group "Inputs" -color Orange $UART/rst_ni
+add wave -noupdate -group "UART" -group "Inputs" $UART/stb_i
+add wave -noupdate -group "UART" -group "Inputs" -radix hexadecimal $UART/adr_i
+add wave -noupdate -group "UART" -group "Inputs" -radix hexadecimal $UART/byte_sel_i
+add wave -noupdate -group "UART" -group "Inputs" $UART/we_i
+add wave -noupdate -group "UART" -group "Inputs" -radix hexadecimal $UART/dat_i
+add wave -noupdate -group "UART" -group "Inputs" $UART/uart_rx_i
 
-add wave -noupdate -group "📋 DECODE" -group "Control" -radix hexadecimal $DECODE/ctrl_o
-add wave -noupdate -group "📋 DECODE" -group "Control" $DECODE/exc_type_o
+add wave -noupdate -group "UART" -group "Outputs" -radix hexadecimal $UART/dat_o
+add wave -noupdate -group "UART" -group "Outputs" $UART/uart_tx_o
 
-add wave -noupdate -group "📋 DECODE" -group "Registers" -radix hexadecimal $DECODE/r1_data_o
-add wave -noupdate -group "📋 DECODE" -group "Registers" -radix hexadecimal $DECODE/r2_data_o
-add wave -noupdate -group "📋 DECODE" -group "Registers" -radix hexadecimal $DECODE/imm_o
-add wave -noupdate -group "📋 DECODE" -group "Registers" $DECODE/fwd_a_i
-add wave -noupdate -group "📋 DECODE" -group "Registers" $DECODE/fwd_b_i
+add wave -noupdate -group "UART" -group "Internal" -radix hexadecimal $UART/baud_div
+add wave -noupdate -group "UART" -group "Internal" $UART/tx_en
+add wave -noupdate -group "UART" -group "Internal" $UART/tx_full
+add wave -noupdate -group "UART" -group "Internal" $UART/tx_empty
+add wave -noupdate -group "UART" -group "Internal" $UART/tx_we
+add wave -noupdate -group "UART" -group "Internal" $UART/rx_en
+add wave -noupdate -group "UART" -group "Internal" -radix hexadecimal $UART/dout
+add wave -noupdate -group "UART" -group "Internal" $UART/rx_full
+add wave -noupdate -group "UART" -group "Internal" $UART/rx_empty
+add wave -noupdate -group "UART" -group "Internal" $UART/rx_re
 
-add wave -noupdate -group "📋 DECODE" -group "Control Unit" -radix hexadecimal $DECODE/i_control_unit/*
-add wave -noupdate -group "📋 DECODE" -group "Reg File" -radix hexadecimal $DECODE/i_reg_file/*
-add wave -noupdate -group "📋 DECODE" -group "Extend" -radix hexadecimal $DECODE/i_extend/*
+# UART_TX Submodule
+add wave -noupdate -group "UART_TX" -group "Inputs" -color Gold $UART_TX/clk_i
+add wave -noupdate -group "UART_TX" -group "Inputs" -color Orange $UART_TX/rst_ni
+add wave -noupdate -group "UART_TX" -group "Inputs" -radix hexadecimal $UART_TX/baud_div_i
+add wave -noupdate -group "UART_TX" -group "Inputs" $UART_TX/tx_we_i
+add wave -noupdate -group "UART_TX" -group "Inputs" $UART_TX/tx_en_i
+add wave -noupdate -group "UART_TX" -group "Inputs" -radix hexadecimal $UART_TX/din_i
 
-##################################################################################
-#                           ⚙️ STAGE 3: EXECUTE                                  #
-##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ EXECUTE ═══════════}
+add wave -noupdate -group "UART_TX" -group "Outputs" $UART_TX/full_o
+add wave -noupdate -group "UART_TX" -group "Outputs" $UART_TX/empty_o
+add wave -noupdate -group "UART_TX" -group "Outputs" $UART_TX/tx_bit_o
 
-add wave -noupdate -group "⚙️ EXECUTE" -group "Input" -radix hexadecimal $SOC/pipe2.pc
-add wave -noupdate -group "⚙️ EXECUTE" -group "Input" $SOC/pipe2.instr_type
-add wave -noupdate -group "⚙️ EXECUTE" -group "Input" -radix hexadecimal $SOC/pipe2.r1_data
-add wave -noupdate -group "⚙️ EXECUTE" -group "Input" -radix hexadecimal $SOC/pipe2.r2_data
-add wave -noupdate -group "⚙️ EXECUTE" -group "Input" -radix hexadecimal $SOC/pipe2.imm
+add wave -noupdate -group "UART_TX" -group "Internal" $UART_TX/state
+add wave -noupdate -group "UART_TX" -group "Internal" -radix hexadecimal $UART_TX/data
+add wave -noupdate -group "UART_TX" -group "Internal" -radix hexadecimal $UART_TX/frame
+add wave -noupdate -group "UART_TX" -group "Internal" -radix unsigned $UART_TX/bit_counter
+add wave -noupdate -group "UART_TX" -group "Internal" -radix unsigned $UART_TX/baud_counter
+add wave -noupdate -group "UART_TX" -group "Internal" $UART_TX/baud_clk
 
-add wave -noupdate -group "⚙️ EXECUTE" -group "ALU" -radix hexadecimal $EXECUTE/i_alu/alu_a_i
-add wave -noupdate -group "⚙️ EXECUTE" -group "ALU" -radix hexadecimal $EXECUTE/i_alu/alu_b_i
-add wave -noupdate -group "⚙️ EXECUTE" -group "ALU" $EXECUTE/i_alu/op_sel_i
-add wave -noupdate -group "⚙️ EXECUTE" -group "ALU" -radix hexadecimal $EXECUTE/i_alu/alu_o
-add wave -noupdate -group "⚙️ EXECUTE" -group "ALU" $EXECUTE/i_alu/zero_o
-add wave -noupdate -group "⚙️ EXECUTE" -group "ALU" $EXECUTE/i_alu/slt_o
-add wave -noupdate -group "⚙️ EXECUTE" -group "ALU" $EXECUTE/i_alu/sltu_o
-add wave -noupdate -group "⚙️ EXECUTE" -group "ALU" $EXECUTE/i_alu/alu_stall_o
+# UART_RX Submodule
+add wave -noupdate -group "UART_RX" -group "Inputs" -color Gold $UART_RX/clk_i
+add wave -noupdate -group "UART_RX" -group "Inputs" -color Orange $UART_RX/rst_ni
+add wave -noupdate -group "UART_RX" -group "Inputs" -radix hexadecimal $UART_RX/baud_div_i
+add wave -noupdate -group "UART_RX" -group "Inputs" $UART_RX/rx_re_i
+add wave -noupdate -group "UART_RX" -group "Inputs" $UART_RX/rx_en_i
+add wave -noupdate -group "UART_RX" -group "Inputs" $UART_RX/rx_bit_i
 
-add wave -noupdate -group "⚙️ EXECUTE" -group "Mul/Div" -radix hexadecimal $EXECUTE/i_alu/*mul*
-add wave -noupdate -group "⚙️ EXECUTE" -group "Mul/Div" -radix hexadecimal $EXECUTE/i_alu/*div*
+add wave -noupdate -group "UART_RX" -group "Outputs" -radix hexadecimal $UART_RX/dout_o
+add wave -noupdate -group "UART_RX" -group "Outputs" $UART_RX/full_o
+add wave -noupdate -group "UART_RX" -group "Outputs" $UART_RX/empty_o
 
-add wave -noupdate -group "⚙️ EXECUTE" -group "Branch" $EXECUTE/pc_sel_i
-add wave -noupdate -group "⚙️ EXECUTE" -group "Branch" $EXECUTE/pc_sel_o
-add wave -noupdate -group "⚙️ EXECUTE" -group "Branch" -radix hexadecimal $EXECUTE/pc_target_o
-
-add wave -noupdate -group "⚙️ EXECUTE" -group "Forwarding" $SOC/ex_fwd_a
-add wave -noupdate -group "⚙️ EXECUTE" -group "Forwarding" $SOC/ex_fwd_b
-
-add wave -noupdate -group "⚙️ EXECUTE" -group "CSR" -radix hexadecimal $EXECUTE/i_cs_reg_file/*
-
-##################################################################################
-#                           💾 STAGE 4: MEMORY                                   #
-##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ MEMORY ═══════════}
-
-add wave -noupdate -group "💾 MEMORY" -group "Input" -radix hexadecimal $SOC/pipe3.pc
-add wave -noupdate -group "💾 MEMORY" -group "Input" -radix hexadecimal $SOC/pipe3.alu_result
-add wave -noupdate -group "💾 MEMORY" -group "Input" -radix hexadecimal $SOC/pipe3.write_data
-add wave -noupdate -group "💾 MEMORY" -group "Input" $SOC/pipe3.wr_en
-add wave -noupdate -group "💾 MEMORY" -group "Input" $SOC/pipe3.rw_size
-
-add wave -noupdate -group "💾 MEMORY" -group "Data Request" $SOC/ex_data_req.valid
-add wave -noupdate -group "💾 MEMORY" -group "Data Request" -radix hexadecimal $SOC/ex_data_req.addr
-add wave -noupdate -group "💾 MEMORY" -group "Data Request" $SOC/ex_data_req.rw
-add wave -noupdate -group "💾 MEMORY" -group "Data Request" -radix hexadecimal $SOC/ex_data_req.data
-
-add wave -noupdate -group "💾 MEMORY" -group "DCache" -radix hexadecimal $MEMORY/i_dcache/*
-add wave -noupdate -group "💾 MEMORY" -group "PMA" -radix hexadecimal $MEMORY/i_dpma/*
-
-add wave -noupdate -group "💾 MEMORY" -group "Output" -radix hexadecimal $MEMORY/me_data_o
-add wave -noupdate -group "💾 MEMORY" -group "Output" $MEMORY/dmiss_stall_o
-add wave -noupdate -group "💾 MEMORY" -group "Output" $MEMORY/fencei_stall_o
-
-add wave -noupdate -group "💾 MEMORY" -group "UART" -radix hexadecimal $MEMORY/i_uart/*
-add wave -noupdate -group "💾 MEMORY" -group "UART TX" -radix hexadecimal $MEMORY/i_uart/i_uart_tx/*
-add wave -noupdate -group "💾 MEMORY" -group "UART RX" -radix hexadecimal $MEMORY/i_uart/i_uart_rx/*
+add wave -noupdate -group "UART_RX" -group "Internal" $UART_RX/state
+add wave -noupdate -group "UART_RX" -group "Internal" -radix hexadecimal $UART_RX/data
+add wave -noupdate -group "UART_RX" -group "Internal" -radix unsigned $UART_RX/bit_counter
+add wave -noupdate -group "UART_RX" -group "Internal" -radix unsigned $UART_RX/baud_counter
+add wave -noupdate -group "UART_RX" -group "Internal" $UART_RX/baud_clk
 
 ##################################################################################
-#                           ✅ STAGE 5: WRITEBACK                                #
+#                              CPU                                               #
 ##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ WRITEBACK ═══════════}
+add wave -noupdate -divider -height 20 {=============== CPU ===============}
 
-add wave -noupdate -group "✅ WRITEBACK" -group "Input" -radix hexadecimal $SOC/pipe4.pc
-add wave -noupdate -group "✅ WRITEBACK" -group "Input" -radix hexadecimal $SOC/pipe4.alu_result
-add wave -noupdate -group "✅ WRITEBACK" -group "Input" -radix hexadecimal $SOC/pipe4.read_data
-add wave -noupdate -group "✅ WRITEBACK" -group "Input" $SOC/pipe4.result_src
-add wave -noupdate -group "✅ WRITEBACK" -group "Input" $SOC/pipe4.rf_rw_en
-add wave -noupdate -group "✅ WRITEBACK" -group "Input" -radix unsigned $SOC/pipe4.rd_addr
+add wave -noupdate -group "CPU" -group "Inputs" -color Gold $CPU/clk_i
+add wave -noupdate -group "CPU" -group "Inputs" -color Orange $CPU/rst_ni
+add wave -noupdate -group "CPU" -group "Inputs" -radix hexadecimal $CPU/iomem_res_i
 
-add wave -noupdate -group "✅ WRITEBACK" -group "Output" $WRITEBACK/rf_rw_en_o
-add wave -noupdate -group "✅ WRITEBACK" -group "Output" -radix hexadecimal $WRITEBACK/wb_data_o
+add wave -noupdate -group "CPU" -group "Outputs" -radix hexadecimal $CPU/iomem_req_o
 
-##################################################################################
-#                           🔀 HAZARD UNIT                                       #
-##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ HAZARD ═══════════}
+add wave -noupdate -group "CPU" -group "Pipeline Registers" -radix hexadecimal $CPU/pipe1
+add wave -noupdate -group "CPU" -group "Pipeline Registers" -radix hexadecimal $CPU/pipe2
+add wave -noupdate -group "CPU" -group "Pipeline Registers" -radix hexadecimal $CPU/pipe3
+add wave -noupdate -group "CPU" -group "Pipeline Registers" -radix hexadecimal $CPU/pipe4
 
-add wave -noupdate -group "🔀 HAZARD" -group "Stalls" $HAZARD/stall_fe_o
-add wave -noupdate -group "🔀 HAZARD" -group "Stalls" $HAZARD/stall_de_o
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/stall_cause
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/fe_imiss_stall
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/me_dmiss_stall
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/ex_alu_stall
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/me_fencei_stall
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/de_flush
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/ex_flush
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/fencei_flush
+add wave -noupdate -group "CPU" -group "Stall/Flush Control" $CPU/priority_flush
 
-add wave -noupdate -group "🔀 HAZARD" -group "Flushes" $HAZARD/flush_de_o
-add wave -noupdate -group "🔀 HAZARD" -group "Flushes" $HAZARD/flush_ex_o
+add wave -noupdate -group "CPU" -group "Exception Handling" $CPU/trap_active
+add wave -noupdate -group "CPU" -group "Exception Handling" $CPU/fe_trap_active
+add wave -noupdate -group "CPU" -group "Exception Handling" $CPU/de_trap_active
+add wave -noupdate -group "CPU" -group "Exception Handling" $CPU/excp_mask
+add wave -noupdate -group "CPU" -group "Exception Handling" -radix hexadecimal $CPU/trap_tval
+add wave -noupdate -group "CPU" -group "Exception Handling" $CPU/fe_exc_type
+add wave -noupdate -group "CPU" -group "Exception Handling" $CPU/de_exc_type
+add wave -noupdate -group "CPU" -group "Exception Handling" $CPU/ex_exc_type
+add wave -noupdate -group "CPU" -group "Exception Handling" $CPU/ex_alu_exc_type
+add wave -noupdate -group "CPU" -group "Exception Handling" -radix hexadecimal $CPU/ex_trap_cause
+add wave -noupdate -group "CPU" -group "Exception Handling" -radix hexadecimal $CPU/ex_trap_mepc
+add wave -noupdate -group "CPU" -group "Exception Handling" -radix hexadecimal $CPU/ex_mtvec
 
-add wave -noupdate -group "🔀 HAZARD" -group "Forwarding EX" $HAZARD/fwd_a_ex_o
-add wave -noupdate -group "🔀 HAZARD" -group "Forwarding EX" $HAZARD/fwd_b_ex_o
-add wave -noupdate -group "🔀 HAZARD" -group "Forwarding DE" $HAZARD/fwd_a_de_o
-add wave -noupdate -group "🔀 HAZARD" -group "Forwarding DE" $HAZARD/fwd_b_de_o
+add wave -noupdate -group "CPU" -group "Branch Prediction" $CPU/ex_spec_hit
+add wave -noupdate -group "CPU" -group "Branch Prediction" $CPU/ex_pc_sel
+add wave -noupdate -group "CPU" -group "Branch Prediction" -radix hexadecimal $CPU/ex_pc_target
+add wave -noupdate -group "CPU" -group "Branch Prediction" -radix hexadecimal $CPU/ex_pc_target_last
+add wave -noupdate -group "CPU" -group "Branch Prediction" $CPU/fe_spec
 
-add wave -noupdate -group "🔀 HAZARD" -group "Register Addresses" -radix unsigned $HAZARD/r1_addr_de_i
-add wave -noupdate -group "🔀 HAZARD" -group "Register Addresses" -radix unsigned $HAZARD/r2_addr_de_i
-add wave -noupdate -group "🔀 HAZARD" -group "Register Addresses" -radix unsigned $HAZARD/rd_addr_ex_i
-add wave -noupdate -group "🔀 HAZARD" -group "Register Addresses" -radix unsigned $HAZARD/rd_addr_me_i
-add wave -noupdate -group "🔀 HAZARD" -group "Register Addresses" -radix unsigned $HAZARD/rd_addr_wb_i
+add wave -noupdate -group "CPU" -group "Data Request" -radix hexadecimal $CPU/ex_data_req
+add wave -noupdate -group "CPU" -group "Data Request" -radix hexadecimal $CPU/me_data_req
 
-##################################################################################
-#                           🔁 MEMORY ARBITER                                    #
-##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ ARBITER ═══════════}
-
-add wave -noupdate -group "🔁 ARBITER" -group "ICache Request" $ARBITER/icache_req_i.valid
-add wave -noupdate -group "🔁 ARBITER" -group "ICache Request" -radix hexadecimal $ARBITER/icache_req_i.addr
-add wave -noupdate -group "🔁 ARBITER" -group "ICache Response" $ARBITER/icache_res_o.valid
-add wave -noupdate -group "🔁 ARBITER" -group "ICache Response" -radix hexadecimal $ARBITER/icache_res_o.data
-
-add wave -noupdate -group "🔁 ARBITER" -group "DCache Request" $ARBITER/dcache_req_i.valid
-add wave -noupdate -group "🔁 ARBITER" -group "DCache Request" -radix hexadecimal $ARBITER/dcache_req_i.addr
-add wave -noupdate -group "🔁 ARBITER" -group "DCache Response" $ARBITER/dcache_res_o.valid
-add wave -noupdate -group "🔁 ARBITER" -group "DCache Response" -radix hexadecimal $ARBITER/dcache_res_o.data
-
-add wave -noupdate -group "🔁 ARBITER" -group "IO Memory" $ARBITER/iomem_req_o.valid
-add wave -noupdate -group "🔁 ARBITER" -group "IO Memory" -radix hexadecimal $ARBITER/iomem_req_o.addr
-add wave -noupdate -group "🔁 ARBITER" -group "IO Memory" $ARBITER/iomem_res_i.valid
-add wave -noupdate -group "🔁 ARBITER" -group "IO Memory" -radix hexadecimal $ARBITER/iomem_res_i.data
-
-add wave -noupdate -group "🔁 ARBITER" -group "Internal" -radix hexadecimal $ARBITER/*
+add wave -noupdate -group "CPU" -group "Forwarding" $CPU/de_fwd_a
+add wave -noupdate -group "CPU" -group "Forwarding" $CPU/de_fwd_b
+add wave -noupdate -group "CPU" -group "Forwarding" $CPU/ex_fwd_a
+add wave -noupdate -group "CPU" -group "Forwarding" $CPU/ex_fwd_b
 
 ##################################################################################
-#                           🏠 WRAPPER / TOP LEVEL                               #
+#                              STAGE 1: FETCH                                    #
 ##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ WRAPPER ═══════════}
+add wave -noupdate -divider -height 20 {=============== FETCH ===============}
 
-add wave -noupdate -group "🏠 WRAPPER" -group "External IO" $TB/clk_i
-add wave -noupdate -group "🏠 WRAPPER" -group "External IO" $TB/rst_ni
-add wave -noupdate -group "🏠 WRAPPER" -group "External IO" $WRAPPER/uart_tx_o
-add wave -noupdate -group "🏠 WRAPPER" -group "External IO" $WRAPPER/uart_rx_i
+add wave -noupdate -group "FETCH" -group "Inputs" -color Gold $FETCH/clk_i
+add wave -noupdate -group "FETCH" -group "Inputs" -color Orange $FETCH/rst_ni
+add wave -noupdate -group "FETCH" -group "Inputs" $FETCH/stall_i
+add wave -noupdate -group "FETCH" -group "Inputs" $FETCH/flush_i
+add wave -noupdate -group "FETCH" -group "Inputs" -radix hexadecimal $FETCH/flush_pc_i
+add wave -noupdate -group "FETCH" -group "Inputs" -radix hexadecimal $FETCH/lx_ires_i
+add wave -noupdate -group "FETCH" -group "Inputs" -radix hexadecimal $FETCH/pc_target_i
+add wave -noupdate -group "FETCH" -group "Inputs" $FETCH/spec_hit_i
+add wave -noupdate -group "FETCH" -group "Inputs" -radix hexadecimal $FETCH/ex_mtvec_i
+add wave -noupdate -group "FETCH" -group "Inputs" $FETCH/trap_active_i
+add wave -noupdate -group "FETCH" -group "Inputs" $FETCH/misa_c_i
+add wave -noupdate -group "FETCH" -group "Inputs" -radix hexadecimal $FETCH/tdata1_i
+add wave -noupdate -group "FETCH" -group "Inputs" -radix hexadecimal $FETCH/tdata2_i
+add wave -noupdate -group "FETCH" -group "Inputs" -radix hexadecimal $FETCH/tcontrol_i
+add wave -noupdate -group "FETCH" -group "Inputs" $FETCH/de_info_i
+add wave -noupdate -group "FETCH" -group "Inputs" $FETCH/ex_info_i
 
-add wave -noupdate -group "🏠 WRAPPER" -group "Memory Interface" $WRAPPER/cpu_mem_req.valid
-add wave -noupdate -group "🏠 WRAPPER" -group "Memory Interface" -radix hexadecimal $WRAPPER/cpu_mem_req.addr
-add wave -noupdate -group "🏠 WRAPPER" -group "Memory Interface" -radix hexadecimal $WRAPPER/cpu_mem_req.data
-add wave -noupdate -group "🏠 WRAPPER" -group "Memory Interface" $WRAPPER/cpu_mem_res.valid
-add wave -noupdate -group "🏠 WRAPPER" -group "Memory Interface" -radix hexadecimal $WRAPPER/cpu_mem_res.data
+add wave -noupdate -group "FETCH" -group "Outputs" $FETCH/spec_o
+add wave -noupdate -group "FETCH" -group "Outputs" -radix hexadecimal $FETCH/lx_ireq_o
+add wave -noupdate -group "FETCH" -group "Outputs" -radix hexadecimal $FETCH/pc_o
+add wave -noupdate -group "FETCH" -group "Outputs" -radix hexadecimal $FETCH/pc_incr_o
+add wave -noupdate -group "FETCH" -group "Outputs" -radix hexadecimal $FETCH/inst_o
+add wave -noupdate -group "FETCH" -group "Outputs" $FETCH/imiss_stall_o
+add wave -noupdate -group "FETCH" -group "Outputs" $FETCH/exc_type_o
+add wave -noupdate -group "FETCH" -group "Outputs" $FETCH/instr_type_o
 
-add wave -noupdate -group "🏠 WRAPPER" -group "RAM" -radix hexadecimal $WRAPPER/i_main_ram/*
+add wave -noupdate -group "FETCH" -group "Internal" -radix hexadecimal $FETCH/pc
+add wave -noupdate -group "FETCH" -group "Internal" -radix hexadecimal $FETCH/pc_next
+add wave -noupdate -group "FETCH" -group "Internal" $FETCH/pc_en
+add wave -noupdate -group "FETCH" -group "Internal" $FETCH/fetch_valid
+add wave -noupdate -group "FETCH" -group "Internal" $FETCH/uncached
+add wave -noupdate -group "FETCH" -group "Internal" $FETCH/grand
+add wave -noupdate -group "FETCH" -group "Internal" $FETCH/illegal_instr
+add wave -noupdate -group "FETCH" -group "Internal" $FETCH/is_comp
 
 ##################################################################################
-#                           📊 ALL INTERNAL SIGNALS                              #
+#                              FETCH SUBMODULES                                  #
 ##################################################################################
-add wave -noupdate -divider -height 20 {═══════════ DETAILED VIEW ═══════════}
+add wave -noupdate -divider -height 15 {FETCH SUBMODULES}
 
-# Detailed groups for deep debugging (collapsed by default)
-add wave -noupdate -group "📊 SOC Internal" -radix hexadecimal $SOC/*
-add wave -noupdate -group "📊 FETCH Internal" -radix hexadecimal $FETCH/*
-add wave -noupdate -group "📊 DECODE Internal" -radix hexadecimal $DECODE/*
-add wave -noupdate -group "📊 EXECUTE Internal" -radix hexadecimal $EXECUTE/*
-add wave -noupdate -group "📊 MEMORY Internal" -radix hexadecimal $MEMORY/*
-add wave -noupdate -group "📊 WRITEBACK Internal" -radix hexadecimal $WRITEBACK/*
+# ICACHE
+add wave -noupdate -group "ICACHE" -group "Inputs" -color Gold $ICACHE/clk_i
+add wave -noupdate -group "ICACHE" -group "Inputs" -color Orange $ICACHE/rst_ni
+add wave -noupdate -group "ICACHE" -group "Inputs" $ICACHE/flush_i
+add wave -noupdate -group "ICACHE" -group "Inputs" -radix hexadecimal $ICACHE/cache_req_i
+add wave -noupdate -group "ICACHE" -group "Inputs" -radix hexadecimal $ICACHE/lowX_res_i
+
+add wave -noupdate -group "ICACHE" -group "Outputs" -radix hexadecimal $ICACHE/cache_res_o
+add wave -noupdate -group "ICACHE" -group "Outputs" -radix hexadecimal $ICACHE/lowX_req_o
+add wave -noupdate -group "ICACHE" -group "Outputs" $ICACHE/fencei_stall_o
+
+add wave -noupdate -group "ICACHE" -group "Internal" -radix hexadecimal $ICACHE/*
+
+# ALIGN_BUFFER
+add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -color Gold $ALIGN_BUFFER/clk_i
+add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -color Orange $ALIGN_BUFFER/rst_ni
+add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -radix hexadecimal $ALIGN_BUFFER/buff_req_i
+add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -radix hexadecimal $ALIGN_BUFFER/icache_res_i
+
+add wave -noupdate -group "ALIGN_BUFFER" -group "Outputs" -radix hexadecimal $ALIGN_BUFFER/buff_res_o
+add wave -noupdate -group "ALIGN_BUFFER" -group "Outputs" -radix hexadecimal $ALIGN_BUFFER/icache_req_o
+add wave -noupdate -group "ALIGN_BUFFER" -group "Outputs" $ALIGN_BUFFER/lookup_ack_o
+
+add wave -noupdate -group "ALIGN_BUFFER" -group "Internal" -radix hexadecimal $ALIGN_BUFFER/*
+
+# COMPRESSED_DECODER
+add wave -noupdate -group "COMPRESSED_DECODER" -group "Inputs" -radix hexadecimal $COMP_DECODER/inst_i
+add wave -noupdate -group "COMPRESSED_DECODER" -group "Outputs" -radix hexadecimal $COMP_DECODER/inst_o
+add wave -noupdate -group "COMPRESSED_DECODER" -group "Outputs" $COMP_DECODER/is_comp_o
+add wave -noupdate -group "COMPRESSED_DECODER" -group "Outputs" $COMP_DECODER/illegal_instr_o
+add wave -noupdate -group "COMPRESSED_DECODER" -group "Internal" -radix hexadecimal $COMP_DECODER/*
+
+# GSHARE Branch Predictor
+add wave -noupdate -group "GSHARE_BP" -group "Inputs" -color Gold $GSHARE/clk_i
+add wave -noupdate -group "GSHARE_BP" -group "Inputs" -color Orange $GSHARE/rst_ni
+add wave -noupdate -group "GSHARE_BP" -group "Inputs" -radix hexadecimal $GSHARE/pc_i
+add wave -noupdate -group "GSHARE_BP" -group "Inputs" $GSHARE/de_info_i
+add wave -noupdate -group "GSHARE_BP" -group "Inputs" $GSHARE/ex_info_i
+
+add wave -noupdate -group "GSHARE_BP" -group "Outputs" $GSHARE/spec_o
+
+add wave -noupdate -group "GSHARE_BP" -group "Internal" -radix hexadecimal $GSHARE/*
+
+# RAS (Return Address Stack)
+add wave -noupdate -group "RAS" -group "Inputs" -color Gold $RAS/clk_i
+add wave -noupdate -group "RAS" -group "Inputs" -color Orange $RAS/rst_ni
+add wave -noupdate -group "RAS" -group "Inputs" $RAS/push_i
+add wave -noupdate -group "RAS" -group "Inputs" $RAS/pop_i
+add wave -noupdate -group "RAS" -group "Inputs" -radix hexadecimal $RAS/data_i
+
+add wave -noupdate -group "RAS" -group "Outputs" -radix hexadecimal $RAS/data_o
+add wave -noupdate -group "RAS" -group "Outputs" $RAS/valid_o
+
+add wave -noupdate -group "RAS" -group "Internal" -radix hexadecimal $RAS/*
+
+# Instruction PMA
+add wave -noupdate -group "IPMA" -group "Inputs" -radix hexadecimal $IPMA/addr_i
+add wave -noupdate -group "IPMA" -group "Outputs" $IPMA/uncached_o
+add wave -noupdate -group "IPMA" -group "Outputs" $IPMA/memregion_o
+add wave -noupdate -group "IPMA" -group "Outputs" $IPMA/grand_o
+add wave -noupdate -group "IPMA" -group "Internal" -radix hexadecimal $IPMA/*
 
 ##################################################################################
-#                           🎬 RUN SIMULATION                                    #
+#                              STAGE 2: DECODE                                   #
+##################################################################################
+add wave -noupdate -divider -height 20 {=============== DECODE ===============}
+
+add wave -noupdate -group "DECODE" -group "Inputs" -color Gold $DECODE/clk_i
+add wave -noupdate -group "DECODE" -group "Inputs" -color Orange $DECODE/rst_ni
+add wave -noupdate -group "DECODE" -group "Inputs" -radix hexadecimal $DECODE/inst_i
+add wave -noupdate -group "DECODE" -group "Inputs" $DECODE/fwd_a_i
+add wave -noupdate -group "DECODE" -group "Inputs" $DECODE/fwd_b_i
+add wave -noupdate -group "DECODE" -group "Inputs" -radix hexadecimal $DECODE/wb_data_i
+add wave -noupdate -group "DECODE" -group "Inputs" -radix unsigned $DECODE/rd_addr_i
+add wave -noupdate -group "DECODE" -group "Inputs" $DECODE/rf_rw_en_i
+add wave -noupdate -group "DECODE" -group "Inputs" $DECODE/instr_type_i
+
+add wave -noupdate -group "DECODE" -group "Outputs" -radix hexadecimal $DECODE/r1_data_o
+add wave -noupdate -group "DECODE" -group "Outputs" -radix hexadecimal $DECODE/r2_data_o
+add wave -noupdate -group "DECODE" -group "Outputs" $DECODE/ctrl_o
+add wave -noupdate -group "DECODE" -group "Outputs" -radix hexadecimal $DECODE/imm_o
+add wave -noupdate -group "DECODE" -group "Outputs" $DECODE/exc_type_o
+
+add wave -noupdate -group "DECODE" -group "Internal" -radix hexadecimal $DECODE/r1_data
+add wave -noupdate -group "DECODE" -group "Internal" -radix hexadecimal $DECODE/r2_data
+
+##################################################################################
+#                              DECODE SUBMODULES                                 #
+##################################################################################
+add wave -noupdate -divider -height 15 {DECODE SUBMODULES}
+
+# CONTROL_UNIT
+add wave -noupdate -group "CONTROL_UNIT" -radix hexadecimal $CTRL_UNIT/*
+
+# REG_FILE
+add wave -noupdate -group "REG_FILE" -group "Inputs" -color Gold $REG_FILE/clk_i
+add wave -noupdate -group "REG_FILE" -group "Inputs" -color Orange $REG_FILE/rst_ni
+add wave -noupdate -group "REG_FILE" -group "Inputs" $REG_FILE/rw_en_i
+add wave -noupdate -group "REG_FILE" -group "Inputs" -radix unsigned $REG_FILE/r1_addr_i
+add wave -noupdate -group "REG_FILE" -group "Inputs" -radix unsigned $REG_FILE/r2_addr_i
+add wave -noupdate -group "REG_FILE" -group "Inputs" -radix unsigned $REG_FILE/waddr_i
+add wave -noupdate -group "REG_FILE" -group "Inputs" -radix hexadecimal $REG_FILE/wdata_i
+
+add wave -noupdate -group "REG_FILE" -group "Outputs" -radix hexadecimal $REG_FILE/r1_data_o
+add wave -noupdate -group "REG_FILE" -group "Outputs" -radix hexadecimal $REG_FILE/r2_data_o
+
+add wave -noupdate -group "REG_FILE" -group "Registers" -radix hexadecimal $REG_FILE/registers
+
+# EXTEND
+add wave -noupdate -group "EXTEND" -radix hexadecimal $EXTEND/*
+
+##################################################################################
+#                              STAGE 3: EXECUTE                                  #
+##################################################################################
+add wave -noupdate -divider -height 20 {=============== EXECUTE ===============}
+
+add wave -noupdate -group "EXECUTE" -group "Inputs" -color Gold $EXECUTE/clk_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -color Orange $EXECUTE/rst_ni
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/stall_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/fwd_a_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/fwd_b_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/alu_result_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/wb_data_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/r1_data_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/r2_data_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/alu_in1_sel_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/alu_in2_sel_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/rd_csr_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/wr_csr_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/csr_idx_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/csr_or_data_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/trap_active_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/de_trap_active_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/trap_cause_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/trap_tval_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/trap_mepc_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/pc_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/pc_incr_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" -radix hexadecimal $EXECUTE/imm_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/pc_sel_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/alu_ctrl_i
+add wave -noupdate -group "EXECUTE" -group "Inputs" $EXECUTE/instr_type_i
+
+add wave -noupdate -group "EXECUTE" -group "Outputs" -radix hexadecimal $EXECUTE/write_data_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" -radix hexadecimal $EXECUTE/pc_target_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" -radix hexadecimal $EXECUTE/alu_result_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" $EXECUTE/pc_sel_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" $EXECUTE/alu_stall_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" $EXECUTE/exc_type_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" -radix hexadecimal $EXECUTE/mtvec_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" $EXECUTE/misa_c_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" -radix hexadecimal $EXECUTE/tdata1_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" -radix hexadecimal $EXECUTE/tdata2_o
+add wave -noupdate -group "EXECUTE" -group "Outputs" -radix hexadecimal $EXECUTE/tcontrol_o
+
+add wave -noupdate -group "EXECUTE" -group "Internal" -radix hexadecimal $EXECUTE/data_a
+add wave -noupdate -group "EXECUTE" -group "Internal" -radix hexadecimal $EXECUTE/operant_a
+add wave -noupdate -group "EXECUTE" -group "Internal" -radix hexadecimal $EXECUTE/operant_b
+add wave -noupdate -group "EXECUTE" -group "Internal" -radix hexadecimal $EXECUTE/alu_result
+add wave -noupdate -group "EXECUTE" -group "Internal" -radix hexadecimal $EXECUTE/csr_rdata
+add wave -noupdate -group "EXECUTE" -group "Internal" -radix hexadecimal $EXECUTE/mepc
+add wave -noupdate -group "EXECUTE" -group "Internal" $EXECUTE/ex_zero
+add wave -noupdate -group "EXECUTE" -group "Internal" $EXECUTE/ex_slt
+add wave -noupdate -group "EXECUTE" -group "Internal" $EXECUTE/ex_sltu
+
+##################################################################################
+#                              EXECUTE SUBMODULES                                #
+##################################################################################
+add wave -noupdate -divider -height 15 {EXECUTE SUBMODULES}
+
+# ALU
+add wave -noupdate -group "ALU" -group "Inputs" -radix hexadecimal $ALU/alu_a_i
+add wave -noupdate -group "ALU" -group "Inputs" -radix hexadecimal $ALU/alu_b_i
+add wave -noupdate -group "ALU" -group "Inputs" $ALU/op_sel_i
+
+add wave -noupdate -group "ALU" -group "Outputs" -radix hexadecimal $ALU/alu_o
+add wave -noupdate -group "ALU" -group "Outputs" $ALU/zero_o
+add wave -noupdate -group "ALU" -group "Outputs" $ALU/slt_o
+add wave -noupdate -group "ALU" -group "Outputs" $ALU/sltu_o
+add wave -noupdate -group "ALU" -group "Outputs" $ALU/alu_stall_o
+
+add wave -noupdate -group "ALU" -group "Internal" -radix hexadecimal $ALU/*
+
+# CSR_FILE
+add wave -noupdate -group "CSR_FILE" -radix hexadecimal $CSR_FILE/*
+
+##################################################################################
+#                              STAGE 4: MEMORY                                   #
+##################################################################################
+add wave -noupdate -divider -height 20 {=============== MEMORY ===============}
+
+add wave -noupdate -group "MEMORY" -group "Inputs" -color Gold $MEMORY/clk_i
+add wave -noupdate -group "MEMORY" -group "Inputs" -color Orange $MEMORY/rst_ni
+add wave -noupdate -group "MEMORY" -group "Inputs" $MEMORY/stall_i
+add wave -noupdate -group "MEMORY" -group "Inputs" $MEMORY/fe_flush_cache_i
+add wave -noupdate -group "MEMORY" -group "Inputs" -radix hexadecimal $MEMORY/lx_dres_i
+add wave -noupdate -group "MEMORY" -group "Inputs" -radix hexadecimal $MEMORY/me_data_req_i
+add wave -noupdate -group "MEMORY" -group "Inputs" -radix hexadecimal $MEMORY/ex_data_req_i
+
+add wave -noupdate -group "MEMORY" -group "Outputs" -radix hexadecimal $MEMORY/lx_dreq_o
+add wave -noupdate -group "MEMORY" -group "Outputs" -radix hexadecimal $MEMORY/me_data_o
+add wave -noupdate -group "MEMORY" -group "Outputs" $MEMORY/dmiss_stall_o
+add wave -noupdate -group "MEMORY" -group "Outputs" $MEMORY/fencei_stall_o
+
+add wave -noupdate -group "MEMORY" -group "Internal" -radix hexadecimal $MEMORY/dcache_req
+add wave -noupdate -group "MEMORY" -group "Internal" -radix hexadecimal $MEMORY/dcache_res
+add wave -noupdate -group "MEMORY" -group "Internal" -radix hexadecimal $MEMORY/rd_data
+add wave -noupdate -group "MEMORY" -group "Internal" $MEMORY/uncached
+add wave -noupdate -group "MEMORY" -group "Internal" $MEMORY/mem_txn_active
+add wave -noupdate -group "MEMORY" -group "Internal" $MEMORY/mem_req_fire
+add wave -noupdate -group "MEMORY" -group "Internal" $MEMORY/req_changed
+
+##################################################################################
+#                              MEMORY SUBMODULES                                 #
+##################################################################################
+add wave -noupdate -divider -height 15 {MEMORY SUBMODULES}
+
+# DCACHE
+add wave -noupdate -group "DCACHE" -group "Inputs" -color Gold $DCACHE/clk_i
+add wave -noupdate -group "DCACHE" -group "Inputs" -color Orange $DCACHE/rst_ni
+add wave -noupdate -group "DCACHE" -group "Inputs" $DCACHE/flush_i
+add wave -noupdate -group "DCACHE" -group "Inputs" -radix hexadecimal $DCACHE/cache_req_i
+add wave -noupdate -group "DCACHE" -group "Inputs" -radix hexadecimal $DCACHE/lowX_res_i
+
+add wave -noupdate -group "DCACHE" -group "Outputs" -radix hexadecimal $DCACHE/cache_res_o
+add wave -noupdate -group "DCACHE" -group "Outputs" -radix hexadecimal $DCACHE/lowX_req_o
+add wave -noupdate -group "DCACHE" -group "Outputs" $DCACHE/fencei_stall_o
+
+add wave -noupdate -group "DCACHE" -group "Internal" -radix hexadecimal $DCACHE/*
+
+# Data PMA
+add wave -noupdate -group "DPMA" -group "Inputs" -radix hexadecimal $DPMA/addr_i
+add wave -noupdate -group "DPMA" -group "Outputs" $DPMA/uncached_o
+add wave -noupdate -group "DPMA" -group "Outputs" $DPMA/memregion_o
+add wave -noupdate -group "DPMA" -group "Outputs" $DPMA/grand_o
+add wave -noupdate -group "DPMA" -group "Internal" -radix hexadecimal $DPMA/*
+
+##################################################################################
+#                              STAGE 5: WRITEBACK                                #
+##################################################################################
+add wave -noupdate -divider -height 20 {=============== WRITEBACK ===============}
+
+add wave -noupdate -group "WRITEBACK" -group "Inputs" -color Gold $WRITEBACK/clk_i
+add wave -noupdate -group "WRITEBACK" -group "Inputs" -color Orange $WRITEBACK/rst_ni
+add wave -noupdate -group "WRITEBACK" -group "Inputs" $WRITEBACK/stall_i
+add wave -noupdate -group "WRITEBACK" -group "Inputs" $WRITEBACK/data_sel_i
+add wave -noupdate -group "WRITEBACK" -group "Inputs" -radix hexadecimal $WRITEBACK/pc_incr_i
+add wave -noupdate -group "WRITEBACK" -group "Inputs" -radix hexadecimal $WRITEBACK/pc_i
+add wave -noupdate -group "WRITEBACK" -group "Inputs" -radix hexadecimal $WRITEBACK/alu_result_i
+add wave -noupdate -group "WRITEBACK" -group "Inputs" -radix hexadecimal $WRITEBACK/read_data_i
+add wave -noupdate -group "WRITEBACK" -group "Inputs" $WRITEBACK/rf_rw_en_i
+add wave -noupdate -group "WRITEBACK" -group "Inputs" $WRITEBACK/fe_flush_cache_i
+
+add wave -noupdate -group "WRITEBACK" -group "Outputs" $WRITEBACK/rf_rw_en_o
+add wave -noupdate -group "WRITEBACK" -group "Outputs" -radix hexadecimal $WRITEBACK/wb_data_o
+
+##################################################################################
+#                              HAZARD_UNIT                                       #
+##################################################################################
+add wave -noupdate -divider -height 20 {=============== HAZARD_UNIT ===============}
+
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" -radix unsigned $HAZARD/r1_addr_de_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" -radix unsigned $HAZARD/r2_addr_de_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" -radix unsigned $HAZARD/r1_addr_ex_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" -radix unsigned $HAZARD/r2_addr_ex_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" -radix unsigned $HAZARD/rd_addr_ex_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" $HAZARD/pc_sel_ex_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" $HAZARD/rslt_sel_ex_0
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" -radix unsigned $HAZARD/rd_addr_me_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" $HAZARD/rf_rw_me_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" $HAZARD/rf_rw_wb_i
+add wave -noupdate -group "HAZARD_UNIT" -group "Inputs" -radix unsigned $HAZARD/rd_addr_wb_i
+
+add wave -noupdate -group "HAZARD_UNIT" -group "Outputs" $HAZARD/stall_fe_o
+add wave -noupdate -group "HAZARD_UNIT" -group "Outputs" $HAZARD/stall_de_o
+add wave -noupdate -group "HAZARD_UNIT" -group "Outputs" $HAZARD/flush_de_o
+add wave -noupdate -group "HAZARD_UNIT" -group "Outputs" $HAZARD/flush_ex_o
+add wave -noupdate -group "HAZARD_UNIT" -group "Outputs" $HAZARD/fwd_a_ex_o
+add wave -noupdate -group "HAZARD_UNIT" -group "Outputs" $HAZARD/fwd_b_ex_o
+add wave -noupdate -group "HAZARD_UNIT" -group "Outputs" $HAZARD/fwd_a_de_o
+add wave -noupdate -group "HAZARD_UNIT" -group "Outputs" $HAZARD/fwd_b_de_o
+
+add wave -noupdate -group "HAZARD_UNIT" -group "Internal" $HAZARD/lw_stall
+
+##################################################################################
+#                              MEMORY_ARBITER                                    #
+##################################################################################
+add wave -noupdate -divider -height 20 {=============== MEMORY_ARBITER ===============}
+
+add wave -noupdate -group "MEMORY_ARBITER" -group "Inputs" -color Gold $ARBITER/clk_i
+add wave -noupdate -group "MEMORY_ARBITER" -group "Inputs" -color Orange $ARBITER/rst_ni
+add wave -noupdate -group "MEMORY_ARBITER" -group "Inputs" -radix hexadecimal $ARBITER/icache_req_i
+add wave -noupdate -group "MEMORY_ARBITER" -group "Inputs" -radix hexadecimal $ARBITER/dcache_req_i
+add wave -noupdate -group "MEMORY_ARBITER" -group "Inputs" -radix hexadecimal $ARBITER/iomem_res_i
+
+add wave -noupdate -group "MEMORY_ARBITER" -group "Outputs" -radix hexadecimal $ARBITER/icache_res_o
+add wave -noupdate -group "MEMORY_ARBITER" -group "Outputs" -radix hexadecimal $ARBITER/dcache_res_o
+add wave -noupdate -group "MEMORY_ARBITER" -group "Outputs" -radix hexadecimal $ARBITER/iomem_req_o
+
+add wave -noupdate -group "MEMORY_ARBITER" -group "Internal" $ARBITER/round
+add wave -noupdate -group "MEMORY_ARBITER" -group "Internal" -radix hexadecimal $ARBITER/icache_req_reg
+add wave -noupdate -group "MEMORY_ARBITER" -group "Internal" -radix hexadecimal $ARBITER/dcache_req_reg
+
+##################################################################################
+#                              QUICK DEBUG VIEW                                  #
+##################################################################################
+add wave -noupdate -divider -height 20 {=============== QUICK DEBUG ===============}
+
+add wave -noupdate -group "QUICK_DEBUG" -group "Clock/Reset" -color Gold $TB/clk_i
+add wave -noupdate -group "QUICK_DEBUG" -group "Clock/Reset" -color Orange $TB/rst_ni
+
+add wave -noupdate -group "QUICK_DEBUG" -group "PC Progress" -color Cyan -radix hexadecimal $CPU/fe_pc
+add wave -noupdate -group "QUICK_DEBUG" -group "PC Progress" -color Green -radix hexadecimal $CPU/pipe1.pc
+add wave -noupdate -group "QUICK_DEBUG" -group "PC Progress" -color Yellow -radix hexadecimal $CPU/pipe2.pc
+add wave -noupdate -group "QUICK_DEBUG" -group "PC Progress" -color Magenta -radix hexadecimal $CPU/pipe3.pc
+add wave -noupdate -group "QUICK_DEBUG" -group "PC Progress" -color Red -radix hexadecimal $CPU/pipe4.pc
+
+add wave -noupdate -group "QUICK_DEBUG" -group "Instructions" -radix hexadecimal $CPU/fe_inst
+add wave -noupdate -group "QUICK_DEBUG" -group "Instructions" -radix hexadecimal $CPU/pipe1.inst
+add wave -noupdate -group "QUICK_DEBUG" -group "Instructions" $CPU/fe_instr_type
+add wave -noupdate -group "QUICK_DEBUG" -group "Instructions" $CPU/pipe1.instr_type
+add wave -noupdate -group "QUICK_DEBUG" -group "Instructions" $CPU/pipe2.instr_type
+
+add wave -noupdate -group "QUICK_DEBUG" -group "Stalls" -color Red $CPU/stall_cause
+add wave -noupdate -group "QUICK_DEBUG" -group "Stalls" -color Orange $CPU/fe_imiss_stall
+add wave -noupdate -group "QUICK_DEBUG" -group "Stalls" -color Orange $CPU/me_dmiss_stall
+add wave -noupdate -group "QUICK_DEBUG" -group "Stalls" -color Orange $CPU/ex_alu_stall
+
+add wave -noupdate -group "QUICK_DEBUG" -group "Exceptions" -color Red $CPU/trap_active
+add wave -noupdate -group "QUICK_DEBUG" -group "Exceptions" $CPU/excp_mask
+add wave -noupdate -group "QUICK_DEBUG" -group "Exceptions" $CPU/priority_flush
+
+add wave -noupdate -group "QUICK_DEBUG" -group "Register File" -radix hexadecimal $REG_FILE/registers
+
+##################################################################################
+#                              RUN SIMULATION                                    #
 ##################################################################################
 
 # Update wave window
@@ -331,14 +662,11 @@ run 10000ns
 # Zoom to fit all signals
 wave zoom full
 
-# Optional: Save waveform
-# write format wave -window .main_pane.wave.interior.cs.body.pw.wf questa_waves.do
-
-puts "═══════════════════════════════════════════════════════════════════"
+puts "=================================================================="
 puts "  CERES RISC-V Debug Waveform Loaded Successfully!"
-puts "═══════════════════════════════════════════════════════════════════"
+puts "=================================================================="
 puts "  Quick Tips:"
 puts "    - Use 'run 1000ns' to run more simulation"
 puts "    - Use 'wave zoom range 0ns 100ns' to zoom"
 puts "    - Click group headers to expand/collapse"
-puts "═══════════════════════════════════════════════════════════════════"
+puts "=================================================================="

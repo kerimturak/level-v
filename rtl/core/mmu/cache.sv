@@ -526,10 +526,13 @@ module cache
         lowX_req_o.valid = !lookup_ack && cache_miss;
         lowX_req_o.ready = !flush && !fi_active;
         lowX_req_o.uncached = write_back ? '0 : cache_req_q.uncached;
-        lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}};
-        lowX_req_o.rw = write_back ? '1 : '0;
+        // For uncached accesses, preserve full address; for cached, align to cache line
+        lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : (cache_req_q.uncached ? cache_req_q.addr : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}});
+        // For uncached writes, pass through the write signal; for writeback, always write
+        lowX_req_o.rw = write_back ? '1 : (cache_req_q.uncached ? cache_req_q.rw : '0);
         lowX_req_o.rw_size = write_back ? 2'b11 : cache_req_q.rw_size;
-        lowX_req_o.data = write_back ? evict_data : '0;
+        // For uncached writes, pass through the data; for writeback, use evicted data
+        lowX_req_o.data = write_back ? evict_data : (cache_req_q.uncached ? cache_req_q.data : '0);
       end
 
       cache_res_o.valid   = !fi_active && (!cache_req_q.rw ? (!write_back && cache_req_q.valid &&

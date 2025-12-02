@@ -58,13 +58,24 @@ module memory_arbiter (
 
     iomem_req_o.data = dcache_req_reg.data;  // dcache verisini kullanıyoruz.
     iomem_req_o.rw   = '0;
-    if (round == DCACHE && dcache_req_reg.valid && dcache_req_reg.rw && !dcache_req_reg.uncached) begin
-      case (dcache_req_reg.rw_size)
-        2'b00:   iomem_req_o.rw = '0;
-        2'b01:   iomem_req_o.rw = 'b1 << dcache_req_reg.addr[BOFFSET-1:0];
-        2'b10:   iomem_req_o.rw = 'b11 << dcache_req_reg.addr[BOFFSET-1:0];
-        default: iomem_req_o.rw = '1;
-      endcase
+    if (round == DCACHE && dcache_req_reg.valid && dcache_req_reg.rw) begin
+      if (dcache_req_reg.uncached) begin
+        // Uncached write: use rw_size to determine byte enables
+        case (dcache_req_reg.rw_size)
+          2'b00:   iomem_req_o.rw = '0;
+          2'b01:   iomem_req_o.rw = 'b1 << dcache_req_reg.addr[BOFFSET-1:0];
+          2'b10:   iomem_req_o.rw = 'b11 << dcache_req_reg.addr[BOFFSET-1:0];
+          default: iomem_req_o.rw = 'b1111 << dcache_req_reg.addr[BOFFSET-1:0];  // Word write for peripherals
+        endcase
+      end else begin
+        // Cached write: full cache line
+        case (dcache_req_reg.rw_size)
+          2'b00:   iomem_req_o.rw = '0;
+          2'b01:   iomem_req_o.rw = 'b1 << dcache_req_reg.addr[BOFFSET-1:0];
+          2'b10:   iomem_req_o.rw = 'b11 << dcache_req_reg.addr[BOFFSET-1:0];
+          default: iomem_req_o.rw = '1;
+        endcase
+      end
     end
   end
 
