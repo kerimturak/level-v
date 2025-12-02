@@ -33,6 +33,7 @@ FLIST_BENCH     := $(TEST_LIST_DIR)/riscv_benchmark.flist
 FLIST_ALL       := $(TEST_LIST_DIR)/all_tests.flist
 FLIST_EXCEPTION := $(TEST_LIST_DIR)/exception_test.flist
 FLIST_ARCH      := $(TEST_LIST_DIR)/arch_test.flist
+FLIST_BRANCH    := $(TEST_LIST_DIR)/branch_test.flist
 
 # -----------------------------------------
 # ISA Tests (riscv-tests)
@@ -51,6 +52,25 @@ isa isa-tests:
 		TEST_TYPE=isa \
 		SIM=$(SIM) \
 		MAX_CYCLES=$(ISA_MAX_CYCLES)
+
+# -----------------------------------------
+# Branch Predictor Tests (branch/jump instructions)
+# -----------------------------------------
+.PHONY: branch bp-tests
+
+# Branch test cycle limit (override with BRANCH_MAX_CYCLES=N)
+BRANCH_MAX_CYCLES ?= 10000
+
+branch bp-tests:
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Running Branch Predictor Tests$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@$(MAKE) --no-print-directory run_flist \
+		FLIST=$(FLIST_BRANCH) \
+		TEST_TYPE=isa \
+		SIM=$(SIM) \
+		MAX_CYCLES=$(BRANCH_MAX_CYCLES) \
+		LOG_BP=1
 
 # -----------------------------------------
 # CSR Tests (machine mode CSR)
@@ -524,6 +544,7 @@ help_lists:
 	@echo -e "  $(GREEN)make imperas$(RESET)      – Run Imperas tests (45 tests)"
 	@echo -e "  $(GREEN)make bench$(RESET)        – Run benchmarks [NO_ADDR=1]"
 	@echo -e "  $(GREEN)make exc$(RESET)          – Run exception tests"
+	@echo -e "  $(GREEN)make branch$(RESET)       – Run branch predictor tests (30 tests, LOG_BP=1)"
 	@echo -e ""
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(CYAN)  COREMARK$(RESET)"

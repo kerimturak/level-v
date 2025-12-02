@@ -12,7 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 module fetch
   import ceres_param::*;
 #(
-    parameter RESET_VECTOR = 32'h8000_0000
+    parameter RESET_VECTOR = ceres_param::RESET_VECTOR
 ) (
 `ifdef COMMIT_TRACER
     output fe_tracer_info_t            fe_tracer_o,

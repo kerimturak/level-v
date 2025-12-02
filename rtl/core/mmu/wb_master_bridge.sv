@@ -102,7 +102,7 @@ module wb_master_bridge (
             // Check for immediate ACK (combinational path through interconnect)
             if (wb_s_i.ack) begin
               state_d = IDLE;  // Stay in IDLE, transaction completes immediately
-`ifdef VERILATOR
+`ifdef WB_INTC
               $display("[%0t] WB_MASTER: IDLE_IMMEDIATE addr=%h write=%b rw=%h sel=%b", $time, iomem_req_i.addr, is_write, iomem_req_i.rw, byte_sel_comb);
 `endif
             end else begin
@@ -119,12 +119,12 @@ module wb_master_bridge (
           // Check for immediate ACK (combinational slave like PBUS)
           if (wb_s_i.ack) begin
             state_d = IDLE;  // Direct completion
-`ifdef VERILATOR
+`ifdef WB_INTC
             $display("[%0t] WB_MASTER: SINGLE_IMMEDIATE addr=%h write=%b", $time, addr_q, write_q);
 `endif
           end else begin
             state_d = SINGLE_WAIT;
-`ifdef VERILATOR
+`ifdef WB_INTC
             $display("[%0t] WB_MASTER: SINGLE_REQ->WAIT addr=%h stall=%b", $time, addr_q, wb_s_i.stall);
 `endif
           end
@@ -134,7 +134,7 @@ module wb_master_bridge (
       SINGLE_WAIT: begin
         if (wb_s_i.ack) begin
           state_d = IDLE;
-`ifdef VERILATOR
+`ifdef WB_INTC
           $display("[%0t] WB_MASTER: SINGLE_COMPLETE addr=%h write=%b ack=%b", $time, addr_q, write_q, wb_s_i.ack);
 `endif
         end else if (wb_s_i.err) begin
@@ -193,7 +193,7 @@ module wb_master_bridge (
             beat_cnt_q <= '0;
             write_q    <= is_write;
             uncached_q <= is_uncached;
-`ifdef VERILATOR
+`ifdef WB_INTC
             $display("[%0t] WB_MASTER: NEW_REQ addr=%h uncached=%b write=%b", $time, iomem_req_i.addr, is_uncached, is_write);
 `endif
 
@@ -220,7 +220,7 @@ module wb_master_bridge (
             beat_cnt_q <= beat_cnt_q + 1;
             if (!write_q) begin
               rdata_q[beat_cnt_q[BEAT_CNT_W-1:0]] <= wb_s_i.dat;
-`ifdef VERILATOR
+`ifdef WB_INTC
               $display("[%0t] WB_MASTER: BURST_DATA beat=%0d addr=%h dat=%h", $time, beat_cnt_q, wb_m_o.adr, wb_s_i.dat);
 `endif
             end
@@ -367,7 +367,7 @@ module wb_master_bridge (
     endcase
   end
 
-`ifdef VERILATOR
+`ifdef WB_INTC
   always_ff @(posedge clk_i) begin
     if (iomem_res_o.valid && !write_q) begin
       $display("[%0t] WB_MASTER: COMPLETE addr=%h data[0]=%h [1]=%h [2]=%h [3]=%h", $time, addr_q, iomem_res_o.data[31:0], iomem_res_o.data[63:32], iomem_res_o.data[95:64], iomem_res_o.data[127:96]);

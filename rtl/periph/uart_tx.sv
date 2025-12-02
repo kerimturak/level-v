@@ -7,9 +7,11 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-module uart_tx #(  // counter
-    parameter DATA_WIDTH = 8,
-    parameter FIFO_DEPTH = 256
+module uart_tx
+  import ceres_param::*;
+#(
+    parameter DATA_WIDTH = ceres_param::UART_DATA_WIDTH,
+    parameter FIFO_DEPTH = ceres_param::UART_TX_FIFO_DEPTH
 ) (
     input  logic        clk_i,
     input  logic        rst_ni,

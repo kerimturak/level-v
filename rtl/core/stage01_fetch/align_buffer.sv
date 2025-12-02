@@ -11,10 +11,10 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 module align_buffer
   import ceres_param::*;
 #(
-    parameter CACHE_SIZE = 512,
-    parameter BLK_SIZE   = 128,
-    parameter XLEN       = 32,
-    parameter NUM_WAY    = 1
+    parameter CACHE_SIZE = ceres_param::ABUFF_SIZE,
+    parameter BLK_SIZE   = ceres_param::BLK_SIZE,
+    parameter XLEN       = ceres_param::XLEN,
+    parameter NUM_WAY    = ceres_param::ABUFF_WAY
 ) (
     input  logic       clk_i,
     input  logic       rst_ni,

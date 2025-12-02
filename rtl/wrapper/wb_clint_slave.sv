@@ -44,13 +44,13 @@ module wb_clint_slave (
 );
 
   // ============================================================================
-  // CLINT Register Offsets
+  // CLINT Register Offsets (from ceres_param)
   // ============================================================================
-  localparam CLINT_MSIP = 16'h0000;
-  localparam CLINT_MTIMECMP_LO = 16'h4000;
-  localparam CLINT_MTIMECMP_HI = 16'h4004;
-  localparam CLINT_MTIME_LO = 16'hBFF8;
-  localparam CLINT_MTIME_HI = 16'hBFFC;
+  localparam CLINT_MSIP = CLINT_MSIP_OFF;
+  localparam CLINT_MTIMECMP_LO = CLINT_MTIMECMP_OFF;
+  localparam CLINT_MTIMECMP_HI = CLINT_MTIMECMP_OFF + 16'h4;
+  localparam CLINT_MTIME_LO = CLINT_MTIME_OFF;
+  localparam CLINT_MTIME_HI = CLINT_MTIME_OFF + 16'h4;
 
   // ============================================================================
   // Registers

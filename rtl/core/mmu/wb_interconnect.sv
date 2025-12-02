@@ -94,7 +94,7 @@ module wb_interconnect #(
         for (int i = 0; i < NUM_SLAVES; i++) begin
           if (slave_sel[i]) begin
             active_slave_q <= i[1:0];
-`ifdef VERILATOR
+`ifdef WB_INTC
             $display("[%0t] WB_INTC: REQ slave=%0d addr=%h we=%b", $time, i, wb_m_i.adr, wb_m_i.we);
 `endif
           end
@@ -102,7 +102,7 @@ module wb_interconnect #(
         req_pending_q <= 1'b1;
       end else if (wb_s_o.ack || wb_s_o.err) begin
         // Request completed
-`ifdef VERILATOR
+`ifdef WB_INTC
         $display("[%0t] WB_INTC: ACK slave=%0d ack=%b err=%b dat=%h", $time, active_slave_q, wb_s_o.ack, wb_s_o.err, wb_s_o.dat);
 `endif
         if (wb_m_i.cti == WB_CTI_CLASSIC || wb_m_i.cti == WB_CTI_EOB) begin

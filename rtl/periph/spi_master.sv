@@ -161,7 +161,7 @@ module spi_master
     endcase
   end
 
-`ifdef VERILATOR
+`ifdef WB_INTC
   // Debug: SPI register access
   always_ff @(posedge clk_i) begin
     if (stb_i) begin

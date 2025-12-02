@@ -281,19 +281,19 @@ module ceres_wrapper
         ram_burst_data_valid <= 1'b1;
         ram_burst_active     <= ram_is_burst;
         ram_burst_cnt        <= '0;
-`ifdef VERILATOR
+`ifdef WB_INTC
         $display("[%0t] WB_RAM: BURST_CAPTURE addr=%h rdata=%h is_burst=%b", $time, ram_wb_addr, ram_rdata, ram_is_burst);
 `endif
       end  // Subsequent beats - increment counter
       else if (ram_burst_active && ram_wb_req && ram_burst_data_valid) begin
         ram_burst_cnt <= ram_burst_cnt + 1;
-`ifdef VERILATOR
+`ifdef WB_INTC
         $display("[%0t] WB_RAM: BURST_BEAT[%0d] addr=%h data=%h cti=%b", $time, ram_burst_cnt, ram_wb_addr, ram_wb_rdata, wb_slave_m[SLV_RAM].cti);
 `endif
         if (ram_is_burst_end) begin
           ram_burst_active     <= 1'b0;
           ram_burst_data_valid <= 1'b0;
-`ifdef VERILATOR
+`ifdef WB_INTC
           $display("[%0t] WB_RAM: BURST_END", $time);
 `endif
         end
@@ -378,7 +378,7 @@ module ceres_wrapper
       .pbus_ready_i(pbus_ready)
   );
 
-`ifdef VERILATOR
+`ifdef WB_INTC
   // Debug: PBUS transactions
   always_ff @(posedge clk_i) begin
     if (pbus_valid && pbus_we) begin

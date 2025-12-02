@@ -12,7 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 module ras
   import ceres_param::*;
 #(
-    parameter RAS_SIZE = 64
+    parameter RAS_SIZE = ceres_param::RAS_SIZE
 ) (
     input  logic            clk_i,
     input  logic            rst_ni,
