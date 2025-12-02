@@ -40,6 +40,9 @@ module tb_wrapper;
       .status_led_o   (status_led_o)
   );
 
+  // SPI Loopback: Connect MOSI to MISO for testing
+  assign spi0_miso_i = spi0_mosi_o;
+
   initial begin
     rst_ni       <= 0;
     program_rx_i <= 1;

@@ -4,3 +4,4 @@ loop_test
 branch_test
 memory_test
 arithmetic_test
+spi_test

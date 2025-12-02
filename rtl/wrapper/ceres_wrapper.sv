@@ -147,8 +147,15 @@ module ceres_wrapper
   logic       [                 31:0] pbus_rdata;
   logic                               pbus_ready;
 
+  // Peripheral select signals
+  logic                               uart_sel;
+  logic                               spi_sel;
+
   // UART
   logic       [                 31:0] uart_rdata;
+
+  // SPI
+  logic       [                 31:0] spi_rdata;
 
   // ==========================================================================
   // Reset
@@ -385,12 +392,21 @@ module ceres_wrapper
 `endif
 
   // ==========================================================================
+  // Peripheral Bus Address Decoding
+  // Memory Map:
+  //   0x2000_0xxx : UART (addr[19:16] == 0x0)
+  //   0x2001_0xxx : SPI  (addr[19:16] == 0x1)
+  // ==========================================================================
+  assign uart_sel = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
+  assign spi_sel  = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
+
+  // ==========================================================================
   // UART (Connected via Peripheral Bus)
   // ==========================================================================
   uart i_uart (
       .clk_i     (clk_i),
       .rst_ni    (sys_rst_n),
-      .stb_i     (pbus_valid),
+      .stb_i     (pbus_valid && uart_sel),
       .adr_i     (pbus_addr[3:2]),
       .byte_sel_i(pbus_wstrb),
       .we_i      (pbus_we),
@@ -400,24 +416,41 @@ module ceres_wrapper
       .uart_tx_o (uart_tx_o)
   );
 
-  assign pbus_rdata = uart_rdata;
-  assign pbus_ready = 1'b1;  // UART always ready
+  // ==========================================================================
+  // SPI Master (Connected via Peripheral Bus)
+  // ==========================================================================
+  spi_master i_spi (
+      .clk_i     (clk_i),
+      .rst_ni    (sys_rst_n),
+      .stb_i     (pbus_valid && spi_sel),
+      .adr_i     (pbus_addr[3:2]),
+      .byte_sel_i(pbus_wstrb),
+      .we_i      (pbus_we),
+      .dat_i     (pbus_wdata),
+      .dat_o     (spi_rdata),
+      .spi_sck_o (spi0_sclk_o),
+      .spi_mosi_o(spi0_mosi_o),
+      .spi_miso_i(spi0_miso_i),
+      .spi_cs_n_o(spi0_ss_o[0])
+  );
+
+  // Peripheral read data mux
+  assign pbus_rdata = uart_sel ? uart_rdata : spi_sel ? spi_rdata : 32'h0;
+  assign pbus_ready = 1'b1;  // All peripherals always ready
 
   // ==========================================================================
   // Unused Peripheral Tie-offs
   // ==========================================================================
   generate
-    if (!SPI_EN) begin : gen_no_spi
-      assign spi0_sclk_o = 1'b0;
-      assign spi0_mosi_o = 1'b0;
-      assign spi0_ss_o   = 4'hF;
-    end
     if (!GPIO_EN) begin : gen_no_gpio
       assign gpio_o    = 32'h0;
       assign gpio_oe_o = 32'h0;
     end
   endgenerate
 
-  assign status_led_o = {3'b0, prog_mode_led_o};
+  // SPI slave selects - directly controlled via register for now
+  assign spi0_ss_o[3:1] = 3'b111;  // Other slaves inactive
+
+  assign status_led_o   = {3'b0, prog_mode_led_o};
 
 endmodule
