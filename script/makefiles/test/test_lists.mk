@@ -56,21 +56,80 @@ isa isa-tests:
 # -----------------------------------------
 # Branch Predictor Tests (branch/jump instructions)
 # -----------------------------------------
-.PHONY: branch bp-tests
+.PHONY: branch bp-tests branch-all branch-isa branch-imperas branch-arch
 
 # Branch test cycle limit (override with BRANCH_MAX_CYCLES=N)
-BRANCH_MAX_CYCLES ?= 10000
+BRANCH_MAX_CYCLES ?= 100000
+
+# Branch test patterns
+BRANCH_PATTERNS := beq bne blt bge bltu bgeu jal jalr cbeqz cbnez cjal cjalr
 
 branch bp-tests:
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@echo -e "$(GREEN)  Running Branch Predictor Tests$(RESET)"
+	@echo -e "$(GREEN)  Running Branch Predictor Tests (ISA only)$(RESET)"
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@$(MAKE) --no-print-directory run_flist \
 		FLIST=$(FLIST_BRANCH) \
 		TEST_TYPE=isa \
 		SIM=$(SIM) \
 		MAX_CYCLES=$(BRANCH_MAX_CYCLES) \
-		LOG_BP=1
+		CONFIG=branch_test
+
+# Run ALL branch tests from all directories (ISA + Imperas + Arch)
+branch-all:
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Running ALL Branch Tests (ISA + Imperas + Arch)$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@$(MAKE) --no-print-directory branch-isa
+	@$(MAKE) --no-print-directory branch-imperas
+	@$(MAKE) --no-print-directory branch-arch
+
+# ISA branch tests
+branch-isa:
+	@echo -e "$(CYAN)[ISA] Running ISA branch tests...$(RESET)"
+	@PASS=0; FAIL=0; \
+	for test in rv32ui-p-beq rv32ui-p-bne rv32ui-p-blt rv32ui-p-bge \
+	            rv32ui-p-bltu rv32ui-p-bgeu rv32ui-p-jal rv32ui-p-jalr; do \
+		if $(MAKE) --no-print-directory t T=$$test CONFIG=branch_test > /dev/null 2>&1; then \
+			echo -e "$(GREEN)[PASS]$(RESET) $$test"; \
+			PASS=$$((PASS+1)); \
+		else \
+			echo -e "$(RED)[FAIL]$(RESET) $$test"; \
+			FAIL=$$((FAIL+1)); \
+		fi; \
+	done; \
+	echo -e "$(CYAN)[ISA] Results: $$PASS passed, $$FAIL failed$(RESET)"
+
+# Imperas branch tests
+branch-imperas:
+	@echo -e "$(CYAN)[IMPERAS] Running Imperas branch tests...$(RESET)"
+	@PASS=0; FAIL=0; \
+	for test in I-BEQ-01 I-BNE-01 I-BLT-01 I-BGE-01 I-BLTU-01 I-BGEU-01 I-JAL-01 I-JALR-01; do \
+		if $(MAKE) --no-print-directory ti T=$$test CONFIG=branch_test > /dev/null 2>&1; then \
+			echo -e "$(GREEN)[PASS]$(RESET) $$test"; \
+			PASS=$$((PASS+1)); \
+		else \
+			echo -e "$(RED)[FAIL]$(RESET) $$test"; \
+			FAIL=$$((FAIL+1)); \
+		fi; \
+	done; \
+	echo -e "$(CYAN)[IMPERAS] Results: $$PASS passed, $$FAIL failed$(RESET)"
+
+# Arch branch tests
+branch-arch:
+	@echo -e "$(CYAN)[ARCH] Running Arch branch tests...$(RESET)"
+	@PASS=0; FAIL=0; \
+	for test in I-beq-01 I-bne-01 I-blt-01 I-bge-01 I-bltu-01 I-bgeu-01 I-jal-01 I-jalr-01 \
+	            C-cbeqz-01 C-cbnez-01 C-cjal-01 C-cjalr-01; do \
+		if $(MAKE) --no-print-directory ta T=$$test CONFIG=branch_test > /dev/null 2>&1; then \
+			echo -e "$(GREEN)[PASS]$(RESET) $$test"; \
+			PASS=$$((PASS+1)); \
+		else \
+			echo -e "$(RED)[FAIL]$(RESET) $$test"; \
+			FAIL=$$((FAIL+1)); \
+		fi; \
+	done; \
+	echo -e "$(CYAN)[ARCH] Results: $$PASS passed, $$FAIL failed$(RESET)"
 
 # -----------------------------------------
 # CSR Tests (machine mode CSR)

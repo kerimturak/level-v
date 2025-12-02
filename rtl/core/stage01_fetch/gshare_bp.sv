@@ -30,22 +30,39 @@ module gshare_bp
   // ============================================================================
 
   // Global History Register: Son N branch'in sonuçlarını tutar
-  logic [             GHR_SIZE-1:0] ghr;
+  logic [              GHR_SIZE-1:0] ghr;
+  logic [              GHR_SIZE-1:0] ghr_spec;  // Speculative GHR (for prediction)
+  logic [              GHR_SIZE-1:0] ghr_recover;  // Recovery GHR (from EX stage)
 
   // Pattern History Table: 2-bit saturating counter'lar
-  logic [                      1:0] pht       [PHT_SIZE];
+  logic [                       1:0] pht                                           [ PHT_SIZE];
+
+  // Bimodal Predictor Table (for tournament)
+  logic [                       1:0] bimodal                                       [ PHT_SIZE];
+
+  // Choice/Meta Predictor: selects between GSHARE and Bimodal
+  // 2'b00/01 = bimodal, 2'b10/11 = gshare
+  logic [                       1:0] choice                                        [ PHT_SIZE];
 
   // Branch Target Buffer
-  logic                             btb_valid [BTB_SIZE];
-  logic [XLEN-1:$clog2(BTB_SIZE)+2] btb_tag   [BTB_SIZE];
-  logic [                 XLEN-1:0] btb_target[BTB_SIZE];
+  logic                              btb_valid                                     [ BTB_SIZE];
+  logic [ XLEN-1:$clog2(BTB_SIZE)+2] btb_tag                                       [ BTB_SIZE];
+  logic [                  XLEN-1:0] btb_target                                    [ BTB_SIZE];
 
   // Indirect Branch Target Cache (JALR için)
   // PC ile indekslenen basit bir hedef adresi tablosu
-  localparam IBTC_SIZE = 32;  // 32 entry indirect branch target cache
-  logic                              ibtc_valid                          [IBTC_SIZE];
-  logic [XLEN-1:$clog2(IBTC_SIZE)+2] ibtc_tag                            [IBTC_SIZE];
-  logic [                  XLEN-1:0] ibtc_target                         [IBTC_SIZE];
+  // IBTC_SIZE ceres_param paketinden alınır
+  logic                              ibtc_valid                                    [IBTC_SIZE];
+  logic [XLEN-1:$clog2(IBTC_SIZE)+2] ibtc_tag                                      [IBTC_SIZE];
+  logic [                  XLEN-1:0] ibtc_target                                   [IBTC_SIZE];
+
+  // Loop Predictor - tracks loop iteration counts
+  localparam int LOOP_SIZE = 16;
+  logic [     $clog2(LOOP_SIZE)-1:0] loop_idx;
+  logic [                       7:0] loop_count                               [LOOP_SIZE];  // Current iteration
+  logic [                       7:0] loop_trip                                [LOOP_SIZE];  // Max iterations seen
+  logic                              loop_valid                               [LOOP_SIZE];
+  logic [XLEN-1:$clog2(LOOP_SIZE)+2] loop_tag                                 [LOOP_SIZE];
 
   // ============================================================================
   // İÇ SİNYALLER
@@ -68,6 +85,8 @@ module gshare_bp
   // Index hesaplama
   logic [      $clog2(PHT_SIZE)-1:0] pht_rd_idx;
   logic [      $clog2(PHT_SIZE)-1:0] pht_wr_idx;
+  logic [      $clog2(PHT_SIZE)-1:0] bimodal_rd_idx;
+  logic [      $clog2(PHT_SIZE)-1:0] bimodal_wr_idx;
   logic [      $clog2(BTB_SIZE)-1:0] btb_rd_idx;
   logic [      $clog2(BTB_SIZE)-1:0] btb_wr_idx;
   logic [     $clog2(IBTC_SIZE)-1:0] ibtc_rd_idx;
@@ -81,8 +100,16 @@ module gshare_bp
   logic                              ibtc_hit;
   logic [                  XLEN-1:0] ibtc_predicted_target;
 
-  // PHT prediction
+  // PHT/Bimodal/Tournament predictions
   logic                              pht_taken;
+  logic                              bimodal_taken;
+  logic                              use_gshare;  // choice predictor decision
+  logic                              final_taken;  // tournament result
+
+  // Loop predictor signals
+  logic                              loop_hit;
+  logic                              loop_pred_exit;  // predict loop exit
+  logic [                       7:0] loop_current_count;
 
   // Misprediction sinyali
   logic                              spec_miss;
@@ -90,6 +117,13 @@ module gshare_bp
   // EX stage'den gelen branch bilgisi
   logic                              ex_is_branch;
   logic                              ex_was_taken;
+
+  // Backward branch detection (for static prediction fallback)
+  logic                              is_backward_branch;
+  logic [                  XLEN-1:0] branch_target_calc;
+
+  // Confidence tracking
+  logic                              high_confidence;
 
   // ============================================================================
   // INSTRUCTION DECODE
@@ -109,25 +143,39 @@ module gshare_bp
     endcase
 
     return_addr = pc_incr_i;
+
+    // Calculate branch target for backward detection
+    branch_target_calc = pc_i + imm;
+
+    // Backward branch detection: if branch target < current PC, it's backward (loop)
+    // This is used for static prediction when BTB misses
+    is_backward_branch = b_type && ($signed(imm) < 0);
   end
 
   // ============================================================================
   // INDEX HESAPLAMA
   // ============================================================================
+  // GSHARE uses PC XOR GHR for better pattern correlation
+  // Bimodal uses PC only for simple local prediction
   always_comb begin
-    // GSHARE: PC XOR GHR
-    pht_rd_idx  = pc_i[$clog2(PHT_SIZE):1] ^ ghr[$clog2(PHT_SIZE)-1:0];
-    btb_rd_idx  = pc_i[$clog2(BTB_SIZE):1];
-    ibtc_rd_idx = pc_i[$clog2(IBTC_SIZE):1];
+    // GSHARE Read: PC XOR speculative GHR
+    pht_rd_idx     = pc_i[$clog2(PHT_SIZE):1] ^ ghr_spec[$clog2(PHT_SIZE)-1:0];
+    btb_rd_idx     = pc_i[$clog2(BTB_SIZE):1];
+    ibtc_rd_idx    = pc_i[$clog2(IBTC_SIZE):1];
+    loop_idx       = pc_i[$clog2(LOOP_SIZE):1];
 
-    // Write index'leri (EX stage PC ile)
-    pht_wr_idx  = ex_info_i.pc[$clog2(PHT_SIZE):1] ^ ghr[$clog2(PHT_SIZE)-1:0];
-    btb_wr_idx  = ex_info_i.pc[$clog2(BTB_SIZE):1];
-    ibtc_wr_idx = ex_info_i.pc[$clog2(IBTC_SIZE):1];
+    // Bimodal uses PC only (no GHR correlation)
+    bimodal_rd_idx = pc_i[$clog2(PHT_SIZE):1];
+
+    // Write indexes use committed GHR for accuracy
+    pht_wr_idx     = ex_info_i.pc[$clog2(PHT_SIZE):1] ^ ghr[$clog2(PHT_SIZE)-1:0];
+    bimodal_wr_idx = ex_info_i.pc[$clog2(PHT_SIZE):1];
+    btb_wr_idx     = ex_info_i.pc[$clog2(BTB_SIZE):1];
+    ibtc_wr_idx    = ex_info_i.pc[$clog2(IBTC_SIZE):1];
   end
 
   // ============================================================================
-  // BTB & IBTC LOOKUP
+  // BTB, IBTC & LOOP LOOKUP
   // ============================================================================
   always_comb begin
     btb_hit = btb_valid[btb_rd_idx] && (btb_tag[btb_rd_idx] == pc_i[XLEN-1:$clog2(BTB_SIZE)+2]);
@@ -136,7 +184,24 @@ module gshare_bp
     ibtc_hit = ibtc_valid[ibtc_rd_idx] && (ibtc_tag[ibtc_rd_idx] == pc_i[XLEN-1:$clog2(IBTC_SIZE)+2]);
     ibtc_predicted_target = ibtc_target[ibtc_rd_idx];
 
-    pht_taken = pht[pht_rd_idx][1];  // MSB = taken prediction
+    // PHT and Bimodal predictions (MSB = taken)
+    pht_taken = pht[pht_rd_idx][1];
+    bimodal_taken = bimodal[bimodal_rd_idx][1];
+
+    // Choice predictor: MSB selects GSHARE(1) vs Bimodal(0)
+    use_gshare = choice[bimodal_rd_idx][1];
+
+    // Tournament result
+    final_taken = use_gshare ? pht_taken : bimodal_taken;
+
+    // High confidence if both predictors agree or counter is saturated
+    high_confidence = (pht_taken == bimodal_taken) || (pht[pht_rd_idx] == 2'b00) || (pht[pht_rd_idx] == 2'b11) || (bimodal[bimodal_rd_idx] == 2'b00) || (bimodal[bimodal_rd_idx] == 2'b11);
+
+    // Loop predictor lookup
+    loop_hit = loop_valid[loop_idx] && (loop_tag[loop_idx] == pc_i[XLEN-1:$clog2(LOOP_SIZE)+2]);
+    loop_current_count = loop_count[loop_idx];
+    // Predict exit when we're about to reach trip count
+    loop_pred_exit = loop_hit && (loop_current_count >= loop_trip[loop_idx] - 1) && (loop_trip[loop_idx] > 1);
   end
 
   // ============================================================================
@@ -156,8 +221,10 @@ module gshare_bp
     // 1. RAS (return prediction)
     // 2. JAL (unconditional direct jump)
     // 3. JALR (unconditional indirect jump) - IBTC kullan
-    // 4. Branch (conditional) - PHT + BTB
-    // 5. Sequential (PC + 4)
+    // 4. Loop predictor (for backward branches in loops)
+    // 5. Tournament (GSHARE vs Bimodal) + BTB
+    // 6. Static BTFN (backward taken, forward not-taken)
+    // 7. Sequential (PC + 4)
 
     spec_o.pc       = pc_incr_i;
     spec_o.taken    = 1'b0;
@@ -179,11 +246,47 @@ module gshare_bp
         spec_o.pc       = ibtc_predicted_target;
         spec_o.taken    = 1'b1;
         spec_o.spectype = JUMP;
-      end else if (b_type && pht_taken && btb_hit) begin
-        // Branch predicted taken ve BTB hit
-        spec_o.pc       = btb_predicted_target;
-        spec_o.taken    = 1'b1;
-        spec_o.spectype = BRANCH;
+      end else if (b_type) begin
+        // Conditional branch prediction with tournament + loop predictor:
+        // Priority: Loop > Tournament > BTFN static
+
+        if (loop_hit && is_backward_branch) begin
+          // Loop predictor has priority for backward branches
+          if (loop_pred_exit) begin
+            // Predict loop exit (not taken)
+            spec_o.pc       = pc_incr_i;
+            spec_o.taken    = 1'b0;
+            spec_o.spectype = BRANCH;
+          end else begin
+            // Predict loop continue (taken)
+            spec_o.pc       = btb_hit ? btb_predicted_target : branch_target_calc;
+            spec_o.taken    = 1'b1;
+            spec_o.spectype = BRANCH;
+          end
+        end else if (btb_hit) begin
+          // BTB hit: use tournament predictor
+          if (final_taken) begin
+            spec_o.pc       = btb_predicted_target;
+            spec_o.taken    = 1'b1;
+            spec_o.spectype = BRANCH;
+          end else begin
+            // Tournament says not-taken
+            spec_o.pc       = pc_incr_i;
+            spec_o.taken    = 1'b0;
+            spec_o.spectype = BRANCH;
+          end
+        end else if (is_backward_branch) begin
+          // BTB miss + backward branch: use BTFN heuristic (predict taken)
+          // Most backward branches are loops
+          spec_o.pc       = branch_target_calc;
+          spec_o.taken    = 1'b1;
+          spec_o.spectype = BRANCH;
+        end else begin
+          // BTB miss + forward branch: predict not-taken (BTFN)
+          spec_o.pc       = pc_incr_i;
+          spec_o.taken    = 1'b0;
+          spec_o.spectype = BRANCH;
+        end
       end
       // else: sequential (default)
     end
@@ -205,7 +308,7 @@ module gshare_bp
   // RETURN ADDRESS STACK (RAS)
   // ============================================================================
   ras #(
-      .RAS_SIZE(RAS_SIZE)
+      .RAS_SIZE(ceres_param::RAS_SIZE)
   ) i_ras (
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
@@ -220,12 +323,35 @@ module gshare_bp
   );
 
   // ============================================================================
-  // PHT, BTB, IBTC ve GHR UPDATE
+  // SPECULATIVE GHR UPDATE
+  // ============================================================================
+  // Update speculative GHR on prediction, restore on misprediction
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      ghr_spec <= '0;
+    end else if (!stall_i) begin
+      if (spec_miss) begin
+        // Misprediction: restore GHR to committed state and add correct outcome
+        ghr_spec <= {ghr[GHR_SIZE-2:0], ex_was_taken};
+      end else if (fetch_valid_i && b_type) begin
+        // Speculatively update GHR with prediction
+        ghr_spec <= {ghr_spec[GHR_SIZE-2:0], spec_o.taken};
+      end
+    end
+  end
+
+  // ============================================================================
+  // PHT, BTB, IBTC, LOOP ve GHR UPDATE
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       ghr <= '0;
-      for (int i = 0; i < PHT_SIZE; i++) pht[i] <= 2'b01;  // Weakly Not-Taken
+      // Initialize PHT to weakly taken (2'b10) - better for loops
+      for (int i = 0; i < PHT_SIZE; i++) begin
+        pht[i] <= 2'b10;  // Weakly Taken
+        bimodal[i] <= 2'b10;  // Weakly Taken
+        choice[i] <= 2'b10;  // Start with GSHARE
+      end
       for (int i = 0; i < BTB_SIZE; i++) begin
         btb_valid[i]  <= 1'b0;
         btb_tag[i]    <= '0;
@@ -235,6 +361,12 @@ module gshare_bp
         ibtc_valid[i]  <= 1'b0;
         ibtc_tag[i]    <= '0;
         ibtc_target[i] <= '0;
+      end
+      for (int i = 0; i < LOOP_SIZE; i++) begin
+        loop_valid[i] <= 1'b0;
+        loop_count[i] <= '0;
+        loop_trip[i]  <= '0;
+        loop_tag[i]   <= '0;
       end
     end else if (!stall_i) begin
       // Branch çözüldüğünde güncelle
@@ -246,15 +378,55 @@ module gshare_bp
           if (pht[pht_wr_idx] > 2'b00) pht[pht_wr_idx] <= pht[pht_wr_idx] - 1;
         end
 
-        // BTB Update: Taken branch'leri cache'le
+        // Bimodal Update: 2-bit saturating counter
         if (ex_was_taken) begin
-          btb_valid[btb_wr_idx]  <= 1'b1;
-          btb_tag[btb_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(BTB_SIZE)+2];
-          btb_target[btb_wr_idx] <= pc_target_i;
+          if (bimodal[bimodal_wr_idx] < 2'b11) bimodal[bimodal_wr_idx] <= bimodal[bimodal_wr_idx] + 1;
+        end else begin
+          if (bimodal[bimodal_wr_idx] > 2'b00) bimodal[bimodal_wr_idx] <= bimodal[bimodal_wr_idx] - 1;
         end
 
-        // GHR Update: Shift left, yeni sonucu ekle
+        // Choice Update: Only update when predictors disagree
+        // Train towards the predictor that was correct
+        if (pht[pht_wr_idx][1] != bimodal[bimodal_wr_idx][1]) begin
+          if (pht[pht_wr_idx][1] == ex_was_taken) begin
+            // GSHARE was correct, increase choice towards GSHARE
+            if (choice[bimodal_wr_idx] < 2'b11) choice[bimodal_wr_idx] <= choice[bimodal_wr_idx] + 1;
+          end else begin
+            // Bimodal was correct, decrease choice towards bimodal
+            if (choice[bimodal_wr_idx] > 2'b00) choice[bimodal_wr_idx] <= choice[bimodal_wr_idx] - 1;
+          end
+        end
+
+        // BTB Update: Always update BTB with resolved target
+        btb_valid[btb_wr_idx]  <= 1'b1;
+        btb_tag[btb_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(BTB_SIZE)+2];
+        btb_target[btb_wr_idx] <= pc_target_i;
+
+        // GHR Update: Shift left, yeni sonucu ekle (committed)
         ghr <= {ghr[GHR_SIZE-2:0], ex_was_taken};
+
+        // Loop Predictor Update (for backward branches)
+        if ($signed(pc_target_i - ex_info_i.pc) < 0) begin
+          // Backward branch - potential loop
+          automatic logic [$clog2(LOOP_SIZE)-1:0] lp_wr_idx = ex_info_i.pc[$clog2(LOOP_SIZE):1];
+          if (ex_was_taken) begin
+            // Loop iteration
+            if (loop_valid[lp_wr_idx] && loop_tag[lp_wr_idx] == ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+2]) begin
+              loop_count[lp_wr_idx] <= loop_count[lp_wr_idx] + 1;
+            end else begin
+              // New loop entry
+              loop_valid[lp_wr_idx] <= 1'b1;
+              loop_tag[lp_wr_idx]   <= ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+2];
+              loop_count[lp_wr_idx] <= 8'd1;
+            end
+          end else begin
+            // Loop exit - record trip count
+            if (loop_valid[lp_wr_idx] && loop_tag[lp_wr_idx] == ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+2]) begin
+              loop_trip[lp_wr_idx]  <= loop_count[lp_wr_idx];
+              loop_count[lp_wr_idx] <= 8'd0;
+            end
+          end
+        end
       end
 
       // IBTC Update: JALR instruction'ları için hedef adresi cache'le
@@ -368,8 +540,7 @@ module gshare_bp
     end
   end
 
-  // Her N cycle'da log yaz
-  localparam LOG_INTERVAL = 10000;
+  // Her N cycle'da log yaz (BP_LOG_INTERVAL ceres_param'dan gelir)
   logic [31:0] log_counter;
 
   always_ff @(posedge clk_i) begin
@@ -377,7 +548,7 @@ module gshare_bp
       log_counter <= '0;
     end else begin
       log_counter <= log_counter + 1;
-      if (log_counter == LOG_INTERVAL) begin
+      if (log_counter == BP_LOG_INTERVAL) begin
         log_counter <= '0;
         if (bp_log_file != 0) begin
           $fwrite(bp_log_file, "%0t,%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d\n", $time, total_branches, correct_predictions, mispredictions, jal_count, jal_correct, jalr_count, jalr_correct,

@@ -73,6 +73,7 @@ module wb_master_bridge (
   logic                                        is_write;
   logic                                        is_uncached;
   logic [    BURST_LEN-1:0][WB_DATA_WIDTH-1:0] wdata_packed;
+  logic [ WB_SEL_WIDTH-1:0]                    byte_sel_comb;
 
   // Pack input data into burst format
   always_comb begin
@@ -237,8 +238,7 @@ module wb_master_bridge (
   // ============================================================================
   // Combinational byte select for immediate use in SINGLE_REQ
   // Extract correct 4-bit byte select based on word offset within cache line
-  logic [WB_SEL_WIDTH-1:0] byte_sel_comb;
-  logic [             1:0] word_offset;
+  logic [1:0] word_offset;
   assign word_offset = iomem_req_i.addr[3:2];  // Which word within 16-byte cache line
 
   always_comb begin

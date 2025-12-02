@@ -1,0 +1,10 @@
+# Branch and Jump Tests for Branch Predictor Evaluation
+# ISA Tests (riscv-tests) - Only these are in the standard test path
+rv32ui-p-beq
+rv32ui-p-bne
+rv32ui-p-blt
+rv32ui-p-bge
+rv32ui-p-bltu
+rv32ui-p-bgeu
+rv32ui-p-jal
+rv32ui-p-jalr
