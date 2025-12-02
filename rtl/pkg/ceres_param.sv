@@ -606,6 +606,78 @@ package ceres_param;
     logic [BLK_SIZE -1:0] data;
   } iomem_res_t;
 
+  // ============================================================================
+  // WISHBONE B4 BUS INTERFACE
+  // ============================================================================
+  // Classic Wishbone B4 pipelined interface for peripheral interconnect.
+  // Supports single transfers and burst modes for cache line fills.
+  //
+  // Cycle Types (CTI):
+  //   000 = Classic cycle (single transfer)
+  //   001 = Constant address burst
+  //   010 = Incrementing burst
+  //   111 = End of burst
+  //
+  // Burst Type Extension (BTE) - for incrementing bursts:
+  //   00 = Linear burst
+  //   01 = 4-beat wrap burst
+  //   10 = 8-beat wrap burst
+  //   11 = 16-beat wrap burst
+  // ============================================================================
+
+  // Wishbone data width configuration
+  localparam WB_DATA_WIDTH = 32;  // 32-bit data bus
+  localparam WB_ADDR_WIDTH = 32;  // 32-bit address bus
+  localparam WB_SEL_WIDTH = WB_DATA_WIDTH / 8;  // 4 byte select lines
+
+  // Wishbone Cycle Type Identifier
+  typedef enum logic [2:0] {
+    WB_CTI_CLASSIC = 3'b000,  // Classic single transfer
+    WB_CTI_CONST   = 3'b001,  // Constant address burst
+    WB_CTI_INCR    = 3'b010,  // Incrementing address burst  
+    WB_CTI_EOB     = 3'b111   // End of burst
+  } wb_cti_e;
+
+  // Wishbone Burst Type Extension (for wrapping bursts)
+  typedef enum logic [1:0] {
+    WB_BTE_LINEAR = 2'b00,  // Linear burst
+    WB_BTE_WRAP4  = 2'b01,  // 4-beat wrap burst
+    WB_BTE_WRAP8  = 2'b10,  // 8-beat wrap burst
+    WB_BTE_WRAP16 = 2'b11   // 16-beat wrap burst
+  } wb_bte_e;
+
+  // Wishbone Master -> Slave signals (active-high, directly from spec)
+  typedef struct packed {
+    logic [WB_ADDR_WIDTH-1:0] adr;  // Address
+    logic [WB_DATA_WIDTH-1:0] dat;  // Data out (master to slave)
+    logic [WB_SEL_WIDTH-1:0]  sel;  // Byte select
+    logic                     we;   // Write enable
+    logic                     stb;  // Strobe (valid transfer)
+    logic                     cyc;  // Cycle (bus request)
+    wb_cti_e                  cti;  // Cycle type identifier
+    wb_bte_e                  bte;  // Burst type extension
+  } wb_master_t;
+
+  // Wishbone Slave -> Master signals
+  typedef struct packed {
+    logic [WB_DATA_WIDTH-1:0] dat;    // Data in (slave to master)
+    logic                     ack;    // Acknowledge
+    logic                     err;    // Error response
+    logic                     rty;    // Retry request
+    logic                     stall;  // Pipeline stall (B4 pipelined)
+  } wb_slave_t;
+
+  // Number of Wishbone slaves for interconnect
+  localparam WB_NUM_SLAVES = 4;  // RAM, CLINT, PBUS, Reserved
+
+  // Wishbone slave address decode (bits [31:28] for top-level decode)
+  typedef enum logic [3:0] {
+    WB_SLAVE_RAM   = 4'h8,  // 0x8xxx_xxxx - Main RAM
+    WB_SLAVE_CLINT = 4'h3,  // 0x3xxx_xxxx - CLINT  
+    WB_SLAVE_PBUS  = 4'h2,  // 0x2xxx_xxxx - Peripheral Bus
+    WB_SLAVE_NONE  = 4'hF   // Invalid/Reserved
+  } wb_slave_sel_e;
+
 
   typedef struct packed {
     logic            valid;

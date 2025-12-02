@@ -7,22 +7,18 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 Description:
-  CERES RISC-V SoC Top-Level Wrapper
+  CERES RISC-V SoC Top-Level Wrapper with Wishbone B4 Bus
   
-  Modular, extensible SoC wrapper designed for future expansion.
+  Full Wishbone B4 pipelined bus architecture for peripheral interconnect.
   
+  Bus Topology:
+    CPU -> iomem -> wb_master_bridge -> wb_interconnect -> slaves
+    
   Memory Map:
-    0x8000_0000 : Main RAM (128KB default)
-    0x3000_0000 : CLINT (mtime, mtimecmp, msip)
-    0x2000_0000 : Peripherals
+    0x8000_0000 : Main RAM (via Wishbone)
+    0x3000_0000 : CLINT (via Wishbone)
+    0x2000_0000 : Peripherals (via Wishbone)
       0x2000_0xxx : UART0
-      0x2000_1xxx : UART1
-      0x2000_2xxx : SPI0
-      0x2000_3xxx : I2C0
-      0x2000_4xxx : GPIO
-      0x2000_5xxx : PWM
-      0x2000_6xxx : Timer
-      0x2000_7xxx : PLIC
 */
 `timescale 1ns / 1ps
 
@@ -88,74 +84,83 @@ module ceres_wrapper
   // ==========================================================================
   localparam int RAM_DEPTH = (RAM_SIZE_KB * 1024) / 4;
   localparam int CACHE_LINE_W = BLK_SIZE;
-  localparam int BYTE_OFFSET = 2;
+  localparam int BYTE_OFFSET = $clog2(CACHE_LINE_W / 8);  // 4 for 128-bit cache line (16 bytes)
 
-  // Address Regions
-  localparam logic [31:0] RAM_BASE = 32'h8000_0000;
-  localparam logic [31:0] RAM_MASK = 32'h000F_FFFF;
-  localparam logic [31:0] CLINT_BASE = 32'h3000_0000;
-  localparam logic [31:0] CLINT_MASK = 32'h0000_FFFF;
-  localparam logic [31:0] PBUS_BASE = 32'h2000_0000;
-  localparam logic [31:0] PBUS_MASK = 32'h00FF_FFFF;
-
-  // CLINT Offsets
-  localparam logic [15:0] CLINT_MSIP = 16'h0000;
-  localparam logic [15:0] CLINT_MTIMECMP = 16'h4000;
-  localparam logic [15:0] CLINT_MTIME = 16'hBFF8;
+  // Wishbone Slave IDs
+  localparam int SLV_RAM = 0;
+  localparam int SLV_CLINT = 1;
+  localparam int SLV_PBUS = 2;
+  localparam int WB_NUM_SLAVES_LOCAL = 3;
 
   // ==========================================================================
   // Internal Signals
   // ==========================================================================
 
   // CPU Interface
-  iomem_req_t cpu_mem_req;
-  iomem_res_t cpu_mem_res;
+  iomem_req_t                         cpu_mem_req;
+  iomem_res_t                         cpu_mem_res;
+
+  // Wishbone Bus
+  wb_master_t                         wb_cpu_m;
+  wb_slave_t                          wb_cpu_s;
+  wb_master_t                         wb_slave_m           [WB_NUM_SLAVES_LOCAL];
+  wb_slave_t                          wb_slave_s           [WB_NUM_SLAVES_LOCAL];
 
   // Reset
-  logic       prog_reset;
-  logic       sys_rst_n;
+  logic                               prog_reset;
+  logic                               sys_rst_n;
 
-  // Address Decode
-  logic sel_ram, sel_clint, sel_pbus;
-  logic [                 15:0] clint_off;
+  // RAM signals
+  logic       [     CACHE_LINE_W-1:0] ram_rdata;
+  logic       [   CACHE_LINE_W/8-1:0] ram_wstrb;
+  logic                               ram_rd_en;
+  logic       [$clog2(RAM_DEPTH)-1:0] ram_addr;
+  logic       [      RAM_LATENCY-1:0] ram_delay_q;
+  logic                               ram_pending_q;
 
-  // RAM
-  logic [     CACHE_LINE_W-1:0] ram_rdata;
-  logic [   CACHE_LINE_W/8-1:0] ram_wstrb;
-  logic                         ram_rd_en;
-  logic [$clog2(RAM_DEPTH)-1:0] ram_addr;
-  logic [      RAM_LATENCY-1:0] ram_delay_q;
-  logic                         ram_pending_q;
+  // RAM Wishbone adapter signals
+  logic                               ram_wb_req;
+  logic                               ram_wb_we;
+  logic       [                 31:0] ram_wb_addr;
+  logic       [                 31:0] ram_wb_wdata;
+  logic       [                  3:0] ram_wb_sel;
+  logic       [                 31:0] ram_wb_rdata;
+  logic                               ram_wb_ack;
 
-  // CLINT
-  logic [                 63:0] mtime_q;
-  logic [                 63:0] mtimecmp_q;
-  logic                         msip_q;
-  logic                         timer_irq;
+  // RAM Burst handling
+  logic                               ram_burst_active;
+  logic       [                  1:0] ram_burst_cnt;
+  logic       [                 31:0] ram_burst_base_addr;
+  logic       [     CACHE_LINE_W-1:0] ram_burst_data_q;
+  logic                               ram_burst_data_valid;
 
-  // UART (directly connected to iomem bus)
-  logic [                 31:0] uart_rdata;
+  // Timer/SW interrupt from CLINT
+  logic                               timer_irq;
+  logic                               sw_irq;
+
+  // Peripheral bus signals
+  logic       [                 31:0] pbus_addr;
+  logic       [                 31:0] pbus_wdata;
+  logic       [                  3:0] pbus_wstrb;
+  logic                               pbus_valid;
+  logic                               pbus_we;
+  logic       [                 31:0] pbus_rdata;
+  logic                               pbus_ready;
+
+  // UART
+  logic       [                 31:0] uart_rdata;
 
   // ==========================================================================
   // Reset
   // ==========================================================================
-  // In Verilator simulation, bypass prog_reset to prevent floating UART issues
 `ifdef VERILATOR
-  assign sys_rst_n = rst_ni;  // Programming reset bypass for simulation
+  assign sys_rst_n = rst_ni;
 `else
   assign sys_rst_n = rst_ni & prog_reset;
 `endif
 
   // ==========================================================================
-  // Address Decoder
-  // ==========================================================================
-  assign sel_ram   = (cpu_mem_req.addr & ~RAM_MASK) == RAM_BASE;
-  assign sel_clint = (cpu_mem_req.addr & ~CLINT_MASK) == CLINT_BASE;
-  assign sel_pbus  = (cpu_mem_req.addr & ~PBUS_MASK) == PBUS_BASE;
-  assign clint_off = cpu_mem_req.addr[15:0];
-
-  // ==========================================================================
-  // CPU Core (instance name 'soc' for tracer compatibility)
+  // CPU Core
   // ==========================================================================
   cpu i_soc (
       .clk_i      (clk_i),
@@ -165,11 +170,74 @@ module ceres_wrapper
   );
 
   // ==========================================================================
-  // Main RAM
+  // WISHBONE MASTER BRIDGE (iomem -> Wishbone B4)
   // ==========================================================================
-  assign ram_addr  = cpu_mem_req.addr[BYTE_OFFSET+$clog2(RAM_DEPTH)-1 : BYTE_OFFSET];
-  assign ram_wstrb = (cpu_mem_req.valid & sel_ram) ? cpu_mem_req.rw : '0;
-  assign ram_rd_en = cpu_mem_req.valid & sel_ram & ~(|cpu_mem_req.rw);
+  wb_master_bridge i_wb_master (
+      .clk_i      (clk_i),
+      .rst_ni     (sys_rst_n),
+      .iomem_req_i(cpu_mem_req),
+      .iomem_res_o(cpu_mem_res),
+      .wb_m_o     (wb_cpu_m),
+      .wb_s_i     (wb_cpu_s)
+  );
+
+  // ==========================================================================
+  // WISHBONE INTERCONNECT (1-to-N Switch)
+  // ==========================================================================
+  wb_interconnect #(
+      .NUM_SLAVES(WB_NUM_SLAVES_LOCAL)
+  ) i_wb_interconnect (
+      .clk_i (clk_i),
+      .rst_ni(sys_rst_n),
+      .wb_m_i(wb_cpu_m),
+      .wb_s_o(wb_cpu_s),
+      .wb_m_o(wb_slave_m),
+      .wb_s_i(wb_slave_s)
+  );
+
+  // ==========================================================================
+  // SLAVE 0: RAM (Wishbone -> Cache-line RAM adapter with Burst Support)
+  // ==========================================================================
+  assign ram_wb_req   = wb_slave_m[SLV_RAM].cyc && wb_slave_m[SLV_RAM].stb;
+  assign ram_wb_we    = wb_slave_m[SLV_RAM].we;
+  assign ram_wb_addr  = wb_slave_m[SLV_RAM].adr;
+  assign ram_wb_wdata = wb_slave_m[SLV_RAM].dat;
+  assign ram_wb_sel   = wb_slave_m[SLV_RAM].sel;
+
+  // Detect burst mode from CTI
+  wire ram_is_burst = (wb_slave_m[SLV_RAM].cti == WB_CTI_INCR) || (wb_slave_m[SLV_RAM].cti == WB_CTI_EOB);
+  wire ram_is_burst_start = ram_wb_req && !ram_wb_we && (wb_slave_m[SLV_RAM].cti == WB_CTI_INCR) && !ram_burst_active;
+  wire ram_is_burst_end = ram_burst_active && (wb_slave_m[SLV_RAM].cti == WB_CTI_EOB);
+
+  // Convert byte address to RAM word address (divide by 4)
+  // RAM module internally aligns to cache line boundary
+  assign ram_addr = ram_wb_addr[2+$clog2(RAM_DEPTH)-1 : 2];
+
+  // Expand word data to cache line width with proper byte strobes
+  logic [  CACHE_LINE_W-1:0] ram_wdata_expanded;
+  logic [CACHE_LINE_W/8-1:0] ram_wstrb_expanded;
+
+  always_comb begin
+    ram_wdata_expanded = '0;
+    ram_wstrb_expanded = '0;
+
+    // Replicate write data across all word positions
+    for (int i = 0; i < CACHE_LINE_W / 32; i++) begin
+      ram_wdata_expanded[i*32+:32] = ram_wb_wdata;
+    end
+
+    // Set byte strobes for correct word position
+    if (ram_wb_req && ram_wb_we) begin
+      logic [1:0] word_offset;
+      word_offset = ram_wb_addr[3:2];  // Select word within 16-byte cache line
+      ram_wstrb_expanded[word_offset*4+:4] = ram_wb_sel;
+    end
+  end
+
+  assign ram_wstrb = ram_wstrb_expanded;
+
+  // Only issue RAM read for first beat of burst OR single access
+  assign ram_rd_en = ram_wb_req && !ram_wb_we && !ram_burst_data_valid;
 
   wrapper_ram #(
       .WORD_WIDTH      (32),
@@ -182,7 +250,7 @@ module ceres_wrapper
       .clk_i          (clk_i),
       .rst_ni         (rst_ni),
       .addr_i         (ram_addr),
-      .wdata_i        (cpu_mem_req.data),
+      .wdata_i        (ram_wdata_expanded),
       .wstrb_i        (ram_wstrb),
       .rdata_o        (ram_rdata),
       .rd_en_i        (ram_rd_en),
@@ -191,77 +259,149 @@ module ceres_wrapper
       .prog_mode_led_o(prog_mode_led_o)
   );
 
-  // RAM Latency Pipeline
+  // Burst state machine
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      ram_burst_active     <= 1'b0;
+      ram_burst_cnt        <= '0;
+      ram_burst_base_addr  <= '0;
+      ram_burst_data_q     <= '0;
+      ram_burst_data_valid <= 1'b0;
+    end else begin
+      // First beat of burst - wait for RAM latency then capture data
+      if (ram_delay_q[RAM_LATENCY-1] && !ram_burst_data_valid) begin
+        ram_burst_data_q     <= ram_rdata;
+        ram_burst_data_valid <= 1'b1;
+        ram_burst_active     <= ram_is_burst;
+        ram_burst_cnt        <= '0;
+`ifdef VERILATOR
+        $display("[%0t] WB_RAM: BURST_CAPTURE addr=%h rdata=%h is_burst=%b", $time, ram_wb_addr, ram_rdata, ram_is_burst);
+`endif
+      end  // Subsequent beats - increment counter
+      else if (ram_burst_active && ram_wb_req && ram_burst_data_valid) begin
+        ram_burst_cnt <= ram_burst_cnt + 1;
+`ifdef VERILATOR
+        $display("[%0t] WB_RAM: BURST_BEAT[%0d] addr=%h data=%h cti=%b", $time, ram_burst_cnt, ram_wb_addr, ram_wb_rdata, wb_slave_m[SLV_RAM].cti);
+`endif
+        if (ram_is_burst_end) begin
+          ram_burst_active     <= 1'b0;
+          ram_burst_data_valid <= 1'b0;
+`ifdef VERILATOR
+          $display("[%0t] WB_RAM: BURST_END", $time);
+`endif
+        end
+      end  // Non-burst read complete - clear valid
+      else if (ram_delay_q[RAM_LATENCY-1] && !ram_is_burst) begin
+        ram_burst_data_valid <= 1'b0;
+      end  // Single access complete
+      else if (!ram_wb_req && !ram_burst_active) begin
+        ram_burst_data_valid <= 1'b0;
+      end
+    end
+  end
+
+  // Extract correct word from cache line for read (use burst data when valid)
+  always_comb begin
+    logic [1:0] word_offset;
+    if (ram_burst_data_valid) begin
+      word_offset  = ram_wb_addr[3:2];
+      ram_wb_rdata = ram_burst_data_q[word_offset*32+:32];
+    end else begin
+      word_offset  = ram_wb_addr[3:2];
+      ram_wb_rdata = ram_rdata[word_offset*32+:32];
+    end
+  end
+
+  // RAM Latency Pipeline for Wishbone ACK
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       ram_delay_q   <= '0;
       ram_pending_q <= 1'b0;
     end else begin
-      if (cpu_mem_req.valid & cpu_mem_res.valid & sel_ram) ram_delay_q <= '0;
-      else ram_delay_q <= {ram_delay_q[RAM_LATENCY-2:0], ram_pending_q};
-
-      ram_pending_q <= cpu_mem_req.valid & ~cpu_mem_res.valid & sel_ram;
-    end
-  end
-
-  // ==========================================================================
-  // CLINT (Core-Local Interruptor)
-  // ==========================================================================
-  assign timer_irq = (mtime_q >= mtimecmp_q);
-
-  always_ff @(posedge clk_i or negedge sys_rst_n) begin
-    if (!sys_rst_n) begin
-      mtime_q    <= 64'h0;
-      mtimecmp_q <= 64'hFFFF_FFFF_FFFF_FFFF;
-      msip_q     <= 1'b0;
-    end else begin
-      mtime_q <= mtime_q + 64'h1;
-
-      if (cpu_mem_req.valid & sel_clint & (|cpu_mem_req.rw)) begin
-        case (clint_off)
-          CLINT_MSIP:         msip_q <= cpu_mem_req.data[0];
-          CLINT_MTIMECMP:     mtimecmp_q[31:0] <= cpu_mem_req.data[31:0];
-          CLINT_MTIMECMP + 4: mtimecmp_q[63:32] <= cpu_mem_req.data[31:0];
-          CLINT_MTIME:        mtime_q[31:0] <= cpu_mem_req.data[31:0];
-          CLINT_MTIME + 4:    mtime_q[63:32] <= cpu_mem_req.data[31:0];
-          default:            ;
-        endcase
-      end
-    end
-  end
-
-  // ==========================================================================
-  // Response Mux
-  // ==========================================================================
-  always_comb begin
-    cpu_mem_res.ready = 1'b1;
-    cpu_mem_res.valid = 1'b0;
-    cpu_mem_res.data  = '0;
-
-    if (cpu_mem_req.valid) begin
-      if (sel_ram) begin
-        cpu_mem_res.valid = ram_delay_q[RAM_LATENCY-1];
-        cpu_mem_res.data  = ram_rdata;
-      end else if (sel_clint) begin
-        cpu_mem_res.valid = 1'b1;
-        case (clint_off)
-          CLINT_MSIP:         cpu_mem_res.data = {96'b0, 31'b0, msip_q};
-          CLINT_MTIMECMP:     cpu_mem_res.data = {96'b0, mtimecmp_q[31:0]};
-          CLINT_MTIMECMP + 4: cpu_mem_res.data = {96'b0, mtimecmp_q[63:32]};
-          CLINT_MTIME:        cpu_mem_res.data = {96'b0, mtime_q[31:0]};
-          CLINT_MTIME + 4:    cpu_mem_res.data = {96'b0, mtime_q[63:32]};
-          default:            cpu_mem_res.data = '0;
-        endcase
-      end else if (sel_pbus) begin
-        // Peripheral Bus - UART at 0x2000_0xxx
-        cpu_mem_res.valid = 1'b1;
-        cpu_mem_res.data  = {96'b0, uart_rdata};
+      // Clear delay pipeline on ACK
+      if (ram_wb_ack) begin
+        ram_delay_q   <= '0;
+        ram_pending_q <= 1'b0;
       end else begin
-        cpu_mem_res.valid = 1'b1;
-        cpu_mem_res.data  = '0;  // Unmapped
+        ram_delay_q   <= {ram_delay_q[RAM_LATENCY-2:0], ram_pending_q};
+        // Only set pending for first beat of burst or single access
+        ram_pending_q <= ram_rd_en;
       end
     end
   end
+
+  // RAM Wishbone response
+  // - Writes ACK immediately
+  // - First read beat: ACK after RAM latency
+  // - Subsequent burst beats: ACK immediately (data already in buffer)
+  assign ram_wb_ack = (ram_wb_req && ram_wb_we) || ram_delay_q[RAM_LATENCY-1] || (ram_burst_active && ram_wb_req && ram_burst_data_valid);
+
+  assign wb_slave_s[SLV_RAM].dat = ram_wb_rdata;
+  assign wb_slave_s[SLV_RAM].ack = ram_wb_ack;
+  assign wb_slave_s[SLV_RAM].err = 1'b0;
+  assign wb_slave_s[SLV_RAM].rty = 1'b0;
+  assign wb_slave_s[SLV_RAM].stall = 1'b0;
+
+  // ==========================================================================
+  // SLAVE 1: CLINT (Core-Local Interruptor)
+  // ==========================================================================
+  wb_clint_slave i_wb_clint (
+      .clk_i      (clk_i),
+      .rst_ni     (sys_rst_n),
+      .wb_m_i     (wb_slave_m[SLV_CLINT]),
+      .wb_s_o     (wb_slave_s[SLV_CLINT]),
+      .timer_irq_o(timer_irq),
+      .sw_irq_o   (sw_irq)
+  );
+
+  // ==========================================================================
+  // SLAVE 2: Peripheral Bus (UART, etc.)
+  // ==========================================================================
+  wb_pbus_slave i_wb_pbus (
+      .clk_i       (clk_i),
+      .rst_ni      (sys_rst_n),
+      .wb_m_i      (wb_slave_m[SLV_PBUS]),
+      .wb_s_o      (wb_slave_s[SLV_PBUS]),
+      .pbus_addr_o (pbus_addr),
+      .pbus_wdata_o(pbus_wdata),
+      .pbus_wstrb_o(pbus_wstrb),
+      .pbus_valid_o(pbus_valid),
+      .pbus_we_o   (pbus_we),
+      .pbus_rdata_i(pbus_rdata),
+      .pbus_ready_i(pbus_ready)
+  );
+
+`ifdef VERILATOR
+  // Debug: PBUS transactions
+  always_ff @(posedge clk_i) begin
+    if (pbus_valid && pbus_we) begin
+      $display("[%0t] PBUS_WRITE: addr=%h data=%h wstrb=%b ready=%b", $time, pbus_addr, pbus_wdata, pbus_wstrb, pbus_ready);
+    end
+    if (wb_slave_m[SLV_PBUS].cyc && wb_slave_m[SLV_PBUS].stb) begin
+      $display("[%0t] WB_PBUS: cyc=%b stb=%b we=%b addr=%h sel=%b ack=%b", $time, wb_slave_m[SLV_PBUS].cyc, wb_slave_m[SLV_PBUS].stb, wb_slave_m[SLV_PBUS].we, wb_slave_m[SLV_PBUS].adr,
+               wb_slave_m[SLV_PBUS].sel, wb_slave_s[SLV_PBUS].ack);
+    end
+  end
+`endif
+
+  // ==========================================================================
+  // UART (Connected via Peripheral Bus)
+  // ==========================================================================
+  uart i_uart (
+      .clk_i     (clk_i),
+      .rst_ni    (sys_rst_n),
+      .stb_i     (pbus_valid),
+      .adr_i     (pbus_addr[3:2]),
+      .byte_sel_i(pbus_wstrb),
+      .we_i      (pbus_we),
+      .dat_i     (pbus_wdata),
+      .dat_o     (uart_rdata),
+      .uart_rx_i (uart_rx_i),
+      .uart_tx_o (uart_tx_o)
+  );
+
+  assign pbus_rdata = uart_rdata;
+  assign pbus_ready = 1'b1;  // UART always ready
 
   // ==========================================================================
   // Unused Peripheral Tie-offs
@@ -279,22 +419,5 @@ module ceres_wrapper
   endgenerate
 
   assign status_led_o = {3'b0, prog_mode_led_o};
-
-  // ==========================================================================
-  // UART (Peripheral Bus 0x2000_0xxx)
-  // Connected via iomem bus - directly accessible from CPU
-  // ==========================================================================
-  uart i_uart (
-      .clk_i     (clk_i),
-      .rst_ni    (sys_rst_n),
-      .stb_i     (cpu_mem_req.valid & sel_pbus),
-      .adr_i     (cpu_mem_req.addr[3:2]),
-      .byte_sel_i(4'b1111),
-      .we_i      (|cpu_mem_req.rw),
-      .dat_i     (cpu_mem_req.data[31:0]),
-      .dat_o     (uart_rdata),
-      .uart_rx_i (uart_rx_i),
-      .uart_tx_o (uart_tx_o)
-  );
 
 endmodule

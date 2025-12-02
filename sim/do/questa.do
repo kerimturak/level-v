@@ -74,6 +74,12 @@ set UART          "$WRAPPER/i_uart"
 set UART_TX       "$UART/i_uart_tx"
 set UART_RX       "$UART/i_uart_rx"
 
+# Wishbone Bus submodules
+set WB_MASTER     "$WRAPPER/i_wb_master"
+set WB_INTERCON   "$WRAPPER/i_wb_interconnect"
+set WB_CLINT      "$WRAPPER/i_wb_clint"
+set WB_PBUS       "$WRAPPER/i_wb_pbus"
+
 ##################################################################################
 #                              TESTBENCH                                         #
 ##################################################################################
@@ -125,9 +131,10 @@ add wave -noupdate -group "CERES_WRAPPER" -group "Internal" -radix hexadecimal $
 add wave -noupdate -group "CERES_WRAPPER" -group "Internal" -radix hexadecimal $WRAPPER/cpu_mem_res
 add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sys_rst_n
 add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/prog_reset
-add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sel_ram
-add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sel_clint
-add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sel_pbus
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" -radix hexadecimal $WRAPPER/wb_cpu_m
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" -radix hexadecimal $WRAPPER/wb_cpu_s
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/timer_irq
+add wave -noupdate -group "CERES_WRAPPER" -group "Internal" $WRAPPER/sw_irq
 
 ##################################################################################
 #                              WRAPPER_RAM                                       #
@@ -212,6 +219,74 @@ add wave -noupdate -group "UART_RX" -group "Internal" -radix hexadecimal $UART_R
 add wave -noupdate -group "UART_RX" -group "Internal" -radix unsigned $UART_RX/bit_counter
 add wave -noupdate -group "UART_RX" -group "Internal" -radix unsigned $UART_RX/baud_counter
 add wave -noupdate -group "UART_RX" -group "Internal" $UART_RX/baud_clk
+
+##################################################################################
+#                              WISHBONE BUS                                      #
+##################################################################################
+add wave -noupdate -divider -height 20 {=============== WISHBONE BUS ===============}
+
+# WB_MASTER_BRIDGE
+add wave -noupdate -group "WB_MASTER" -group "Inputs" -color Gold $WB_MASTER/clk_i
+add wave -noupdate -group "WB_MASTER" -group "Inputs" -color Orange $WB_MASTER/rst_ni
+add wave -noupdate -group "WB_MASTER" -group "Inputs" -radix hexadecimal $WB_MASTER/iomem_req_i
+add wave -noupdate -group "WB_MASTER" -group "Inputs" -radix hexadecimal $WB_MASTER/wb_s_i
+
+add wave -noupdate -group "WB_MASTER" -group "Outputs" -radix hexadecimal $WB_MASTER/iomem_res_o
+add wave -noupdate -group "WB_MASTER" -group "Outputs" -radix hexadecimal $WB_MASTER/wb_m_o
+
+add wave -noupdate -group "WB_MASTER" -group "Internal" $WB_MASTER/state_q
+add wave -noupdate -group "WB_MASTER" -group "Internal" -radix hexadecimal $WB_MASTER/addr_q
+add wave -noupdate -group "WB_MASTER" -group "Internal" -radix hexadecimal $WB_MASTER/wdata_q
+add wave -noupdate -group "WB_MASTER" -group "Internal" -radix hexadecimal $WB_MASTER/rdata_q
+add wave -noupdate -group "WB_MASTER" -group "Internal" -radix unsigned $WB_MASTER/beat_cnt_q
+add wave -noupdate -group "WB_MASTER" -group "Internal" $WB_MASTER/write_q
+add wave -noupdate -group "WB_MASTER" -group "Internal" $WB_MASTER/uncached_q
+
+# WB_INTERCONNECT
+add wave -noupdate -group "WB_INTERCONNECT" -group "Inputs" -color Gold $WB_INTERCON/clk_i
+add wave -noupdate -group "WB_INTERCONNECT" -group "Inputs" -color Orange $WB_INTERCON/rst_ni
+add wave -noupdate -group "WB_INTERCONNECT" -group "Inputs" -radix hexadecimal $WB_INTERCON/wb_m_i
+add wave -noupdate -group "WB_INTERCONNECT" -group "Inputs" -radix hexadecimal $WB_INTERCON/wb_s_i
+
+add wave -noupdate -group "WB_INTERCONNECT" -group "Outputs" -radix hexadecimal $WB_INTERCON/wb_s_o
+add wave -noupdate -group "WB_INTERCONNECT" -group "Outputs" -radix hexadecimal $WB_INTERCON/wb_m_o
+
+add wave -noupdate -group "WB_INTERCONNECT" -group "Internal" $WB_INTERCON/slave_sel
+add wave -noupdate -group "WB_INTERCONNECT" -group "Internal" $WB_INTERCON/addr_valid
+add wave -noupdate -group "WB_INTERCONNECT" -group "Internal" -radix unsigned $WB_INTERCON/active_slave_q
+add wave -noupdate -group "WB_INTERCONNECT" -group "Internal" $WB_INTERCON/req_pending_q
+
+# WB_CLINT_SLAVE
+add wave -noupdate -group "WB_CLINT" -group "Inputs" -color Gold $WB_CLINT/clk_i
+add wave -noupdate -group "WB_CLINT" -group "Inputs" -color Orange $WB_CLINT/rst_ni
+add wave -noupdate -group "WB_CLINT" -group "Inputs" -radix hexadecimal $WB_CLINT/wb_m_i
+
+add wave -noupdate -group "WB_CLINT" -group "Outputs" -radix hexadecimal $WB_CLINT/wb_s_o
+add wave -noupdate -group "WB_CLINT" -group "Outputs" $WB_CLINT/timer_irq_o
+add wave -noupdate -group "WB_CLINT" -group "Outputs" $WB_CLINT/sw_irq_o
+
+add wave -noupdate -group "WB_CLINT" -group "Internal" -radix hexadecimal $WB_CLINT/mtime_q
+add wave -noupdate -group "WB_CLINT" -group "Internal" -radix hexadecimal $WB_CLINT/mtimecmp_q
+add wave -noupdate -group "WB_CLINT" -group "Internal" $WB_CLINT/msip_q
+add wave -noupdate -group "WB_CLINT" -group "Internal" $WB_CLINT/req_valid
+add wave -noupdate -group "WB_CLINT" -group "Internal" -radix hexadecimal $WB_CLINT/reg_offset
+
+# WB_PBUS_SLAVE
+add wave -noupdate -group "WB_PBUS" -group "Inputs" -color Gold $WB_PBUS/clk_i
+add wave -noupdate -group "WB_PBUS" -group "Inputs" -color Orange $WB_PBUS/rst_ni
+add wave -noupdate -group "WB_PBUS" -group "Inputs" -radix hexadecimal $WB_PBUS/wb_m_i
+add wave -noupdate -group "WB_PBUS" -group "Inputs" -radix hexadecimal $WB_PBUS/pbus_rdata_i
+add wave -noupdate -group "WB_PBUS" -group "Inputs" $WB_PBUS/pbus_ready_i
+
+add wave -noupdate -group "WB_PBUS" -group "Outputs" -radix hexadecimal $WB_PBUS/wb_s_o
+add wave -noupdate -group "WB_PBUS" -group "Outputs" -radix hexadecimal $WB_PBUS/pbus_addr_o
+add wave -noupdate -group "WB_PBUS" -group "Outputs" -radix hexadecimal $WB_PBUS/pbus_wdata_o
+add wave -noupdate -group "WB_PBUS" -group "Outputs" -radix hexadecimal $WB_PBUS/pbus_wstrb_o
+add wave -noupdate -group "WB_PBUS" -group "Outputs" $WB_PBUS/pbus_valid_o
+add wave -noupdate -group "WB_PBUS" -group "Outputs" $WB_PBUS/pbus_we_o
+
+add wave -noupdate -group "WB_PBUS" -group "Internal" $WB_PBUS/req_valid
+add wave -noupdate -group "WB_PBUS" -group "Internal" $WB_PBUS/req_we
 
 ##################################################################################
 #                              CPU                                               #
@@ -327,19 +402,19 @@ add wave -noupdate -group "ICACHE" -group "Internal" -radix hexadecimal $ICACHE/
 # ALIGN_BUFFER
 add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -color Gold $ALIGN_BUFFER/clk_i
 add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -color Orange $ALIGN_BUFFER/rst_ni
+add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" $ALIGN_BUFFER/flush_i
 add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -radix hexadecimal $ALIGN_BUFFER/buff_req_i
-add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -radix hexadecimal $ALIGN_BUFFER/icache_res_i
+add wave -noupdate -group "ALIGN_BUFFER" -group "Inputs" -radix hexadecimal $ALIGN_BUFFER/lowX_res_i
 
 add wave -noupdate -group "ALIGN_BUFFER" -group "Outputs" -radix hexadecimal $ALIGN_BUFFER/buff_res_o
-add wave -noupdate -group "ALIGN_BUFFER" -group "Outputs" -radix hexadecimal $ALIGN_BUFFER/icache_req_o
-add wave -noupdate -group "ALIGN_BUFFER" -group "Outputs" $ALIGN_BUFFER/lookup_ack_o
+add wave -noupdate -group "ALIGN_BUFFER" -group "Outputs" -radix hexadecimal $ALIGN_BUFFER/lowX_req_o
 
 add wave -noupdate -group "ALIGN_BUFFER" -group "Internal" -radix hexadecimal $ALIGN_BUFFER/*
 
 # COMPRESSED_DECODER
-add wave -noupdate -group "COMPRESSED_DECODER" -group "Inputs" -radix hexadecimal $COMP_DECODER/inst_i
-add wave -noupdate -group "COMPRESSED_DECODER" -group "Outputs" -radix hexadecimal $COMP_DECODER/inst_o
-add wave -noupdate -group "COMPRESSED_DECODER" -group "Outputs" $COMP_DECODER/is_comp_o
+add wave -noupdate -group "COMPRESSED_DECODER" -group "Inputs" -radix hexadecimal $COMP_DECODER/instr_i
+add wave -noupdate -group "COMPRESSED_DECODER" -group "Outputs" -radix hexadecimal $COMP_DECODER/instr_o
+add wave -noupdate -group "COMPRESSED_DECODER" -group "Outputs" $COMP_DECODER/is_compressed_o
 add wave -noupdate -group "COMPRESSED_DECODER" -group "Outputs" $COMP_DECODER/illegal_instr_o
 add wave -noupdate -group "COMPRESSED_DECODER" -group "Internal" -radix hexadecimal $COMP_DECODER/*
 
@@ -357,12 +432,15 @@ add wave -noupdate -group "GSHARE_BP" -group "Internal" -radix hexadecimal $GSHA
 # RAS (Return Address Stack)
 add wave -noupdate -group "RAS" -group "Inputs" -color Gold $RAS/clk_i
 add wave -noupdate -group "RAS" -group "Inputs" -color Orange $RAS/rst_ni
-add wave -noupdate -group "RAS" -group "Inputs" $RAS/push_i
-add wave -noupdate -group "RAS" -group "Inputs" $RAS/pop_i
-add wave -noupdate -group "RAS" -group "Inputs" -radix hexadecimal $RAS/data_i
+add wave -noupdate -group "RAS" -group "Inputs" -radix hexadecimal $RAS/restore_i
+add wave -noupdate -group "RAS" -group "Inputs" $RAS/req_valid_i
+add wave -noupdate -group "RAS" -group "Inputs" $RAS/j_type_i
+add wave -noupdate -group "RAS" -group "Inputs" $RAS/jr_type_i
+add wave -noupdate -group "RAS" -group "Inputs" -radix hexadecimal $RAS/rd_addr_i
+add wave -noupdate -group "RAS" -group "Inputs" -radix hexadecimal $RAS/r1_addr_i
+add wave -noupdate -group "RAS" -group "Inputs" -radix hexadecimal $RAS/return_addr_i
 
-add wave -noupdate -group "RAS" -group "Outputs" -radix hexadecimal $RAS/data_o
-add wave -noupdate -group "RAS" -group "Outputs" $RAS/valid_o
+add wave -noupdate -group "RAS" -group "Outputs" -radix hexadecimal $RAS/popped_o
 
 add wave -noupdate -group "RAS" -group "Internal" -radix hexadecimal $RAS/*
 
