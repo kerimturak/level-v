@@ -59,11 +59,12 @@ package ceres_param;
   // ============================================================================
   // 3. BRANCH PREDICTOR PARAMETERS
   // ============================================================================
-  localparam int PHT_SIZE = 256;  // Pattern History Table entries
-  localparam int BTB_SIZE = 128;  // Branch Target Buffer entries
-  localparam int GHR_SIZE = 12;  // Global History Register bits
+  localparam int PHT_SIZE = 512;  // Pattern History Table entries
+  localparam int BTB_SIZE = 256;  // Branch Target Buffer entries
+  localparam int GHR_SIZE = 24;  // Global History Register bits
   localparam int IBTC_SIZE = 32;  // Indirect Branch Target Cache
-  localparam int RAS_SIZE = 8;  // Return Address Stack depth
+  localparam int RAS_SIZE = 16;  // Return Address Stack depth
+  localparam int LOOP_SIZE = 8;
   localparam int BP_LOG_INTERVAL = 10000;
 
   // ============================================================================

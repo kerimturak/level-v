@@ -57,12 +57,12 @@ module gshare_bp
   logic [                  XLEN-1:0] ibtc_target                                   [IBTC_SIZE];
 
   // Loop Predictor - tracks loop iteration counts
-  localparam int LOOP_SIZE = 16;
+
   logic [     $clog2(LOOP_SIZE)-1:0] loop_idx;
-  logic [                       7:0] loop_count                               [LOOP_SIZE];  // Current iteration
-  logic [                       7:0] loop_trip                                [LOOP_SIZE];  // Max iterations seen
-  logic                              loop_valid                               [LOOP_SIZE];
-  logic [XLEN-1:$clog2(LOOP_SIZE)+2] loop_tag                                 [LOOP_SIZE];
+  logic [                       7:0] loop_count                                    [LOOP_SIZE];  // Current iteration
+  logic [                       7:0] loop_trip                                     [LOOP_SIZE];  // Max iterations seen
+  logic                              loop_valid                                    [LOOP_SIZE];
+  logic [XLEN-1:$clog2(LOOP_SIZE)+2] loop_tag                                      [LOOP_SIZE];
 
   // ============================================================================
   // İÇ SİNYALLER
