@@ -114,7 +114,86 @@ package ceres_param;
   localparam logic [15:0] PERIPH_PWM_OFF = 16'h5000;
   localparam logic [15:0] PERIPH_TIMER_OFF = 16'h6000;
   localparam logic [15:0] PERIPH_PLIC_OFF = 16'h7000;
+  localparam logic [15:0] PERIPH_WDT_OFF = 16'h8000;
+  localparam logic [15:0] PERIPH_DMA_OFF = 16'h9000;
   localparam int PERIPH_SLOT_SIZE = 4096;
+
+  // GPIO Register Offsets (from GPIO base)
+  localparam logic [5:0] GPIO_DIR_OFF = 6'h00;  // Direction register
+  localparam logic [5:0] GPIO_OUT_OFF = 6'h04;  // Output data
+  localparam logic [5:0] GPIO_IN_OFF = 6'h08;  // Input data (read-only)
+  localparam logic [5:0] GPIO_SET_OFF = 6'h0C;  // Atomic set (write-only)
+  localparam logic [5:0] GPIO_CLR_OFF = 6'h10;  // Atomic clear (write-only)
+  localparam logic [5:0] GPIO_TGL_OFF = 6'h14;  // Atomic toggle (write-only)
+  localparam logic [5:0] GPIO_PUE_OFF = 6'h18;  // Pull-up enable
+  localparam logic [5:0] GPIO_PDE_OFF = 6'h1C;  // Pull-down enable
+  localparam logic [5:0] GPIO_IE_OFF = 6'h20;  // Interrupt enable
+  localparam logic [5:0] GPIO_IS_OFF = 6'h24;  // Interrupt status (W1C)
+  localparam logic [5:0] GPIO_IBE_OFF = 6'h28;  // Interrupt both edges
+  localparam logic [5:0] GPIO_IEV_OFF = 6'h2C;  // Interrupt event (edge select)
+
+  // PLIC Register Offsets (from PLIC base 0x2000_7000)
+  localparam logic [11:0] PLIC_PRIORITY_BASE = 12'h000;  // 0x000-0x07C: Priority regs
+  localparam logic [11:0] PLIC_PENDING_OFF = 12'h080;  // 0x080: Pending register
+  localparam logic [11:0] PLIC_ENABLE_OFF = 12'h100;  // 0x100: Enable register
+  localparam logic [11:0] PLIC_THRESHOLD_OFF = 12'h200;  // 0x200: Priority threshold
+  localparam logic [11:0] PLIC_CLAIM_OFF = 12'h204;  // 0x204: Claim/Complete
+
+  // Timer Register Offsets (from Timer base 0x2000_6000)
+  // Each timer has 0x40 bytes (16 registers * 4 bytes), Timer N at offset N*0x40
+  localparam logic [5:0] TIM_CTRL_OFF = 6'h00;  // Control register
+  localparam logic [5:0] TIM_CNT_OFF = 6'h04;  // Counter value
+  localparam logic [5:0] TIM_PSC_OFF = 6'h08;  // Prescaler (16-bit)
+  localparam logic [5:0] TIM_ARR_OFF = 6'h0C;  // Auto-reload value
+  localparam logic [5:0] TIM_CCR0_OFF = 6'h10;  // Compare/Capture 0
+  localparam logic [5:0] TIM_CCR1_OFF = 6'h14;  // Compare/Capture 1
+  localparam logic [5:0] TIM_SR_OFF = 6'h18;  // Status register (W1C)
+  localparam logic [5:0] TIM_IER_OFF = 6'h1C;  // Interrupt enable
+
+  // Watchdog Register Offsets (from WDT base 0x2000_8000)
+  localparam logic [5:0] WDT_CTRL_OFF = 6'h00;  // Control register
+  localparam logic [5:0] WDT_LOAD_OFF = 6'h04;  // Reload/timeout value
+  localparam logic [5:0] WDT_COUNT_OFF = 6'h08;  // Current counter (read-only)
+  localparam logic [5:0] WDT_WINDOW_OFF = 6'h0C;  // Window start value
+  localparam logic [5:0] WDT_KEY_OFF = 6'h10;  // Unlock/refresh key
+  localparam logic [5:0] WDT_STATUS_OFF = 6'h14;  // Status register
+
+  // DMA Register Offsets (from DMA base 0x2000_9000)
+  // Per-channel: CH_N base = N * 0x20 (32 bytes per channel)
+  localparam logic [5:0] DMA_CCR_OFF = 6'h00;  // Channel control
+  localparam logic [5:0] DMA_CNDTR_OFF = 6'h04;  // Number of data
+  localparam logic [5:0] DMA_CPAR_OFF = 6'h08;  // Peripheral address
+  localparam logic [5:0] DMA_CMAR_OFF = 6'h0C;  // Memory address
+  localparam logic [5:0] DMA_CTCNT_OFF = 6'h10;  // Transfer count
+  // Global registers at 0x80
+  localparam logic [7:0] DMA_ISR_OFF = 8'h80;  // Interrupt status
+  localparam logic [7:0] DMA_IFCR_OFF = 8'h84;  // Interrupt flag clear
+  localparam logic [7:0] DMA_GCR_OFF = 8'h88;  // Global control
+
+  // PWM Register Offsets (from PWM base 0x2000_5000)
+  localparam logic [5:0] PWM_GCR_OFF = 6'h00;  // Global control
+  localparam logic [5:0] PWM_PERIOD_OFF = 6'h04;  // Period value
+  localparam logic [5:0] PWM_PSC_OFF = 6'h08;  // Prescaler
+  localparam logic [5:0] PWM_CNT_OFF = 6'h0C;  // Counter (read-only)
+  localparam logic [5:0] PWM_DEADTIME_OFF = 6'h10;  // Dead-time config
+  localparam logic [5:0] PWM_FAULT_OFF = 6'h14;  // Fault configuration
+  localparam logic [5:0] PWM_IER_OFF = 6'h18;  // Interrupt enable
+  localparam logic [5:0] PWM_ISR_OFF = 6'h1C;  // Interrupt status
+  // Per-channel: CH_N base = 0x40 + N * 0x10
+  localparam logic [7:0] PWM_CH_BASE_OFF = 8'h40;  // Channel registers start
+
+  // VGA Peripheral (base 0x2000_D000)
+  localparam logic [15:0] PERIPH_VGA_OFF = 16'hD000;
+  // VGA Register Offsets (from VGA base)
+  localparam logic [11:0] VGA_CTRL_OFF = 12'h000;  // Control register
+  localparam logic [11:0] VGA_STATUS_OFF = 12'h004;  // Status register
+  localparam logic [11:0] VGA_CURSOR_OFF = 12'h008;  // Cursor position
+  localparam logic [11:0] VGA_FG_COLOR_OFF = 12'h00C;  // Foreground color
+  localparam logic [11:0] VGA_BG_COLOR_OFF = 12'h010;  // Background color
+  localparam logic [11:0] VGA_SCROLL_OFF = 12'h014;  // Scroll offset
+  localparam logic [11:0] VGA_TEXT_BASE = 12'h800;  // Text framebuffer (2400 bytes)
+  // Graphics framebuffer at 0x2010_0000 (separate 256KB region)
+  localparam logic [31:0] VGA_FB_BASE = 32'h2010_0000;
 
   // CLINT Offsets
   localparam logic [15:0] CLINT_MSIP_OFF = 16'h0000;

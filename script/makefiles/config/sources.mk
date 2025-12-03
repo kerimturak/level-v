@@ -32,7 +32,16 @@ SV_SOURCES := \
   $(wildcard $(RTL_DIR)/core/mmu/*.sv) \
   $(wildcard $(RTL_DIR)/tracer/*.sv) \
   $(wildcard $(RTL_DIR)/util/*.sv) \
-  $(wildcard $(RTL_DIR)/periph/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/gpio/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/plic/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/timer/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/wdt/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/dma/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/pwm/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/vga/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/i2c/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/spi/*.sv) \
+  $(wildcard $(RTL_DIR)/periph/uart/*.sv) \
   $(wildcard $(RTL_DIR)/ram/*.sv) \
   $(wildcard $(RTL_DIR)/wrapper/*.sv) \
   $(wildcard $(RTL_DIR)/wrapper/*.v)

@@ -150,9 +150,20 @@ module ceres_wrapper
   // Peripheral select signals
   logic                               uart_sel;
   logic                               spi_sel;
+  logic                               i2c_sel;
 
   // UART
   logic       [                 31:0] uart_rdata;
+
+  // I2C
+  logic       [                 31:0] i2c_rdata;
+  logic                               i2c_scl_o;
+  logic                               i2c_scl_oe;
+  logic                               i2c_scl_i;
+  logic                               i2c_sda_o;
+  logic                               i2c_sda_oe;
+  logic                               i2c_sda_i;
+  logic                               i2c_irq;
 
   // SPI
   logic       [                 31:0] spi_rdata;
@@ -396,9 +407,11 @@ module ceres_wrapper
   // Memory Map:
   //   0x2000_0xxx : UART (addr[19:16] == 0x0)
   //   0x2001_0xxx : SPI  (addr[19:16] == 0x1)
+  //   0x2002_0xxx : I2C  (addr[19:16] == 0x2)
   // ==========================================================================
   assign uart_sel = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
   assign spi_sel  = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
+  assign i2c_sel  = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
 
   // ==========================================================================
   // UART (Connected via Peripheral Bus)
@@ -434,8 +447,58 @@ module ceres_wrapper
       .spi_cs_n_o(spi0_ss_o[0])
   );
 
+  // ==========================================================================
+  // I2C Master (Connected via Peripheral Bus)
+  // ==========================================================================
+  i2c_master i_i2c (
+      .clk_i       (clk_i),
+      .rst_ni      (sys_rst_n),
+      .stb_i       (pbus_valid && i2c_sel),
+      .adr_i       (pbus_addr[4:2]),
+      .byte_sel_i  (pbus_wstrb),
+      .we_i        (pbus_we),
+      .dat_i       (pbus_wdata),
+      .dat_o       (i2c_rdata),
+      .i2c_scl_o   (i2c_scl_o),
+      .i2c_scl_oe_o(i2c_scl_oe),
+      .i2c_scl_i   (i2c_scl_i),
+      .i2c_sda_o   (i2c_sda_o),
+      .i2c_sda_oe_o(i2c_sda_oe),
+      .i2c_sda_i   (i2c_sda_i),
+      .irq_o       (i2c_irq)
+  );
+
+  // I2C Tri-state buffers and simulation slave
+`ifdef VERILATOR
+  // For simulation: I2C slave model
+  logic i2c_slave_sda_o;
+  logic i2c_slave_sda_oe;
+
+  i2c_slave_sim #(
+      .SLAVE_ADDR(7'h50),
+      .MEM_SIZE  (256)
+  ) i_i2c_slave (
+      .clk_i   (clk_i),
+      .rst_ni  (sys_rst_n),
+      .scl_i   (i2c_scl_oe ? i2c_scl_o : 1'b1),
+      .sda_i   (i2c_sda_oe ? i2c_sda_o : 1'b1),
+      .sda_o   (i2c_slave_sda_o),
+      .sda_oe_o(i2c_slave_sda_oe)
+  );
+
+  // Wired-AND for I2C bus (open-drain simulation)
+  assign i2c_scl_i = i2c_scl_oe ? i2c_scl_o : 1'b1;
+  assign i2c_sda_i = (i2c_sda_oe ? i2c_sda_o : 1'b1) & (i2c_slave_sda_oe ? i2c_slave_sda_o : 1'b1);
+`else
+  // For FPGA: external tri-state buffers
+  assign i2c0_scl_io = i2c_scl_oe ? (i2c_scl_o ? 1'bz : 1'b0) : 1'bz;
+  assign i2c0_sda_io = i2c_sda_oe ? (i2c_sda_o ? 1'bz : 1'b0) : 1'bz;
+  assign i2c_scl_i   = i2c0_scl_io;
+  assign i2c_sda_i   = i2c0_sda_io;
+`endif
+
   // Peripheral read data mux
-  assign pbus_rdata = uart_sel ? uart_rdata : spi_sel ? spi_rdata : 32'h0;
+  assign pbus_rdata = uart_sel ? uart_rdata : spi_sel ? spi_rdata : i2c_sel ? i2c_rdata : 32'h0;
   assign pbus_ready = 1'b1;  // All peripherals always ready
 
   // ==========================================================================

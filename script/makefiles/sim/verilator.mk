@@ -227,6 +227,22 @@ X_INITIAL          ?= 0
 X_INITIAL_EDGE     ?= 1
 
 # -----------------------------------------
+# Multi-threading Support
+# -----------------------------------------
+# THREADS=N enables multi-threaded simulation (N = number of threads)
+# Default: 0 (single-threaded for determinism)
+THREADS            ?= 0
+ifneq ($(THREADS),0)
+  THREAD_FLAGS     := --threads $(THREADS) --threads-dpi all
+  THREAD_CFLAGS    := -pthread
+  THREAD_LDFLAGS   := -lpthread -latomic
+else
+  THREAD_FLAGS     :=
+  THREAD_CFLAGS    :=
+  THREAD_LDFLAGS   :=
+endif
+
+# -----------------------------------------
 # Warning Suppressions (organized by category)
 # -----------------------------------------
 # Critical warnings that should never be suppressed
@@ -319,6 +335,7 @@ VERILATOR_COMMON_FLAGS = \
     --converge-limit 100 \
     --error-limit 100 \
     $(if $(wildcard $(VERILATOR_WAIVER)),$(VERILATOR_WAIVER),) \
+    $(THREAD_FLAGS) \
     --Mdir $(OBJ_DIR)
 
 # Build-specific flags
@@ -336,8 +353,8 @@ VERILATOR_BUILD_FLAGS = \
     $(VPI_FLAGS) \
     $(HIER_FLAGS) \
     $(VERILATOR_DEBUG_FLAGS) \
-    --CFLAGS "$(OPT_LEVEL) $(CFLAGS_DEBUG) -std=c++17 -Wall -Wextra -Wno-unused-parameter" \
-    --LDFLAGS "-lm -lpthread"
+    --CFLAGS "$(OPT_LEVEL) $(CFLAGS_DEBUG) $(THREAD_CFLAGS) -std=c++17 -Wall -Wextra -Wno-unused-parameter" \
+    --LDFLAGS "-lm $(THREAD_LDFLAGS)"
 
 # =========================================
 # Targets
