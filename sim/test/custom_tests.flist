@@ -5,3 +5,11 @@ branch_test
 memory_test
 arithmetic_test
 spi_test
+i2c_test
+gpio_test
+timer_test
+wdt_test
+pwm_test
+dma_test
+plic_test
+vga_test
