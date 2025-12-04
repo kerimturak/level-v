@@ -44,12 +44,12 @@ package ceres_param;
 
   // Instruction Cache
   localparam int IC_WAY = 8;
-  localparam int IC_CAPACITY = 32 * 1024 * 8;  // 32KB (bits)
+  localparam int IC_CAPACITY = 8 * 1024 * 8;  // 32KB (bits)
   localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
 
   // Data Cache  
   localparam int DC_WAY = 8;
-  localparam int DC_CAPACITY = 32 * 1024 * 8;  // 32KB (bits)
+  localparam int DC_CAPACITY = 8 * 1024 * 8;  // 32KB (bits)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
 
   // Align Buffer (Fetch unit)
@@ -66,6 +66,17 @@ package ceres_param;
   localparam int RAS_SIZE = 16;  // Return Address Stack depth
   localparam int LOOP_SIZE = 8;
   localparam int BP_LOG_INTERVAL = 10000;
+
+  // ============================================================================
+  // 3.5. PREFETCHER PARAMETERS
+  // ============================================================================
+  // Prefetch Type: 0=None, 1=NextLine, 2=Stride, 3=Stream, 4=Hybrid
+  // NOTE: Currently disabled (0) - needs proper integration with cache response handling
+  localparam int PREFETCH_TYPE = 0;
+  localparam int STRIDE_TABLE_SIZE = 64;  // Stride prefetcher table entries
+  localparam int STRIDE_BITS = 12;  // Stride bit width
+  localparam int NUM_STREAMS = 4;  // Stream prefetcher stream count
+  localparam int PREFETCH_DEGREE = 4;  // How many lines ahead to prefetch
 
   // ============================================================================
   // 4. MULTIPLIER/DIVIDER PARAMETERS
