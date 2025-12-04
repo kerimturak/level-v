@@ -12,3 +12,5 @@ results
 coremark
 riscv-privileged.pdf
 riscv-unprivileged.pdf
+# MkDocs site
+site/

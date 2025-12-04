@@ -10,7 +10,6 @@ include script/makefiles/config/config.mk
 include script/makefiles/config/profiles.mk
 
 # Simulation Tools
-include script/makefiles/sim/common.mk
 include script/makefiles/sim/modelsim.mk
 include script/makefiles/sim/verilator.mk
 include script/makefiles/sim/icarus.mk

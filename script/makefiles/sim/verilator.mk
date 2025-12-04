@@ -2,8 +2,6 @@
 # CERES RISC-V — Verilator Simulation
 # Optimized for Verilator 5.x
 # =========================================
-# NOT: LOG/SIM/TRACE kontrolleri sim/common.mk'de merkezi olarak yönetiliyor.
-#      common.mk ana makefile tarafından include edilir.
 
 # -----------------------------------------
 # Configuration Loading (from JSON)
@@ -53,17 +51,117 @@ BUILD_JOBS         ?= $(VERILATOR_THREADS)
 SIM_THREADS        ?= $(or $(CFG_SIM_THREADS),1)
 
 # -----------------------------------------
-# Verilator-Specific Flags
+# Verilator Defines (New naming convention)
 # -----------------------------------------
-# NOT: LOG/SIM/TRACE kontrolleri artık common.mk'de merkezi olarak yönetiliyor.
-# Burada sadece Verilator'a özgü flag'ler tanımlanır.
 
-# Coverage flags (Verilator-specific format)
-ifeq ($(ENABLE_COVERAGE),1)
+# ===========================================
+# LOG CONTROLS (LOG_XXX=1 to enable)
+# ===========================================
+
+# Commit trace (Spike-compatible) - LOG_COMMIT=1
+ifeq ($(LOG_COMMIT),1)
+  SV_DEFINES += +define+LOG_COMMIT
+endif
+
+# Pipeline trace (KONATA format) - LOG_PIPELINE=1
+ifeq ($(LOG_PIPELINE),1)
+  SV_DEFINES += +define+LOG_PIPELINE
+endif
+
+# RAM init messages - LOG_RAM=1
+ifeq ($(LOG_RAM),1)
+  SV_DEFINES += +define+LOG_RAM
+endif
+
+# UART file logging - LOG_UART=1
+ifeq ($(LOG_UART),1)
+  SV_DEFINES += +define+LOG_UART
+endif
+
+# Branch Predictor stats - LOG_BP=1
+ifeq ($(LOG_BP),1)
+  SV_DEFINES += +define+LOG_BP
+endif
+
+# Verbose BP logging - LOG_BP_VERBOSE=1
+ifeq ($(LOG_BP_VERBOSE),1)
+  SV_DEFINES += +define+LOG_BP +define+LOG_BP_VERBOSE
+endif
+
+# ===========================================
+# TRACE CONTROLS
+# ===========================================
+
+# KONATA pipeline visualizer - KONATA_TRACER=1
+ifeq ($(KONATA_TRACER),1)
+  SV_DEFINES += +define+KONATA_TRACER
+endif
+
+# ===========================================
+# SIMULATION CONTROLS
+# ===========================================
+
+# Fast simulation mode - SIM_FAST=1
+ifeq ($(SIM_FAST),1)
+  SV_DEFINES += +define+SIM_FAST
+  TRACE_FLAGS :=
+  TRACE_DEFINE :=
+endif
+
+# UART monitoring + auto-stop - SIM_UART_MONITOR=1
+ifeq ($(SIM_UART_MONITOR),1)
+  SV_DEFINES += +define+SIM_UART_MONITOR
+endif
+
+# Coverage collection - SIM_COVERAGE=1
+ifeq ($(SIM_COVERAGE),1)
   COVERAGE_FLAGS := --coverage --coverage-line --coverage-toggle
+  SV_DEFINES += +define+SIM_COVERAGE
 else
   COVERAGE_FLAGS :=
 endif
+
+# ===========================================
+# BACKWARD COMPATIBILITY (old names)
+# ===========================================
+
+# BP_LOG -> LOG_BP
+ifeq ($(BP_LOG),1)
+  SV_DEFINES += +define+LOG_BP
+endif
+
+# BP_VERBOSE -> LOG_BP_VERBOSE  
+ifeq ($(BP_VERBOSE),1)
+  SV_DEFINES += +define+LOG_BP +define+LOG_BP_VERBOSE
+endif
+
+# FAST_SIM -> SIM_FAST
+ifeq ($(FAST_SIM),1)
+  SV_DEFINES += +define+SIM_FAST
+  TRACE_FLAGS :=
+  TRACE_DEFINE :=
+endif
+
+# MINIMAL_SOC -> Minimal peripherals for faster simulation
+# Only CPU + RAM + UART + Timer + CLINT active
+ifeq ($(MINIMAL_SOC),1)
+  SV_DEFINES += +define+MINIMAL_SOC
+endif
+
+# COVERAGE -> SIM_COVERAGE
+ifeq ($(COVERAGE),1)
+  COVERAGE_FLAGS := --coverage --coverage-line --coverage-toggle
+  SV_DEFINES += +define+SIM_COVERAGE
+endif
+
+# Auto-enable for benchmark tests
+ifeq ($(TEST_TYPE),bench)
+  SV_DEFINES += +define+SIM_UART_MONITOR
+endif
+
+# ===========================================
+# OTHER FLAGS
+# ===========================================
 
 # VPI support - VPI=1
 ifeq ($(VPI),1)
@@ -79,11 +177,8 @@ else
   HIER_FLAGS :=
 endif
 
-# Setup trace flags (DISABLE_TRACE common.mk'den gelir)
-ifeq ($(DISABLE_TRACE),1)
-  TRACE_FLAGS :=
-  TRACE_DEFINE :=
-else ifndef TRACE_FLAGS
+# Setup trace flags if not in fast mode
+ifndef TRACE_FLAGS
   TRACE_FLAGS := --trace-fst --trace-structs --trace-params
   TRACE_DEFINE := +define+VM_TRACE_FST
 endif

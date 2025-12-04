@@ -1,8 +1,6 @@
 # =========================================
 # CERES RISC-V — ModelSim / Questa Simulation
 # =========================================
-# NOT: LOG/SIM/TRACE kontrolleri sim/common.mk'de merkezi olarak yönetiliyor.
-#      common.mk ana makefile tarafından include edilir.
 
 # -----------------------------------------
 # Configuration Loading (from JSON)

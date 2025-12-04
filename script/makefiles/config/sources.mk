@@ -20,6 +20,7 @@ LOGGER_SRC    ?= $(RTL_DIR)/tracer/konata_logger.sv
 SV_SOURCES := \
   $(RTL_DIR)/pkg/ceres_param.sv \
   $(wildcard $(RTL_DIR)/core/*.sv) \
+  $(wildcard $(RTL_DIR)/core/bus/*.sv) \
   $(wildcard $(RTL_DIR)/core/pmp_pma/*.sv) \
   $(wildcard $(RTL_DIR)/core/stage01_fetch/*.sv) \
   $(wildcard $(RTL_DIR)/core/stage02_decode/*.sv) \
@@ -30,7 +31,6 @@ SV_SOURCES := \
   $(wildcard $(RTL_DIR)/core/stage04_memory/*.sv) \
   $(wildcard $(RTL_DIR)/core/stage05_writeback/*.sv) \
   $(wildcard $(RTL_DIR)/core/mmu/*.sv) \
-  $(wildcard $(RTL_DIR)/core/bus/*.sv) \
   $(wildcard $(RTL_DIR)/tracer/*.sv) \
   $(wildcard $(RTL_DIR)/util/*.sv) \
   $(wildcard $(RTL_DIR)/periph/gpio/*.sv) \

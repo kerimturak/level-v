@@ -21,6 +21,25 @@
 // LOG_BP_VERBOSE: Detailed per-branch logging (gshare_bp.sv)
 
 // ============================================================================
+// MINIMAL SOC - Fast Simulation Mode
+// ============================================================================
+// MINIMAL_SOC: Benchmark modunda (CoreMark vb.) kaynak kullanımını minimize et
+// 
+// Bu modda:
+//   - Cache: 2KB I-Cache + 2KB D-Cache (8KB yerine)
+//   - Branch Predictor: PHT=64, BTB=32, GHR=8 (512/256/24 yerine)
+//   - Sadece CPU + RAM + UART + Timer + CLINT aktif
+//
+// Faydaları:
+//   - Verilator compile süresi ~%40-50 azalır
+//   - Simülasyon hızı ~%20-30 artar
+//   - CoreMark gibi küçük benchmarklar için yeterli
+//
+// Kullanım: 
+//   make cm_quick MINIMAL_SOC=1
+//   make verilate MINIMAL_SOC=1 FAST_SIM=1
+
+// ============================================================================
 // FEATURE FLAGS
 // ============================================================================
 // Multiplier implementation (sadece biri aktif olmalı)

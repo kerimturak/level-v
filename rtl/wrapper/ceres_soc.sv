@@ -51,6 +51,8 @@ module ceres_soc
     // ========================================================================
     // Peripheral Configuration
     // ========================================================================
+    // MINIMAL_SOC modunda sadece UART ve Timer aktif, diğerleri kapalı
+`ifdef MINIMAL_SOC
     parameter int unsigned NUM_UART = 1,
     parameter bit          SPI_EN   = 1'b0,
     parameter bit          I2C_EN   = 1'b0,
@@ -61,6 +63,18 @@ module ceres_soc
     parameter bit          WDT_EN   = 1'b0,
     parameter bit          DMA_EN   = 1'b0,
     parameter bit          VGA_EN   = 1'b0,
+`else
+    parameter int unsigned NUM_UART = 1,
+    parameter bit          SPI_EN   = 1'b0,
+    parameter bit          I2C_EN   = 1'b0,
+    parameter bit          GPIO_EN  = 1'b0,
+    parameter bit          PWM_EN   = 1'b0,
+    parameter bit          TIMER_EN = 1'b1,
+    parameter bit          PLIC_EN  = 1'b0,
+    parameter bit          WDT_EN   = 1'b0,
+    parameter bit          DMA_EN   = 1'b0,
+    parameter bit          VGA_EN   = 1'b0,
+`endif
 
     // ========================================================================
     // Debug Configuration

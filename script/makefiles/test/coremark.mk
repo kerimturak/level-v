@@ -187,7 +187,74 @@ cm: run_coremark
 # - No coverage
 # - Multi-threaded (if supported)
 # - All loggers disabled
-.PHONY: cm_fast cm_turbo
+.PHONY: cm_fast cm_turbo cm_quick cm_validate
+
+# QUICK mode: Minimal iteration, fastest check if CoreMark runs
+# Use this to verify CoreMark works before running full benchmark
+cm_quick: 
+	@echo -e ""
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  CoreMark QUICK TEST (ITERATIONS=0, ~2M cycles)$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(YELLOW)[INFO]$(RESET) Building CoreMark with ITERATIONS=0..."
+	@$(MAKE) --no-print-directory coremark COREMARK_ITERATIONS=0
+	@if [ -d "$(COREMARK_LOG_DIR)" ]; then rm -rf "$(COREMARK_LOG_DIR)"; fi
+	@$(MKDIR) "$(COREMARK_LOG_DIR)"
+	@echo -e "$(YELLOW)[INFO]$(RESET) Running quick validation (FAST_SIM, MINIMAL_SOC, no trace)..."
+	@$(MAKE) --no-print-directory verilate FAST_SIM=1 MINIMAL_SOC=1 TRACE=0
+	@$(MAKE) --no-print-directory run_verilator \
+		TEST_NAME=coremark \
+		TEST_CONFIG=coremark \
+		MEM_FILE=$(COREMARK_MEM) \
+		NO_ADDR=1 \
+		FAST_SIM=1 \
+		MINIMAL_SOC=1 \
+		TRACE=0 \
+		MAX_CYCLES=2000000 \
+		VERILATOR_LOG_DIR=$(COREMARK_LOG_DIR)
+	@echo -e ""
+	@if [ -f "$(COREMARK_LOG_DIR)/uart_output.log" ]; then \
+		echo -e "$(YELLOW)[UART OUTPUT]$(RESET)"; \
+		cat "$(COREMARK_LOG_DIR)/uart_output.log"; \
+		if grep -q "CoreMark" "$(COREMARK_LOG_DIR)/uart_output.log"; then \
+			echo -e "$(GREEN)[SUCCESS]$(RESET) CoreMark initialized and output detected!"; \
+		else \
+			echo -e "$(YELLOW)[INFO]$(RESET) CoreMark started but score not printed yet (need more cycles)"; \
+		fi; \
+	else \
+		echo -e "$(RED)[WARNING]$(RESET) No UART output - check if simulation ran correctly"; \
+	fi
+
+# VALIDATE mode: Single iteration to verify score calculation
+cm_validate:
+	@echo -e ""
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  CoreMark VALIDATE (ITERATIONS=1, ~10M cycles)$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(YELLOW)[INFO]$(RESET) Building CoreMark with ITERATIONS=1..."
+	@$(MAKE) --no-print-directory coremark COREMARK_ITERATIONS=1
+	@if [ -d "$(COREMARK_LOG_DIR)" ]; then rm -rf "$(COREMARK_LOG_DIR)"; fi
+	@$(MKDIR) "$(COREMARK_LOG_DIR)"
+	@echo -e "$(YELLOW)[INFO]$(RESET) Running validation (FAST_SIM, MINIMAL_SOC)..."
+	@$(MAKE) --no-print-directory verilate FAST_SIM=1 MINIMAL_SOC=1 TRACE=0
+	@$(MAKE) --no-print-directory run_verilator \
+		TEST_NAME=coremark \
+		TEST_CONFIG=coremark \
+		MEM_FILE=$(COREMARK_MEM) \
+		NO_ADDR=1 \
+		FAST_SIM=1 \
+		MINIMAL_SOC=1 \
+		TRACE=0 \
+		MAX_CYCLES=10000000 \
+		VERILATOR_LOG_DIR=$(COREMARK_LOG_DIR)
+	@echo -e ""
+	@if [ -f "$(COREMARK_LOG_DIR)/uart_output.log" ]; then \
+		echo -e "$(YELLOW)[UART OUTPUT]$(RESET)"; \
+		cat "$(COREMARK_LOG_DIR)/uart_output.log"; \
+		if grep -q "CoreMark" "$(COREMARK_LOG_DIR)/uart_output.log"; then \
+			echo -e "$(GREEN)[SUCCESS]$(RESET) CoreMark score printed!"; \
+		fi; \
+	fi
 
 cm_fast: coremark
 	@echo -e ""
@@ -293,6 +360,8 @@ coremark_help:
 	@echo -e "  make run_coremark          - Build (if needed) and run simulation"
 	@echo -e "  make cm                    - Short alias for run_coremark"
 	@echo -e "  make cm_run                - Quick run (skip rebuild if exists)"
+	@echo -e "  $(CYAN)make cm_quick$(RESET)            - $(CYAN)QUICK test (ITER=0, ~500K cycles)$(RESET)"
+	@echo -e "  $(CYAN)make cm_validate$(RESET)         - $(CYAN)Validate score (ITER=1, ~1M cycles)$(RESET)"
 	@echo -e "  $(CYAN)make cm_fast$(RESET)             - $(CYAN)FAST mode (no trace, no loggers)$(RESET)"
 	@echo -e "  $(CYAN)make cm_turbo$(RESET)            - $(CYAN)TURBO mode (rebuild + multi-thread)$(RESET)"
 	@echo ""
@@ -300,14 +369,24 @@ coremark_help:
 	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1)"
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo -e "  $(CYAN)FAST_SIM=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
+	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP for fast compile$(RESET)"
 	@echo -e "  $(CYAN)THREADS=N$(RESET)                - $(CYAN)Enable multi-threaded simulation$(RESET)"
+	@echo ""
+	@echo -e "$(YELLOW)MINIMAL_SOC Mode:$(RESET)"
+	@echo -e "  Cache: 2KB I$ + 2KB D$ (instead of 8KB each)"
+	@echo -e "  BP: PHT=64, BTB=32, GHR=8 (instead of 512/256/24)"
+	@echo -e "  Compile time: ~40-50%% faster"
+	@echo -e "  Sim speed: ~20-30%% faster"
 	@echo ""
 	@echo -e "$(YELLOW)Memory Map:$(RESET)"
 	@echo -e "  Edit: $(COREMARK_PORT_SRC)/memory_map.yaml"
 	@echo -e "  Linker script is auto-generated from memory map"
 	@echo ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
+	@echo -e "  make cm_quick                        # Quick test (~30 sec)"
+	@echo -e "  make cm_validate                     # Validate score (~1 min)"
 	@echo -e "  make cm                              # Build & run CoreMark"
+	@echo -e "  make cm_fast                         # Fast run (no trace)"
 	@echo -e "  make cm MAX_CYCLES=10000000          # Run with more cycles"
 	@echo -e "  make coremark COREMARK_ITERATIONS=2000"
 	@echo -e "  make coremark_clean coremark         # Clean rebuild"

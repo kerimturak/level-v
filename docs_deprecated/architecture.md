@@ -1082,9 +1082,9 @@ print(exceptions)
 - `docs/` - Dökümantasyon
 
 ### İlgili Belgeler
-- [PARAMETRIC_EXCEPTION_PRIORITY.md](parametric-exception-priority.md)
-- [IMPLEMENTATION_SUMMARY.md](#implementation)
-- [riscv-test.md](#riscv-tests)
+- [PARAMETRIC_EXCEPTION_PRIORITY.md](./PARAMETRIC_EXCEPTION_PRIORITY.md)
+- [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)
+- [riscv-test.md](./riscv-test.md)
 
 ---
 

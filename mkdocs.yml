@@ -1,0 +1,158 @@
+site_name: CERES RISC-V Documentation
+site_description: RV32IMC RISC-V Processor Core Documentation
+site_author: Kerim Turak
+site_url: https://kerimturak.github.io/level-v/
+
+repo_name: kerimturak/level-v
+repo_url: https://github.com/kerimturak/level-v
+
+copyright: Copyright &copy; 2024-2025 Kerim Turak
+
+theme:
+  name: material
+  language: tr
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Karanlık moda geç
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Aydınlık moda geç
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+plugins:
+  - search:
+      lang: tr
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - admonition
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kerimturak
+  generator: false
+
+nav:
+  - Ana Sayfa: index.md
+  - Başlangıç:
+    - Hızlı Başlangıç: getting-started.md
+    - Araçlar: tools.md
+    - Mimari: architecture.md
+  - RTL Core:
+    - Genel Bakış: core/index.md
+    - CPU: core/cpu_module.md
+    - Hazard Unit: core/hazard_unit_module.md
+    - Fetch Stage:
+      - Fetch: core/stage01_fetch/fetch_module.md
+      - Align Buffer: core/stage01_fetch/align_buffer_module.md
+      - Compressed Decoder: core/stage01_fetch/compressed_decoder_module.md
+      - Branch Predictor: core/stage01_fetch/gshare_bp_module.md
+      - RAS: core/stage01_fetch/ras_module.md
+    - Decode Stage:
+      - Decode: core/stage02_decode/decode_module.md
+      - Control Unit: core/stage02_decode/control_unit_module.md
+      - Extend: core/stage02_decode/extend_module.md
+      - Register File: core/stage02_decode/reg_file_module.md
+    - Execute Stage:
+      - Execution: core/stage03_execute/execution_module.md
+      - ALU: core/stage03_execute/alu_module.md
+      - CSR: core/stage03_execute/cs_reg_file_module.md
+      - Multiplier: core/stage03_execute/mul_int_module.md
+      - Divider: core/stage03_execute/divu_int_module.md
+    - Memory Stage:
+      - Memory: core/stage04_memory/memory_module.md
+    - Writeback Stage:
+      - Writeback: core/stage05_writeback/writeback_module.md
+    - Memory Management:
+      - Cache: core/mmu/cache_module.md
+      - Memory Arbiter: core/mmu/memory_arbiter_module.md
+      - WB Interconnect: core/mmu/wb_interconnect_module.md
+      - WB Master Bridge: core/mmu/wb_master_bridge_module.md
+    - Memory Protection:
+      - PMA: core/pmp_pma/pma_module.md
+  - Peripherals:
+    - Genel Bakış: periph/index.md
+    - UART: periph/uart.md
+    - SPI: periph/spi.md
+    - I2C: periph/i2c.md
+    - GPIO: periph/gpio.md
+    - Timer: periph/timer.md
+    - PLIC: periph/plic.md
+    - PWM: periph/pwm.md
+    - DMA: periph/dma.md
+    - WDT: periph/wdt.md
+    - VGA: periph/vga.md
+  - Support:
+    - Include: include/overview.md
+    - Package: pkg/overview.md
+    - RAM: ram/overview.md
+    - Tracer: tracer/overview.md
+    - Utilities: util/overview.md
+    - Wrapper: wrapper/overview.md
+  - Build System:
+    - Script Overview: script/overview.md
+    - Makefiles: script/makefiles.md
+    - Python Tools: script/python.md
+    - Shell Scripts: script/shell.md
+    - Configuration: script/config.md
+  - Test & Simulation:
+    - Simulation: sim/overview.md
+    - Environments: env/overview.md
+    - Test Suites: subrepo/overview.md
+  - Referans:
+    - Wishbone Bus: wishbone-bus.md
+    - Exception Priority: parametric-exception-priority.md
+    - FENCE.I: fence-i-implementation.md
+    - CoreMark: coremark-build.md
+    - UART Test Guide: custom-uart-test-guide.md
+    - Extended Tests: extended-test-suites.md
+  - Gelecek Planları:
+    - AI Enhancement: ai-enhancement-plans.md
+    - SoC Roadmap: soc-roadmap.md
