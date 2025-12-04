@@ -9,83 +9,19 @@
 #   make run TEST_NAME=xxx TEST_TYPE=yyy  # Manual override
 # ============================================================
 
-# -----------------------------------------
-# File-based TEST_TYPE Auto-detection
-# -----------------------------------------
-# If TEST_TYPE was auto-detected (not user-specified), verify by checking
-# if the test file actually exists in the expected directory.
-# This provides a fallback if pattern matching fails.
 
-define DETECT_TEST_TYPE_FROM_FILES
-$(if $(wildcard $(BUILD_DIR)/tests/riscv-tests/elf/$(TEST_NAME)),isa,\
-$(if $(wildcard $(BUILD_DIR)/tests/riscv-tests/elf/$(TEST_NAME).elf),isa,\
-$(if $(wildcard $(BUILD_DIR)/tests/riscv-arch-test/elf/$(TEST_NAME).elf),arch,\
-$(if $(wildcard $(BUILD_DIR)/tests/imperas/elf/$(TEST_NAME).elf),imperas,\
-$(if $(wildcard $(BUILD_DIR)/tests/riscv-benchmarks/elf/$(TEST_NAME)),bench,\
-$(if $(wildcard $(BUILD_DIR)/tests/dhrystone/$(TEST_NAME).elf),dhrystone,\
-$(if $(wildcard $(BUILD_DIR)/tests/embench/elf/$(TEST_NAME).elf),embench,\
-$(if $(wildcard $(BUILD_DIR)/tests/torture/elf/$(TEST_NAME).elf),torture,\
-$(if $(wildcard $(BUILD_DIR)/tests/custom/$(TEST_NAME).elf),custom,\
-$(TEST_TYPE))))))))))
-endef
-
-# Apply file-based detection as a verification/fallback
-TEST_TYPE := $(strip $(call DETECT_TEST_TYPE_FROM_FILES))
+# Test tipi ve dosya/dizin mapping'i artık test_types.mk'den otomatik geliyor.
+# Sadece test_types.mk'yi include etmek yeterli.
 
 # -----------------------------------------
 # Test Type Based Paths
 # -----------------------------------------
-ifeq ($(TEST_TYPE),bench)
-    TEST_ROOT := $(BUILD_DIR)/tests/riscv-benchmarks
-else ifeq ($(TEST_TYPE),isa)
-    TEST_ROOT := $(BUILD_DIR)/tests/riscv-tests
-else ifeq ($(TEST_TYPE),arch)
-    TEST_ROOT := $(BUILD_DIR)/tests/riscv-arch-test
-else ifeq ($(TEST_TYPE),imperas)
-    TEST_ROOT := $(BUILD_DIR)/tests/imperas
-else ifeq ($(TEST_TYPE),dhrystone)
-    TEST_ROOT := $(BUILD_DIR)/tests/dhrystone
-else ifeq ($(TEST_TYPE),embench)
-    TEST_ROOT := $(BUILD_DIR)/tests/embench
-else ifeq ($(TEST_TYPE),torture)
-    TEST_ROOT := $(BUILD_DIR)/tests/torture
-else ifeq ($(TEST_TYPE),riscv-dv)
-    TEST_ROOT := $(BUILD_DIR)/tests/riscv-dv
-else ifeq ($(TEST_TYPE),custom)
-    TEST_ROOT := $(BUILD_DIR)/tests/custom
-else ifneq ($(MEM_DIR),)
-    # If MEM_DIR is provided, skip TEST_TYPE validation (custom paths)
-    TEST_ROOT := $(dir $(MEM_DIR))
-else
-    $(error Invalid TEST_TYPE="$(TEST_TYPE)". Use: isa, bench, arch, imperas, dhrystone, embench, torture, riscv-dv, or custom)
-endif
-
-# Derived paths from TEST_ROOT (can be overridden)
-ELF_DIR  ?= $(TEST_ROOT)/elf
-MEM_DIR  ?= $(TEST_ROOT)/mem
-HEX_DIR  ?= $(TEST_ROOT)/hex
-DUMP_DIR ?= $(TEST_ROOT)/dump
-ADDR_DIR ?= $(TEST_ROOT)/pass_fail_addr
-
-# ELF file extension (arch, imperas, dhrystone, embench, torture, riscv-dv, custom use .elf)
-ifeq ($(TEST_TYPE),arch)
-    ELF_EXT := .elf
-else ifeq ($(TEST_TYPE),imperas)
-    ELF_EXT := .elf
-else ifeq ($(TEST_TYPE),dhrystone)
-    ELF_EXT := .elf
-else ifeq ($(TEST_TYPE),embench)
-    ELF_EXT := .elf
-else ifeq ($(TEST_TYPE),torture)
-    ELF_EXT := .elf
-else ifeq ($(TEST_TYPE),riscv-dv)
-    ELF_EXT := .elf
-else ifeq ($(TEST_TYPE),custom)
-    ELF_EXT := .elf
-else
-    ELF_EXT :=
-endif
-ELF_FILE := $(ELF_DIR)/$(TEST_NAME)$(ELF_EXT)
+# NOT: TEST_ROOT, ELF_DIR, MEM_DIR, HEX_DIR, DUMP_DIR, ADDR_DIR, ELF_EXT
+# değişkenleri artık config/test_types.mk'de merkezi olarak tanımlanıyor.
+# Yeni bir test tipi eklemek için sadece test_types.mk'deki tabloya satır ekleyin.
+#
+# Burada sadece ELF_FILE'ı tanımlıyoruz (backward compat için):
+ELF_FILE ?= $(ELF_DIR)/$(TEST_NAME)$(ELF_EXT)
 
 # -----------------------------------------
 # Exception Address Override

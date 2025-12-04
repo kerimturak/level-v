@@ -9,8 +9,14 @@
 # Default Parameters (must be set BEFORE profiles.mk)
 # -----------------------------------------
 MODE          ?= debug
-TEST_NAME     ?= rv32ui-p-add
 SIM_TIME      := 20000ns
+
+# T kısayolu: make run T=rv32ui-p-add → TEST_NAME=rv32ui-p-add
+ifdef T
+  TEST_NAME   := $(T)
+else
+  TEST_NAME   ?= rv32ui-p-add
+endif
 
 # -----------------------------------------
 # Auto-detect TEST_TYPE from TEST_NAME pattern
@@ -76,6 +82,7 @@ include $(dir $(lastword $(MAKEFILE_LIST)))toolchain.mk
 include $(dir $(lastword $(MAKEFILE_LIST)))sources.mk
 include $(dir $(lastword $(MAKEFILE_LIST)))colors.mk
 include $(dir $(lastword $(MAKEFILE_LIST)))profiles.mk
+include $(dir $(lastword $(MAKEFILE_LIST)))test_types.mk
 
 # -----------------------------------------
 # Test Configuration (JSON-based)

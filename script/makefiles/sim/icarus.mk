@@ -23,6 +23,9 @@
 #   make SIM=icarus run        - Use in test pipeline
 # =========================================
 
+# NOT: LOG/SIM/TRACE kontrolleri sim/common.mk'de merkezi olarak yönetiliyor.
+#      common.mk ana makefile tarafından include edilir.
+
 # -----------------------------------------
 # Icarus Paths & Configuration
 # -----------------------------------------
