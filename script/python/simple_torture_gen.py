@@ -1,14 +1,41 @@
 #!/usr/bin/env python3
-# ============================================================
-# Simple Torture Test Generator (Fallback)
-# ============================================================
-# Generates simple valid instruction sequences
+"""
+Simple RISC-V Torture Test Generator (Fallback)
+===============================================
+Generates simple but valid instruction sequences for basic testing.
+Used as fallback when main generator is unavailable or for quick tests.
+
+Features:
+- Minimal dependencies
+- Fast generation
+- Guaranteed valid output
+- Memory-safe operations
+
+Author: Ceres-V Project
+License: MIT
+"""
 
 import argparse
 import random
+import sys
+import logging
 
-def generate_simple_test(seed, name, output_path):
-    """Generate a simple torture test assembly file"""
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
+
+def generate_simple_test(seed: int, name: str, output_path: str) -> None:
+    """
+    Generate a simple torture test assembly file.
+    
+    Args:
+        seed: Random seed for reproducibility
+        name: Test name (for comments)
+        output_path: Output file path
+        
+    Raises:
+        IOError: If file cannot be written
+    """
+    logger.info(f'Generating simple test: {name} (seed={seed})')
     rng = random.Random(seed)
     
     # Generate random initial values
@@ -90,19 +117,43 @@ test_data:
     .space 64
 '''
     
-    with open(output_path, 'w') as f:
-        f.write(code)
-    
-    print(f'Generated: {output_path}')
+    try:
+        with open(output_path, 'w') as f:
+            f.write(code)
+        logger.info(f'Successfully wrote: {output_path}')
+    except IOError as e:
+        logger.error(f'Failed to write file: {e}')
+        raise
 
 def main():
-    parser = argparse.ArgumentParser(description='Simple Torture Test Generator')
-    parser.add_argument('--seed', type=int, required=True, help='Random seed')
-    parser.add_argument('--name', type=str, required=True, help='Test name')
-    parser.add_argument('--output', type=str, required=True, help='Output file')
+    parser = argparse.ArgumentParser(
+        description='Simple RISC-V Torture Test Generator (Fallback)',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument('--seed', type=int, required=True,
+                        help='Random seed for reproducibility')
+    parser.add_argument('--name', type=str, required=True,
+                        help='Test name (for comments)')
+    parser.add_argument('--output', type=str, required=True,
+                        help='Output assembly file path')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Enable verbose logging')
+    
     args = parser.parse_args()
     
-    generate_simple_test(args.seed, args.name, args.output)
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+    
+    # Validate arguments
+    if args.seed < 0:
+        logger.error('Seed must be non-negative')
+        sys.exit(1)
+    
+    try:
+        generate_simple_test(args.seed, args.name, args.output)
+    except Exception as e:
+        logger.error(f'Test generation failed: {e}')
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

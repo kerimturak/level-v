@@ -185,31 +185,6 @@ module vga_controller
   logic [11:0] palette_ram   [256];
   logic [11:0] palette_color;
 
-  // Default VGA palette initialization
-  initial begin
-    // Basic 16 colors (CGA compatible)
-    palette_ram[0]  = 12'h000;  // Black
-    palette_ram[1]  = 12'h00A;  // Blue
-    palette_ram[2]  = 12'h0A0;  // Green
-    palette_ram[3]  = 12'h0AA;  // Cyan
-    palette_ram[4]  = 12'hA00;  // Red
-    palette_ram[5]  = 12'hA0A;  // Magenta
-    palette_ram[6]  = 12'hA50;  // Brown
-    palette_ram[7]  = 12'hAAA;  // Light Gray
-    palette_ram[8]  = 12'h555;  // Dark Gray
-    palette_ram[9]  = 12'h55F;  // Light Blue
-    palette_ram[10] = 12'h5F5;  // Light Green
-    palette_ram[11] = 12'h5FF;  // Light Cyan
-    palette_ram[12] = 12'hF55;  // Light Red
-    palette_ram[13] = 12'hF5F;  // Light Magenta
-    palette_ram[14] = 12'hFF5;  // Yellow
-    palette_ram[15] = 12'hFFF;  // White
-    // Fill rest with grayscale ramp
-    for (int i = 16; i < 256; i++) begin
-      palette_ram[i] = {i[7:4], i[7:4], i[7:4]};
-    end
-  end
-
   // ===========================================================================
   // Timing Generator (Pixel clock domain)
   // ===========================================================================
@@ -441,14 +416,35 @@ module vga_controller
   // ===========================================================================
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      ctrl_q        <= 32'h0;
-      fb_base_q     <= 32'h8010_0000;  // Default FB at RAM + 1MB
-      fb_stride_q   <= H_VISIBLE;
-      cursor_x_q    <= 16'd0;
-      cursor_y_q    <= 16'd0;
-      scroll_x_q    <= 16'd0;
-      scroll_y_q    <= 16'd0;
-      palette_idx_q <= 8'd0;
+      ctrl_q          <= 32'h0;
+      fb_base_q       <= 32'h8010_0000;  // Default FB at RAM + 1MB
+      fb_stride_q     <= H_VISIBLE;
+      cursor_x_q      <= 16'd0;
+      cursor_y_q      <= 16'd0;
+      scroll_x_q      <= 16'd0;
+      scroll_y_q      <= 16'd0;
+      palette_idx_q   <= 8'd0;
+      // Default VGA palette initialization (CGA compatible)
+      palette_ram[0]  <= 12'h000;  // Black
+      palette_ram[1]  <= 12'h00A;  // Blue
+      palette_ram[2]  <= 12'h0A0;  // Green
+      palette_ram[3]  <= 12'h0AA;  // Cyan
+      palette_ram[4]  <= 12'hA00;  // Red
+      palette_ram[5]  <= 12'hA0A;  // Magenta
+      palette_ram[6]  <= 12'hA50;  // Brown
+      palette_ram[7]  <= 12'hAAA;  // Light Gray
+      palette_ram[8]  <= 12'h555;  // Dark Gray
+      palette_ram[9]  <= 12'h55F;  // Light Blue
+      palette_ram[10] <= 12'h5F5;  // Light Green
+      palette_ram[11] <= 12'h5FF;  // Light Cyan
+      palette_ram[12] <= 12'hF55;  // Light Red
+      palette_ram[13] <= 12'hF5F;  // Light Magenta
+      palette_ram[14] <= 12'hFF5;  // Yellow
+      palette_ram[15] <= 12'hFFF;  // White
+      // Fill rest with grayscale ramp
+      for (int i = 16; i < 256; i++) begin
+        palette_ram[i] <= {i[7:4], i[7:4], i[7:4]};
+      end
     end else if (stb_i && we_i) begin
       case (adr_i)
         REG_CTRL: begin

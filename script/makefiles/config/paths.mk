@@ -13,6 +13,7 @@ BUILD_DIR     := $(ROOT_DIR)/build
 RESULTS_DIR   := $(ROOT_DIR)/results
 SUBREPO_DIR   := $(ROOT_DIR)/subrepo
 ENV_DIR       := $(ROOT_DIR)/env
+CONFIG_DIR    := $(SCRIPT_DIR)/config
 
 # -----------------------------------------
 # Derived Directories

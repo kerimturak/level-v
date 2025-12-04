@@ -3,6 +3,26 @@
  * ============================================================
  * This module wraps the Ceres-V CPU and exports RVFI signals
  * for formal verification.
+ *
+ * CURRENT STATUS: Placeholder implementation
+ * 
+ * To enable full formal verification, the following changes
+ * are needed in the CPU:
+ *
+ * 1. Add RVFI output ports to cpu.sv
+ * 2. Export pipe4 signals for instruction retirement
+ * 3. Track rs1/rs2 values through pipeline
+ * 4. Export register file read ports
+ *
+ * The commit log (writeback_log.svh) already tracks similar
+ * information that can be adapted for RVFI.
+ *
+ * NOTE: Yosys has limited SystemVerilog support. The current
+ * Ceres-V RTL uses advanced SV features that require either:
+ * - Using commercial formal tools (Jasper, OneSpin)
+ * - Simplifying RTL for Yosys compatibility
+ * - Using Verilator for simulation-based verification
+ * ============================================================
  */
 
 `default_nettype none
@@ -41,68 +61,85 @@ module rvfi_wrapper (
     output wire [31:0] rvfi_mem_wdata
 );
 
-  // Internal signals
-  wire [31:0] instr_addr;
-  wire [31:0] instr_data;
-  wire        instr_valid;
+  // ==========================================================================
+  // Simple Memory Model for Formal Verification
+  // ==========================================================================
+  reg [31:0] mem        [0:16383];  // 64KB
 
-  wire [31:0] data_addr;
-  wire [31:0] data_wdata;
-  wire [31:0] data_rdata;
-  wire [ 3:0] data_be;
-  wire        data_we;
-  wire        data_req;
-  wire        data_gnt;
-  wire        data_rvalid;
+  // ==========================================================================
+  // Instruction Counter
+  // ==========================================================================
+  reg [63:0] insn_order;
 
-  // Simple memory model for formal verification
-  reg  [31:0] mem         [0:16383];  // 64KB
-
-  // Instruction memory
-  assign instr_valid = 1'b1;
-  assign instr_data = mem[instr_addr[15:2]];
-
-  // Data memory
-  assign data_gnt = data_req;
   always @(posedge clock) begin
-    data_rvalid <= data_req && !data_we;
-    if (data_req && data_we) begin
-      if (data_be[0]) mem[data_addr[15:2]][7:0] <= data_wdata[7:0];
-      if (data_be[1]) mem[data_addr[15:2]][15:8] <= data_wdata[15:8];
-      if (data_be[2]) mem[data_addr[15:2]][23:16] <= data_wdata[23:16];
-      if (data_be[3]) mem[data_addr[15:2]][31:24] <= data_wdata[31:24];
+    if (reset) begin
+      insn_order <= 64'h0;
+    end else if (rvfi_valid) begin
+      insn_order <= insn_order + 1;
     end
   end
-  assign data_rdata = mem[data_addr[15:2]];
 
-  // TODO: Instantiate Ceres-V CPU here and connect RVFI signals
-  // This requires adding RVFI interface to the CPU
+  // ==========================================================================
+  // RVFI Placeholder Signals
+  // ==========================================================================
+  // These need to be connected to actual CPU signals for real verification
 
-  // Placeholder RVFI signals
-  assign rvfi_valid = 1'b0;
-  assign rvfi_order = 64'b0;
-  assign rvfi_insn = 32'b0;
+  // For now, implement a simple instruction fetch model
+  reg [31:0] pc_reg;
+  reg [31:0] next_pc;
+  reg        valid_reg;
+
+  always @(posedge clock) begin
+    if (reset) begin
+      pc_reg    <= 32'h8000_0000;  // Reset vector
+      valid_reg <= 1'b0;
+    end else begin
+      pc_reg    <= next_pc;
+      valid_reg <= 1'b1;
+    end
+  end
+
+  // Simple PC increment (no branches for placeholder)
+  always @(*) begin
+    next_pc = pc_reg + 4;
+  end
+
+  // Fetch instruction from memory
+  wire [31:0] fetched_insn = mem[pc_reg[15:2]];
+
+  // ==========================================================================
+  // RVFI Output Assignments
+  // ==========================================================================
+
+  assign rvfi_valid = valid_reg && !reset;
+  assign rvfi_order = insn_order;
+  assign rvfi_insn = fetched_insn;
   assign rvfi_trap = 1'b0;
   assign rvfi_halt = 1'b0;
   assign rvfi_intr = 1'b0;
   assign rvfi_mode = 2'b11;  // M-mode
-  assign rvfi_ixl = 2'b01;  // 32-bit
+  assign rvfi_ixl = 2'b01;  // RV32
 
-  assign rvfi_rs1_addr = 5'b0;
-  assign rvfi_rs2_addr = 5'b0;
-  assign rvfi_rs1_rdata = 32'b0;
-  assign rvfi_rs2_rdata = 32'b0;
-  assign rvfi_rd_addr = 5'b0;
-  assign rvfi_rd_wdata = 32'b0;
+  // Register addresses from instruction encoding
+  assign rvfi_rs1_addr = fetched_insn[19:15];
+  assign rvfi_rs2_addr = fetched_insn[24:20];
+  assign rvfi_rd_addr = fetched_insn[11:7];
 
-  assign rvfi_pc_rdata = 32'b0;
-  assign rvfi_pc_wdata = 32'b0;
+  // Placeholder register data (would need actual register file)
+  assign rvfi_rs1_rdata = 32'h0;
+  assign rvfi_rs2_rdata = 32'h0;
+  assign rvfi_rd_wdata = 32'h0;
 
-  assign rvfi_mem_addr = 32'b0;
+  // Program counter
+  assign rvfi_pc_rdata = pc_reg;
+  assign rvfi_pc_wdata = next_pc;
+
+  // Memory access (placeholder - no load/store detection)
+  assign rvfi_mem_addr = 32'h0;
   assign rvfi_mem_rmask = 4'b0;
   assign rvfi_mem_wmask = 4'b0;
-  assign rvfi_mem_rdata = 32'b0;
-  assign rvfi_mem_wdata = 32'b0;
+  assign rvfi_mem_rdata = 32'h0;
+  assign rvfi_mem_wdata = 32'h0;
 
 endmodule
 

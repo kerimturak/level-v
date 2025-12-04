@@ -1,0 +1,209 @@
+{
+  "$schema": "./formal.schema.json",
+  "_comment": "RISC-V Formal Verification Configuration",
+  "_description": "Formal verification using SymbiYosys and RISC-V Formal",
+
+  "test_list": "formal",
+
+  "verification": {
+    "mode": "bmc",
+    "depth": 20,
+    "engine": "smtbmc",
+    "solver": "z3",
+    "timeout": 3600
+  },
+
+  "engines": {
+    "available": ["smtbmc", "btor", "abc"],
+    "smtbmc": {
+      "solvers": ["z3", "boolector", "yices", "bitwuzla"],
+      "default_solver": "z3"
+    },
+    "btor": {
+      "solvers": ["boolector", "bitwuzla"],
+      "default_solver": "boolector"
+    },
+    "abc": {
+      "solvers": ["pdr"],
+      "default_solver": "pdr"
+    }
+  },
+
+  "checks": {
+    "instruction": {
+      "enabled": true,
+      "description": "Verify each instruction executes correctly"
+    },
+    "register": {
+      "enabled": true,
+      "description": "Verify register file consistency"
+    },
+    "pc_forward": {
+      "enabled": true,
+      "description": "Verify PC increments correctly"
+    },
+    "pc_backward": {
+      "enabled": true,
+      "description": "Verify backward jumps work"
+    },
+    "memory": {
+      "enabled": true,
+      "description": "Verify memory operations"
+    },
+    "liveness": {
+      "enabled": false,
+      "description": "Verify no deadlocks (expensive)",
+      "depth": 100
+    },
+    "unique": {
+      "enabled": false,
+      "description": "Verify unique instruction retirement"
+    },
+    "causal": {
+      "enabled": false,
+      "description": "Verify causal consistency"
+    },
+    "hang": {
+      "enabled": true,
+      "description": "Verify CPU doesn't hang"
+    },
+    "cover": {
+      "enabled": false,
+      "description": "Coverage analysis"
+    }
+  },
+
+  "isa": {
+    "base": "rv32i",
+    "extensions": {
+      "M": true,
+      "C": true,
+      "Zicsr": false,
+      "Zifencei": false
+    }
+  },
+
+  "cpu": {
+    "wrapper": "rvfi_wrapper",
+    "wrapper_file": "env/riscv-formal/rvfi_wrapper.sv",
+    "channels": 1,
+    "xlen": 32
+  },
+
+  "paths": {
+    "formal_root": "subrepo/riscv-formal",
+    "env_dir": "env/riscv-formal",
+    "build_dir": "build/formal",
+    "work_dir": "build/formal/work",
+    "log_dir": "results/logs/formal"
+  },
+
+  "tools": {
+    "yosys": {
+      "command": "yosys",
+      "required": true
+    },
+    "sby": {
+      "command": "sby",
+      "required": true
+    },
+    "solver": {
+      "command": "z3",
+      "required": true,
+      "alternatives": ["boolector", "yices", "bitwuzla"]
+    }
+  },
+
+  "rtl_sources": {
+    "include_dirs": [
+      "rtl/include",
+      "rtl/pkg"
+    ],
+    "packages": [
+      "rtl/pkg/ceres_pkg.sv"
+    ],
+    "sources": [
+      "rtl/core/*.sv",
+      "rtl/util/*.sv"
+    ],
+    "exclude": [
+      "rtl/core/*_tb.sv"
+    ]
+  },
+
+  "simulation": {
+    "max_cycles": 100000,
+    "timeout_seconds": 3600,
+    "build_threads": "auto"
+  },
+
+  "defines": {
+    "FORMAL": true,
+    "RVFI": true,
+    "SYNTHESIS": false
+  },
+
+  "modes": {
+    "bmc": {
+      "description": "Bounded Model Checking - checks properties up to depth N",
+      "default_depth": 20,
+      "use_cases": ["Quick verification", "Finding shallow bugs"]
+    },
+    "prove": {
+      "description": "Inductive proof - mathematically proves properties",
+      "default_depth": 20,
+      "use_cases": ["Complete verification", "Certification"]
+    },
+    "cover": {
+      "description": "Coverage analysis - finds paths to reach states",
+      "default_depth": 50,
+      "use_cases": ["Reachability analysis", "Test generation"]
+    },
+    "live": {
+      "description": "Liveness checking - verifies progress properties",
+      "default_depth": 100,
+      "use_cases": ["Deadlock detection", "Fairness"]
+    }
+  },
+
+  "presets": {
+    "quick": {
+      "description": "Quick smoke test",
+      "mode": "bmc",
+      "depth": 10,
+      "checks": ["instruction", "register", "pc_forward"]
+    },
+    "standard": {
+      "description": "Standard verification",
+      "mode": "bmc",
+      "depth": 20,
+      "checks": ["instruction", "register", "pc_forward", "pc_backward", "memory", "hang"]
+    },
+    "thorough": {
+      "description": "Thorough verification with proofs",
+      "mode": "prove",
+      "depth": 30,
+      "checks": ["instruction", "register", "pc_forward", "pc_backward", "memory", "liveness", "unique", "hang"]
+    },
+    "coverage": {
+      "description": "Coverage analysis",
+      "mode": "cover",
+      "depth": 50,
+      "checks": ["cover"]
+    }
+  },
+
+  "output": {
+    "report_format": "text",
+    "save_vcd": false,
+    "save_traces": true,
+    "verbose": false
+  },
+
+  "advanced": {
+    "multiclock": false,
+    "assume_statements": [],
+    "assert_statements": [],
+    "custom_properties": []
+  }
+}

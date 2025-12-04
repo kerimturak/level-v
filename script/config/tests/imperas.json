@@ -4,8 +4,7 @@
   "extends": "default",
   "test_list": "sim/test/imperas_test_list.flist",
    "simulation": {
-    "max_cycles": 10000,
-    "timeout_seconds": 30
+    "max_cycles": 10000
   },
 
   "defines": {

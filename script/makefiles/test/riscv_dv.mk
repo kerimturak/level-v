@@ -51,22 +51,19 @@ RISCV_DV_LDFLAGS    := -T$(RISCV_DV_LDSCRIPT)
 ELF_TO_MEM          := $(SCRIPT_DIR)/python/elf_to_mem.py
 RISCV_DV_SCRIPT     := $(RISCV_DV_ROOT)/run.py
 RISCV_DV_FALLBACK   := $(SCRIPT_DIR)/python/riscv_dv_gen.py
+RISCV_DV_CONFIG_RDR := $(SCRIPT_DIR)/python/riscv_dv_config.py
 
-# Test configuration
-RISCV_DV_TEST       ?= riscv_arithmetic_basic_test
-RISCV_DV_ITER       ?= 5
-RISCV_DV_SEED       ?= 0
-RISCV_DV_ISA        ?= rv32imc
+# JSON Configuration
+RISCV_DV_CONFIG     := $(SCRIPT_DIR)/config/tests/riscv-dv.json
+
+# Test configuration (can override from command line or use JSON defaults)
+# Command line takes priority > JSON config
+RISCV_DV_TEST       ?= $(shell python3 $(RISCV_DV_CONFIG_RDR) -c $(RISCV_DV_CONFIG) get-value -k tests.0.name -d riscv_arithmetic_basic_test)
+RISCV_DV_ITER       ?= $(shell python3 $(RISCV_DV_CONFIG_RDR) -c $(RISCV_DV_CONFIG) get-iterations -t $(RISCV_DV_TEST) 2>/dev/null || echo 5)
+RISCV_DV_SEED       ?= $(shell python3 $(RISCV_DV_CONFIG_RDR) -c $(RISCV_DV_CONFIG) get-value -k generator.seed -d 0)
+RISCV_DV_ISA        ?= $(shell python3 $(RISCV_DV_CONFIG_RDR) -c $(RISCV_DV_CONFIG) get-value -k generator.isa -d rv32imc)
+RISCV_DV_INSTR_CNT  ?= $(shell python3 $(RISCV_DV_CONFIG_RDR) -c $(RISCV_DV_CONFIG) get-value -k generator.instr_cnt -d 500)
 RISCV_DV_MMODE      ?= 1
-
-# Available tests
-RISCV_DV_TESTS      := riscv_arithmetic_basic_test \
-                       riscv_rand_instr_test \
-                       riscv_jump_stress_test \
-                       riscv_loop_test \
-                       riscv_rand_jump_test \
-                       riscv_mmu_stress_test \
-                       riscv_illegal_instr_test
 
 # ============================================================
 # Main Targets
@@ -236,13 +233,96 @@ riscv_dv_compare:
 	@echo -e "$(GREEN)[OK] Comparison complete$(RESET)"
 
 # ============================================================
-# List Available Tests
+# List Available Tests (from JSON config)
 # ============================================================
 
 riscv_dv_list:
-	@echo -e "$(CYAN)[RISCV-DV] Available tests:$(RESET)"
-	@for test in $(RISCV_DV_TESTS); do \
-		echo -e "  - $$test"; \
+	@echo -e "$(CYAN)[RISCV-DV] Available tests (from $(RISCV_DV_CONFIG)):$(RESET)"
+	@python3 $(RISCV_DV_CONFIG_RDR) -c $(RISCV_DV_CONFIG) get-all-tests | while read line; do \
+		name=$$(echo $$line | cut -d: -f1); \
+		iters=$$(echo $$line | cut -d: -f2); \
+		echo -e "  - $$name ($$iters iterations)"; \
+	done
+
+# Show configuration summary
+riscv_dv_config:
+	@python3 $(RISCV_DV_CONFIG_RDR) -c $(RISCV_DV_CONFIG) summary
+
+# ============================================================
+# Run All Enabled Tests from JSON
+# ============================================================
+
+# Build all tests first, then run all
+riscv_dv_run_all: riscv_dv_build_all riscv_dv_verilate _riscv_dv_run_only
+
+# Run only (skip build) - useful if tests already built
+riscv_dv_run_only: riscv_dv_verilate _riscv_dv_run_only
+
+_riscv_dv_run_only:
+	@echo -e "$(YELLOW)[RISCV-DV] Running all tests...$(RESET)"
+	@mkdir -p $(RISCV_DV_LOG_DIR)
+	@PASS=0; FAIL=0; \
+	for mem in $(RISCV_DV_MEM_DIR)/*.mem; do \
+		if [ -f "$$mem" ]; then \
+			name=$$(basename $$mem .mem); \
+			echo -e "  $(YELLOW)→ Running: $$name$(RESET)"; \
+			if $(MAKE) --no-print-directory run \
+				TEST_TYPE=riscv-dv \
+				TEST_NAME=$$name \
+				MEM_DIR="$(RISCV_DV_MEM_DIR)" \
+				ELF_DIR="$(RISCV_DV_ELF_DIR)" \
+				DUMP_DIR="$(RISCV_DV_DUMP_DIR)" \
+				ADDR_DIR="$(RISCV_DV_ADDR_DIR)" \
+				TEST_LOG_DIR="$(RISCV_DV_LOG_DIR)/$$name" \
+				RTL_LOG_DIR="$(RISCV_DV_LOG_DIR)/$$name" \
+				MAX_CYCLES=50000 2>/dev/null; then \
+				echo -e "  $(GREEN)✓ $$name PASS$(RESET)"; \
+				PASS=$$((PASS + 1)); \
+			else \
+				echo -e "  $(RED)✗ $$name FAIL$(RESET)"; \
+				FAIL=$$((FAIL + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo -e ""; \
+	echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
+	echo -e "$(GREEN) RISCV-DV Final Results: $$PASS passed, $$FAIL failed$(RESET)"; \
+	echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+
+# Build ALL enabled tests from JSON config
+riscv_dv_build_all: riscv_dv_clone riscv_dv_setup
+	@echo -e "$(YELLOW)[RISCV-DV] Building all enabled tests from config...$(RESET)"
+	@python3 $(RISCV_DV_CONFIG_RDR) -c $(RISCV_DV_CONFIG) get-all-tests | while read line; do \
+		test_name=$$(echo $$line | cut -d: -f1); \
+		test_iter=$$(echo $$line | cut -d: -f2); \
+		echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
+		echo -e "$(CYAN) Generating: $$test_name ($$test_iter iterations)$(RESET)"; \
+		echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
+		$(MAKE) --no-print-directory _riscv_dv_gen_one TEST_NAME=$$test_name TEST_ITER=$$test_iter; \
+	done
+	@echo -e "$(YELLOW)[RISCV-DV] Compiling all tests...$(RESET)"
+	@PASS=0; FAIL=0; \
+	for src in $(RISCV_DV_GEN_DIR)/*.S; do \
+		if [ -f "$$src" ]; then \
+			name=$$(basename $$src .S); \
+			if $(MAKE) --no-print-directory _riscv_dv_build_one SRC=$$src NAME=$$name 2>/dev/null; then \
+				PASS=$$((PASS + 1)); \
+			else \
+				FAIL=$$((FAIL + 1)); \
+			fi; \
+		fi; \
+	done; \
+	echo -e "$(GREEN)[RISCV-DV] Build complete: $$PASS passed, $$FAIL failed$(RESET)"
+
+# Generate tests for a specific test type
+_riscv_dv_gen_one:
+	@for i in $$(seq 0 $$(($(TEST_ITER) - 1))); do \
+		python3 $(RISCV_DV_FALLBACK) \
+			--test $(TEST_NAME) \
+			--idx $$i \
+			--seed $$(($(RISCV_DV_SEED) + $$i)) \
+			--instr-cnt $(RISCV_DV_INSTR_CNT) \
+			--output $(RISCV_DV_GEN_DIR)/$(TEST_NAME)_$$i.S; \
 	done
 
 # ============================================================
@@ -264,20 +344,37 @@ riscv_dv_help:
 	@echo -e "$(GREEN)     RISC-V DV Random Test Generator$(RESET)"
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e ""
+	@echo -e "$(CYAN)Configuration File:$(RESET)"
+	@echo -e "  $(RISCV_DV_CONFIG)"
+	@echo -e ""
 	@echo -e "$(CYAN)Usage:$(RESET)"
-	@echo -e "  make riscv_dv                    Build all generated tests"
-	@echo -e "  make riscv_dv_run                Run all tests"
+	@echo -e "  make riscv_dv                    Build tests for default test type"
+	@echo -e "  make riscv_dv_run                Run tests for default test type"
+	@echo -e "  make riscv_dv_build_all          Build ALL tests from JSON (no run)"
+	@echo -e "  make riscv_dv_run_all            Build & Run ALL tests from JSON"
+	@echo -e "  make riscv_dv_run_only           Run only (skip build, tests must exist)"
 	@echo -e "  make riscv_dv_compare            Compare with Spike ISS"
-	@echo -e "  make riscv_dv_list               List available test types"
+	@echo -e "  make riscv_dv_list               List available tests from config"
+	@echo -e "  make riscv_dv_config             Show configuration summary"
 	@echo -e "  make riscv_dv_clean              Clean build files"
 	@echo -e ""
-	@echo -e "$(CYAN)Configuration:$(RESET)"
-	@echo -e "  RISCV_DV_TEST=name               Test type (default: riscv_arithmetic_basic_test)"
-	@echo -e "  RISCV_DV_ITER=N                  Number of iterations (default: 5)"
-	@echo -e "  RISCV_DV_SEED=N                  Random seed (default: 0)"
+	@echo -e "$(CYAN)Configuration (override JSON):$(RESET)"
+	@echo -e "  RISCV_DV_TEST=name               Test type"
+	@echo -e "  RISCV_DV_ITER=N                  Number of iterations"
+	@echo -e "  RISCV_DV_SEED=N                  Random seed"
 	@echo -e "  RISCV_DV_ISA=rv32imc             Target ISA"
+	@echo -e "  RISCV_DV_INSTR_CNT=N             Instructions per test (default: 500)"
+	@echo -e ""
+	@echo -e "$(CYAN)JSON Config Structure:$(RESET)"
+	@echo -e "  generator.instr_cnt              Instructions per test"
+	@echo -e "  generator.isa                    ISA configuration"
+	@echo -e "  generator.seed                   Base random seed"
+	@echo -e "  tests[].name                     Test name"
+	@echo -e "  tests[].iterations               Number of iterations"
+	@echo -e "  tests[].enabled                  Enable/disable test"
 	@echo -e ""
 	@echo -e "$(CYAN)Examples:$(RESET)"
-	@echo -e "  make riscv_dv RISCV_DV_TEST=riscv_rand_instr_test RISCV_DV_ITER=10"
-	@echo -e "  make riscv_dv_run RISCV_DV_SEED=12345"
+	@echo -e "  make riscv_dv_run_all                              # Build & run all"
+	@echo -e "  make riscv_dv_run_only                             # Run only (no build)"
+	@echo -e "  make riscv_dv RISCV_DV_TEST=riscv_rand_instr_test  # Single test type"
 	@echo -e ""

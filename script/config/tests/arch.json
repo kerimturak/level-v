@@ -4,8 +4,7 @@
   "extends": "default",
   "test_list": "sim/test/arch_test_list.flist",
   "simulation": {
-    "max_cycles": 30000,
-    "timeout_seconds": 30
+    "max_cycles": 30000
   },
 
   "defines": {

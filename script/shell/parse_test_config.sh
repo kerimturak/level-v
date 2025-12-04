@@ -198,7 +198,7 @@ MAKEVARS
   # Comparison settings
   echo "# Comparison settings"
   local compare_enabled
-  compare_enabled=$(echo "$config" | jq -r '.comparison.enabled // true')
+  compare_enabled=$(echo "$config" | jq -r 'if .comparison.enabled != null then .comparison.enabled else "true" end')
   [ "$compare_enabled" = "true" ] && echo "CFG_COMPARE := 1" || echo "CFG_COMPARE := 0"
   
   local use_addr
@@ -206,7 +206,7 @@ MAKEVARS
   [ "$use_addr" = "true" ] && echo "CFG_NO_ADDR := 0" || echo "CFG_NO_ADDR := 1"
   
   local spike
-  spike=$(echo "$config" | jq -r '.comparison.spike_enabled // true')
+  spike=$(echo "$config" | jq -r 'if .comparison.spike_enabled != null then .comparison.spike_enabled else "true" end')
   [ "$spike" = "true" ] && echo "CFG_SPIKE := 1" || echo "CFG_SPIKE := 0"
   
   echo ""
@@ -263,7 +263,7 @@ MAKEVARS
   [ "$spike_enabled" = "true" ] && echo "CFG_SPIKE_ENABLED := 1" || echo "CFG_SPIKE_ENABLED := 0"
   
   local spike_isa
-  spike_isa=$(echo "$config" | jq -r '.spike.isa // "rv32im_zicsr_zicntr_zifencei"')
+  spike_isa=$(echo "$config" | jq -r '.spike.isa // "rv32imc_zicsr_zicntr_zifencei"')
   echo "CFG_SPIKE_ISA := $spike_isa"
   
   local spike_priv

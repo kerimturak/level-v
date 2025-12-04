@@ -209,8 +209,8 @@ module ceres_soc
   // Timer Signals
   logic       [                 31:0] timer_rdata;
   logic       [                  7:0] timer_pwm;  // 4 timers * 2 PWM outputs
-  logic       [                  3:0] timer_irq;  // Per-timer interrupt
-  logic                               timer_irq_combined;
+  logic       [                  3:0] gptimer_irq;  // Per-timer interrupt
+  logic                               gptimer_irq_combined;
 
   // Watchdog Signals
   logic       [                 31:0] wdt_rdata;
@@ -472,8 +472,8 @@ module ceres_soc
     pwm_irq,  // Source 20: PWM
     dma_irq,  // Sources 16-19: DMA channels
     wdt_irq,  // Source 15: Watchdog
-    timer_irq,  // Sources 11-14: Individual timer IRQs
-    timer_irq_combined,  // Source 10: Timer combined
+    gptimer_irq,  // Sources 11-14: Individual timer IRQs
+    gptimer_irq_combined,  // Source 10: Timer combined
     ext_irq_i,  // Sources 2-9: External interrupts
     gpio_irq,  // Source 1: GPIO
     1'b0  // Source 0: Reserved (always 0)
@@ -519,14 +519,14 @@ module ceres_soc
           .dat_i         (cpu_mem_req.data[31:0]),
           .dat_o         (timer_rdata),
           .pwm_o         (timer_pwm),
-          .irq_o         (timer_irq),
-          .irq_combined_o(timer_irq_combined)
+          .irq_o         (gptimer_irq),
+          .irq_combined_o(gptimer_irq_combined)
       );
     end else begin : gen_no_timer
-      assign timer_rdata        = '0;
-      assign timer_pwm          = '0;
-      assign timer_irq          = '0;
-      assign timer_irq_combined = 1'b0;
+      assign timer_rdata          = '0;
+      assign timer_pwm            = '0;
+      assign gptimer_irq          = '0;
+      assign gptimer_irq_combined = 1'b0;
     end
   endgenerate
 

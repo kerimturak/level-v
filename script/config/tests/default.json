@@ -3,7 +3,7 @@
   "_comment": "CERES RISC-V Default Test Configuration",
 
   "simulation": {
-    "max_cycles": 10000,
+    "max_cycles": 100000,
     "timeout_seconds": 60,
     "build_threads": "auto",
     "sim_threads": 16

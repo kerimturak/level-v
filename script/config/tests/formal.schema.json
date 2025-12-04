@@ -1,0 +1,246 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "formal.schema.json",
+  "title": "Formal Verification Configuration",
+  "description": "Configuration schema for RISC-V Formal Verification",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "_comment": {
+      "type": "string"
+    },
+    "_description": {
+      "type": "string"
+    },
+    "test_list": {
+      "type": "string",
+      "enum": ["formal"]
+    },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["bmc", "prove", "cover", "live"],
+          "default": "bmc"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20
+        },
+        "engine": {
+          "type": "string",
+          "enum": ["smtbmc", "btor", "abc"],
+          "default": "smtbmc"
+        },
+        "solver": {
+          "type": "string",
+          "enum": ["z3", "boolector", "yices", "bitwuzla"],
+          "default": "z3"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 3600
+        }
+      }
+    },
+    "engines": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "smtbmc": {
+          "type": "object",
+          "properties": {
+            "solvers": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "default_solver": { "type": "string" }
+          }
+        },
+        "btor": {
+          "type": "object",
+          "properties": {
+            "solvers": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "default_solver": { "type": "string" }
+          }
+        },
+        "abc": {
+          "type": "object",
+          "properties": {
+            "solvers": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "default_solver": { "type": "string" }
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "description": { "type": "string" },
+          "depth": { "type": "integer" }
+        }
+      }
+    },
+    "isa": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "type": "string",
+          "enum": ["rv32i", "rv32e", "rv64i"]
+        },
+        "extensions": {
+          "type": "object",
+          "properties": {
+            "M": { "type": "boolean" },
+            "C": { "type": "boolean" },
+            "A": { "type": "boolean" },
+            "F": { "type": "boolean" },
+            "D": { "type": "boolean" },
+            "Zicsr": { "type": "boolean" },
+            "Zifencei": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "cpu": {
+      "type": "object",
+      "properties": {
+        "wrapper": { "type": "string" },
+        "wrapper_file": { "type": "string" },
+        "channels": { "type": "integer" },
+        "xlen": { "type": "integer", "enum": [32, 64] }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "properties": {
+        "formal_root": { "type": "string" },
+        "env_dir": { "type": "string" },
+        "build_dir": { "type": "string" },
+        "work_dir": { "type": "string" },
+        "log_dir": { "type": "string" }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" },
+          "required": { "type": "boolean" },
+          "alternatives": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "rtl_sources": {
+      "type": "object",
+      "properties": {
+        "include_dirs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "packages": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sources": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "simulation": {
+      "type": "object",
+      "properties": {
+        "max_cycles": { "type": "integer" },
+        "timeout_seconds": { "type": "integer" },
+        "build_threads": { "type": ["string", "integer"] }
+      }
+    },
+    "defines": {
+      "type": "object",
+      "additionalProperties": { "type": "boolean" }
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "default_depth": { "type": "integer" },
+          "use_cases": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "presets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "mode": { "type": "string" },
+          "depth": { "type": "integer" },
+          "checks": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "report_format": { "type": "string" },
+        "save_vcd": { "type": "boolean" },
+        "save_traces": { "type": "boolean" },
+        "verbose": { "type": "boolean" }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "properties": {
+        "multiclock": { "type": "boolean" },
+        "assume_statements": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "assert_statements": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "custom_properties": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["test_list", "verification"]
+}

@@ -8,8 +8,7 @@
   "simulation": {
     "max_cycles": 100000,
     "timeout_seconds": 60,
-    "build_threads": "auto",
-    "sim_threads": 1
+    "build_threads": "auto"
   },
 
   "comparison": {
@@ -25,7 +24,7 @@
     "LOG_UART": true,
     "LOG_BP": true,
     "SIM_FAST": true,
-    "SIM_UART_MONITOR": true
+    "SIM_UART_MONITOR": false
   },
 
   "trace": {
@@ -39,8 +38,8 @@
 
   "custom_options": {
     "description": "Torture test specific options",
-    "num_tests": 10,
-    "max_instructions": 1000,
+    "num_tests": 100,
+    "max_instructions": 10000,
     "test_directory": "build/tests/torture/mem"
   }
 }

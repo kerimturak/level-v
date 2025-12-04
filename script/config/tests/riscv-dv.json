@@ -1,33 +1,97 @@
 {
+  "$schema": "./riscv-dv.schema.json",
   "name": "riscv-dv",
   "description": "RISC-V DV Random Test Generator",
   "version": "1.0",
-  
+
+  "generator": {
+    "isa": "rv32imc",
+    "mabi": "ilp32",
+    "mmode": true,
+    "seed": 123,
+    "instr_cnt": 500,
+    "num_sub_programs": 5,
+    "no_fence": false,
+    "no_data_page": false,
+    "no_branch_jump": false,
+    "no_csr_instr": true
+  },
+
+  "tests": [
+    {
+      "name": "riscv_arithmetic_basic_test",
+      "description": "Basic arithmetic instruction test",
+      "iterations": 3,
+      "enabled": true
+    },
+    {
+      "name": "riscv_rand_instr_test",
+      "description": "Random instruction test",
+      "iterations": 3,
+      "enabled": true
+    },
+    {
+      "name": "riscv_jump_stress_test",
+      "description": "Jump instruction stress test",
+      "iterations": 3,
+      "enabled": true
+    },
+    {
+      "name": "riscv_loop_test",
+      "description": "Loop instruction test",
+      "iterations": 3,
+      "enabled": true
+    },
+    {
+      "name": "riscv_rand_jump_test",
+      "description": "Random jump test",
+      "iterations": 3,
+      "enabled": true
+    },
+    {
+      "name": "riscv_mmu_stress_test",
+      "description": "MMU stress test",
+      "iterations": 3,
+      "enabled": false
+    },
+    {
+      "name": "riscv_illegal_instr_test",
+      "description": "Illegal instruction exception test (requires real riscv-dv)",
+      "iterations": 3,
+      "enabled": false
+    }
+  ],
+
   "simulation": {
     "max_cycles": 50000,
     "timeout_ms": 30000
   },
-  
+
   "spike": {
     "enabled": true,
     "isa": "rv32imc_zicsr_zicntr_zifencei",
     "priv_mode": "m",
     "triggers": 1
   },
-  
+
   "comparison": {
     "enabled": true,
     "skip_csr": false,
     "resync": false,
     "verbose": false
   },
-  
+
   "defines": {
-    "LOG_COMMIT": true,
     "COMMIT_TRACER": true,
-    "SIM_FAST": true
+    "KONATA_TRACER": true,
+    "LOG_COMMIT": true,
+    "LOG_RAM": false,
+    "LOG_UART": false,
+    "LOG_BP": true,
+    "SIM_FAST": false,
+    "SIM_UART_MONITOR": false
   },
-  
+
   "coverage": {
     "enabled": false
   }
