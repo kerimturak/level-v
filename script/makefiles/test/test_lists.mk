@@ -245,9 +245,15 @@ ta:
 ifndef T
 	$(error Usage: make ta T=<arch_test_name> (e.g., I-add-01))
 endif
-	@$(MAKE) --no-print-directory run_verilator \
+	@$(MAKE) --no-print-directory run \
 		TEST_NAME=$(T) \
 		TEST_TYPE=arch \
+		MEM_DIR="$(BUILD_DIR)/tests/riscv-arch-test/mem" \
+		ELF_DIR="$(BUILD_DIR)/tests/riscv-arch-test/elf" \
+		DUMP_DIR="$(BUILD_DIR)/tests/riscv-arch-test/dump" \
+		ADDR_DIR="$(BUILD_DIR)/tests/riscv-arch-test/pass_fail_addr" \
+		TEST_LOG_DIR="$(RESULTS_DIR)/logs/verilator/arch/$(T)" \
+		RTL_LOG_DIR="$(RESULTS_DIR)/logs/verilator/arch/$(T)" \
 		SIM=verilator
 
 # -----------------------------------------

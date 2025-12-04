@@ -22,7 +22,11 @@ $(if $(wildcard $(BUILD_DIR)/tests/riscv-tests/elf/$(TEST_NAME).elf),isa,\
 $(if $(wildcard $(BUILD_DIR)/tests/riscv-arch-test/elf/$(TEST_NAME).elf),arch,\
 $(if $(wildcard $(BUILD_DIR)/tests/imperas/elf/$(TEST_NAME).elf),imperas,\
 $(if $(wildcard $(BUILD_DIR)/tests/riscv-benchmarks/elf/$(TEST_NAME)),bench,\
-$(TEST_TYPE))))))
+$(if $(wildcard $(BUILD_DIR)/tests/dhrystone/$(TEST_NAME).elf),dhrystone,\
+$(if $(wildcard $(BUILD_DIR)/tests/embench/elf/$(TEST_NAME).elf),embench,\
+$(if $(wildcard $(BUILD_DIR)/tests/torture/elf/$(TEST_NAME).elf),torture,\
+$(if $(wildcard $(BUILD_DIR)/tests/custom/$(TEST_NAME).elf),custom,\
+$(TEST_TYPE))))))))))
 endef
 
 # Apply file-based detection as a verification/fallback
@@ -39,8 +43,21 @@ else ifeq ($(TEST_TYPE),arch)
     TEST_ROOT := $(BUILD_DIR)/tests/riscv-arch-test
 else ifeq ($(TEST_TYPE),imperas)
     TEST_ROOT := $(BUILD_DIR)/tests/imperas
+else ifeq ($(TEST_TYPE),dhrystone)
+    TEST_ROOT := $(BUILD_DIR)/tests/dhrystone
+else ifeq ($(TEST_TYPE),embench)
+    TEST_ROOT := $(BUILD_DIR)/tests/embench
+else ifeq ($(TEST_TYPE),torture)
+    TEST_ROOT := $(BUILD_DIR)/tests/torture
+else ifeq ($(TEST_TYPE),riscv-dv)
+    TEST_ROOT := $(BUILD_DIR)/tests/riscv-dv
+else ifeq ($(TEST_TYPE),custom)
+    TEST_ROOT := $(BUILD_DIR)/tests/custom
+else ifneq ($(MEM_DIR),)
+    # If MEM_DIR is provided, skip TEST_TYPE validation (custom paths)
+    TEST_ROOT := $(dir $(MEM_DIR))
 else
-    $(error Invalid TEST_TYPE="$(TEST_TYPE)". Use: isa, bench, arch, or imperas)
+    $(error Invalid TEST_TYPE="$(TEST_TYPE)". Use: isa, bench, arch, imperas, dhrystone, embench, torture, riscv-dv, or custom)
 endif
 
 # Derived paths from TEST_ROOT (can be overridden)
@@ -50,10 +67,20 @@ HEX_DIR  ?= $(TEST_ROOT)/hex
 DUMP_DIR ?= $(TEST_ROOT)/dump
 ADDR_DIR ?= $(TEST_ROOT)/pass_fail_addr
 
-# ELF file extension (arch and imperas tests use .elf, others don't)
+# ELF file extension (arch, imperas, dhrystone, embench, torture, riscv-dv, custom use .elf)
 ifeq ($(TEST_TYPE),arch)
     ELF_EXT := .elf
 else ifeq ($(TEST_TYPE),imperas)
+    ELF_EXT := .elf
+else ifeq ($(TEST_TYPE),dhrystone)
+    ELF_EXT := .elf
+else ifeq ($(TEST_TYPE),embench)
+    ELF_EXT := .elf
+else ifeq ($(TEST_TYPE),torture)
+    ELF_EXT := .elf
+else ifeq ($(TEST_TYPE),riscv-dv)
+    ELF_EXT := .elf
+else ifeq ($(TEST_TYPE),custom)
     ELF_EXT := .elf
 else
     ELF_EXT :=
@@ -124,6 +151,8 @@ ifeq ($(SIM),verilator)
 	@$(MAKE) --no-print-directory run_verilator \
 		TEST_NAME=$(TEST_NAME) MAX_CYCLES=$(MAX_CYCLES) \
 		VERILATOR_LOG_DIR=$(RTL_LOG_DIR) \
+		MEM_FILE=$(MEM_DIR)/$(TEST_NAME).mem \
+		ADDR_FILE=$(ADDR_DIR)/$(TEST_NAME)_addr.txt \
 		2>&1 | tee $(RTL_LOG); \
 	RTL_EXIT=$$?; \
 	echo "RTL_EXIT_CODE=$$RTL_EXIT" >> $(REPORT_FILE); \
@@ -157,6 +186,12 @@ endif
 # 3️⃣ Run Spike Golden Reference
 # ============================================================
 run_spike:
+ifeq ($(CFG_SPIKE),0)
+	@echo -e ""
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(YELLOW)  Step 2/3: Spike comparison disabled (benchmark mode)$(RESET)"
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+else
 	@echo -e ""
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Step 2/3: Running Spike Golden Model$(RESET)"
@@ -191,11 +226,25 @@ run_spike:
 		echo -e "$(YELLOW)[WARNING]$(RESET) Spike exited with code $$SPIKE_EXIT (may be normal)"; \
 	fi; \
 	echo -e "$(GREEN)✓ Spike execution complete$(RESET)"
+endif
 
 # ============================================================
 # 4️⃣ Compare Logs
 # ============================================================
 compare_logs:
+ifeq ($(CFG_COMPARE),0)
+	@echo -e ""
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(YELLOW)  Step 3/3: Log comparison disabled (benchmark mode)$(RESET)"
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "COMPARE_STATUS=SKIPPED" >> $(REPORT_FILE)
+else ifeq ($(CFG_SPIKE),0)
+	@echo -e ""
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(YELLOW)  Step 3/3: Log comparison skipped (no Spike run)$(RESET)"
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "COMPARE_STATUS=SKIPPED" >> $(REPORT_FILE)
+else
 	@echo -e ""
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Step 3/3: Comparing RTL vs Spike$(RESET)"
@@ -235,12 +284,30 @@ compare_logs:
 		echo -e "$(RED)✗ Logs differ$(RESET)"; \
 		exit $$COMPARE_EXIT; \
 	fi
+endif
 
 
 # ============================================================
 # 5️⃣ Generate Final Test Report
 # ============================================================
 test_report:
+ifeq ($(CFG_COMPARE),0)
+	@echo -e ""
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Benchmark Run Complete$(RESET)"
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "BENCHMARK_STATUS=COMPLETE" >> $(REPORT_FILE)
+	@echo -e "$(GREEN)✓ RTL simulation finished$(RESET)"
+	@echo -e "$(CYAN)[INFO]$(RESET) Check UART log for benchmark output"
+else ifeq ($(CFG_SPIKE),0)
+	@echo -e ""
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Benchmark Run Complete$(RESET)"
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "BENCHMARK_STATUS=COMPLETE" >> $(REPORT_FILE)
+	@echo -e "$(GREEN)✓ RTL simulation finished$(RESET)"
+	@echo -e "$(CYAN)[INFO]$(RESET) Check UART log for benchmark output"
+else
 	@if grep -q "PASS" $(REPORT_FILE); then \
 		echo -e "$(GREEN)TEST PASSED$(RESET)"; \
 		exit 0; \
@@ -251,6 +318,7 @@ test_report:
 		echo -e "$(YELLOW)TEST STATUS UNKNOWN$(RESET)"; \
 		exit 1; \
 	fi
+endif
 # ============================================================
 # 6️⃣ Batch Test Execution from File
 # ============================================================

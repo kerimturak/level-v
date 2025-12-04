@@ -28,6 +28,10 @@ module cs_reg_file
     input  logic        [XLEN-1:0] trap_cause_i,
     input  logic        [XLEN-1:0] trap_mepc_i,
     input  logic        [XLEN-1:0] trap_tval_i,
+    // Hardware interrupt inputs
+    input  logic                   timer_irq_i,    // CLINT timer interrupt (MTIP)
+    input  logic                   sw_irq_i,       // CLINT software interrupt (MSIP)
+    input  logic                   ext_irq_i,      // PLIC external interrupt (MEIP)
     output logic        [XLEN-1:0] mtvec_o,
     output logic        [XLEN-1:0] mepc_o,
     output logic                   misa_c_o,
@@ -152,6 +156,9 @@ module cs_reg_file
   localparam logic [XLEN-1:0] MIE_RW_MASK = 32'h0000_0888;
 
   // MIP is read-only in minimal implementation (HW sets pending bits)
+  // Bit 3: MSIP (Software Interrupt Pending)
+  // Bit 7: MTIP (Timer Interrupt Pending)  
+  // Bit 11: MEIP (External Interrupt Pending)
   localparam logic [XLEN-1:0] MIP_RW_MASK = 32'h0000_0000;
 
   // ============================================================================
@@ -202,6 +209,21 @@ module cs_reg_file
   // ============================================================================
   // OUTPUT ASSIGNMENTS
   // ============================================================================
+
+  // ============================================================================
+  // MIP Register - Hardware Interrupt Pending Bits
+  // ============================================================================
+  // MIP bits are set by hardware interrupt sources:
+  //   Bit 3 (MSIP): Software interrupt from CLINT
+  //   Bit 7 (MTIP): Timer interrupt from CLINT (mtime >= mtimecmp)
+  //   Bit 11 (MEIP): External interrupt from PLIC
+  // These bits are read-only to software - they reflect hardware state
+  always_comb begin
+    mip = '0;
+    mip[3]  = sw_irq_i;      // MSIP - Machine Software Interrupt Pending
+    mip[7]  = timer_irq_i;   // MTIP - Machine Timer Interrupt Pending
+    mip[11] = ext_irq_i;     // MEIP - Machine External Interrupt Pending
+  end
   
   // ============================================================================
   // Write-through bypass for trigger registers
@@ -257,7 +279,7 @@ module cs_reg_file
       misa      <= CERES_MISA;
       mie       <= '0;
       mtvec     <= '0;
-      mip       <= '0;
+      // Note: mip is now combinational - driven by hardware interrupt sources
       mscratch  <= '0;
       mepc      <= '0;
       mcause    <= '0;
@@ -345,7 +367,7 @@ module cs_reg_file
           MTVEC:    mtvec <= csr_wdata_i;
 
           // Trap Handling Registers
-          MIP:      mip       <= (mip & ~MIP_RW_MASK) | (csr_wdata_i & MIP_RW_MASK);
+          // Note: MIP is read-only - hardware interrupt sources set the pending bits
           MSCRATCH: mscratch  <= csr_wdata_i;
           MEPC:     mepc      <= csr_wdata_i;
           MCAUSE:   mcause    <= csr_wdata_i;

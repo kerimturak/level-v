@@ -1,0 +1,46 @@
+{
+  "$schema": "./tests.schema.json",
+  "_comment": "RISC-V Torture Test Configuration",
+  "_description": "Random instruction stress tests for verification",
+
+  "test_list": "torture",
+
+  "simulation": {
+    "max_cycles": 100000,
+    "timeout_seconds": 60,
+    "build_threads": "auto",
+    "sim_threads": 1
+  },
+
+  "comparison": {
+    "enabled": true,
+    "spike_enabled": true
+  },
+
+  "defines": {
+    "COMMIT_TRACER": true,
+    "KONATA_TRACER": false,
+    "LOG_COMMIT": true,
+    "LOG_RAM": false,
+    "LOG_UART": true,
+    "LOG_BP": true,
+    "SIM_FAST": true,
+    "SIM_UART_MONITOR": true
+  },
+
+  "trace": {
+    "enabled": false,
+    "format": "fst"
+  },
+
+  "build": {
+    "mode": "release"
+  },
+
+  "custom_options": {
+    "description": "Torture test specific options",
+    "num_tests": 10,
+    "max_instructions": 1000,
+    "test_directory": "build/tests/torture/mem"
+  }
+}

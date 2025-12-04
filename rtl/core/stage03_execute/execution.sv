@@ -34,6 +34,10 @@ module execution
     input  logic        [XLEN-1:0] trap_cause_i,
     input  logic        [XLEN-1:0] trap_tval_i,       // faulting instruction / adres
     input  logic        [XLEN-1:0] trap_mepc_i,
+    // Hardware interrupt inputs
+    input  logic                   timer_irq_i,       // CLINT timer interrupt
+    input  logic                   sw_irq_i,          // CLINT software interrupt
+    input  logic                   ext_irq_i,         // PLIC external interrupt
     input  logic        [XLEN-1:0] pc_i,
     input  logic        [XLEN-1:0] pc_incr_i,
     input  logic        [XLEN-1:0] imm_i,
@@ -182,6 +186,10 @@ module execution
       .trap_mepc_i     (trap_mepc_i),
       .trap_tval_i     (trap_tval_i),
       .instr_type_i    (instr_type_i),
+      // Hardware interrupt inputs
+      .timer_irq_i     (timer_irq_i),
+      .sw_irq_i        (sw_irq_i),
+      .ext_irq_i       (ext_irq_i),
       .mtvec_o         (mtvec_o),
       .mepc_o          (mepc),
       .misa_c_o        (misa_c),

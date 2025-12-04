@@ -183,6 +183,10 @@ module ceres_wrapper
   cpu i_soc (
       .clk_i      (clk_i),
       .rst_ni     (sys_rst_n),
+      // Hardware interrupt inputs
+      .timer_irq_i(timer_irq),    // CLINT timer interrupt
+      .sw_irq_i   (sw_irq),       // CLINT software interrupt  
+      .ext_irq_i  (|ext_irq_i),   // External interrupt (directly from external pins)
       .iomem_req_o(cpu_mem_req),
       .iomem_res_i(cpu_mem_res)
   );

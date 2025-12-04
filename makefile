@@ -24,6 +24,13 @@ include script/makefiles/test/coremark.mk
 include script/makefiles/test/test_lists.mk
 include script/makefiles/custom_test.mk
 
+# Extended Test Suites
+include script/makefiles/test/embench.mk
+include script/makefiles/test/dhrystone.mk
+include script/makefiles/test/torture.mk
+include script/makefiles/test/riscv_dv.mk
+include script/makefiles/test/riscv_formal.mk
+
 # Synthesis Tools
 include script/makefiles/synth/yosys.mk
 
@@ -78,6 +85,17 @@ help:
 	@echo -e "  cm_run          Quick CoreMark run (skip rebuild)"
 	@echo -e "  coremark        Build CoreMark only"
 	@echo -e "  coremark_help   Show CoreMark help"
+	@echo -e ""
+	@echo -e "$(CYAN)▶ Extended Test Suites:$(RESET)"
+	@echo -e "  embench         Build Embench-IoT benchmarks"
+	@echo -e "  embench_run     Run Embench benchmarks"
+	@echo -e "  dhrystone       Build Dhrystone benchmark"
+	@echo -e "  dhrystone_run   Run Dhrystone benchmark"
+	@echo -e "  torture         Generate & build torture tests"
+	@echo -e "  torture_run     Run torture tests"
+	@echo -e "  riscv_dv        Build RISCV-DV generated tests"
+	@echo -e "  riscv_dv_run    Run RISCV-DV tests"
+	@echo -e "  formal          Run formal verification"
 	@echo -e ""
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(YELLOW)                    Logging & Trace Defines$(RESET)"

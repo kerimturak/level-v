@@ -1,0 +1,34 @@
+{
+  "name": "riscv-dv",
+  "description": "RISC-V DV Random Test Generator",
+  "version": "1.0",
+  
+  "simulation": {
+    "max_cycles": 50000,
+    "timeout_ms": 30000
+  },
+  
+  "spike": {
+    "enabled": true,
+    "isa": "rv32imc_zicsr_zicntr_zifencei",
+    "priv_mode": "m",
+    "triggers": 1
+  },
+  
+  "comparison": {
+    "enabled": true,
+    "skip_csr": false,
+    "resync": false,
+    "verbose": false
+  },
+  
+  "defines": {
+    "LOG_COMMIT": true,
+    "COMMIT_TRACER": true,
+    "SIM_FAST": true
+  },
+  
+  "coverage": {
+    "enabled": false
+  }
+}

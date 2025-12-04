@@ -13,3 +13,8 @@ pwm_test
 dma_test
 plic_test
 vga_test
+interrupt_test
+csr_test
+cache_test
+clint_test
+exception_test

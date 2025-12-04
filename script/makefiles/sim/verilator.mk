@@ -34,7 +34,8 @@ endif
 # -----------------------------------------
 # Verilator Paths
 # -----------------------------------------
-VERILATOR_LOG_DIR  := $(LOG_DIR)/verilator/$(TEST_NAME)
+# Use provided VERILATOR_LOG_DIR or default to LOG_DIR/verilator/TEST_NAME
+VERILATOR_LOG_DIR  ?= $(LOG_DIR)/verilator/$(TEST_NAME)
 VERILATOR_INCLUDES := $(addprefix -I, $(INC_DIRS))
 
 # Waiver file for suppressing known UNOPTFLAT warnings
@@ -363,7 +364,7 @@ VERILATOR_BUILD_FLAGS = \
 .PHONY: dirs lint lint-report verilate verilate-fast run_verilator wave clean_verilator verilator_help stats
 
 dirs:
-	@$(MKDIR) -p "$(BUILD_DIR)" "$(OBJ_DIR)" "$(LOG_DIR)" "$(VERILATOR_LOG_DIR)"
+	@$(MKDIR) -p "$(BUILD_DIR)" "$(OBJ_DIR)" "$(LOG_DIR)"
 
 # ============================================================
 # Lint — Full lint check with all warnings enabled
@@ -539,6 +540,7 @@ run_verilator: verilate
 		TEST_NAME="$(TEST_NAME)" \
 		MAX_CYCLES="$(MAX_CYCLES)" \
 		MEM_FILE="$(MEM_FILE)" \
+		ADDR_FILE="$(ADDR_FILE)" \
 		NO_ADDR="$(NO_ADDR)" \
 		VERILATOR_THREADS="$(SIM_THREADS)" \
 		COVERAGE_FILE="$(COVERAGE_DATA_DIR)/$(TEST_NAME).dat" \

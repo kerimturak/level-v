@@ -31,6 +31,16 @@ ifndef TEST_CONFIG
     TEST_CONFIG := imperas
   else ifeq ($(TEST_TYPE),bench)
     TEST_CONFIG := bench
+  else ifeq ($(TEST_TYPE),embench)
+    TEST_CONFIG := embench
+  else ifeq ($(TEST_TYPE),dhrystone)
+    TEST_CONFIG := dhrystone
+  else ifeq ($(TEST_TYPE),torture)
+    TEST_CONFIG := torture
+  else ifeq ($(TEST_TYPE),riscv-dv)
+    TEST_CONFIG := riscv-dv
+  else ifeq ($(TEST_TYPE),custom)
+    TEST_CONFIG := custom
   else
     TEST_CONFIG := default
   endif

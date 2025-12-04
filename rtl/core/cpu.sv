@@ -13,6 +13,10 @@ module cpu
 (
     input  logic       clk_i,
     input  logic       rst_ni,
+    // Hardware interrupt inputs
+    input  logic       timer_irq_i,    // CLINT timer interrupt (MTIP)
+    input  logic       sw_irq_i,       // CLINT software interrupt (MSIP)
+    input  logic       ext_irq_i,      // PLIC external interrupt (MEIP)
     output iomem_req_t iomem_req_o,
     input  iomem_res_t iomem_res_i
 );
@@ -358,6 +362,10 @@ module cpu
       .trap_tval_i  (trap_tval), // muxlanarak exc çıkan aşamanın pcsi atanmalı
       .trap_cause_i (ex_trap_cause ),
       .trap_mepc_i  (ex_trap_mepc  ),  // muxlanarak exc çıkan aşamanın pcsi atanmalı
+      // Hardware interrupt inputs
+      .timer_irq_i  (timer_irq_i),
+      .sw_irq_i     (sw_irq_i),
+      .ext_irq_i    (ext_irq_i),
       .rd_csr_i     (ex_rd_csr),
       .wr_csr_i     (ex_wr_csr),
       .csr_idx_i    (pipe2.csr_idx),

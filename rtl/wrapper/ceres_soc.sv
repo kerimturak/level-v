@@ -258,6 +258,10 @@ module ceres_soc
   cpu i_cpu (
       .clk_i      (clk_i),
       .rst_ni     (sys_rst_n),
+      // Hardware interrupt inputs
+      .timer_irq_i(timer_irq),    // CLINT timer interrupt
+      .sw_irq_i   (sw_irq),       // CLINT software interrupt
+      .ext_irq_i  (plic_irq),     // PLIC external interrupt
       .iomem_req_o(cpu_mem_req),
       .iomem_res_i(cpu_mem_res),
       .uart_tx_o  (uart0_tx_o),

@@ -10,3 +10,12 @@
 [submodule "subrepo/imperas-riscv-tests"]
 	path = subrepo/imperas-riscv-tests
 	url = https://github.com/riscv-ovpsim/imperas-riscv-tests.git
+[submodule "subrepo/embench-iot"]
+	path = subrepo/embench-iot
+	url = https://github.com/embench/embench-iot.git
+[submodule "subrepo/riscv-formal"]
+	path = subrepo/riscv-formal
+	url = https://github.com/YosysHQ/riscv-formal.git
+[submodule "subrepo/riscv-dv"]
+	path = subrepo/riscv-dv
+	url = https://github.com/chipsalliance/riscv-dv.git

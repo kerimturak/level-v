@@ -1,0 +1,49 @@
+{
+  "$schema": "./tests.schema.json",
+  "_comment": "Dhrystone Benchmark Configuration",
+  "_description": "Classic Dhrystone 2.1 benchmark for MIPS/DMIPS measurement",
+
+  "test_list": "dhrystone",
+
+  "simulation": {
+    "max_cycles": 5000000,
+    "timeout_seconds": 300,
+    "build_threads": "auto",
+    "sim_threads": 16
+  },
+
+  "comparison": {
+    "enabled": false,
+    "spike_enabled": false
+  },
+
+  "defines": {
+    "COMMIT_TRACER": true,
+    "KONATA_TRACER": false,
+    "LOG_COMMIT": true,
+    "LOG_RAM": false,
+    "LOG_UART": true,
+    "LOG_BP": true,
+    "SIM_FAST": true,
+    "SIM_UART_MONITOR": true
+  },
+
+  "trace": {
+    "enabled": false,
+    "format": "fst"
+  },
+
+  "build": {
+    "mode": "release"
+  },
+
+  "custom_options": {
+    "description": "Dhrystone benchmark specific options",
+    "uart_log_enabled": true,
+    "uart_log_path": "dhrystone_output.log",
+    "test_directory": "build/tests/dhrystone",
+    "build_directory": "build/tests/dhrystone",
+    "iterations": 1,
+    "cpu_mhz": 50
+  }
+}
