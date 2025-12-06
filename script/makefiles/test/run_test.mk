@@ -43,10 +43,11 @@ $(if $(wildcard $(BUILD_DIR)/tests/riscv-arch-test/elf/$(TEST_NAME).elf),arch,\
 $(if $(wildcard $(BUILD_DIR)/tests/imperas/elf/$(TEST_NAME).elf),imperas,\
 $(if $(wildcard $(BUILD_DIR)/tests/riscv-benchmarks/elf/$(TEST_NAME)),bench,\
 $(if $(wildcard $(BUILD_DIR)/tests/dhrystone/$(TEST_NAME).elf),dhrystone,\
+$(if $(wildcard $(BUILD_DIR)/tests/coremark/$(TEST_NAME).elf),coremark,\
 $(if $(wildcard $(BUILD_DIR)/tests/embench/elf/$(TEST_NAME).elf),embench,\
 $(if $(wildcard $(BUILD_DIR)/tests/torture/elf/$(TEST_NAME).elf),torture,\
 $(if $(wildcard $(BUILD_DIR)/tests/custom/$(TEST_NAME).elf),custom,\
-$(TEST_TYPE))))))))))
+$(TEST_TYPE)))))))))))
 endef
 
 # Apply file-based detection as a verification/fallback
@@ -65,6 +66,8 @@ else ifeq ($(TEST_TYPE),imperas)
     TEST_ROOT := $(BUILD_DIR)/tests/imperas
 else ifeq ($(TEST_TYPE),dhrystone)
     TEST_ROOT := $(BUILD_DIR)/tests/dhrystone
+else ifeq ($(TEST_TYPE),coremark)
+    TEST_ROOT := $(BUILD_DIR)/tests/coremark
 else ifeq ($(TEST_TYPE),embench)
     TEST_ROOT := $(BUILD_DIR)/tests/embench
 else ifeq ($(TEST_TYPE),torture)

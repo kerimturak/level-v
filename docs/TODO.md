@@ -1,0 +1,1 @@
+run test dosyasında spike çalıştırmak için ayrı komuşt var onuda spike makefile'ından çağırsın
