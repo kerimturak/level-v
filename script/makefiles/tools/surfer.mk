@@ -29,7 +29,7 @@ SURFER_FST     ?= $(BUILD_DIR)/verilator/waveform.fst
 # Check if Surfer is installed
 check_surfer:
 	@command -v $(SURFER) >/dev/null 2>&1 || { \
-		echo -e "$(RED)❌ Surfer not found$(RESET)"; \
+		echo -e "$(RED)$(ERROR) Surfer not found$(RESET)"; \
 		echo -e "$(YELLOW)Install with:$(RESET)"; \
 		echo -e "  cargo install --git https://gitlab.com/surfer-project/surfer surfer"; \
 		echo -e "  # Or download from: https://surfer-project.org/"; \
@@ -48,7 +48,7 @@ surfer: check_surfer
 		echo -e "$(CYAN)[INFO]$(RESET) Opening VCD: $(SURFER_VCD)"; \
 		$(SURFER) $(SURFER_VCD) &; \
 	else \
-		echo -e "$(RED)❌ No waveform file found$(RESET)"; \
+		echo -e "$(RED)$(ERROR) No waveform file found$(RESET)"; \
 		echo -e "$(YELLOW)Run simulation first with TRACE=1:$(RESET)"; \
 		echo -e "  make run_verilator TEST_NAME=rv32ui-p-add TRACE=1"; \
 		exit 1; \
@@ -57,7 +57,7 @@ surfer: check_surfer
 # Open specific waveform file
 surfer_file: check_surfer
 ifndef WAVE_FILE
-	@echo -e "$(RED)❌ WAVE_FILE not specified$(RESET)"
+	@echo -e "$(RED)$(ERROR) WAVE_FILE not specified$(RESET)"
 	@echo -e "$(YELLOW)Usage: make surfer_file WAVE_FILE=path/to/file.vcd$(RESET)"
 	@exit 1
 endif
@@ -74,7 +74,7 @@ surfer_install:
 		echo -e "$(CYAN)[INFO]$(RESET) Installing via cargo..."; \
 		cargo install --git https://gitlab.com/surfer-project/surfer surfer; \
 	else \
-		echo -e "$(RED)❌ Cargo not found$(RESET)"; \
+		echo -e "$(RED)$(ERROR) Cargo not found$(RESET)"; \
 		echo -e "$(YELLOW)Install Rust first: https://rustup.rs/$(RESET)"; \
 		echo -e ""; \
 		echo -e "$(YELLOW)Alternative: Download AppImage from:$(RESET)"; \
@@ -82,7 +82,7 @@ surfer_install:
 		exit 1; \
 	fi
 	@echo -e ""
-	@echo -e "$(GREEN)✓ Surfer installed$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Surfer installed$(RESET)"
 	@surfer --version 2>/dev/null || true
 
 # Compare with GTKWave
@@ -92,15 +92,15 @@ wave_compare:
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e ""
 	@echo -e "$(CYAN)GTKWave$(RESET) (Traditional)"
-	@echo -e "  ✓ Mature, well-documented"
-	@echo -e "  ✓ TCL scripting support"
+	@echo -e "  $(SUCCESS) Mature, well-documented"
+	@echo -e "  $(SUCCESS) TCL scripting support"
 	@echo -e "  ✗ Older UI, slower with large files"
 	@echo -e "  Command: make gtkwave"
 	@echo -e ""
 	@echo -e "$(CYAN)Surfer$(RESET) (Modern)"
-	@echo -e "  ✓ GPU accelerated, very fast"
-	@echo -e "  ✓ Modern UI, signal search"
-	@echo -e "  ✓ VCD/FST/GHW support"
+	@echo -e "  $(SUCCESS) GPU accelerated, very fast"
+	@echo -e "  $(SUCCESS) Modern UI, signal search"
+	@echo -e "  $(SUCCESS) VCD/FST/GHW support"
 	@echo -e "  ✗ Newer, less documentation"
 	@echo -e "  Command: make surfer"
 	@echo -e ""

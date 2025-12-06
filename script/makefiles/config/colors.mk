@@ -10,3 +10,8 @@ BLUE    := \033[1;34m
 MAGENTA := \033[1;35m
 RESET   := \033[0m
 BOLD    := \033[1m
+
+WARN	:= ⚠️
+INFO	:= ℹ️
+SUCCESS	:= ✓
+ERROR	:= ❌

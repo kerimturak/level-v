@@ -119,7 +119,7 @@ endif
 # Check if Icarus is installed
 check_icarus:
 	@command -v $(IVERILOG) >/dev/null 2>&1 || { \
-		echo -e "$(RED)❌ Icarus Verilog not found$(RESET)"; \
+		echo -e "$(RED)$(ERROR) Icarus Verilog not found$(RESET)"; \
 		echo -e "$(YELLOW)Install with: sudo apt install iverilog$(RESET)"; \
 		exit 1; \
 	}
@@ -138,7 +138,7 @@ iverilog: check_icarus dirs
 		-s tb_wrapper \
 		$(ICARUS_RTL_SRCS) \
 		$(ICARUS_TB)
-	@echo -e "$(GREEN)✓ Compilation successful$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Compilation successful$(RESET)"
 
 # Run Icarus simulation
 run_icarus: iverilog
@@ -151,9 +151,9 @@ run_icarus: iverilog
 	@cd $(ICARUS_DIR) && $(VVP) $(VVP_FLAGS) $(ICARUS_OUT) $(VVP_PLUSARGS) \
 		2>&1 | tee $(ICARUS_LOG_DIR)/simulation.log
 	@if [ -f $(ICARUS_VCD) ]; then \
-		echo -e "$(GREEN)✓ VCD generated: $(ICARUS_VCD)$(RESET)"; \
+		echo -e "$(GREEN)$(SUCCESS) VCD generated: $(ICARUS_VCD)$(RESET)"; \
 	fi
-	@echo -e "$(GREEN)✓ Simulation complete$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Simulation complete$(RESET)"
 
 # Run and open GTKWave
 run_icarus_gui: run_icarus
@@ -163,7 +163,7 @@ run_icarus_gui: run_icarus
 	elif [ -f $(ICARUS_FST) ]; then \
 		$(GTKWAVE) $(ICARUS_FST) &; \
 	else \
-		echo -e "$(YELLOW)⚠️  No waveform file found$(RESET)"; \
+		echo -e "$(YELLOW)$(WARN)  No waveform file found$(RESET)"; \
 	fi
 
 # Quick Icarus test (compile only, fast check)
@@ -173,14 +173,14 @@ icarus_check: check_icarus dirs
 	@$(IVERILOG) $(ICARUS_FLAGS) -t null \
 		$(ICARUS_RTL_SRCS) \
 		$(ICARUS_TB) 2>&1 | head -50
-	@echo -e "$(GREEN)✓ Syntax check complete$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Syntax check complete$(RESET)"
 
 # Clean Icarus outputs
 clean_icarus:
 	@echo -e "$(CYAN)[CLEAN]$(RESET) Removing Icarus build files..."
 	@rm -rf $(ICARUS_DIR)
 	@rm -rf $(LOG_DIR)/icarus
-	@echo -e "$(GREEN)✓ Clean complete$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Clean complete$(RESET)"
 
 # Help
 icarus_help:

@@ -53,7 +53,7 @@ ELF_TO_MEM           := $(SCRIPT_DIR)/python/elf_to_mem.py
 # ============================================================
 
 dhrystone: dhrystone_setup dhrystone_build
-	@echo -e "$(GREEN)[DHRYSTONE] ✓ Build complete$(RESET)"
+	@echo -e "$(GREEN)[DHRYSTONE] $(SUCCESS) Build complete$(RESET)"
 
 # ============================================================
 # Setup Environment

@@ -151,7 +151,7 @@ _arch_build_ext:
 			if [ -f "$$elf" ]; then \
 				$(ARCH_OBJDUMP) -D $$elf > $$dump; \
 				$(ARCH_OBJCOPY) -O verilog $$elf $$hex; \
-				echo -e "  $(GREEN)✓ Built: $(EXT)-$${name}$(RESET)"; \
+				echo -e "  $(GREEN)$(SUCCESS) Built: $(EXT)-$${name}$(RESET)"; \
 				PASS=$$((PASS + 1)); \
 			else \
 				echo -e "  $(RED)✗ Failed: $(EXT)-$${name}$(RESET)"; \

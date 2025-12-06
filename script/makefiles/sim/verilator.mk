@@ -638,7 +638,7 @@ coverage-quick:
 	@$(MAKE) --no-print-directory isa COVERAGE=1
 	@echo -e "$(YELLOW)[3/3] Generating coverage report...$(RESET)"
 	@$(MAKE) --no-print-directory coverage-html
-	@echo -e "$(GREEN)✓ Coverage complete! Open results/coverage/index.html$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Coverage complete! Open results/coverage/index.html$(RESET)"
 
 # Full coverage with all compliance tests
 coverage:
@@ -654,7 +654,7 @@ coverage:
 	@$(MAKE) --no-print-directory arch COVERAGE=1
 	@echo -e "$(YELLOW)[4/4] Generating coverage report...$(RESET)"
 	@$(MAKE) --no-print-directory coverage-html
-	@echo -e "$(GREEN)✓ Coverage complete! Open results/coverage/index.html$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Coverage complete! Open results/coverage/index.html$(RESET)"
 
 # Generate text-based coverage report
 coverage-report:

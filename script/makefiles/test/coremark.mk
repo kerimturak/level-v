@@ -38,7 +38,7 @@ COREMARK_DUMP := $(COREMARK_BUILD_DIR)/coremark.dump
 # ============================================================
 
 coremark: coremark_check coremark_setup coremark_gen_linker coremark_build
-	@echo -e "$(GREEN)[COREMARK] ✓ Build complete$(RESET)"
+	@echo -e "$(GREEN)[COREMARK] $(SUCCESS) Build complete$(RESET)"
 	@echo -e "$(GREEN)[COREMARK] Output files:$(RESET)"
 	@echo -e "  ELF:  $(COREMARK_ELF)"
 	@echo -e "  BIN:  $(COREMARK_BIN)"
@@ -53,7 +53,7 @@ coremark: coremark_check coremark_setup coremark_gen_linker coremark_build
 coremark_check:
 	@echo -e "$(YELLOW)[COREMARK] Checking source availability...$(RESET)"
 	@if [ -d "$(COREMARK_SRC_DIR)" ] && [ -f "$(COREMARK_SRC_DIR)/coremark.h" ]; then \
-		echo -e "$(GREEN)[COREMARK] ✓ Source found at $(COREMARK_SRC_DIR)$(RESET)"; \
+		echo -e "$(GREEN)[COREMARK] $(SUCCESS) Source found at $(COREMARK_SRC_DIR)$(RESET)"; \
 	else \
 		echo -e "$(YELLOW)[COREMARK] Source not found, cloning...$(RESET)"; \
 		if grep -q "path = $(COREMARK_SRC_DIR)" .gitmodules 2>/dev/null; then \
@@ -67,7 +67,7 @@ coremark_check:
 			echo -e "$(RED)[COREMARK] ✗ Failed to get CoreMark source$(RESET)"; \
 			exit 1; \
 		fi; \
-		echo -e "$(GREEN)[COREMARK] ✓ Source cloned successfully$(RESET)"; \
+		echo -e "$(GREEN)[COREMARK] $(SUCCESS) Source cloned successfully$(RESET)"; \
 	fi
 
 # ============================================================
@@ -82,7 +82,7 @@ coremark_setup: coremark_check
 	fi
 	@mkdir -p $(COREMARK_PORT_DST)
 	@cp -r $(COREMARK_PORT_SRC)/* $(COREMARK_PORT_DST)/
-	@echo -e "$(GREEN)[COREMARK] ✓ Port files copied to $(COREMARK_PORT_DST)$(RESET)"
+	@echo -e "$(GREEN)[COREMARK] $(SUCCESS) Port files copied to $(COREMARK_PORT_DST)$(RESET)"
 
 # ============================================================
 # 3.5️ Generate Linker Script from Memory Map
@@ -98,7 +98,7 @@ coremark_gen_linker: coremark_setup
 			$(COREMARK_LINKER_OUT) \
 			--header $(COREMARK_HEADER_OUT) \
 			--verbose; \
-		echo -e "$(GREEN)[COREMARK] ✓ Linker script generated$(RESET)"; \
+		echo -e "$(GREEN)[COREMARK] $(SUCCESS) Linker script generated$(RESET)"; \
 	fi
 
 # ============================================================
@@ -137,7 +137,7 @@ coremark_build: coremark_gen_linker
 		--word-size 4 \
 		--word-endian little \
 		--word-order high-to-low
-	@echo -e "$(GREEN)[COREMARK] ✓ Build successful$(RESET)"
+	@echo -e "$(GREEN)[COREMARK] $(SUCCESS) Build successful$(RESET)"
 
 # ============================================================
 # 4.5 Run CoreMark Simulation
@@ -336,7 +336,7 @@ coremark_clean:
 		$(MAKE) -C $(COREMARK_SRC_DIR) PORT_DIR=ceresv clean 2>/dev/null || true; \
 	fi
 	@rm -rf $(COREMARK_PORT_DST)
-	@echo -e "$(GREEN)[COREMARK] ✓ Clean complete$(RESET)"
+	@echo -e "$(GREEN)[COREMARK] $(SUCCESS) Clean complete$(RESET)"
 
 # ============================================================
 # 6 Help

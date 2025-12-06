@@ -70,7 +70,7 @@ RISCV_DV_MMODE      ?= 1
 # ============================================================
 
 riscv_dv: riscv_dv_clone riscv_dv_setup riscv_dv_gen riscv_dv_build
-	@echo -e "$(GREEN)[RISCV-DV] ✓ Tests generated and built$(RESET)"
+	@echo -e "$(GREEN)[RISCV-DV] $(SUCCESS) Tests generated and built$(RESET)"
 
 # ============================================================
 # Clone Repository
@@ -178,7 +178,7 @@ _riscv_dv_build_one:
 	PASS_ADDR=$$(grep "^[0-9a-f]* <_pass>:" $(RISCV_DV_DUMP_DIR)/$(NAME).dump | awk '{print "0x" $$1}') && \
 	FAIL_ADDR=$$(grep "^[0-9a-f]* <_fail>:" $(RISCV_DV_DUMP_DIR)/$(NAME).dump | awk '{print "0x" $$1}') && \
 	echo "$$PASS_ADDR $$FAIL_ADDR" > $(RISCV_DV_ADDR_DIR)/$(NAME)_addr.txt && \
-	echo -e "  $(GREEN)✓ $(NAME)$(RESET)"
+	echo -e "  $(GREEN)$(SUCCESS) $(NAME)$(RESET)"
 
 # ============================================================
 # Run Tests
@@ -202,7 +202,7 @@ riscv_dv_run: riscv_dv_build riscv_dv_verilate
 				TEST_LOG_DIR="$(RISCV_DV_LOG_DIR)/$$name" \
 				RTL_LOG_DIR="$(RISCV_DV_LOG_DIR)/$$name" \
 				MAX_CYCLES=50000 2>/dev/null; then \
-				echo -e "  $(GREEN)✓ $$name PASS$(RESET)"; \
+				echo -e "  $(GREEN)$(SUCCESS) $$name PASS$(RESET)"; \
 				PASS=$$((PASS + 1)); \
 			else \
 				echo -e "  $(RED)✗ $$name FAIL$(RESET)"; \
@@ -276,7 +276,7 @@ _riscv_dv_run_only:
 				TEST_LOG_DIR="$(RISCV_DV_LOG_DIR)/$$name" \
 				RTL_LOG_DIR="$(RISCV_DV_LOG_DIR)/$$name" \
 				MAX_CYCLES=50000 2>/dev/null; then \
-				echo -e "  $(GREEN)✓ $$name PASS$(RESET)"; \
+				echo -e "  $(GREEN)$(SUCCESS) $$name PASS$(RESET)"; \
 				PASS=$$((PASS + 1)); \
 			else \
 				echo -e "  $(RED)✗ $$name FAIL$(RESET)"; \

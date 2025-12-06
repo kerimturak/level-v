@@ -440,7 +440,7 @@ full regression:
 	echo -e "$(GREEN)║$(RESET)  Report: $$REPORT  $(GREEN)║$(RESET)"; \
 	echo -e "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(RESET)"; \
 	if [ $$TOTAL_FAIL -gt 0 ]; then \
-		echo -e "$(RED)⚠️  $$TOTAL_FAIL test(s) failed!$(RESET)"; \
+		echo -e "$(RED)$(WARN)  $$TOTAL_FAIL test(s) failed!$(RESET)"; \
 		exit 1; \
 	else \
 		echo -e "$(GREEN)🎉 All tests passed!$(RESET)"; \
@@ -530,7 +530,7 @@ run_bench_flist:
 			VERILATOR_LOG_DIR=$${TEST_LOG_DIR} > "$${TEST_LOG_DIR}/summary.log" 2>&1; then \
 			PASS=$$(( $${PASS} + 1 )); \
 			echo "$${test}" >> "$(PASS_LIST_FILE)"; \
-			echo -e "$(GREEN)✓ $${test} PASSED$(RESET)"; \
+			echo -e "$(GREEN)$(SUCCESS) $${test} PASSED$(RESET)"; \
 		else \
 			TEST_EXIT=$$?; \
 			FAIL=$$(( $${FAIL} + 1 )); \
@@ -544,11 +544,11 @@ run_bench_flist:
 	echo -e "$(GREEN) Benchmark Summary$(RESET)"; \
 	echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
 	echo -e "$(GREEN)✅ Passed: $${PASS}$(RESET)"; \
-	echo -e "$(RED)❌ Failed: $${FAIL}$(RESET)"; \
+	echo -e "$(RED)$(ERROR) Failed: $${FAIL}$(RESET)"; \
 	echo -e "$(CYAN)📊 Total:  $${TOTAL}$(RESET)"; \
 	echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
 	if [ $${FAIL} -gt 0 ]; then \
-		echo -e "$(RED)⚠️  $${FAIL} benchmark(s) failed$(RESET)"; \
+		echo -e "$(RED)$(WARN)  $${FAIL} benchmark(s) failed$(RESET)"; \
 		exit 1; \
 	else \
 		echo -e "$(GREEN)🎉 All benchmarks passed!$(RESET)"; \

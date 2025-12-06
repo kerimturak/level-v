@@ -219,9 +219,9 @@ compile: $(WORK_DIR)
 		$(SV_SOURCES) $(TB_FILE) 2>&1 | tee "$(MODELSIM_LOG_DIR)/compile.log"); \
 	EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -ne 0 ]; then \
-		echo -e "$(RED)❌ Compilation failed.$(RESET)"; exit $$EXIT_CODE; \
+		echo -e "$(RED)$(ERROR) Compilation failed.$(RESET)"; exit $$EXIT_CODE; \
 	elif grep -i "Error" $(MODELSIM_LOG_DIR)/compile.log | grep -v "Errors: 0" >/dev/null; then \
-		echo -e "$(RED)❌ Errors found in log.$(RESET)"; exit 1; \
+		echo -e "$(RED)$(ERROR) Errors found in log.$(RESET)"; exit 1; \
 	else \
 		echo -e "$(GREEN)Compilation successful.$(RESET)"; \
 	fi

@@ -83,7 +83,7 @@ EMBENCH_BENCHMARKS := aha-mont64 crc32 edn huffbench matmult-int \
 # ============================================================
 
 embench: embench_clone embench_setup embench_build
-	@echo -e "$(GREEN)[EMBENCH] ✓ Build complete$(RESET)"
+	@echo -e "$(GREEN)[EMBENCH] $(SUCCESS) Build complete$(RESET)"
 	@echo -e "$(GREEN)[EMBENCH] Built benchmarks:$(RESET)"
 	@ls -1 $(EMBENCH_ELF_DIR)/*.elf 2>/dev/null | wc -l | xargs -I{} echo -e "  {} benchmarks ready"
 
@@ -158,7 +158,7 @@ _embench_build_one:
 	$(EMBENCH_OBJCOPY) -O binary $(EMBENCH_ELF_DIR)/$(BENCH).elf $(EMBENCH_HEX_DIR)/$(BENCH).bin && \
 	python3 $(ELF_TO_MEM) --in $(EMBENCH_HEX_DIR)/$(BENCH).bin --out $(EMBENCH_MEM_DIR)/$(BENCH).mem \
 		--addr 0x80000000 --block-bytes 4 --word-size 4 --word-endian little --word-order high-to-low && \
-	echo -e "  $(GREEN)✓ $(BENCH)$(RESET)"
+	echo -e "  $(GREEN)$(SUCCESS) $(BENCH)$(RESET)"
 
 # ============================================================
 # Run Benchmarks
@@ -182,7 +182,7 @@ embench_run: embench_build embench_verilate
 				TEST_LOG_DIR="$(EMBENCH_LOG_DIR)/$$bench" \
 				RTL_LOG_DIR="$(EMBENCH_LOG_DIR)/$$bench" 2>&1; then \
 				PASS=$$((PASS + 1)); \
-				echo -e "  $(GREEN)✓ $$bench PASSED$(RESET)"; \
+				echo -e "  $(GREEN)$(SUCCESS) $$bench PASSED$(RESET)"; \
 			else \
 				FAIL=$$((FAIL + 1)); \
 				echo -e "  $(RED)✗ $$bench FAILED$(RESET)"; \
@@ -197,7 +197,7 @@ embench_run: embench_build embench_verilate
 		echo -e "$(RED)[EMBENCH] ✗ Some benchmarks failed$(RESET)"; \
 		exit 1; \
 	else \
-		echo -e "$(GREEN)[EMBENCH] ✓ All benchmarks passed$(RESET)"; \
+		echo -e "$(GREEN)[EMBENCH] $(SUCCESS) All benchmarks passed$(RESET)"; \
 	fi
 
 # ============================================================

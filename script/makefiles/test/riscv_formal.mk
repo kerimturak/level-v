@@ -87,7 +87,7 @@ FORMAL_CHECK_COVER  := $(call read_formal_json,d.get('checks',{}).get('cover',{}
 # ============================================================
 
 formal: formal_setup formal_run
-	@echo -e "$(GREEN)[FORMAL] ✓ Formal verification complete$(RESET)"
+	@echo -e "$(GREEN)[FORMAL] $(SUCCESS) Formal verification complete$(RESET)"
 
 # ============================================================
 # Clone Repository
@@ -119,7 +119,7 @@ formal_setup: formal_clone
 		echo -e "  Install: $(CYAN)apt install yosys$(RESET)"; \
 		exit 1; \
 	else \
-		echo -e "$(GREEN)  ✓ yosys found$(RESET)"; \
+		echo -e "$(GREEN)  $(SUCCESS) yosys found$(RESET)"; \
 	fi
 	@if ! which $(SBY) > /dev/null 2>&1; then \
 		echo -e "$(RED)[ERROR] sby (SymbiYosys) not found$(RESET)"; \
@@ -130,20 +130,20 @@ formal_setup: formal_clone
 		echo -e "    $(CYAN)pip install sby$(RESET)"; \
 		exit 1; \
 	else \
-		echo -e "$(GREEN)  ✓ sby found$(RESET)"; \
+		echo -e "$(GREEN)  $(SUCCESS) sby found$(RESET)"; \
 	fi
 	@if ! which $(FORMAL_SOLVER_CMD) > /dev/null 2>&1; then \
 		echo -e "$(YELLOW)[WARN] SMT solver $(FORMAL_SOLVER_CMD) not found$(RESET)"; \
 		echo -e "  Install: $(CYAN)apt install z3$(RESET) or $(CYAN)apt install boolector$(RESET)"; \
 	else \
-		echo -e "$(GREEN)  ✓ SMT solver $(FORMAL_SOLVER_CMD) found$(RESET)"; \
+		echo -e "$(GREEN)  $(SUCCESS) SMT solver $(FORMAL_SOLVER_CMD) found$(RESET)"; \
 	fi
 	@# Check if wrapper exists
 	@if [ ! -f "$(FORMAL_WRAPPER_FILE)" ]; then \
 		echo -e "$(YELLOW)[WARN] RVFI wrapper not found at $(FORMAL_WRAPPER_FILE)$(RESET)"; \
 		echo -e "$(YELLOW)       Generate with CPU integration.$(RESET)"; \
 	else \
-		echo -e "$(GREEN)  ✓ RVFI wrapper found$(RESET)"; \
+		echo -e "$(GREEN)  $(SUCCESS) RVFI wrapper found$(RESET)"; \
 	fi
 	@echo -e "$(GREEN)[OK] Setup complete$(RESET)"
 

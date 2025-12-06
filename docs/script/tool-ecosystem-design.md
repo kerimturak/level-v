@@ -705,6 +705,139 @@ Debug log'da her parametrenin kaynağı gösterilir:
 - `script/python/makefile/debug_logger.py` - Debug logger modülü
 - `script/python/makefile/modelsim_runner.py` - ModelSim runner (logger entegreli)
 - `script/python/makefile/verilator_runner.py` - Verilator runner (logger entegreli)
+- `script/python/makefile/test_runner.py` - Test pipeline runner (logger entegreli)
 - `script/python/makefile/modelsim_config.py` - Config yönetimi örneği
 - `script/config/modelsim.json` - JSON config örneği
 - `script/makefiles/sim/modelsim.mk` - Makefile entegrasyon örneği
+- `script/makefiles/test/run_test.mk` - Test runner Makefile entegrasyonu
+
+---
+
+## 🧪 Test Runner Pipeline
+
+### Genel Bakış
+
+`test_runner.py`, test sürecini uçtan uca yöneten Python modülüdür. Makefile'dan `USE_PYTHON=1` ile çağrılabilir:
+
+```bash
+# Makefile üzerinden
+make run T=rv32ui-p-add USE_PYTHON=1
+
+# Debug modunda
+CERES_DEBUG=1 make run T=rv32ui-p-add USE_PYTHON=1
+
+# Doğrudan Python ile
+python3 script/python/makefile/test_runner.py --test-name rv32ui-p-add --debug
+```
+
+### Pipeline Aşamaları
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      TEST PIPELINE                              │
+├─────────────────────────────────────────────────────────────────┤
+│  1️⃣ TEST PREPARATION                                           │
+│     - Log dizinlerini oluştur                                   │
+│     - Gerekli dosyaları kontrol et (ELF, MEM, ADDR)            │
+│     - Rapor dosyasını başlat                                    │
+├─────────────────────────────────────────────────────────────────┤
+│  2️⃣ RTL SIMULATION                                             │
+│     - Verilator veya ModelSim runner'ı çağır                    │
+│     - Simülasyon çıktılarını topla                              │
+│     - commit_trace.log oluştur                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  3️⃣ SPIKE GOLDEN REFERENCE (opsiyonel)                        │
+│     - Spike ISS'yi aynı ELF ile çalıştır                       │
+│     - Golden commit log oluştur                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  4️⃣ LOG COMPARISON (opsiyonel)                                │
+│     - RTL ve Spike commit loglarını karşılaştır                 │
+│     - Fark varsa detaylı rapor oluştur                         │
+├─────────────────────────────────────────────────────────────────┤
+│  5️⃣ REPORT GENERATION                                         │
+│     - Test sonucunu raporla                                     │
+│     - Debug log'ları kaydet                                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Makefile Entegrasyonu
+
+`run_test.mk` içinde Python runner şu şekilde entegre edilmiştir:
+
+```makefile
+# Python veya geleneksel Makefile runner seçimi
+ifeq ($(USE_PYTHON),1)
+run: run_python
+else
+run: run_make
+endif
+
+# Python-based test runner
+run_python:
+    python3 $(TEST_RUNNER_SCRIPT) \
+        --test-name "$(TEST_NAME)" \
+        --test-type "$(TEST_TYPE)" \
+        --simulator "$(SIM)" \
+        --build-dir "$(BUILD_DIR)" \
+        --max-cycles $(MAX_CYCLES) \
+        $(if $(filter 1,$(LOG_COMMIT)),--log-commit,) \
+        $(if $(filter 1,$(CFG_SPIKE)),--enable-spike,--no-spike)
+```
+
+### Test Type Auto-Detection
+
+`test_runner.py` test tipini otomatik tespit eder:
+
+| Pattern | Test Type |
+|---------|-----------|
+| `rv32ui-p-*`, `rv32um-p-*` | `isa` |
+| `I-ADD-01`, `M-MUL-01` | `arch` veya `imperas` |
+| `dhrystone`, `coremark` | `bench` |
+| `aha-mont64`, `crc32` | `embench` |
+
+### Quick Mode
+
+Hızlı test için `--quick` veya `--no-spike` kullanılabilir:
+
+```bash
+# Sadece RTL simülasyonu, Spike ve karşılaştırma yok
+make run T=rv32ui-p-add USE_PYTHON=1 CFG_SPIKE=0
+
+# Python doğrudan quick mode
+python3 test_runner.py --test-name rv32ui-p-add --quick
+```
+
+### Debug Log Örneği
+
+```
+================================================================================
+  CERES RISC-V — TEST_RUNNER Debug Log
+================================================================================
+  Started: 2025-12-06 18:20:40
+  CWD:     /home/kerim/level-v
+  Python:  3.10.12
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ CLI Arguments                                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+  [CLI ] test_name                 = rv32ui-p-add
+  [CLI ] test_type                 = isa
+  [CLI ] simulator                 = verilator
+  [CLI ] max_cycles                = 10000
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Resolved Configuration                                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+  [RESO] root_dir                  = /home/kerim/level-v
+  [RESO] build_dir                 = /home/kerim/level-v/build
+  [RESO] skip_spike                = False
+  [RESO] skip_compare              = False
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Test Pipeline Start                                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+  [CONF] test_name                 = rv32ui-p-add
+  [CONF] simulator                 = verilator
+  ...
+```

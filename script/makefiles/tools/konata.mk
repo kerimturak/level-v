@@ -38,7 +38,7 @@ konata: check-log
 # --------------------------------------------------------------------------
 check-log:
 	@if [ ! -f "$(KONATA_LOG)" ]; then \
-		echo "❌ Log bulunamadı:"; \
+		echo "$(ERROR) Log bulunamadı:"; \
 		echo "   $(KONATA_LOG)"; \
 		echo ""; \
 		echo "ℹ️  Önce test çalıştırın:"; \

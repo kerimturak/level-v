@@ -144,7 +144,7 @@ run_python:
 		$(if $(filter 1,$(CFG_COMPARE)),--enable-compare,--no-compare) \
 		$(if $(SKIP_CSR),--skip-csr,) \
 		$(if $(RESYNC),--resync --resync-window $(or $(RESYNC_WINDOW),8),)
-	@echo -e "$(GREEN)✓ Python test runner completed$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Python test runner completed$(RESET)"
 
 # ============================================================
 # 1 Prepare Test Environment
@@ -214,11 +214,11 @@ else ifeq ($(SIM),modelsim)
 		exit $$RTL_EXIT; \
 	fi
 else
-	@echo -e "$(RED)❌ Unknown simulator: $(SIM)$(RESET)"
+	@echo -e "$(RED)$(ERROR) Unknown simulator: $(SIM)$(RESET)"
 	@echo -e "   Valid options: verilator, icarus, modelsim"
 	@exit 1
 endif
-	@echo -e "$(GREEN)✓ RTL simulation complete$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) RTL simulation complete$(RESET)"
 
 # ============================================================
 # 3 Run Spike Golden Reference
@@ -250,7 +250,7 @@ else
 		fi; \
 		read PASS_ADDR FAIL_ADDR < "$$ADDR_FILE"; \
 	fi; \
-	echo -e "$(GREEN)✓ Using PASS address: $$PASS_ADDR$(RESET)"; \
+	echo -e "$(GREEN)$(SUCCESS) Using PASS address: $$PASS_ADDR$(RESET)"; \
 	DEBUG_CMD="$(BUILD_DIR)/test_work/$(TEST_NAME)_spike.cmd"; \
 	echo -e "until pc 0 $$PASS_ADDR\nquit" > "$$DEBUG_CMD"; \
 	echo -e "$(CYAN)[DEBUG]$(RESET) Spike args: $(SPIKE_ARGS)"; \
@@ -263,7 +263,7 @@ else
 	if [ $$SPIKE_EXIT -ne 0 ]; then \
 		echo -e "$(YELLOW)[WARNING]$(RESET) Spike exited with code $$SPIKE_EXIT (may be normal)"; \
 	fi; \
-	echo -e "$(GREEN)✓ Spike execution complete$(RESET)"
+	echo -e "$(GREEN)$(SUCCESS) Spike execution complete$(RESET)"
 endif
 
 # ============================================================
@@ -316,7 +316,7 @@ else
 	COMPARE_EXIT=$$?; \
 	if [ $$COMPARE_EXIT -eq 0 ]; then \
 		echo "COMPARE_STATUS=MATCH" >> $(REPORT_FILE); \
-		echo -e "$(GREEN)✓ Logs match!$(RESET)"; \
+		echo -e "$(GREEN)$(SUCCESS) Logs match!$(RESET)"; \
 	else \
 		echo "COMPARE_STATUS=MISMATCH" >> $(REPORT_FILE); \
 		echo -e "$(RED)✗ Logs differ$(RESET)"; \
@@ -335,7 +335,7 @@ ifeq ($(CFG_COMPARE),0)
 	@echo -e "$(GREEN)  Benchmark Run Complete$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo "BENCHMARK_STATUS=COMPLETE" >> $(REPORT_FILE)
-	@echo -e "$(GREEN)✓ RTL simulation finished$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) RTL simulation finished$(RESET)"
 	@echo -e "$(CYAN)[INFO]$(RESET) Check UART log for benchmark output"
 else ifeq ($(CFG_SPIKE),0)
 	@echo -e ""
@@ -343,7 +343,7 @@ else ifeq ($(CFG_SPIKE),0)
 	@echo -e "$(GREEN)  Benchmark Run Complete$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo "BENCHMARK_STATUS=COMPLETE" >> $(REPORT_FILE)
-	@echo -e "$(GREEN)✓ RTL simulation finished$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) RTL simulation finished$(RESET)"
 	@echo -e "$(CYAN)[INFO]$(RESET) Check UART log for benchmark output"
 else
 	@if grep -q "PASS" $(REPORT_FILE); then \
@@ -406,7 +406,7 @@ run_flist:
 			RTL_LOG_DIR=$${TEST_LOG_DIR} > "$${TEST_LOG_DIR}/summary.log" 2>&1; then \
 			PASS=$$(( $${PASS} + 1 )); \
 			echo "$${test}" >> "$(PASS_LIST_FILE)"; \
-			echo -e "$(GREEN)✓ $${test} PASSED$(RESET)"; \
+			echo -e "$(GREEN)$(SUCCESS) $${test} PASSED$(RESET)"; \
 		else \
 			TEST_EXIT=$$?; \
 			FAIL=$$(( $${FAIL} + 1 )); \
@@ -425,13 +425,13 @@ run_flist:
 	echo -e "$(GREEN) File-Based Batch Summary$(RESET)"; \
 	echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
 	echo -e "$(GREEN)✅ Passed: $${PASS}$(RESET)"; \
-	echo -e "$(RED)❌ Failed: $${FAIL}$(RESET)"; \
+	echo -e "$(RED)$(ERROR) Failed: $${FAIL}$(RESET)"; \
 	echo -e "$(CYAN)📊 Total:  $${TOTAL}$(RESET)"; \
 	echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
 	echo -e "$(GREEN)Passed tests:$(RESET) $(PASS_LIST_FILE)"; \
 	echo -e "$(RED)Failed tests:$(RESET) $(FAIL_LIST_FILE)"; \
 	if [ $${FAIL} -gt 0 ]; then \
-		echo -e "$(RED)⚠️  $${FAIL} test(s) failed$(RESET)"; \
+		echo -e "$(RED)$(WARN)  $${FAIL} test(s) failed$(RESET)"; \
 		exit 1; \
 	else \
 		echo -e "$(GREEN)🎉 All tests passed!$(RESET)"; \
@@ -466,7 +466,7 @@ dashboard:
 		--simulator "$(SIM)" \
 		--output "$(DASHBOARD_OUTPUT)" \
 		--title "$(DASHBOARD_TITLE)"
-	@echo -e "$(GREEN)✓ Dashboard generated successfully$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Dashboard generated successfully$(RESET)"
 	@echo -e "$(CYAN)[INFO]$(RESET) Open with: xdg-open $(DASHBOARD_OUTPUT)"
 
 open_dashboard: dashboard

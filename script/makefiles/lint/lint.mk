@@ -62,7 +62,7 @@ $(SVLINT_CONFIG):
 # Check if svlint is installed
 check_svlint:
 	@command -v $(SVLINT) >/dev/null 2>&1 || { \
-		echo -e "$(RED)❌ svlint not found$(RESET)"; \
+		echo -e "$(RED)$(ERROR) svlint not found$(RESET)"; \
 		echo -e "$(YELLOW)Install with:$(RESET)"; \
 		echo -e "  cargo install svlint"; \
 		echo -e "  # or download from: https://github.com/dalance/svlint/releases"; \
@@ -72,7 +72,7 @@ check_svlint:
 # Check if Slang/pyslang is installed
 check_slang:
 	@python3 -c "import pyslang" 2>/dev/null || { \
-		echo -e "$(RED)❌ pyslang not found$(RESET)"; \
+		echo -e "$(RED)$(ERROR) pyslang not found$(RESET)"; \
 		echo -e "$(YELLOW)Install with:$(RESET)"; \
 		echo -e "  pip install pyslang"; \
 		exit 1; \
@@ -92,7 +92,7 @@ svlint: check_svlint $(SVLINT_CONFIG)
 	EXIT_CODE=$${PIPESTATUS[0]}; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo -e ""; \
-		echo -e "$(GREEN)✓ svlint passed - no issues found$(RESET)"; \
+		echo -e "$(GREEN)$(SUCCESS) svlint passed - no issues found$(RESET)"; \
 	else \
 		echo -e ""; \
 		echo -e "$(YELLOW)⚠ svlint found issues$(RESET)"; \
@@ -115,7 +115,7 @@ slang_lint: check_slang
 	EXIT_CODE=$${PIPESTATUS[0]}; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo -e ""; \
-		echo -e "$(GREEN)✓ Slang lint passed$(RESET)"; \
+		echo -e "$(GREEN)$(SUCCESS) Slang lint passed$(RESET)"; \
 	else \
 		echo -e ""; \
 		echo -e "$(YELLOW)⚠ Slang found issues$(RESET)"; \
@@ -181,7 +181,7 @@ lint_install:
 	@echo -e "$(CYAN)[2/2]$(RESET) Installing pyslang (Slang Python bindings)..."
 	@pip install --quiet pyslang
 	@echo -e ""
-	@echo -e "$(GREEN)✓ Installation complete$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Installation complete$(RESET)"
 	@echo -e ""
 	@echo -e "Versions installed:"
 	@svlint --version 2>/dev/null || echo "  svlint: not found"
@@ -191,7 +191,7 @@ lint_install:
 lint_clean:
 	@echo -e "$(CYAN)[CLEAN]$(RESET) Removing lint outputs..."
 	@rm -rf $(LINT_DIR)
-	@echo -e "$(GREEN)✓ Clean complete$(RESET)"
+	@echo -e "$(GREEN)$(SUCCESS) Clean complete$(RESET)"
 
 # Help
 lint_help:

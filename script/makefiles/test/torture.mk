@@ -60,7 +60,7 @@ TORTURE_MAX_INSNS   ?= 1000
 # ============================================================
 
 torture: torture_setup torture_gen torture_build
-	@echo -e "$(GREEN)[TORTURE] ✓ Tests generated and built$(RESET)"
+	@echo -e "$(GREEN)[TORTURE] $(SUCCESS) Tests generated and built$(RESET)"
 
 # ============================================================
 # Clone Repository (optional - we can generate locally)
@@ -150,7 +150,7 @@ _torture_build_one:
 	FAIL_ADDR=$$(grep -E "<_fail>:|<fail>:" $(TORTURE_DUMP_DIR)/$(NAME).dump | head -1 | awk '{print $$1}' | sed 's/://') && \
 	if [ -z "$$FAIL_ADDR" ]; then FAIL_ADDR="0"; fi && \
 	echo "0x$$PASS_ADDR 0x$$FAIL_ADDR" > $(TORTURE_ADDR_DIR)/$(NAME)_addr.txt && \
-	echo -e "  $(GREEN)✓ $(NAME)$(RESET)"
+	echo -e "  $(GREEN)$(SUCCESS) $(NAME)$(RESET)"
 
 # ============================================================
 # Run Tests
@@ -178,7 +178,7 @@ torture_run: torture_build torture_verilate
 				ADDR_DIR="$(TORTURE_ADDR_DIR)" \
 				TEST_LOG_DIR="$(TORTURE_LOG_DIR)/$$name" \
 				RTL_LOG_DIR="$(TORTURE_LOG_DIR)/$$name" 2>/dev/null; then \
-				echo -e "  $(GREEN)✓ $$name PASS$(RESET)"; \
+				echo -e "  $(GREEN)$(SUCCESS) $$name PASS$(RESET)"; \
 				PASS=$$((PASS + 1)); \
 			else \
 				echo -e "  $(RED)✗ $$name FAIL$(RESET)"; \
