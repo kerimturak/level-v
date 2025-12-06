@@ -276,7 +276,11 @@ def print_summary(stats, has_errors, elapsed_time=None, test_name=None):
     print(f"{Fore.RED}│ ❌ PC/INST mismatches                  │{stats['pcinst_mismatch']:>18,} │{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}│ ⚠️  Register mismatches                │{stats['reg_mismatch']:>18,} │{Style.RESET_ALL}")
     print(f"{Fore.CYAN}│ ➕ RTL extra entries                   │{stats['insert_rtl']:>18,} │{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}│ ➕ Spike extra entries                 │{stats['insert_spike']:>18,} │{Style.RESET_ALL}")
+    # Spike extra entries - should be minimal if Spike stops at PASS address
+    # Non-zero values may indicate address file issue or timing difference
+    spike_extra_color = Fore.YELLOW if stats['insert_spike'] > 0 else Fore.CYAN
+    spike_label = "Spike extra (check if >0)" if stats['insert_spike'] > 0 else "Spike extra entries"
+    print(f"{spike_extra_color}│ ➕ {spike_label:<36} │{stats['insert_spike']:>18,} │{Style.RESET_ALL}")
     if stats.get('resyncs', 0) > 0:
         print(f"{Fore.MAGENTA}│ 🔄 Resync events                       │{stats['resyncs']:>18,} │{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}├{'─' * 40}┼{'─' * 20}┤{Style.RESET_ALL}")

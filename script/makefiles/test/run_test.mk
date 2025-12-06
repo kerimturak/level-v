@@ -15,7 +15,19 @@
 
 # Python Test Runner
 TEST_RUNNER_SCRIPT := $(SCRIPT_DIR)/python/makefile/test_runner.py
-USE_PYTHON ?= 0
+USE_PYTHON ?= 1
+
+# Allow short form variable `T` to specify the test name (e.g. `make run T=rv32ui-p-add`).
+# Prefer `T` if provided; otherwise fall back to any pre-existing `TEST_NAME`.
+TEST_NAME := $(if $(T),$(T),$(TEST_NAME))
+
+# Recompute per-test paths now that TEST_NAME is finalized so CLI `T=` works
+TEST_LOG_DIR := $(RESULTS_DIR)/logs/$(SIM)/$(TEST_NAME)
+RTL_LOG_DIR  := $(TEST_LOG_DIR)
+RTL_LOG      := $(TEST_LOG_DIR)/rtl_sim.log
+SPIKE_LOG    := $(TEST_LOG_DIR)/spike.log
+DIFF_LOG     := $(TEST_LOG_DIR)/diff.log
+REPORT_FILE  := $(TEST_LOG_DIR)/test_report.txt
 
 # -----------------------------------------
 # File-based TEST_TYPE Auto-detection

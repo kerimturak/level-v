@@ -396,27 +396,31 @@ full regression:
 	CSR_PASS=0; CSR_FAIL=0; \
 	echo -e "$(YELLOW)[1/4] Running ISA tests...$(RESET)"; \
 	if $(MAKE) --no-print-directory isa CLEAN_LOGS=1 2>&1 | tee $(REGRESSION_DIR)/reg_isa.log; then \
-		ISA_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_isa.log 2>/dev/null || echo 0); \
-		ISA_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_isa.log 2>/dev/null || echo 0); \
+		ISA_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_isa.log 2>/dev/null || true); \
+		ISA_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_isa.log 2>/dev/null || true); \
 	fi; \
+	ISA_PASS=$${ISA_PASS:-0}; ISA_FAIL=$${ISA_FAIL:-0}; \
 	echo "ISA: $$ISA_PASS passed, $$ISA_FAIL failed" >> $$REPORT; \
 	echo -e "$(YELLOW)[2/4] Running Architecture tests...$(RESET)"; \
 	if $(MAKE) --no-print-directory arch 2>&1 | tee $(REGRESSION_DIR)/reg_arch.log; then \
-		ARCH_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_arch.log 2>/dev/null || echo 0); \
-		ARCH_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_arch.log 2>/dev/null || echo 0); \
+		ARCH_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_arch.log 2>/dev/null || true); \
+		ARCH_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_arch.log 2>/dev/null || true); \
 	fi; \
+	ARCH_PASS=$${ARCH_PASS:-0}; ARCH_FAIL=$${ARCH_FAIL:-0}; \
 	echo "ARCH: $$ARCH_PASS passed, $$ARCH_FAIL failed" >> $$REPORT; \
 	echo -e "$(YELLOW)[3/4] Running Imperas tests...$(RESET)"; \
 	if $(MAKE) --no-print-directory imperas 2>&1 | tee $(REGRESSION_DIR)/reg_imperas.log; then \
-		IMP_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_imperas.log 2>/dev/null || echo 0); \
-		IMP_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_imperas.log 2>/dev/null || echo 0); \
+		IMP_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_imperas.log 2>/dev/null || true); \
+		IMP_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_imperas.log 2>/dev/null || true); \
 	fi; \
+	IMP_PASS=$${IMP_PASS:-0}; IMP_FAIL=$${IMP_FAIL:-0}; \
 	echo "IMPERAS: $$IMP_PASS passed, $$IMP_FAIL failed" >> $$REPORT; \
 	echo -e "$(YELLOW)[4/4] Running CSR tests...$(RESET)"; \
 	if $(MAKE) --no-print-directory csr 2>&1 | tee $(REGRESSION_DIR)/reg_csr.log; then \
-		CSR_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_csr.log 2>/dev/null || echo 0); \
-		CSR_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_csr.log 2>/dev/null || echo 0); \
+		CSR_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_csr.log 2>/dev/null || true); \
+		CSR_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_csr.log 2>/dev/null || true); \
 	fi; \
+	CSR_PASS=$${CSR_PASS:-0}; CSR_FAIL=$${CSR_FAIL:-0}; \
 	echo "CSR: $$CSR_PASS passed, $$CSR_FAIL failed" >> $$REPORT; \
 	END_TIME=$$(date +%s); \
 	DURATION=$$((END_TIME - START_TIME)); \

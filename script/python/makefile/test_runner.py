@@ -258,7 +258,9 @@ class TestConfig:
     quick_mode: bool = False  # RTL only, no Spike
     
     # Spike settings
-    spike_isa: str = "rv32imc_zicsr_zifencei"
+    spike_isa: str = "rv32imc_zicsr_zicntr_zifencei"
+    spike_pc: str = "0x80000000"  # Başlangıç PC - RTL reset vector ile aynı olmalı
+    spike_priv: str = "m"  # Privilege mode
     spike_log_commits: bool = True
     
     # Output files
@@ -448,6 +450,9 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     """
     Step 3: Spike golden reference çalıştır.
     
+    Spike'ı debug modunda çalıştırır ve PASS adresinde durdurur.
+    Bu şekilde RTL ile aynı sayıda instruction execute edilir.
+    
     Returns:
         (success, exit_code)
     """
@@ -460,12 +465,45 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     step(2, 3, "Running Spike Golden Model")
     
     elf_file = config.test_paths["elf_file"]
+    addr_file = config.test_paths["addr_file"]
+    
+    # PASS adresini oku
+    pass_addr = None
+    if addr_file.exists():
+        try:
+            with open(addr_file) as f:
+                parts = f.read().strip().split()
+                if parts:
+                    pass_addr = parts[0]  # İlk değer PASS adresi
+                    logger.param("pass_addr", pass_addr, "spike")
+                    info(f"PASS address: {pass_addr}")
+        except Exception as e:
+            logger.warning(f"Failed to read address file: {e}")
+    
+    if not pass_addr:
+        logger.warning(f"Address file not found or empty: {addr_file}")
+        warn(f"Address file not found: {addr_file} - Spike may run indefinitely")
+    
+    # Debug command dosyası oluştur (PASS adresinde dur)
+    debug_cmd_file = config.log_dir / "spike_debug.cmd"
+    if pass_addr:
+        with open(debug_cmd_file, "w") as f:
+            # "until pc 0 <addr>" - core 0'da <addr> PC'sine ulaşınca dur
+            f.write(f"until pc 0 {pass_addr}\n")
+            f.write("quit\n")
+        logger.note(f"Created debug command: until pc 0 {pass_addr}")
     
     # Spike komutunu oluştur
-    cmd = [
-        "spike",
-        f"--isa={config.spike_isa}",
-    ]
+    cmd = ["spike"]
+    
+    # Debug mode ve command file (PASS adresinde durmak için)
+    if pass_addr:
+        cmd.extend(["-d", f"--debug-cmd={debug_cmd_file}"])
+    
+    # ISA, PC ve privilege mode parametreleri (Makefile ile aynı)
+    cmd.append(f"--isa={config.spike_isa}")
+    cmd.append(f"--pc={config.spike_pc}")
+    cmd.append(f"--priv={config.spike_priv}")
     
     if config.spike_log_commits:
         cmd.extend(["-l", "--log-commits"])
@@ -473,7 +511,7 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     cmd.append(str(elf_file))
     
     logger.command(cmd, "Spike simulation")
-    info(f"Running: spike --isa={config.spike_isa} {elf_file.name}")
+    info(f"Running: spike -d --isa={config.spike_isa} --pc={config.spike_pc} {elf_file.name}")
     
     try:
         # Spike çıktısını log dosyasına yaz
@@ -558,30 +596,46 @@ def compare_logs(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     info(f"RTL commits:   {len(rtl_lines)}")
     info(f"Spike commits: {len(spike_lines)}")
     
-    # Detaylı karşılaştırma (Python compare script varsa kullan)
-    compare_script = config.root_dir / "script/python/compare_logs.py"
+    # Detaylı karşılaştırma - compare_logs.py script'ini kullan
+    compare_script = config.root_dir / "script/python/makefile/compare_logs.py"
     
     if compare_script.exists():
+        # Makefile ile aynı argümanları kullan - .log uzantısı gerekli!
+        diff_log = config.log_dir / "diff.log"
         cmd = [
             sys.executable, str(compare_script),
-            str(rtl_log),
-            str(spike_log),
-            "--output", str(config.log_dir / "diff_report.txt"),
+            "--rtl", str(rtl_log),
+            "--spike", str(spike_log),
+            "--output", str(diff_log),
+            "--test-name", config.test_name,
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Opsiyonel dump ve addr dosyaları
+        dump_file = config.test_paths.get("dump_file")
+        if dump_file and dump_file.exists():
+            cmd.extend(["--dump", str(dump_file)])
+        
+        addr_file = config.test_paths.get("addr_file")
+        if addr_file and addr_file.exists():
+            cmd.extend(["--addr", str(addr_file)])
+        
+        logger.command(cmd, "Compare logs")
+        
+        # Script çıktısını hem göster hem logla
+        result = subprocess.run(cmd, capture_output=False, text=True)
         
         if result.returncode == 0:
             logger.success("Logs match!")
-            success("✓ RTL and Spike logs match!")
             return True, 0
         else:
             logger.error("Logs differ!")
-            error("✗ RTL and Spike logs differ!")
-            info(f"See: {config.log_dir / 'diff_report.txt'}")
+            info(f"See: {config.log_dir / 'diff_visual_diff.log'}")
             return False, result.returncode
     else:
-        # Basit karşılaştırma
+        logger.warning(f"Compare script not found: {compare_script}")
+        warn(f"Compare script not found, using simple line comparison")
+        
+        # Basit karşılaştırma (fallback)
         if len(rtl_lines) == len(spike_lines):
             # İlk farklı satırı bul
             for i, (rtl, spike) in enumerate(zip(rtl_lines, spike_lines)):
@@ -628,6 +682,32 @@ def generate_report(config: TestConfig, logger: DebugLogger,
         print(f"{Color.RED}  ✗ TEST FAILED: {config.test_name}{Color.RESET}")
         print(f"{Color.RED}{'═' * 50}{Color.RESET}")
         logger.error(f"Test failed: {config.test_name}")
+        # Provide helpful failure artifacts paths
+        diff_log = config.log_dir / "diff.log"
+        visual_diff = config.log_dir / "diff_visual_diff.log"
+        html_diff = config.log_dir / "diff.html"
+        dump_file = config.test_paths.get("dump_file")
+        # Print paths to console for quick inspection
+        print()
+        print(f"[INFO] Report      : {config.report_file}")
+        print(f"[INFO] Logs        : {config.log_dir}")
+        if diff_log.exists():
+            print(f"[INFO] Diff status : {diff_log}")
+        else:
+            print(f"[INFO] Diff status : {diff_log} (not generated)")
+        if visual_diff.exists():
+            print(f"[INFO] Visual diff : {visual_diff}")
+        if html_diff.exists():
+            print(f"[INFO] HTML diff   : {html_diff}")
+        if dump_file and Path(dump_file).exists():
+            print(f"[INFO] Dump file   : {dump_file}")
+        # Also append these paths into the report file
+        with open(config.report_file, "a") as f:
+            f.write(f"DIFF_LOG={diff_log}\n")
+            f.write(f"VISUAL_DIFF={visual_diff}\n")
+            f.write(f"HTML_DIFF={html_diff}\n")
+            if dump_file:
+                f.write(f"DUMP_FILE={dump_file}\n")
     
     keyval("Report", str(config.report_file))
     keyval("Logs", str(config.log_dir))

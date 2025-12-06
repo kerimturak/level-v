@@ -168,6 +168,7 @@ def find_mem_file(test_name: str, mem_dirs: List[Path]) -> Optional[Path]:
 
 def find_addr_file(test_name: str, build_dir: Path) -> Optional[Path]:
     """Pass/fail adres dosyasını bul."""
+    # Kesin dosya adı pattern'ları - test_name_addr.txt formatında olmalı
     patterns = [
         f"pass_fail_addr/{test_name}_addr.txt",
         f"{test_name}_addr.txt",
@@ -179,8 +180,23 @@ def find_addr_file(test_name: str, build_dir: Path) -> Optional[Path]:
         if addr_file.exists():
             return addr_file
     
-    # Recursive search
-    for addr_file in build_dir.rglob(f"*{test_name}*addr*.txt"):
+    # Test tiplerine göre kesin path'lerde ara
+    test_dirs = [
+        "tests/riscv-tests",
+        "tests/riscv-arch-test", 
+        "tests/imperas",
+        "tests/riscv-benchmarks",
+        "tests/custom",
+    ]
+    
+    for test_dir in test_dirs:
+        addr_file = build_dir / test_dir / "pass_fail_addr" / f"{test_name}_addr.txt"
+        if addr_file.exists():
+            return addr_file
+    
+    # Son çare: Recursive arama ama TAM isim eşleşmesi
+    exact_filename = f"{test_name}_addr.txt"
+    for addr_file in build_dir.rglob(exact_filename):
         return addr_file
     
     return None
