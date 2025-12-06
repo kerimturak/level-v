@@ -1,35 +1,14 @@
 # =========================================
 # CERES RISC-V — Verilator Simulation
-# Optimized for Verilator 5.x
+# Optimized for Verilator 5.x + Python Runner
 # =========================================
 
 # -----------------------------------------
-# Configuration Loading (from JSON)
+# Configuration (Python-based)
 # -----------------------------------------
-CONFIG_SCRIPT := $(ROOT_DIR)/script/shell/parse_verilator_config.sh
-CONFIG_FILE   := $(ROOT_DIR)/script/config/verilator.json
-
-# Load config if available and no explicit overrides
-ifneq ($(wildcard $(CONFIG_SCRIPT)),)
-  ifneq ($(wildcard $(CONFIG_FILE)),)
-    # Check if jq is available
-    JQ_EXISTS := $(shell command -v jq 2>/dev/null)
-    ifdef JQ_EXISTS
-      # Load profile if specified
-      ifdef PROFILE
-        CONFIG_ARGS := --profile $(PROFILE)
-      endif
-      
-      # Include generated config (only if not already set)
-      -include $(BUILD_DIR)/.verilator_config.mk
-      
-      # Generate config makefile
-      $(BUILD_DIR)/.verilator_config.mk: $(CONFIG_FILE) $(wildcard $(ROOT_DIR)/script/config/verilator.local.json)
-		@mkdir -p $(BUILD_DIR)
-		@$(CONFIG_SCRIPT) --make $(CONFIG_ARGS) > $@ 2>/dev/null || true
-    endif
-  endif
-endif
+# JSON config is now handled by Python runner
+# See: script/python/makefile/verilator_config.py
+VERILATOR_CONFIG_FILE := $(ROOT_DIR)/script/config/verilator.json
 
 # -----------------------------------------
 # Verilator Paths
@@ -533,35 +512,72 @@ rebuild-cpp: dirs
 # Coverage data directory
 COVERAGE_DATA_DIR := $(LOG_DIR)/verilator/coverage_data
 
+# Python runner
+VERILATOR_RUNNER := $(ROOT_DIR)/script/python/makefile/verilator_runner.py
+VERILATOR_CONFIG := $(ROOT_DIR)/script/config/verilator.json
+
+# Memory search directories
+VERILATOR_MEM_DIRS := $(BUILD_DIR)/tests/riscv-tests/mem \
+                      $(BUILD_DIR)/tests/riscv-arch-test/mem \
+                      $(BUILD_DIR)/tests/imperas/mem \
+                      $(BUILD_DIR)/tests/bench/mem
+
+# Runner arguments
+VERILATOR_RUNNER_ARGS := \
+    --test $(TEST_NAME) \
+    --bin-path $(RUN_BIN) \
+    --log-dir $(VERILATOR_LOG_DIR) \
+    --mem-dirs "$(VERILATOR_MEM_DIRS)" \
+    --build-dir $(BUILD_DIR)/tests
+
+# Optional arguments
+ifdef VERILATOR_PROFILE
+    VERILATOR_RUNNER_ARGS += --profile $(VERILATOR_PROFILE)
+endif
+
+ifdef MAX_CYCLES
+    VERILATOR_RUNNER_ARGS += --max-cycles $(MAX_CYCLES)
+endif
+
+ifdef MEM_FILE
+    VERILATOR_RUNNER_ARGS += --mem-file $(MEM_FILE)
+endif
+
+ifeq ($(TRACE),0)
+    VERILATOR_RUNNER_ARGS += --no-trace
+endif
+
+ifeq ($(COVERAGE),1)
+    VERILATOR_RUNNER_ARGS += --coverage --coverage-file $(COVERAGE_DATA_DIR)/$(TEST_NAME).dat
+endif
+
+ifeq ($(FAST),1)
+    VERILATOR_RUNNER_ARGS += --fast
+endif
+
+ifeq ($(NO_COLOR),1)
+    VERILATOR_RUNNER_ARGS += --no-color
+endif
+
+# Main run target using Python runner
 run_verilator: verilate
-	@echo -e "$(GREEN)[RUNNING VERILATOR SIMULATION]$(RESET)"
-	@# Clean previous logs for this test
-	@if [ -d "$(VERILATOR_LOG_DIR)" ]; then \
-		echo -e "$(CYAN)[CLEAN]$(RESET) Removing previous logs: $(VERILATOR_LOG_DIR)"; \
-		rm -rf "$(VERILATOR_LOG_DIR)"; \
-	fi
-	@mkdir -p "$(VERILATOR_LOG_DIR)"
-	@mkdir -p "$(COVERAGE_DATA_DIR)"
-	@VERILATOR_LOG_DIR="$(VERILATOR_LOG_DIR)" \
-		TEST_NAME="$(TEST_NAME)" \
-		MAX_CYCLES="$(MAX_CYCLES)" \
-		MEM_FILE="$(MEM_FILE)" \
-		ADDR_FILE="$(ADDR_FILE)" \
-		NO_ADDR="$(NO_ADDR)" \
-		VERILATOR_THREADS="$(SIM_THREADS)" \
-		COVERAGE_FILE="$(COVERAGE_DATA_DIR)/$(TEST_NAME).dat" \
-		"$(ROOT_DIR)/script/shell/run_verilator.sh"
+	@$(PYTHON) $(VERILATOR_RUNNER) $(VERILATOR_RUNNER_ARGS)
 
 # Quick run - use verilate-fast
 run_verilator_quick: verilate-fast
-	@echo -e "$(GREEN)[RUNNING VERILATOR SIMULATION — QUICK]$(RESET)"
-	@mkdir -p "$(VERILATOR_LOG_DIR)"
-	@VERILATOR_LOG_DIR="$(VERILATOR_LOG_DIR)" \
-		TEST_NAME="$(TEST_NAME)" \
-		MAX_CYCLES="$(MAX_CYCLES)" \
-		MEM_FILE="$(MEM_FILE)" \
-		NO_ADDR="$(NO_ADDR)" \
-		"$(ROOT_DIR)/script/shell/run_verilator.sh"
+	@$(PYTHON) $(VERILATOR_RUNNER) $(VERILATOR_RUNNER_ARGS)
+
+# Dry-run to see command
+run_verilator_dry:
+	@$(PYTHON) $(VERILATOR_RUNNER) $(VERILATOR_RUNNER_ARGS) --dry-run
+
+# Show current config
+verilator_show_config:
+	@$(PYTHON) $(VERILATOR_RUNNER) $(VERILATOR_RUNNER_ARGS) --show-config
+
+# Validate config
+verilator_validate_config:
+	@$(PYTHON) $(ROOT_DIR)/script/python/makefile/verilator_config.py --validate
 
 # ============================================================
 # Waveform Viewer
@@ -719,16 +735,16 @@ verilator_help:
 	@echo -e ""
 	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
 	@echo -e "$(GREEN)            CERES RISC-V — Verilator Simulation               $(RESET)"
-	@echo -e "$(GREEN)              Verilator 5.x Optimized Makefile                $(RESET)"
+	@echo -e "$(GREEN)              Verilator 5.x + Python Runner                   $(RESET)"
 	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
 	@echo -e ""
 	@echo -e "$(YELLOW)Lint Targets:$(RESET)"
-	@echo -e "  $(GREEN)lint              $(RESET)– Full lint with all warnings (log: build/logs/verilator/lint.log)"
+	@echo -e "  $(GREEN)lint              $(RESET)– Full lint with all warnings"
 	@echo -e "  $(GREEN)lint-report       $(RESET)– Lint with statistics"
 	@echo -e "  $(GREEN)lint-width        $(RESET)– Check width mismatches only"
 	@echo -e "  $(GREEN)lint-unused       $(RESET)– Check unused/undriven signals only"
 	@echo -e "  $(GREEN)lint-loops        $(RESET)– Check combinational loops only"
-	@echo -e "  $(GREEN)lint-loops-view   $(RESET)– Generate and view loop diagrams (PDF/SVG)"
+	@echo -e "  $(GREEN)lint-loops-view   $(RESET)– Generate loop diagrams (PDF/SVG)"
 	@echo -e ""
 	@echo -e "$(YELLOW)Build Targets:$(RESET)"
 	@echo -e "  $(GREEN)verilate          $(RESET)– Build C++ simulation model"
@@ -737,38 +753,41 @@ verilator_help:
 	@echo -e "  $(GREEN)stats             $(RESET)– Generate design statistics"
 	@echo -e ""
 	@echo -e "$(YELLOW)Run Targets:$(RESET)"
-	@echo -e "  $(GREEN)run_verilator     $(RESET)– Build and run simulation"
-	@echo -e "  $(GREEN)run_verilator_quick$(RESET)– Quick run (skip rebuild if up-to-date)"
-	@echo -e "  $(GREEN)wave              $(RESET)– Open GTKWave waveform viewer"
-	@echo -e "  $(GREEN)coverage-report   $(RESET)– Generate coverage report"
+	@echo -e "  $(GREEN)run_verilator       $(RESET)– Build and run simulation (Python runner)"
+	@echo -e "  $(GREEN)run_verilator_quick $(RESET)– Quick run (skip rebuild if up-to-date)"
+	@echo -e "  $(GREEN)run_verilator_dry   $(RESET)– Show command without running"
+	@echo -e "  $(GREEN)wave                $(RESET)– Open GTKWave waveform viewer"
 	@echo -e ""
 	@echo -e "$(YELLOW)Config Targets:$(RESET)"
-	@echo -e "  $(GREEN)config-show       $(RESET)– Show current configuration"
-	@echo -e "  $(GREEN)config-profiles   $(RESET)– List available profiles"
+	@echo -e "  $(GREEN)verilator_show_config    $(RESET)– Show current JSON config"
+	@echo -e "  $(GREEN)verilator_validate_config$(RESET)– Validate JSON config"
+	@echo -e ""
+	@echo -e "$(YELLOW)Coverage Targets:$(RESET)"
+	@echo -e "  $(GREEN)coverage          $(RESET)– Full coverage run"
+	@echo -e "  $(GREEN)coverage-quick    $(RESET)– Quick coverage (ISA only)"
+	@echo -e "  $(GREEN)coverage-html     $(RESET)– Generate HTML report"
 	@echo -e ""
 	@echo -e "$(YELLOW)Clean Targets:$(RESET)"
 	@echo -e "  $(GREEN)clean_verilator   $(RESET)– Clean build files"
 	@echo -e "  $(GREEN)clean_verilator_deep$(RESET)– Deep clean including .d/.o files"
 	@echo -e ""
-	@echo -e "$(YELLOW)Configuration (via JSON or command line):$(RESET)"
-	@echo -e "  $(CYAN)PROFILE$(RESET)=<name>        – Use predefined profile (fast/debug/coverage/benchmark)"
+	@echo -e "$(YELLOW)Configuration:$(RESET)"
 	@echo -e "  $(CYAN)Config file$(RESET): script/config/verilator.json"
 	@echo -e "  $(CYAN)Local override$(RESET): script/config/verilator.local.json"
 	@echo -e ""
-	@echo -e "$(YELLOW)Basic Parameters (override JSON):$(RESET)"
-	@echo -e "  $(CYAN)TEST_NAME$(RESET)=<name>     – Test to run"
-	@echo -e "  $(CYAN)MAX_CYCLES$(RESET)=<n>       – Max cycles (default: $(MAX_CYCLES))"
-	@echo -e "  $(CYAN)MODE$(RESET)=debug|profile   – Build mode (default: release)"
+	@echo -e "$(YELLOW)CLI Parameters (override JSON):$(RESET)"
+	@echo -e "  $(CYAN)VERILATOR_PROFILE$(RESET)=<name>  – Use profile (fast/debug/coverage/benchmark)"
+	@echo -e "  $(CYAN)TEST_NAME$(RESET)=<name>         – Test to run"
+	@echo -e "  $(CYAN)MAX_CYCLES$(RESET)=<n>           – Max cycles (default: from JSON)"
+	@echo -e "  $(CYAN)FAST$(RESET)=1                   – Fast mode (no trace)"
+	@echo -e "  $(CYAN)COVERAGE$(RESET)=1               – Enable coverage"
+	@echo -e "  $(CYAN)TRACE$(RESET)=0                  – Disable trace"
 	@echo -e ""
-	@echo -e "$(YELLOW)Logger Parameters:$(RESET)"
-	@echo -e "  $(CYAN)BP_LOG$(RESET)=1             – Enable branch predictor statistics"
-	@echo -e "  $(CYAN)BP_VERBOSE$(RESET)=1         – Enable verbose BP logger"
-	@echo -e "  $(CYAN)FAST_SIM$(RESET)=1           – Fast mode (disable all loggers)"
+	@echo -e "$(YELLOW)Examples:$(RESET)"
+	@echo -e "  make run_verilator TEST_NAME=rv32ui-p-add"
+	@echo -e "  make run_verilator TEST_NAME=coremark VERILATOR_PROFILE=benchmark"
+	@echo -e "  make run_verilator TEST_NAME=dhrystone FAST=1 MAX_CYCLES=1000000"
 	@echo -e ""
-	@echo -e "$(YELLOW)Advanced Parameters:$(RESET)"
-	@echo -e "  $(CYAN)VERILATOR_THREADS$(RESET)=<n>  – Parallel threads (default: auto)"
-	@echo -e "  $(CYAN)BUILD_JOBS$(RESET)=<n>         – Parallel build jobs"
-	@echo -e "  $(CYAN)COVERAGE$(RESET)=1             – Enable coverage collection"
 	@echo -e "  $(CYAN)VPI$(RESET)=1                  – Enable VPI support"
 	@echo -e "  $(CYAN)HIERARCHICAL$(RESET)=1         – Enable hierarchical build"
 	@echo -e "  $(CYAN)TRACE_DEPTH$(RESET)=<n>        – Signal trace depth (default: 99)"
@@ -783,25 +802,16 @@ verilator_help:
 	@echo -e ""
 
 # ============================================================
-# Configuration Management
+# Configuration Management (Python-based)
 # ============================================================
 .PHONY: config-show config-profiles config-edit
 
-config-show:
-	@if [ -x "$(CONFIG_SCRIPT)" ] && command -v jq &>/dev/null; then \
-		$(CONFIG_SCRIPT) --summary $(if $(PROFILE),--profile $(PROFILE),); \
-	else \
-		echo -e "$(YELLOW)[INFO]$(RESET) Install jq for config management: sudo apt install jq"; \
-	fi
+config-show: verilator_show_config
 
 config-profiles:
-	@if [ -x "$(CONFIG_SCRIPT)" ] && command -v jq &>/dev/null; then \
-		$(CONFIG_SCRIPT) --list-profiles; \
-	else \
-		echo -e "$(YELLOW)[INFO]$(RESET) Install jq for config management: sudo apt install jq"; \
-	fi
+	@$(PYTHON) $(ROOT_DIR)/script/python/makefile/verilator_config.py --help | grep -A20 "Profiller:"
 
 config-edit:
-	@echo -e "$(CYAN)[INFO]$(RESET) Edit config: $(CONFIG_FILE)"
+	@echo -e "$(CYAN)[INFO]$(RESET) Edit config: $(VERILATOR_CONFIG_FILE)"
 	@echo -e "$(CYAN)[INFO]$(RESET) For local overrides, create: $(ROOT_DIR)/script/config/verilator.local.json"
-	@$${EDITOR:-nano} "$(CONFIG_FILE)"
+	@$${EDITOR:-nano} "$(VERILATOR_CONFIG_FILE)"

@@ -2,7 +2,7 @@
 .PHONY: arch_build_I arch_build_M arch_build_C arch_build_Zicsr
 
 # ============================================================
-# 1️⃣ Ceres RISC-V Architecture Test Pipeline
+# 1 Ceres RISC-V Architecture Test Pipeline
 # ============================================================
 # Direct compilation approach (no RISCOF dependency)
 # Similar to riscv-tests import pipeline
@@ -55,7 +55,7 @@ ARCH_PIPELINE_PY := $(SCRIPT_DIR)/python/makefile/arch_pipeline.py
 HEX_TO_MEM_PY    := $(SCRIPT_DIR)/python/makefile/hex_to_mem.py
 
 # ============================================================
-# 2️⃣ Main Pipeline (Clone → Setup → Build → Import)
+# 2 Main Pipeline (Clone → Setup → Build → Import)
 # ============================================================
 
 arch_auto: arch_clone arch_setup arch_build arch_import

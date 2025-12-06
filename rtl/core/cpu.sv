@@ -556,12 +556,12 @@ module cpu
       .rd_en_csr_i     (pipe4.rd_en_csr),
       .wr_en_csr_i     (pipe4.wr_en_csr),
       .csr_idx_i       (pipe4.csr_idx),
-      .fe_flush_cache_i(fencei_flush),
       .instr_type_i    (pipe4.instr_type),
       .csr_wr_data_i   (pipe4.csr_wr_data),
       .trap_active_i   (trap_active),
       .tcontrol_i      (ex_tcontrol),
 `endif
+      .fe_flush_cache_i(fencei_flush),
       .clk_i           (clk_i),
       .rst_ni          (rst_ni),
       .data_sel_i      (pipe4.result_src),

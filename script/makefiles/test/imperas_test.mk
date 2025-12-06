@@ -2,7 +2,7 @@
 .PHONY: imperas_build_I imperas_build_M imperas_build_C imperas_build_Zicsr imperas_build_Zifencei
 
 # ============================================================
-# 1️⃣ Ceres RISC-V Imperas Test Pipeline
+# 1 Ceres RISC-V Imperas Test Pipeline
 # ============================================================
 # Direct compilation approach for Imperas RISC-V tests
 # (riscv-ovpsim/imperas-riscv-tests)
@@ -62,7 +62,7 @@ IMPERAS_LDFLAGS    := -T$(IMPERAS_LDSCRIPT)
 HEX_TO_MEM_PY      := $(SCRIPT_DIR)/python/makefile/hex_to_mem.py
 
 # ============================================================
-# 2️⃣ Main Pipeline (Clone → Setup → Build → Import)
+# 2 Main Pipeline (Clone → Setup → Build → Import)
 # ============================================================
 
 imperas_auto: imperas_clone imperas_setup imperas_build imperas_import

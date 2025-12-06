@@ -63,12 +63,62 @@ MODELSIM_MULTICORE      ?=
 MODELSIM_QUIET          ?=
 
 # -----------------------------------------
+# Trace/Log Defines (compile-time)
+# These must be passed to vlog, not vsim
+# -----------------------------------------
+MODELSIM_DEFINES :=
+
+# Commit trace (Spike-compatible) - LOG_COMMIT=1
+ifeq ($(LOG_COMMIT),1)
+  MODELSIM_DEFINES += +define+LOG_COMMIT
+endif
+
+# Pipeline trace (KONATA format) - LOG_PIPELINE=1
+ifeq ($(LOG_PIPELINE),1)
+  MODELSIM_DEFINES += +define+LOG_PIPELINE
+endif
+
+# RAM init messages - LOG_RAM=1
+ifeq ($(LOG_RAM),1)
+  MODELSIM_DEFINES += +define+LOG_RAM
+endif
+
+# UART file logging - LOG_UART=1
+ifeq ($(LOG_UART),1)
+  MODELSIM_DEFINES += +define+LOG_UART
+endif
+
+# Branch Predictor stats - LOG_BP=1
+ifeq ($(LOG_BP),1)
+  MODELSIM_DEFINES += +define+LOG_BP
+endif
+
+# Verbose BP logging - LOG_BP_VERBOSE=1
+ifeq ($(LOG_BP_VERBOSE),1)
+  MODELSIM_DEFINES += +define+LOG_BP +define+LOG_BP_VERBOSE
+endif
+
+# KONATA pipeline visualizer - KONATA_TRACER=1
+ifeq ($(KONATA_TRACER),1)
+  MODELSIM_DEFINES += +define+KONATA_TRACER
+endif
+
+# COMMIT_TRACER for pipeline register trace info
+ifeq ($(COMMIT_TRACER),1)
+  MODELSIM_DEFINES += +define+COMMIT_TRACER
+endif
+
+# Default: Always enable COMMIT_TRACER for trace info in pipeline
+MODELSIM_DEFINES += +define+COMMIT_TRACER
+
+# -----------------------------------------
 # Compilation Options
 # -----------------------------------------
 VLOG_BASE_OPTS := $(MODELSIM_SV_MODE) $(MODELSIM_MFCU) \
                   +acc=$(MODELSIM_ACC) +incdir+$(INC_DIRS) \
                   -work $(WORK_DIR) -svinputport=$(MODELSIM_SVINPUTPORT) \
-                  $(MODELSIM_SUPPRESS) $(MODELSIM_NOWARN)
+                  $(MODELSIM_SUPPRESS) $(MODELSIM_NOWARN) \
+                  $(MODELSIM_DEFINES)
 
 ifdef MODELSIM_SV_COMPAT
   VLOG_BASE_OPTS += $(MODELSIM_SV_COMPAT)
@@ -114,11 +164,12 @@ VLOG_LINT_FULL_OPTS := $(MODELSIM_SV_MODE) $(MODELSIM_MFCU) \
 # -----------------------------------------
 # Simulation Flags
 # -----------------------------------------
+# Note: +define+ flags must be passed at compile time (vlog), not runtime (vsim)
+# Runtime uses +plusargs only (no preprocessing)
 VSIM_FLAGS_BASE := -t $(MODELSIM_TIME_RES) -voptargs=$(MODELSIM_VOPTARGS) \
                    $(MODELSIM_NOTIMINGCHECKS) $(MODELSIM_NOSPECIFY) \
                    $(MODELSIM_DELAY_MODE) \
-                   +define+COMMIT_TRACER=1 +test_name=$(TEST_NAME) \
-                   +sim=modelsim +define+KONATA_TRACE $(SV_DEFINES) \
+                   +test_name=$(TEST_NAME) \
                    +simulator=modelsim $(MODELSIM_QUIET)
 
 # Debug flags for simulation
@@ -147,7 +198,8 @@ VSIM_LOG   := $(LOG_DIR)/vsim_$(shell date +%Y%m%d_%H%M%S).log
 # =========================================
 
 .PHONY: $(WORK_DIR) compile compile_lint lint_modelsim lint_report_modelsim \
-        resolve_mem simulate clean_modelsim modelsim_help modelsim_config_summary
+        resolve_mem simulate simulate_gui validate_config show_config \
+        clean_modelsim modelsim_help modelsim_config_summary
 
 # ============================================================
 # Library Creation
@@ -299,59 +351,62 @@ resolve_mem:
 
 
 # ============================================================
+# Python Runner Script
+# ============================================================
+MODELSIM_RUNNER := $(ROOT_DIR)/script/python/makefile/modelsim_runner.py
+
+# ============================================================
 # Simulation
 # ============================================================
 simulate: compile
-	@# Clean previous logs for this test
-	@if [ -d "$(MODELSIM_LOG_DIR)" ]; then \
-		echo -e "$(CYAN)[CLEAN]$(RESET) Removing previous logs: $(MODELSIM_LOG_DIR)"; \
-		rm -rf "$(MODELSIM_LOG_DIR)"; \
-	fi
-	@if [ -z "$(MEM_FILE)" ]; then \
-		echo -e "$(YELLOW)[INFO]$(RESET) Resolving MEM_FILE from TEST_NAME='$(TEST_NAME)'..."; \
-		$(MAKE) --no-print-directory resolve_mem TEST_NAME=$(TEST_NAME); \
-		MEM_FILE=$$(grep MEM_FILE "$(BUILD_DIR)/.mem_path_$(TEST_NAME).tmp" | cut -d'=' -f2); \
-	else \
-		if echo -e "$(MEM_FILE)" | grep -q '/'; then \
-			MF_DIR=$$(dirname "$(MEM_FILE)"); MF_BASE=$$(basename "$(MEM_FILE)"); \
-			MEM_FILE="$$(cd $$MF_DIR && pwd)/$$MF_BASE"; \
-		else \
-			MATCH=""; \
-			for dir in $(MEM_DIRS); do \
-				if [ -f "$$dir/$(MEM_FILE)" ]; then MATCH="$$dir/$(MEM_FILE)"; break; fi; \
-			done; \
-			if [ -z "$$MATCH" ]; then echo -e "$(RED)[ERROR]$(RESET) MEM_FILE not found"; exit 1; fi; \
-			MEM_FILE=$$(cd $$(dirname $$MATCH) && pwd)/$$(basename $$MATCH); \
-		fi; \
-	fi; \
-	rm -f "$(BUILD_DIR)/.mem_path_$(TEST_NAME).tmp" || true; \
-	ADDR_FILE="$(BUILD_DIR)/tests/riscv-tests/pass_fail_addr/$(TEST_NAME)_addr.txt"; \
-	if [ -f "$$ADDR_FILE" ]; then \
-		echo -e "$(GREEN)[INFO]$(RESET) Using +addr_file => $$ADDR_FILE"; \
-		VSIM_FLAGS="$(VSIM_FLAGS_BASE) +addr_file=$$ADDR_FILE"; \
-	else \
-		echo -e "$(YELLOW)[WARN]$(RESET) No addr_file found, skipping."; \
-		VSIM_FLAGS="$(VSIM_FLAGS_BASE)"; \
-	fi; \
-	echo -e "$(YELLOW)[INFO]$(RESET) Using INIT_FILE:"; echo -e "       → $$MEM_FILE"; \
-	@$(MKDIR) "$(MODELSIM_LOG_DIR)"; \
-	TRACE_ARG="+trace_file=$(MODELSIM_LOG_DIR)/commit_trace.log"; \
-	LOG_ARG="+log_path=$(MODELSIM_LOG_DIR)/ceres.log"; \
-	DUMP_ARG="+DUMP_FILE=$(MODELSIM_LOG_DIR)/waveform.wlf"; \
-	if [ "$(GUI)" = "1" ]; then \
-		echo -e "$(YELLOW)[RUN]$(RESET) GUI Mode"; \
-		$(VSIM) build/work.$(TB_LEVEL) -do $(DO_FILE) $$VSIM_FLAGS $$TRACE_ARG $$LOG_ARG $$DUMP_ARG \
-			+INIT_FILE="$$MEM_FILE" +UVM_TESTNAME=$(TEST_NAME); \
-	else \
-		echo -e "$(YELLOW)[RUN]$(RESET) Batch Mode"; \
-		( $(VSIM) -c build/work.$(TB_LEVEL) \
-			-do "run $(SIM_TIME); quit" $$VSIM_FLAGS $$TRACE_ARG $$LOG_ARG $$DUMP_ARG \
-			+INIT_FILE="$$MEM_FILE" +UVM_TESTNAME=$(TEST_NAME) \
-			2>&1 | tee "$(MODELSIM_LOG_DIR)/modelsim_run.log" ); \
-		VSIM_EXIT=$$?; \
-		printf '{"test":"%s","mem_file":"%s","exit_code":%s,"log_dir":"%s"}\n' "$(TEST_NAME)" "$$MEM_FILE" "$$VSIM_EXIT" "$(MODELSIM_LOG_DIR)" > "$(MODELSIM_LOG_DIR)/summary.json"; \
-	fi; \
-	echo -e "$(GREEN)Logs saved under: $(MODELSIM_LOG_DIR)$(RESET)"
+	@python3 $(MODELSIM_RUNNER) \
+		--test=$(TEST_NAME) \
+		--work-dir=$(WORK_DIR) \
+		--log-dir=$(MODELSIM_LOG_DIR) \
+		--mem-dirs="$(MEM_DIRS)" \
+		--build-dir=$(BUILD_DIR) \
+		--sim-time=$(SIM_TIME) \
+		--tb-level=$(TB_LEVEL) \
+		$(if $(MODELSIM_PROFILE),--profile=$(MODELSIM_PROFILE)) \
+		$(if $(filter 1,$(GUI)),--gui) \
+		$(if $(DO_FILE),--do-file=$(DO_FILE)) \
+		$(if $(MEM_FILE),--mem-file=$(MEM_FILE)) \
+		$(foreach def,$(subst +define+,,$(SV_DEFINES)),-D $(def))
+
+# GUI mode shortcut
+simulate_gui: compile
+	@python3 $(MODELSIM_RUNNER) \
+		--test=$(TEST_NAME) \
+		--work-dir=$(WORK_DIR) \
+		--log-dir=$(MODELSIM_LOG_DIR) \
+		--mem-dirs="$(MEM_DIRS)" \
+		--build-dir=$(BUILD_DIR) \
+		--sim-time=$(SIM_TIME) \
+		--tb-level=$(TB_LEVEL) \
+		--gui \
+		--do-file=$(DO_FILE) \
+		$(if $(MODELSIM_PROFILE),--profile=$(MODELSIM_PROFILE)) \
+		$(if $(MEM_FILE),--mem-file=$(MEM_FILE))
+
+# Config validation
+validate_config:
+	@python3 $(MODELSIM_RUNNER) \
+		--test=dummy \
+		--work-dir=$(WORK_DIR) \
+		--log-dir=/tmp \
+		--mem-dirs="." \
+		--validate-config \
+		$(if $(MODELSIM_PROFILE),--profile=$(MODELSIM_PROFILE))
+
+# Show current config
+show_config:
+	@python3 $(MODELSIM_RUNNER) \
+		--test=dummy \
+		--work-dir=$(WORK_DIR) \
+		--log-dir=/tmp \
+		--mem-dirs="." \
+		--show-config \
+		$(if $(MODELSIM_PROFILE),--profile=$(MODELSIM_PROFILE))
 
 
 # ============================================================
@@ -407,48 +462,67 @@ clean_modelsim:
 # Help
 # ============================================================
 modelsim_help:
-	@echo -e ""
-	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
-	@echo -e "$(GREEN)        CERES RISC-V — ModelSim / Questa Simulation            $(RESET)"
-	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
-	@echo -e ""
-	@echo -e "$(YELLOW)Main Targets:$(RESET)"
-	@echo -e "  $(GREEN)compile              $(RESET)– Compile all RTL + Testbench sources"
-	@echo -e "  $(GREEN)compile_lint         $(RESET)– Compile with lint checks enabled"
-	@echo -e "  $(GREEN)lint_modelsim        $(RESET)– Full lint analysis"
-	@echo -e "  $(GREEN)lint_report_modelsim $(RESET)– Categorized lint report"
-	@echo -e "  $(GREEN)simulate             $(RESET)– Run simulation (auto memory resolve)"
-	@echo -e "  $(GREEN)clean_modelsim       $(RESET)– Clean ModelSim/Questa build artifacts"
-	@echo -e "  $(GREEN)modelsim_config_summary $(RESET)– Show current configuration"
-	@echo -e ""
-	@echo -e "$(YELLOW)Configuration:$(RESET)"
-	@echo -e "  Configuration is loaded from: script/config/modelsim.json"
-	@echo -e "  Local overrides:              script/config/modelsim.local.json"
-	@echo -e ""
-	@echo -e "$(YELLOW)Profiles:$(RESET)"
-	@echo -e "  $(GREEN)MODELSIM_PROFILE=fast      $(RESET)– Maximum speed, minimal checking"
-	@echo -e "  $(GREEN)MODELSIM_PROFILE=debug     $(RESET)– Full debugging features"
-	@echo -e "  $(GREEN)MODELSIM_PROFILE=lint_only $(RESET)– Lint checking only"
-	@echo -e "  $(GREEN)MODELSIM_PROFILE=coverage  $(RESET)– Coverage collection mode"
-	@echo -e "  $(GREEN)MODELSIM_PROFILE=gls       $(RESET)– Gate-level simulation"
-	@echo -e ""
-	@echo -e "$(YELLOW)Lint Modes:$(RESET)"
-	@echo -e "  $(GREEN)MODELSIM_LINT_MODE=default $(RESET)– Standard lint checks"
-	@echo -e "  $(GREEN)MODELSIM_LINT_MODE=fast    $(RESET)– Quick lint scan"
-	@echo -e "  $(GREEN)MODELSIM_LINT_MODE=full    $(RESET)– Comprehensive lint analysis"
-	@echo -e ""
-	@echo -e "$(YELLOW)Parameters:$(RESET)"
-	@echo -e "  TEST_NAME=<name>             – Select test to run"
-	@echo -e "  GUI=1                        – Launch ModelSim GUI"
-	@echo -e "  SIM_TIME=<t>                 – Simulation time (default: $(SIM_TIME))"
-	@echo -e "  MODELSIM_LINT_MODE=<mode>    – Lint mode: default, fast, full"
-	@echo -e ""
-	@echo -e "$(YELLOW)Examples:$(RESET)"
-	@echo -e "  make compile"
-	@echo -e "  make lint_modelsim MODELSIM_LINT_MODE=full"
-	@echo -e "  make simulate TEST_NAME=rv32ui-p-add GUI=1"
-	@echo -e "  make simulate TEST_NAME=rv32uc-p-rvc SIM_TIME=50000ns"
-	@echo -e "  make compile MODELSIM_PROFILE=debug"
-	@echo -e "  make lint_modelsim MODELSIM_PROFILE=lint_only"
-	@echo -e ""
-	@echo -e "$(GREEN)══════════════════════════════════════════════════════════════$(RESET)"
+	@echo ""
+	@echo -e "$(CYAN)══════════════════════════════════════════════════════════════$(RESET)"
+	@echo -e "$(CYAN)        CERES RISC-V — ModelSim / Questa Simulation            $(RESET)"
+	@echo -e "$(CYAN)══════════════════════════════════════════════════════════════$(RESET)"
+	@echo ""
+	@echo -e "$(YELLOW)COMPILATION TARGETS:$(RESET)"
+	@echo -e "  $(GREEN)compile$(RESET)              Compile all RTL + Testbench sources"
+	@echo -e "  $(GREEN)compile_lint$(RESET)         Compile with lint checks enabled"
+	@echo ""
+	@echo -e "$(YELLOW)LINT TARGETS:$(RESET)"
+	@echo -e "  $(GREEN)lint_modelsim$(RESET)        Full lint analysis (output: results/lint/modelsim/)"
+	@echo -e "  $(GREEN)lint_report_modelsim$(RESET) Categorized lint report from previous run"
+	@echo ""
+	@echo -e "$(YELLOW)SIMULATION TARGETS:$(RESET)"
+	@echo -e "  $(GREEN)simulate$(RESET)             Run simulation with Python runner"
+	@echo -e "  $(GREEN)simulate_gui$(RESET)         Run simulation in GUI mode"
+	@echo ""
+	@echo -e "$(YELLOW)CONFIG TARGETS:$(RESET)"
+	@echo -e "  $(GREEN)show_config$(RESET)          Show current JSON configuration"
+	@echo -e "  $(GREEN)validate_config$(RESET)      Validate JSON config and show warnings"
+	@echo ""
+	@echo -e "$(YELLOW)UTILITY TARGETS:$(RESET)"
+	@echo -e "  $(GREEN)resolve_mem$(RESET)          Resolve memory file path for a test"
+	@echo -e "  $(GREEN)modelsim_config_summary$(RESET)  Show Makefile variable summary"
+	@echo -e "  $(GREEN)clean_modelsim$(RESET)       Clean ModelSim/Questa build artifacts"
+	@echo ""
+	@echo -e "$(YELLOW)CONFIGURATION FILES:$(RESET)"
+	@echo -e "  $(CYAN)script/config/modelsim.json$(RESET)       Main configuration"
+	@echo -e "  $(CYAN)script/config/modelsim.local.json$(RESET) Local overrides (git ignored)"
+	@echo ""
+	@echo -e "$(YELLOW)PROFILES (MODELSIM_PROFILE=...):$(RESET)"
+	@echo -e "  $(MAGENTA)fast$(RESET)       Maximum speed, minimal checking"
+	@echo -e "  $(MAGENTA)debug$(RESET)      Full debugging features (+acc=full)"
+	@echo -e "  $(MAGENTA)lint_only$(RESET)  Lint checking only, no simulation"
+	@echo -e "  $(MAGENTA)coverage$(RESET)   Coverage collection mode"
+	@echo -e "  $(MAGENTA)gls$(RESET)        Gate-level simulation settings"
+	@echo ""
+	@echo -e "$(YELLOW)LINT MODES (MODELSIM_LINT_MODE=...):$(RESET)"
+	@echo -e "  $(MAGENTA)default$(RESET)    Standard lint checks"
+	@echo -e "  $(MAGENTA)fast$(RESET)       Quick lint scan"
+	@echo -e "  $(MAGENTA)full$(RESET)       Comprehensive lint analysis with pedantic"
+	@echo ""
+	@echo -e "$(YELLOW)PARAMETERS:$(RESET)"
+	@echo -e "  $(CYAN)TEST_NAME=<name>$(RESET)     Test to run (e.g., rv32ui-p-add)"
+	@echo -e "  $(CYAN)MEM_FILE=<path>$(RESET)      Override memory file path"
+	@echo -e "  $(CYAN)SIM_TIME=<time>$(RESET)      Simulation duration (default: $(SIM_TIME))"
+	@echo -e "  $(CYAN)GUI=1$(RESET)                Launch ModelSim GUI"
+	@echo ""
+	@echo -e "$(YELLOW)EXAMPLES:$(RESET)"
+	@echo -e "  $(GREEN)make compile$(RESET)"
+	@echo -e "  $(GREEN)make simulate TEST_NAME=rv32ui-p-add$(RESET)"
+	@echo -e "  $(GREEN)make simulate TEST_NAME=rv32ui-p-add GUI=1$(RESET)"
+	@echo -e "  $(GREEN)make simulate TEST_NAME=rv32uc-p-rvc SIM_TIME=50000ns$(RESET)"
+	@echo -e "  $(GREEN)make lint_modelsim MODELSIM_LINT_MODE=full$(RESET)"
+	@echo -e "  $(GREEN)make compile MODELSIM_PROFILE=debug$(RESET)"
+	@echo ""
+	@echo -e "$(YELLOW)OUTPUT DIRECTORIES:$(RESET)"
+	@echo -e "  Compile logs:  $(CYAN)$(LOG_DIR)/modelsim/<test>/compile.log$(RESET)"
+	@echo -e "  Sim logs:      $(CYAN)$(LOG_DIR)/modelsim/<test>/modelsim_run.log$(RESET)"
+	@echo -e "  Summary:       $(CYAN)$(LOG_DIR)/modelsim/<test>/summary.json$(RESET)"
+	@echo -e "  Waveforms:     $(CYAN)$(LOG_DIR)/modelsim/<test>/waveform.wlf$(RESET)"
+	@echo -e "  Lint output:   $(CYAN)$(LINT_DIR)/modelsim/lint.log$(RESET)"
+	@echo ""
+	@echo -e "$(CYAN)══════════════════════════════════════════════════════════════$(RESET)"

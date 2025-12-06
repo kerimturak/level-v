@@ -8,7 +8,7 @@
         bench_auto bench_build bench_import
 
 # ============================================================
-# 1️⃣ ISA PIPELINE
+# 1 ISA PIPELINE
 # ============================================================
 
 isa_auto: isa_clone isa_configure isa_my_configure isa_build isa_import
@@ -85,7 +85,7 @@ isa_import:
 	@echo -e "$(GREEN)ISA import complete.$(RESET)"
 
 # ============================================================
-# 2️⃣ BENCHMARK PIPELINE
+# 2 BENCHMARK PIPELINE
 # ============================================================
 
 bench_auto: isa_clone bench_build bench_import
@@ -101,7 +101,7 @@ bench_import:
 	@echo -e "$(GREEN)Benchmark import complete.$(RESET)"
 
 # ============================================================
-# 3️⃣ HELPERS
+# 3 HELPERS
 # ============================================================
 
 isa_clean:

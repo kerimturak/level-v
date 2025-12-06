@@ -34,7 +34,7 @@ COREMARK_MEM  := $(COREMARK_BUILD_DIR)/coremark.mem
 COREMARK_DUMP := $(COREMARK_BUILD_DIR)/coremark.dump
 
 # ============================================================
-# 1️⃣ Main Target - Full Pipeline
+# 1 Main Target - Full Pipeline
 # ============================================================
 
 coremark: coremark_check coremark_setup coremark_gen_linker coremark_build
@@ -47,7 +47,7 @@ coremark: coremark_check coremark_setup coremark_gen_linker coremark_build
 	@echo -e "  DUMP: $(COREMARK_DUMP)"
 
 # ============================================================
-# 2️⃣ Check CoreMark Source Availability
+# 2 Check CoreMark Source Availability
 # ============================================================
 
 coremark_check:
@@ -71,7 +71,7 @@ coremark_check:
 	fi
 
 # ============================================================
-# 3️⃣ Setup - Copy Ceres-V Port Files
+# 3 Setup - Copy Ceres-V Port Files
 # ============================================================
 
 coremark_setup: coremark_check
@@ -85,7 +85,7 @@ coremark_setup: coremark_check
 	@echo -e "$(GREEN)[COREMARK] ✓ Port files copied to $(COREMARK_PORT_DST)$(RESET)"
 
 # ============================================================
-# 3.5️⃣ Generate Linker Script from Memory Map
+# 3.5️ Generate Linker Script from Memory Map
 # ============================================================
 
 coremark_gen_linker: coremark_setup
@@ -102,7 +102,7 @@ coremark_gen_linker: coremark_setup
 	fi
 
 # ============================================================
-# 4️⃣ Build CoreMark for Ceres-V
+# 4 Build CoreMark for Ceres-V
 # ============================================================
 
 # ELF to MEM converter script
@@ -140,7 +140,7 @@ coremark_build: coremark_gen_linker
 	@echo -e "$(GREEN)[COREMARK] ✓ Build successful$(RESET)"
 
 # ============================================================
-# 4.5️⃣ Run CoreMark Simulation
+# 4.5 Run CoreMark Simulation
 # ============================================================
 # CoreMark log directory
 COREMARK_LOG_DIR := $(RESULTS_DIR)/logs/$(SIM)/coremark
@@ -180,7 +180,7 @@ run_coremark: coremark
 cm: run_coremark
 
 # ============================================================
-# 4.6️⃣ FAST CoreMark - Maximum Speed
+# 4.6 FAST CoreMark - Maximum Speed
 # ============================================================
 # Optimized for fastest possible simulation:
 # - No trace (FST/VCD)
@@ -326,7 +326,7 @@ cm_run:
 		VERILATOR_LOG_DIR=$(COREMARK_LOG_DIR)
 
 # ============================================================
-# 5️⃣ Clean
+# 5 Clean
 # ============================================================
 
 coremark_clean:
@@ -339,7 +339,7 @@ coremark_clean:
 	@echo -e "$(GREEN)[COREMARK] ✓ Clean complete$(RESET)"
 
 # ============================================================
-# 6️⃣ Help
+# 6 Help
 # ============================================================
 
 coremark_help:

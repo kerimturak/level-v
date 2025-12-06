@@ -7,7 +7,15 @@
 #   make run T=median               # Auto-detects TEST_TYPE=bench
 #   make run T=I-ADD-01             # Auto-detects TEST_TYPE=imperas
 #   make run TEST_NAME=xxx TEST_TYPE=yyy  # Manual override
+#
+# Python Mode (recommended):
+#   make run T=rv32ui-p-add USE_PYTHON=1
+#   CERES_DEBUG=1 make run T=rv32ui-p-add USE_PYTHON=1  # With debug log
 # ============================================================
+
+# Python Test Runner
+TEST_RUNNER_SCRIPT := $(SCRIPT_DIR)/python/makefile/test_runner.py
+USE_PYTHON ?= 0
 
 # -----------------------------------------
 # File-based TEST_TYPE Auto-detection
@@ -100,16 +108,46 @@ endef
 # Targets
 # =========================================
 
-.PHONY: run test_prepare run_rtl run_spike compare_logs test_report clean_test list_tests help_test run_flist
+.PHONY: run run_python run_make test_prepare run_rtl run_spike compare_logs test_report clean_test list_tests help_test run_flist
 
 
 # ============================================================
 # Main Pipeline
 # ============================================================
-run: test_prepare run_rtl run_spike compare_logs test_report
+ifeq ($(USE_PYTHON),1)
+run: run_python
+else
+run: run_make
+endif
+
+run_make: test_prepare run_rtl run_spike compare_logs test_report
+
+# Python-based test runner (USE_PYTHON=1)
+run_python:
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  CERES RISC-V Test Runner (Python Mode)$(RESET)"
+	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@python3 $(TEST_RUNNER_SCRIPT) \
+		--test-name "$(TEST_NAME)" \
+		--test-type "$(TEST_TYPE)" \
+		--simulator "$(SIM)" \
+		--build-dir "$(BUILD_DIR)" \
+		--sim-dir "$(SIM_DIR)" \
+		--results-dir "$(RESULTS_DIR)" \
+		--test-log-dir "$(TEST_LOG_DIR)" \
+		--max-cycles $(MAX_CYCLES) \
+		$(if $(filter 1,$(LOG_COMMIT)),--log-commit,) \
+		$(if $(filter 1,$(LOG_BP)),--log-bp,) \
+		$(if $(filter 1,$(KONATA_TRACER)),--konata-tracer,) \
+		$(if $(filter 1,$(TRACE)),--trace,) \
+		$(if $(filter 1,$(CFG_SPIKE)),--enable-spike,--no-spike) \
+		$(if $(filter 1,$(CFG_COMPARE)),--enable-compare,--no-compare) \
+		$(if $(SKIP_CSR),--skip-csr,) \
+		$(if $(RESYNC),--resync --resync-window $(or $(RESYNC_WINDOW),8),)
+	@echo -e "$(GREEN)✓ Python test runner completed$(RESET)"
 
 # ============================================================
-# 1️⃣ Prepare Test Environment
+# 1 Prepare Test Environment
 # ============================================================
 test_prepare:
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -139,7 +177,7 @@ test_prepare:
 	@echo ""                                >> $(REPORT_FILE)
 
 # ============================================================
-# 2️⃣ Run RTL Simulation
+# 2 Run RTL Simulation
 # ============================================================
 run_rtl:
 	@echo -e ""
@@ -183,7 +221,7 @@ endif
 	@echo -e "$(GREEN)✓ RTL simulation complete$(RESET)"
 
 # ============================================================
-# 3️⃣ Run Spike Golden Reference
+# 3 Run Spike Golden Reference
 # ============================================================
 run_spike:
 ifeq ($(CFG_SPIKE),0)
@@ -229,7 +267,7 @@ else
 endif
 
 # ============================================================
-# 4️⃣ Compare Logs
+# 4 Compare Logs
 # ============================================================
 compare_logs:
 ifeq ($(CFG_COMPARE),0)
@@ -288,7 +326,7 @@ endif
 
 
 # ============================================================
-# 5️⃣ Generate Final Test Report
+# 5 Generate Final Test Report
 # ============================================================
 test_report:
 ifeq ($(CFG_COMPARE),0)
@@ -320,7 +358,7 @@ else
 	fi
 endif
 # ============================================================
-# 6️⃣ Batch Test Execution from File
+# 6 Batch Test Execution from File
 # ============================================================
 run_flist:
 	@if [ ! -f "$(FLIST)" ]; then \
@@ -401,7 +439,7 @@ run_flist:
 
 
 # ============================================================
-# 7️⃣ Generate HTML Test Dashboard
+# 7 Generate HTML Test Dashboard
 # ============================================================
 # Usage:
 #   make html                    # Generate dashboard for verilator results
