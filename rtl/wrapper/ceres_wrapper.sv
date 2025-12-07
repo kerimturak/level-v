@@ -25,58 +25,88 @@ Description:
 module ceres_wrapper
   import ceres_param::*;
 #(
-    // System Configuration
-    parameter int unsigned CLK_FREQ_HZ = CPU_CLK,
-    parameter int unsigned BAUD_RATE   = 115200,
+  // System Configuration
+  parameter int unsigned CLK_FREQ_HZ = CPU_CLK,
+  parameter int unsigned BAUD_RATE   = 115200,
 
-    // Memory Configuration
-    parameter int unsigned RAM_SIZE_KB = 1024,
-    parameter int unsigned RAM_LATENCY = 16,
+  // Memory Configuration
+  parameter int unsigned RAM_SIZE_KB     = 1024,
+  parameter int unsigned RAM_LATENCY     = 16,
+  parameter bit          BOOTROM_EN      = 1'b0,
+  parameter int unsigned BOOTROM_SIZE_KB = 4,
 
-    // Peripheral Configuration
-    parameter int unsigned NUM_UART = 1,
-    parameter bit          SPI_EN   = 1'b0,
-    parameter bit          I2C_EN   = 1'b0,
-    parameter bit          GPIO_EN  = 1'b0,
-    parameter bit          PWM_EN   = 1'b0,
-    parameter bit          TIMER_EN = 1'b1,
-    parameter bit          PLIC_EN  = 1'b0,
+  // Peripheral Configuration
+  parameter int unsigned NUM_UART = 1,
+  parameter bit          SPI_EN   = 1'b0,
+  parameter bit          I2C_EN   = 1'b0,
+  parameter bit          GPIO_EN  = 1'b0,
+  parameter bit          PWM_EN   = 1'b0,
+  parameter bit          TIMER_EN = 1'b1,
+  parameter bit          PLIC_EN  = 1'b0,
+  parameter bit          WDT_EN   = 1'b0,
+  parameter bit          DMA_EN   = 1'b0,
+  parameter bit          VGA_EN   = 1'b0,
 
-    // Programming Interface
-    parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROG_SEQUENCE = PROGRAM_SEQUENCE
+  // Debug Configuration
+  parameter bit DEBUG_EN = 1'b0,
+  parameter bit JTAG_EN  = 1'b0,
+
+  // Programming Interface
+  parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROG_SEQUENCE = PROGRAM_SEQUENCE
 ) (
-    // Clock and Reset
-    input logic clk_i,
-    input logic rst_ni,
+  // Clock and Reset
+  input logic clk_i,
+  input logic rst_ni,
 
-    // UART Interface
-    output logic uart_tx_o,
-    input  logic uart_rx_i,
+  // UART Interface
+  output logic uart0_tx_o,
+  input  logic uart0_rx_i,
+  output logic uart1_tx_o,
+  input  logic uart1_rx_i,
 
-    // SPI Interface (active when SPI_EN=1)
-    output logic       spi0_sclk_o,
-    output logic       spi0_mosi_o,
-    input  logic       spi0_miso_i,
-    output logic [3:0] spi0_ss_o,
+  // SPI Interface
+  output logic       spi0_sclk_o,
+  output logic       spi0_mosi_o,
+  input  logic       spi0_miso_i,
+  output logic [3:0] spi0_ss_o,
 
-    // I2C Interface (active when I2C_EN=1)
-    inout wire i2c0_sda_io,
-    inout wire i2c0_scl_io,
+  // I2C Interface
+  inout wire i2c0_sda_io,
+  inout wire i2c0_scl_io,
 
-    // GPIO Interface (active when GPIO_EN=1)
-    input  logic [31:0] gpio_i,
-    output logic [31:0] gpio_o,
-    output logic [31:0] gpio_oe_o,
+  // GPIO Interface
+  input  logic [31:0] gpio_i,
+  output logic [31:0] gpio_o,
+  output logic [31:0] gpio_oe_o,
 
-    // External Interrupts
-    input logic [7:0] ext_irq_i,
+  // PWM Interface
+  output logic pwm_o,
 
-    // Programming Interface
-    input  logic program_rx_i,
-    output logic prog_mode_led_o,
+  // Timer Interface
+  output logic timer_irq_o,
 
-    // Debug/Status
-    output logic [3:0] status_led_o
+  // PLIC Interface
+  input logic [7:0] ext_irq_i,
+
+  // WDT Interface
+  output logic wdt_irq_o,
+
+  // DMA Interface
+  output logic dma_irq_o,
+
+  // VGA Interface
+  output logic vga_hsync_o,
+  output logic vga_vsync_o,
+  output logic [7:0] vga_r_o,
+  output logic [7:0] vga_g_o,
+  output logic [7:0] vga_b_o,
+
+  // Programming Interface
+  input  logic program_rx_i,
+  output logic prog_mode_led_o,
+
+  // Debug/Status
+  output logic [3:0] status_led_o
 );
 
   // ==========================================================================
@@ -148,25 +178,78 @@ module ceres_wrapper
   logic                               pbus_ready;
 
   // Peripheral select signals
-  logic                               uart_sel;
-  logic                               spi_sel;
-  logic                               i2c_sel;
+  logic                               sel_ram;
+  logic                               sel_clint;
+  logic                               sel_periph;
+  logic                               sel_uart0;
+  logic                               sel_uart1;
+  logic                               sel_spi0;
+  logic                               sel_i2c0;
+  logic                               sel_gpio;
+  logic                               sel_pwm;
+  logic                               sel_timer;
+  logic                               sel_plic;
+  logic                               sel_wdt;
+  logic                               sel_dma;
+  logic                               sel_vga;
 
   // UART
-  logic       [                 31:0] uart_rdata;
-
-  // I2C
-  logic       [                 31:0] i2c_rdata;
-  logic                               i2c_scl_o;
-  logic                               i2c_scl_oe;
-  logic                               i2c_scl_i;
-  logic                               i2c_sda_o;
-  logic                               i2c_sda_oe;
-  logic                               i2c_sda_i;
-  logic                               i2c_irq;
+  logic       [                 31:0] uart0_rdata;
+  logic       [                 31:0] uart1_rdata;
 
   // SPI
-  logic       [                 31:0] spi_rdata;
+  logic       [                 31:0] spi0_rdata;
+
+  // I2C
+  logic       [                 31:0] i2c0_rdata;
+  logic                               i2c0_scl_o;
+  logic                               i2c0_scl_oe;
+  logic                               i2c0_scl_i;
+  logic                               i2c0_sda_o;
+  logic                               i2c0_sda_oe;
+  logic                               i2c0_sda_i;
+  logic                               i2c0_irq;
+
+  // GPIO
+  logic       [                 31:0] gpio_rdata;
+  logic                               gpio_irq;
+
+  // PWM
+  logic       [                 31:0] pwm_rdata;
+  logic       [                  7:0] pwm_out;
+  logic       [                  7:0] pwm_n_out;
+  logic                               pwm_irq;
+  logic                               pwm_sync;
+
+  // Timer
+  logic       [                 31:0] timer_rdata;
+  logic       [                  7:0] timer_pwm;
+  logic       [                  3:0] gptimer_irq;
+  logic                               gptimer_irq_combined;
+
+  // PLIC
+  logic       [                 31:0] plic_rdata;
+  logic       [                 31:0] plic_irq_sources;
+  logic                               plic_irq;
+
+  // Watchdog
+  logic       [                 31:0] wdt_rdata;
+  logic                               wdt_irq;
+  logic                               wdt_reset;
+
+  // DMA
+  logic       [                 31:0] dma_rdata;
+  logic       [                  3:0] dma_irq;
+  logic                               dma_req;
+  logic       [                 31:0] dma_addr;
+  logic       [                 31:0] dma_wdata;
+  logic       [                  3:0] dma_wstrb;
+  logic                               dma_ack;
+
+  // VGA
+  logic       [                 31:0] vga_rdata;
+  logic                               pixel_clk;
+  logic                               pll_locked;
 
   // ==========================================================================
   // Reset
@@ -502,8 +585,33 @@ module ceres_wrapper
 `endif
 
   // Peripheral read data mux
-  assign pbus_rdata = uart_sel ? uart_rdata : spi_sel ? spi_rdata : i2c_sel ? i2c_rdata : 32'h0;
-  assign pbus_ready = 1'b1;  // All peripherals always ready
+  always_comb begin
+    pbus_rdata = 32'h0;
+    pbus_ready = 1'b1;
+    if (sel_uart0) begin
+      pbus_rdata = uart0_rdata;
+    end else if (sel_uart1) begin
+      pbus_rdata = uart1_rdata;
+    end else if (sel_spi0) begin
+      pbus_rdata = spi0_rdata;
+    end else if (sel_i2c0) begin
+      pbus_rdata = i2c0_rdata;
+    end else if (sel_gpio) begin
+      pbus_rdata = gpio_rdata;
+    end else if (sel_pwm) begin
+      pbus_rdata = pwm_rdata;
+    end else if (sel_timer) begin
+      pbus_rdata = timer_rdata;
+    end else if (sel_plic) begin
+      pbus_rdata = plic_rdata;
+    end else if (sel_wdt) begin
+      pbus_rdata = wdt_rdata;
+    end else if (sel_dma) begin
+      pbus_rdata = dma_rdata;
+    end else if (sel_vga) begin
+      pbus_rdata = vga_rdata;
+    end
+  end
 
   // ==========================================================================
   // Unused Peripheral Tie-offs

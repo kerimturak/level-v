@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     // Initialize DUT signals
     top->clk_i     = 0;
     top->rst_ni    = 0;
-    top->uart_rx_i = 1;
+    top->uart0_rx_i = 1;
 
     // --- Reset phase (10 cycles) ---
     for (int i = 0; i < 10; ++i) {
