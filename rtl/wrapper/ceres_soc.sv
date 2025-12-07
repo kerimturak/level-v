@@ -85,7 +85,7 @@ module ceres_soc
     // ========================================================================
     // Programming Interface
     // ========================================================================
-    parameter string PROG_SEQUENCE = PROGRAM_SEQUENCE
+    parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROG_SEQUENCE = PROGRAM_SEQUENCE
 ) (
     // ========================================================================
     // Clock and Reset

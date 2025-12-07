@@ -30,7 +30,7 @@ module ceres_wrapper
     parameter int unsigned BAUD_RATE   = 115200,
 
     // Memory Configuration
-    parameter int unsigned RAM_SIZE_KB = 1024,
+    parameter int unsigned RAM_SIZE_KB = 8,
     parameter int unsigned RAM_LATENCY = 16,
 
     // Peripheral Configuration
@@ -43,7 +43,7 @@ module ceres_wrapper
     parameter bit          PLIC_EN  = 1'b0,
 
     // Programming Interface
-    parameter string PROG_SEQUENCE = PROGRAM_SEQUENCE
+    parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROG_SEQUENCE = PROGRAM_SEQUENCE
 ) (
     // Clock and Reset
     input logic clk_i,

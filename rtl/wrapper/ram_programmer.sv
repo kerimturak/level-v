@@ -21,11 +21,11 @@ Description:
 module ram_programmer
   import ceres_param::*;
 #(
-    parameter int unsigned CLK_FREQ     = CPU_CLK,
-    parameter int unsigned BAUD_RATE    = PROG_BAUD_RATE,
-    parameter              MAGIC_SEQ    = PROGRAM_SEQUENCE,
-    parameter int unsigned SEQ_LENGTH   = 9,
-    parameter int unsigned BREAK_CYCLES = 1_000_000
+  parameter int unsigned CLK_FREQ     = CPU_CLK,
+  parameter int unsigned BAUD_RATE    = PROG_BAUD_RATE,
+  parameter int unsigned SEQ_LENGTH   = PROGRAM_SEQUENCE_LEN,
+  parameter logic [SEQ_LENGTH*8-1:0]  MAGIC_SEQ    = PROGRAM_SEQUENCE,
+  parameter int unsigned BREAK_CYCLES = 1_000_000
 ) (
     input logic clk_i,
     input logic rst_ni,

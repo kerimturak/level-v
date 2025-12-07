@@ -33,7 +33,7 @@ module wrapper_ram
     // Programming Configuration  
     parameter int unsigned CPU_CLK          = ceres_param::CPU_CLK,
     parameter int unsigned PROG_BAUD_RATE   = ceres_param::PROG_BAUD_RATE,
-    parameter              PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
+    parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
 ) (
     input logic clk_i,
     input logic rst_ni,
@@ -61,6 +61,8 @@ module wrapper_ram
   // ==========================================================================
   // Memory Array
   // ==========================================================================
+  // Request Xilinx block RAM implementation where possible
+  (* ram_style = "block" *)
   logic   [       WORD_WIDTH-1:0] ram            [0:RAM_DEPTH-1];
 
   // ==========================================================================
@@ -83,7 +85,8 @@ module wrapper_ram
   // ==========================================================================
   // Memory Initialization
   // ==========================================================================
-  string                          init_file;
+  localparam int INIT_FILE_LEN    = 256;
+  reg    [8*INIT_FILE_LEN-1:0]    init_file;
   integer                         fd;
 
   initial begin
@@ -107,12 +110,34 @@ module wrapper_ram
 `ifdef LOG_RAM
       $display("[INFO] Memory loaded successfully.");
 `endif
-    end else begin
-`ifdef LOG_RAM
+        end else begin
+    `ifdef SYNTHESIS
+      // During synthesis (Vivado), default to the top-level `coremark.mem` file
+      // Absolute path to the repository's coremark.mem on Windows
+      init_file = "C:/level-v/coremark.mem";
+    `ifdef LOG_RAM
+      $display("[INFO] No INIT_FILE -> attempting to load default %s", init_file);
+    `endif
+      fd = $fopen(init_file, "r");
+      if (fd == 0) begin
+    `ifdef LOG_RAM
+        $display("[WARN] Default memory file not found: %s -> RAM zeroed", init_file);
+    `endif
+        ram = '{default: '0};
+      end else begin
+        $fclose(fd);
+        $readmemh(init_file, ram, 0, RAM_DEPTH - 1);
+    `ifdef LOG_RAM
+        $display("[INFO] Memory loaded from default: %s", init_file);
+    `endif
+      end
+    `else
+    `ifdef LOG_RAM
       $display("[INFO] No INIT_FILE -> RAM initialized to zero");
-`endif
+    `endif
       ram = '{default: '0};
-    end
+    `endif
+        end
   end
 
   // ==========================================================================
@@ -137,23 +162,35 @@ module wrapper_ram
   // ==========================================================================
   // Write Logic - Byte-granular with programming support
   // ==========================================================================
-  generate
-    for (genvar w = 0; w < WORDS_PER_LINE; w++) begin : gen_word
-      for (genvar b = 0; b < BYTES_PER_WORD; b++) begin : gen_byte
-        localparam int STROBE_IDX = w * BYTES_PER_WORD + b;
-
-        always_ff @(posedge clk_i) begin
-          // Normal write via strobes
-          if (wstrb_i[STROBE_IDX]) begin
-            ram[line_base_addr+w[$clog2(RAM_DEPTH)-1:0]][b*8+:8] <= wdata_i[w*WORD_WIDTH+b*8+:8];
-          end  // Programming write (only to word 0 position)
-          else if (prog_mode && prog_valid && w == 0) begin
-            ram[prog_addr[$clog2(RAM_DEPTH)-1:0]][b*8+:8] <= prog_data[b*8+:8];
-          end
+  // Consolidated write: perform per-word read-modify-write to support byte strobes
+  logic [WORD_WIDTH-1:0] next_word;
+  logic [WORD_WIDTH-1:0] prev_word;
+  logic [$clog2(RAM_DEPTH)-1:0] word_addr;
+  always_ff @(posedge clk_i) begin
+    // Normal write via strobes across the cache line
+    for (int w = 0; w < WORDS_PER_LINE; w++) begin
+      // compute word address within RAM
+      word_addr = line_base_addr + $unsigned(w);
+      // start with previous content
+      prev_word = ram[word_addr];
+      next_word = prev_word;
+      // Apply byte strobes for this word
+      for (int b = 0; b < BYTES_PER_WORD; b++) begin
+        automatic int strobe_idx = w * BYTES_PER_WORD + b;
+        if (wstrb_i[strobe_idx]) begin
+          next_word[b*8 +: 8] = wdata_i[w*WORD_WIDTH + b*8 +: 8];
         end
       end
+
+      // Write updated word if any strobe set
+      if (|wstrb_i[w*BYTES_PER_WORD +: BYTES_PER_WORD]) begin
+        ram[word_addr] <= next_word;
+      end else if (prog_mode && prog_valid && w == 0) begin
+        // Programming write (only to word 0 position)
+        ram[prog_addr[$clog2(RAM_DEPTH)-1:0]] <= prog_data;
+      end
     end
-  endgenerate
+  end
 
   // ==========================================================================
   // Programming Module Instance
@@ -162,7 +199,7 @@ module wrapper_ram
       .CLK_FREQ    (CPU_CLK),
       .BAUD_RATE   (PROG_BAUD_RATE),
       .MAGIC_SEQ   (PROGRAM_SEQUENCE),
-      .SEQ_LENGTH  (9),
+      .SEQ_LENGTH  (PROGRAM_SEQUENCE_LEN),
       .BREAK_CYCLES(1_000_000)
   ) i_programmer (
       .clk_i         (clk_i),

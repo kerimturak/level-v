@@ -114,7 +114,8 @@ package ceres_param;
   // 5. PERIPHERAL PARAMETERS
   // ============================================================================
   localparam int PROG_BAUD_RATE = 115200;
-  localparam PROGRAM_SEQUENCE = "CERESTEST";
+  localparam int PROGRAM_SEQUENCE_LEN = 9;
+  localparam logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = "CERESTEST";
   localparam int UART_DATA_WIDTH = 8;
   localparam int UART_TX_FIFO_DEPTH = 256;
   localparam int UART_RX_FIFO_DEPTH = 32;

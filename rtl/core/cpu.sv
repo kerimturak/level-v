@@ -692,6 +692,8 @@ module cpu
         trap_tval = '0;
       end
     endcase
+  end else begin
+    trap_tval = '0;
   end
 
   end
