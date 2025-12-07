@@ -25,90 +25,132 @@ Description:
 module ceres_wrapper
   import ceres_param::*;
 #(
-  // System Configuration
-  parameter int unsigned CLK_FREQ_HZ = CPU_CLK,
-  parameter int unsigned BAUD_RATE   = 115200,
+    // ========================================================================
+    // System Configuration
+    // ========================================================================
+    parameter int unsigned CLK_FREQ_HZ = CPU_CLK,
+    parameter int unsigned BAUD_RATE   = 115200,
 
-  // Memory Configuration
-  parameter int unsigned RAM_SIZE_KB     = 1024,
-  parameter int unsigned RAM_LATENCY     = 16,
-  parameter bit          BOOTROM_EN      = 1'b0,
-  parameter int unsigned BOOTROM_SIZE_KB = 4,
+    // ========================================================================
+    // Memory Configuration
+    // ========================================================================
+    parameter int unsigned RAM_SIZE_KB     = 128,
+    parameter int unsigned RAM_LATENCY     = 16,
+    parameter bit          BOOTROM_EN      = 1'b0,
+    parameter int unsigned BOOTROM_SIZE_KB = 4,
 
-  // Peripheral Configuration
-  parameter int unsigned NUM_UART = 1,
-  parameter bit          SPI_EN   = 1'b0,
-  parameter bit          I2C_EN   = 1'b0,
-  parameter bit          GPIO_EN  = 1'b0,
-  parameter bit          PWM_EN   = 1'b0,
-  parameter bit          TIMER_EN = 1'b1,
-  parameter bit          PLIC_EN  = 1'b0,
-  parameter bit          WDT_EN   = 1'b0,
-  parameter bit          DMA_EN   = 1'b0,
-  parameter bit          VGA_EN   = 1'b0,
+    // ========================================================================
+    // Peripheral Configuration
+    // ========================================================================
+    // MINIMAL_SOC modunda sadece UART ve Timer aktif, diğerleri kapalı
+`ifdef MINIMAL_SOC
+    parameter int unsigned NUM_UART = 1,
+    parameter bit          SPI_EN   = 1'b0,
+    parameter bit          I2C_EN   = 1'b0,
+    parameter bit          GPIO_EN  = 1'b0,
+    parameter bit          PWM_EN   = 1'b0,
+    parameter bit          TIMER_EN = 1'b1,
+    parameter bit          PLIC_EN  = 1'b0,
+    parameter bit          WDT_EN   = 1'b0,
+    parameter bit          DMA_EN   = 1'b0,
+    parameter bit          VGA_EN   = 1'b0,
+`else
+    parameter int unsigned NUM_UART = 1,
+    parameter bit          SPI_EN   = 1'b0,
+    parameter bit          I2C_EN   = 1'b0,
+    parameter bit          GPIO_EN  = 1'b0,
+    parameter bit          PWM_EN   = 1'b0,
+    parameter bit          TIMER_EN = 1'b1,
+    parameter bit          PLIC_EN  = 1'b0,
+    parameter bit          WDT_EN   = 1'b0,
+    parameter bit          DMA_EN   = 1'b0,
+    parameter bit          VGA_EN   = 1'b0,
+`endif
 
-  // Debug Configuration
-  parameter bit DEBUG_EN = 1'b0,
-  parameter bit JTAG_EN  = 1'b0,
+    // ========================================================================
+    // Debug Configuration
+    // ========================================================================
+    parameter bit DEBUG_EN = 1'b0,
+    parameter bit JTAG_EN  = 1'b0,
 
-  // Programming Interface
-  parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROG_SEQUENCE = PROGRAM_SEQUENCE
+    // ========================================================================
+    // Programming Interface
+    // ========================================================================
+    parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROG_SEQUENCE = PROGRAM_SEQUENCE
 ) (
-  // Clock and Reset
-  input logic clk_i,
-  input logic rst_ni,
+    // ========================================================================
+    // Clock and Reset
+    // ========================================================================
+    input logic clk_i,
+    input logic rst_ni,
 
-  // UART Interface
-  output logic uart0_tx_o,
-  input  logic uart0_rx_i,
-  output logic uart1_tx_o,
-  input  logic uart1_rx_i,
+    // ========================================================================
+    // UART Interface
+    // ========================================================================
+    output logic uart0_tx_o,
+    input  logic uart0_rx_i,
+    output logic uart1_tx_o,
+    input  logic uart1_rx_i,
 
-  // SPI Interface
-  output logic       spi0_sclk_o,
-  output logic       spi0_mosi_o,
-  input  logic       spi0_miso_i,
-  output logic [3:0] spi0_ss_o,
+    // ========================================================================
+    // SPI Interface
+    // ========================================================================
+    output logic       spi0_sclk_o,
+    output logic       spi0_mosi_o,
+    input  logic       spi0_miso_i,
+    output logic [3:0] spi0_ss_o,
 
-  // I2C Interface
-  inout wire i2c0_sda_io,
-  inout wire i2c0_scl_io,
+    // ========================================================================
+    // I2C Interface
+    // ========================================================================
+    inout wire i2c0_sda_io,
+    inout wire i2c0_scl_io,
 
-  // GPIO Interface
-  input  logic [31:0] gpio_i,
-  output logic [31:0] gpio_o,
-  output logic [31:0] gpio_oe_o,
+    // ========================================================================
+    // GPIO Interface
+    // ========================================================================
+    input  logic [31:0] gpio_i,
+    output logic [31:0] gpio_o,
+    output logic [31:0] gpio_oe_o,
 
-  // PWM Interface
-  output logic pwm_o,
+    // ========================================================================
+    // PWM Interface
+    // ========================================================================
+    output logic [7:0] pwm_o,
+    output logic [7:0] pwm_n_o,
+    input  logic       pwm_fault_i,
 
-  // Timer Interface
-  output logic timer_irq_o,
+    // ========================================================================
+    // Watchdog
+    // ========================================================================
+    output logic wdt_reset_o,
 
-  // PLIC Interface
-  input logic [7:0] ext_irq_i,
+    // ========================================================================
+    // VGA Interface
+    // ========================================================================
+    output logic       vga_hsync_o,
+    output logic       vga_vsync_o,
+    output logic [3:0] vga_r_o,
+    output logic [3:0] vga_g_o,
+    output logic [3:0] vga_b_o,
 
-  // WDT Interface
-  output logic wdt_irq_o,
+    // ========================================================================
+    // External Interrupts
+    // ========================================================================
+    input logic [7:0] ext_irq_i,
 
-  // DMA Interface
-  output logic dma_irq_o,
+    // ========================================================================
+    // Programming Interface
+    // ========================================================================
+    input  logic prog_rx_i,
+    output logic prog_mode_o,
 
-  // VGA Interface
-  output logic vga_hsync_o,
-  output logic vga_vsync_o,
-  output logic [7:0] vga_r_o,
-  output logic [7:0] vga_g_o,
-  output logic [7:0] vga_b_o,
-
-  // Programming Interface
-  input  logic program_rx_i,
-  output logic prog_mode_led_o,
-
-  // Debug/Status
-  output logic [3:0] status_led_o
+    // ========================================================================
+    // Debug/Status
+    // ========================================================================
+    output logic       cpu_halt_o,
+    output logic [3:0] status_led_o
 );
-
   // ==========================================================================
   // Local Parameters
   // ==========================================================================
@@ -250,6 +292,11 @@ module ceres_wrapper
   logic       [                 31:0] vga_rdata;
   logic                               pixel_clk;
   logic                               pll_locked;
+
+  // Response signals for multiplexer
+  iomem_res_t                         ram_res;
+  iomem_res_t                         clint_res;
+  iomem_res_t                         periph_res;
 
   // ==========================================================================
   // Reset
@@ -614,18 +661,345 @@ module ceres_wrapper
   end
 
   // ==========================================================================
-  // Unused Peripheral Tie-offs
+  // GPIO Controller
   // ==========================================================================
   generate
-    if (!GPIO_EN) begin : gen_no_gpio
-      assign gpio_o    = 32'h0;
-      assign gpio_oe_o = 32'h0;
+    if (GPIO_EN) begin : gen_gpio
+      gpio #(
+          .GPIO_WIDTH(32)
+      ) i_gpio (
+          .clk_i     (clk_i),
+          .rst_ni    (sys_rst_n),
+          .stb_i     (sel_gpio),
+          .adr_i     (cpu_mem_req.addr[5:2]),   // Register address (word aligned)
+          .byte_sel_i(cpu_mem_req.rw[3:0]),     // Byte enables
+          .we_i      (|cpu_mem_req.rw),         // Write enable
+          .dat_i     (cpu_mem_req.data[31:0]),
+          .dat_o     (gpio_rdata),
+          .gpio_i    (gpio_i),
+          .gpio_o    (gpio_o),
+          .gpio_oe_o (gpio_oe_o),
+          .gpio_pue_o(),                        // Pull-up (connect to pads if needed)
+          .gpio_pde_o(),                        // Pull-down (connect to pads if needed)
+          .irq_o     (gpio_irq)
+      );
+    end else begin : gen_no_gpio_internal
+      assign gpio_rdata = '0;
+      assign gpio_irq   = 1'b0;
     end
   endgenerate
 
-  // SPI slave selects - directly controlled via register for now
-  assign spi0_ss_o[3:1] = 3'b111;  // Other slaves inactive
+  // ==========================================================================
+  // PLIC (Platform-Level Interrupt Controller)
+  // ==========================================================================
+  // Interrupt source mapping:
+  //   Source 0     : Reserved (always 0)
+  //   Source 1     : GPIO interrupt
+  //   Source 2-9   : External interrupts (ext_irq_i[0-7])
+  //   Source 10    : Timer combined interrupt
+  //   Source 11-14 : Individual timer interrupts
+  //   Source 15    : Watchdog early warning
+  //   Source 16-19 : DMA channel interrupts
+  //   Source 20    : PWM interrupt
+  //   Source 21-31 : Reserved for future peripherals
+  assign plic_irq_sources = {
+    11'b0,  // Sources 21-31: Reserved
+    pwm_irq,  // Source 20: PWM
+    dma_irq,  // Sources 16-19: DMA channels
+    wdt_irq,  // Source 15: Watchdog
+    gptimer_irq,  // Sources 11-14: Individual timer IRQs
+    gptimer_irq_combined,  // Source 10: Timer combined
+    ext_irq_i,  // Sources 2-9: External interrupts
+    gpio_irq,  // Source 1: GPIO
+    1'b0  // Source 0: Reserved (always 0)
+  };
 
-  assign status_led_o   = {3'b0, prog_mode_led_o};
+  generate
+    if (PLIC_EN) begin : gen_plic
+      plic #(
+          .NUM_SOURCES (32),
+          .NUM_PRIORITY(8)
+      ) i_plic (
+          .clk_i        (clk_i),
+          .rst_ni       (sys_rst_n),
+          .stb_i        (sel_plic),
+          .adr_i        (cpu_mem_req.addr[11:2]),  // 10-bit word address
+          .byte_sel_i   (cpu_mem_req.rw[3:0]),
+          .we_i         (|cpu_mem_req.rw),
+          .dat_i        (cpu_mem_req.data[31:0]),
+          .dat_o        (plic_rdata),
+          .irq_sources_i(plic_irq_sources),
+          .irq_o        (plic_irq)
+      );
+    end else begin : gen_no_plic
+      assign plic_rdata = '0;
+      assign plic_irq   = 1'b0;
+    end
+  endgenerate
+
+  // ==========================================================================
+  // General Purpose Timer
+  // ==========================================================================
+  generate
+    if (TIMER_EN) begin : gen_timer
+      gptimer #(
+          .NUM_TIMERS(4)
+      ) i_gptimer (
+          .clk_i         (clk_i),
+          .rst_ni        (sys_rst_n),
+          .stb_i         (sel_timer),
+          .adr_i         (cpu_mem_req.addr[9:2]),   // 8-bit word address
+          .byte_sel_i    (cpu_mem_req.rw[3:0]),
+          .we_i          (|cpu_mem_req.rw),
+          .dat_i         (cpu_mem_req.data[31:0]),
+          .dat_o         (timer_rdata),
+          .pwm_o         (timer_pwm),
+          .irq_o         (gptimer_irq),
+          .irq_combined_o(gptimer_irq_combined)
+      );
+    end else begin : gen_no_timer
+      assign timer_rdata          = '0;
+      assign timer_pwm            = '0;
+      assign gptimer_irq          = '0;
+      assign gptimer_irq_combined = 1'b0;
+    end
+  endgenerate
+
+  // ==========================================================================
+  // Watchdog Timer
+  // ==========================================================================
+  generate
+    if (WDT_EN) begin : gen_wdt
+      watchdog #(
+          .RESET_PULSE_WIDTH(16)
+      ) i_watchdog (
+          .clk_i      (clk_i),
+          .rst_ni     (sys_rst_n),
+          .stb_i      (sel_wdt),
+          .adr_i      (cpu_mem_req.addr[5:2]),   // 4-bit word address
+          .byte_sel_i (cpu_mem_req.rw[3:0]),
+          .we_i       (|cpu_mem_req.rw),
+          .dat_i      (cpu_mem_req.data[31:0]),
+          .dat_o      (wdt_rdata),
+          .dbg_halt_i (1'b0),                    // TODO: Connect to debug module
+          .wdt_reset_o(wdt_reset),
+          .irq_o      (wdt_irq)
+      );
+    end else begin : gen_no_wdt
+      assign wdt_rdata = '0;
+      assign wdt_reset = 1'b0;
+      assign wdt_irq   = 1'b0;
+    end
+  endgenerate
+
+  assign wdt_reset_o = wdt_reset;
+
+  // ==========================================================================
+  // DMA Controller
+  // ==========================================================================
+  generate
+    if (DMA_EN) begin : gen_dma
+      dma #(
+          .NUM_CHANNELS(4),
+          .MAX_BURST   (16)
+      ) i_dma (
+          .clk_i      (clk_i),
+          .rst_ni     (sys_rst_n),
+          .stb_i      (sel_dma),
+          .adr_i      (cpu_mem_req.addr[7:2]),   // 6-bit word address
+          .byte_sel_i (cpu_mem_req.rw[3:0]),
+          .we_i       (|cpu_mem_req.rw),
+          .dat_i      (cpu_mem_req.data[31:0]),
+          .dat_o      (dma_rdata),
+          .dma_req_o  (dma_req),
+          .dma_addr_o (dma_addr),
+          .dma_wdata_o(dma_wdata),
+          .dma_wstrb_o(dma_wstrb),
+          .dma_rdata_i(32'h0),                   // TODO: Connect DMA master port
+          .dma_ack_i  (1'b0),
+          .dreq_i     (4'b0),                    // TODO: Connect peripheral DMA requests
+          .irq_o      (dma_irq)
+      );
+    end else begin : gen_no_dma
+      assign dma_rdata = '0;
+      assign dma_req   = 1'b0;
+      assign dma_addr  = '0;
+      assign dma_wdata = '0;
+      assign dma_wstrb = '0;
+      assign dma_irq   = '0;
+    end
+  endgenerate
+
+  // ==========================================================================
+  // PWM Controller
+  // ==========================================================================
+  generate
+    if (PWM_EN) begin : gen_pwm
+      pwm #(
+          .NUM_CHANNELS(8),
+          .PWM_WIDTH   (16)
+      ) i_pwm (
+          .clk_i     (clk_i),
+          .rst_ni    (sys_rst_n),
+          .stb_i     (sel_pwm),
+          .adr_i     (cpu_mem_req.addr[7:2]),   // 6-bit word address
+          .byte_sel_i(cpu_mem_req.rw[3:0]),
+          .we_i      (|cpu_mem_req.rw),
+          .dat_i     (cpu_mem_req.data[31:0]),
+          .dat_o     (pwm_rdata),
+          .fault_i   (pwm_fault_i),
+          .pwm_o     (pwm_out),
+          .pwm_n_o   (pwm_n_out),
+          .sync_o    (pwm_sync),
+          .drq_o     (),                        // DMA request (connect if needed)
+          .irq_o     (pwm_irq)
+      );
+    end else begin : gen_no_pwm
+      assign pwm_rdata = '0;
+      assign pwm_out   = '0;
+      assign pwm_n_out = '0;
+      assign pwm_sync  = 1'b0;
+      assign pwm_irq   = 1'b0;
+    end
+  endgenerate
+
+  assign pwm_o   = pwm_out;
+  assign pwm_n_o = pwm_n_out;
+
+  // ==========================================================================
+  // VGA Controller
+  // ==========================================================================
+  generate
+    if (VGA_EN) begin : gen_vga
+      // Pixel clock generator
+      vga_clk_gen #(
+          .SYS_CLK_FREQ  (CLK_FREQ_HZ),
+          .PIXEL_CLK_FREQ(25_175_000)
+      ) i_vga_clk (
+          .clk_i      (clk_i),
+          .rst_ni     (sys_rst_n),
+          .pixel_clk_o(pixel_clk),
+          .locked_o   (pll_locked)
+      );
+
+      // VGA controller
+      vga_controller #(
+          .H_VISIBLE  (640),
+          .H_FRONT    (16),
+          .H_SYNC     (96),
+          .H_BACK     (48),
+          .V_VISIBLE  (480),
+          .V_FRONT    (10),
+          .V_SYNC     (2),
+          .V_BACK     (33),
+          .TEXT_COLS  (80),
+          .TEXT_ROWS  (30),
+          .CHAR_WIDTH (8),
+          .CHAR_HEIGHT(16)
+      ) i_vga (
+          .clk_i      (clk_i),
+          .rst_ni     (sys_rst_n),
+          .pixel_clk_i(pixel_clk),
+          .stb_i      (sel_vga),
+          .adr_i      (cpu_mem_req.addr[11:2]),  // 10-bit word address (4KB)
+          .byte_sel_i (cpu_mem_req.rw[3:0]),
+          .we_i       (|cpu_mem_req.rw),
+          .dat_i      (cpu_mem_req.data[31:0]),
+          .dat_o      (vga_rdata),
+          .vga_hsync_o    (vga_hsync_o),
+          .vga_vsync_o    (vga_vsync_o),
+          .vga_r_o        (vga_r_o),
+          .vga_g_o        (vga_g_o),
+          .vga_b_o        (vga_b_o)
+      );
+    end else begin : gen_no_vga
+      assign vga_rdata   = '0;
+      assign pixel_clk   = 1'b0;
+      assign pll_locked  = 1'b0;
+      assign vga_hsync_o = 1'b1;
+      assign vga_vsync_o = 1'b1;
+      assign vga_r_o     = '0;
+      assign vga_g_o     = '0;
+      assign vga_b_o     = '0;
+    end
+  endgenerate
+
+  // ==========================================================================
+  // Peripheral Response Multiplexer
+  // ==========================================================================
+  always_comb begin
+    periph_res.valid = sel_periph;
+    periph_res.ready = 1'b1;
+    periph_res.data  = '0;
+
+    if (sel_gpio) begin
+      periph_res.data = {96'b0, gpio_rdata};
+    end else if (sel_plic) begin
+      periph_res.data = {96'b0, plic_rdata};
+    end else if (sel_timer) begin
+      periph_res.data = {96'b0, timer_rdata};
+    end else if (sel_wdt) begin
+      periph_res.data = {96'b0, wdt_rdata};
+    end else if (sel_dma) begin
+      periph_res.data = {96'b0, dma_rdata};
+    end else if (sel_pwm) begin
+      periph_res.data = {96'b0, pwm_rdata};
+    end else if (sel_vga) begin
+      periph_res.data = {96'b0, vga_rdata};
+    end
+    // Add more peripherals here as they are implemented:
+    // else if (sel_uart0) begin
+    //   periph_res.data = {96'b0, uart0_rdata};
+    // end
+  end
+
+  // ==========================================================================
+  // Response Multiplexer
+  // ==========================================================================
+  always_comb begin
+    cpu_mem_res.valid = 1'b0;
+    cpu_mem_res.ready = 1'b1;
+    cpu_mem_res.data  = '0;
+
+    if (sel_ram) begin
+      cpu_mem_res = ram_res;
+    end else if (sel_clint) begin
+      cpu_mem_res = clint_res;
+    end else if (sel_periph) begin
+      cpu_mem_res = periph_res;
+    end
+  end
+
+  // ==========================================================================
+  // Unused Peripheral Outputs
+  // ==========================================================================
+
+  // UART1 - tied off if not enabled
+  generate
+    if (NUM_UART < 2) begin : gen_no_uart1
+      assign uart1_tx_o = 1'b1;  // Idle high
+    end
+  endgenerate
+
+  // SPI - disabled
+  generate
+    if (!SPI_EN) begin : gen_no_spi
+      assign spi0_sclk_o = 1'b0;
+      assign spi0_mosi_o = 1'b0;
+      assign spi0_ss_o   = 4'hF;  // All slaves deselected
+    end
+  endgenerate
+
+  // GPIO outputs - directly driven by gpio module when enabled
+  generate
+    if (!GPIO_EN) begin : gen_no_gpio
+      assign gpio_o    = 32'h0;
+      assign gpio_oe_o = 32'h0;  // All inputs
+    end
+  endgenerate
+
+  // Status outputs
+  assign cpu_halt_o   = 1'b0;  // TODO: Connect to debug module
+  assign status_led_o = {3'b0, prog_mode_o};
 
 endmodule
