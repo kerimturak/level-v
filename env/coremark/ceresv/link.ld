@@ -1,77 +1,77 @@
 /*
  * Linker script for Ceres-V RV32IMC_Zicsr processor
- * CoreMark benchmark
+ * CoreMark benchmark - 16KB Total Memory (Tight Fit)
  */
 
 OUTPUT_ARCH("riscv")
 ENTRY(_start)
 
-/* Memory layout for Ceres-V */
 MEMORY
 {
-    /* Code starts at 0x80000000 */
-    ROM (rx)  : ORIGIN = 0x80000000, LENGTH = 64K
-    /* Data/Stack area */
-    RAM (rwx) : ORIGIN = 0x80010000, LENGTH = 64K
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 16K
 }
 
-/* Stack size */
-_stack_size = 8K;
+_stack_size = 2K;   /* Minimal stack */
+_heap_size = 4K;    /* CoreMark için minimal heap */
 
 SECTIONS
 {
-    /* Code section */
+    . = 0x80000000;
+    
+    /* Code section - kompakt */
     .text : ALIGN(4)
     {
         *(.text.init)
-        *(.text .text.*)
-        *(.rodata .rodata.*)
-        . = ALIGN(4);
-        _etext = .;
-    } > ROM
+        *(.text.startup)
+        *(.text*)
+    } > RAM
 
-    /* Initialized data section */
+    /* Read-only data */
+    .rodata : ALIGN(4)
+    {
+        *(.rodata*)
+        *(.srodata*)
+    } > RAM
+
+    /* Data section */
     .data : ALIGN(4)
     {
         _data_start = .;
-        *(.data .data.*)
-        *(.sdata .sdata.*)
-        . = ALIGN(4);
+        *(.data*)
+        *(.sdata*)
         _data_end = .;
-    } > RAM AT > ROM
+    } > RAM
 
-    _data_load = LOADADDR(.data);
-
-    /* Uninitialized data section (BSS) */
+    /* BSS section */
     .bss : ALIGN(4)
     {
         _bss_start = .;
-        *(.bss .bss.*)
-        *(.sbss .sbss.*)
+        *(.bss*)
+        *(.sbss*)
         *(COMMON)
-        . = ALIGN(4);
         _bss_end = .;
     } > RAM
 
-    /* Global pointer for efficient access to small data */
+    /* Global pointer */
     PROVIDE(__global_pointer$ = _data_start + 0x800);
 
-    /* Stack at end of RAM */
-    .stack (NOLOAD) : ALIGN(16)
+    /* Heap - CoreMark needs malloc */
+    .heap (NOLOAD) : ALIGN(4)
     {
-        . = . + _stack_size;
+        _heap_start = .;
+        . += _heap_size;
+        _heap_end = .;
+    } > RAM
+
+    /* Stack */
+    .stack (NOLOAD) : ALIGN(8)
+    {
+        . += _stack_size;
         _stack_top = .;
     } > RAM
 
-    /* End of used memory */
     _end = .;
-    PROVIDE(end = .);
-
-    /* Discard unwanted sections */
-    /DISCARD/ :
-    {
-        *(.comment)
-        *(.note*)
-        *(.eh_frame*)
-    }
+    
+    /* Memory usage check */
+    ASSERT(. <= 0x80004000, "ERROR: Program exceeds 16KB memory limit!")
 }

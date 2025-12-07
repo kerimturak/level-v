@@ -4,14 +4,30 @@ ENTRY(_start)
 SECTIONS
 {
   . = 0x80000000;
+  
   .text.init : { *(.text.init) }
-  . = ALIGN(0x1000);
+  
+  /* tohost için sadece 8-byte hizalama yeterli */
+  . = ALIGN(8);
   .tohost : { *(.tohost) }
-  . = ALIGN(0x1000);
+  
+  /* Normal kod için 4-byte hizalama */
+  . = ALIGN(4);
   .text : { *(.text) }
-  . = ALIGN(0x1000);
+  
+  /* Data için 8-byte hizalama (double-word için) */
+  . = ALIGN(8);
   .data : { *(.data) }
+  
   .bss : { *(.bss) }
+  
+  /* Signature sections (test framework için) */
+  . = ALIGN(4);
+  .signature : { 
+    *(.signature)
+    *(begin_signature)
+    *(end_signature)
+  }
+  
   _end = .;
 }
-

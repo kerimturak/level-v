@@ -1,6 +1,5 @@
 /* ============================================================
- * Ceres-V Linker Script for Torture Tests - 32KB Memory
- * Torture tests generate large code, need more space
+ * Ceres-V Linker Script for Dhrystone - 32KB Memory
  * ============================================================
  */
 
@@ -12,13 +11,14 @@ MEMORY
     RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 32K
 }
 
-_stack_size = 2K;   /* Torture testler çok stack kullanmaz */
+_stack_size = 4K;   /* Rahat stack */
+_heap_size  = 4K;   /* Opsiyonel heap */
 
 SECTIONS
 {
     . = 0x80000000;
     
-    /* Code section - torture tests büyük kod üretir */
+    /* Code section */
     .text : ALIGN(4)
     {
         *(.text.init)
@@ -33,13 +33,14 @@ SECTIONS
         *(.srodata*)
     } > RAM
     
-    /* Data with global pointer */
+    /* Small data with global pointer */
     .sdata : ALIGN(4)
     {
         __global_pointer$ = . + 0x800;
         *(.sdata*)
     } > RAM
     
+    /* Data section */
     .data : ALIGN(4)
     {
         _data_start = .;
@@ -47,12 +48,13 @@ SECTIONS
         _data_end = .;
     } > RAM
     
-    /* BSS section */
+    /* Small BSS */
     .sbss : ALIGN(4)
     {
         *(.sbss*)
     } > RAM
     
+    /* BSS section */
     .bss : ALIGN(4)
     {
         _bss_start = .;
@@ -61,7 +63,15 @@ SECTIONS
         _bss_end = .;
     } > RAM
     
-    /* Stack - torture tests shallow call depth */
+    /* Heap */
+    .heap (NOLOAD) : ALIGN(4)
+    {
+        _heap_start = .;
+        . += _heap_size;
+        _heap_end = .;
+    } > RAM
+    
+    /* Stack */
     .stack (NOLOAD) : ALIGN(8)
     {
         _stack_bottom = .;
@@ -71,14 +81,15 @@ SECTIONS
     
     _end = .;
     
-    /* Memory check - torture tests can be LARGE! */
-    ASSERT(. <= 0x80008000, "ERROR: Torture test exceeds 32KB memory!")
+    /* Memory check */
+    ASSERT(. <= 0x80008000, "ERROR: Dhrystone exceeds 32KB memory!")
     
     /DISCARD/ :
     {
         *(.note*)
         *(.comment)
         *(.eh_frame*)
+        *(.gcc_except_table)
     }
 }
 

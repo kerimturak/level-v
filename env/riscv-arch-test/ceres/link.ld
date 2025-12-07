@@ -1,73 +1,70 @@
 /* RISC-V Architecture Test Linker Script for Ceres Processor */
-/* Ceres-V RV32IMC_Zicsr Processor */
+/* Optimized for compact memory layout */
 
 OUTPUT_ARCH("riscv")
 ENTRY(rvtest_entry_point)
 
-/* Memory Layout for Ceres */
 MEMORY
 {
-    RAM   (rwx) : ORIGIN = 0x80000000, LENGTH = 2M
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 2M
 }
 
 SECTIONS
 {
-    /* Code section - starts at RAM base */
     . = 0x80000000;
     
-    .text.init : {
-        *(.text.init)
-    } > RAM
-    
-    . = ALIGN(0x1000);
-    
-    .tohost : {
-        *(.tohost)
-    } > RAM
-    
-    . = ALIGN(0x1000);
-    
+    /* Code section - tightly packed */
     .text : {
+        *(.text.init)
+        . = ALIGN(4);
         *(.text)
         *(.text.*)
     } > RAM
     
-    . = ALIGN(0x1000);
-    
-    /* Read-only data */
-    .rodata : {
+    /* Read-only data immediately after code */
+    .rodata : ALIGN(4) {
         *(.rodata)
         *(.rodata.*)
     } > RAM
     
-    . = ALIGN(0x1000);
-    
-    /* Data section */
-    .data : {
+    /* Data section - 8-byte align for tohost/fromhost */
+    .data : ALIGN(8) {
         _data_start = .;
+        *(.tohost)           /* tohost/fromhost here */
+        . = ALIGN(8);
+        begin_regstate = .;
+        . += 128;            /* regstate space */
+        end_regstate = .;
+        . = ALIGN(8);
+        begin_signature = .; /* signature space */
         *(.data)
         *(.data.*)
+        . = ALIGN(8);
+        end_signature = .;
         _data_end = .;
     } > RAM
     
     /* BSS section */
-    .bss : {
+    .bss : ALIGN(8) {
         _bss_start = .;
         *(.bss)
         *(.bss.*)
         *(.sbss)
         *(.sbss.*)
         *(COMMON)
+        . = ALIGN(8);
         _bss_end = .;
     } > RAM
     
-    . = ALIGN(16);
-    
-    /* Stack */
-    .stack : {
-        . = . + 4K;
+    /* Stack - minimal space */
+    .stack : ALIGN(16) {
+        . = . + 0x1000;      /* 4KB stack - testler için yeterli */
         _stack_top = .;
     } > RAM
     
     _end = .;
+    
+    /* Symbol exports for framework */
+    PROVIDE(tohost = ADDR(.data));
+    PROVIDE(fromhost = tohost + 8);
 }
