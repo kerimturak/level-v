@@ -44,6 +44,7 @@ module wrapper_ram
     input  logic [CACHE_LINE_WIDTH/8-1:0] wstrb_i,
     output logic [  CACHE_LINE_WIDTH-1:0] rdata_o,
     input  logic                          rd_en_i,
+    // Completion pulses (one-cycle) to indicate serialized operations finished
 
     // Programming Interface
     input  logic ram_prog_rx_i,
@@ -63,24 +64,31 @@ module wrapper_ram
   // ==========================================================================
   // Request Xilinx block RAM implementation where possible
   (* ram_style = "block" *)
-  logic [       WORD_WIDTH-1:0] ram            [0:RAM_DEPTH-1];
+  logic [            WORD_WIDTH-1:0] ram            [0:RAM_DEPTH-1];
 
   // ==========================================================================
   // Internal Signals
   // ==========================================================================
 
   // Address calculation
-  logic [$clog2(RAM_DEPTH)-1:0] line_base_addr;
+  logic [     $clog2(RAM_DEPTH)-1:0] line_base_addr;
 
   // Read data register
-  logic [ CACHE_LINE_WIDTH-1:0] rdata_q;
+  logic [      CACHE_LINE_WIDTH-1:0] rdata_q;
 
   // Programming interface
-  logic [                 31:0] prog_addr;
-  logic [                 31:0] prog_data;
-  logic                         prog_valid;
-  logic                         prog_mode;
-  logic                         prog_sys_rst;
+  logic [                      31:0] prog_addr;
+  logic [                      31:0] prog_data;
+  logic                              prog_valid;
+  logic                              prog_mode;
+  logic                              prog_sys_rst;
+  logic                              read_active;
+  // Read FSM indices/base address
+  logic [$clog2(WORDS_PER_LINE)-1:0] read_idx;
+  logic [     $clog2(RAM_DEPTH)-1:0] read_base_addr;
+  // Completion pulses (registered)
+  logic                              rd_done_q;
+  logic                              wr_done_q;
 
   // ==========================================================================
   // Memory Initialization
@@ -139,6 +147,7 @@ module wrapper_ram
       read_idx       <= '0;
       read_base_addr <= '0;
       rdata_q        <= '0;
+      rd_done_q      <= 1'b0;
     end else begin
       if (rd_en_i && !read_active) begin
         read_active    <= 1'b1;
@@ -148,6 +157,9 @@ module wrapper_ram
         rdata_q[read_idx*WORD_WIDTH+:WORD_WIDTH] <= ram[read_base_addr+read_idx];
         if (read_idx == WORDS_PER_LINE - 1) begin
           read_active <= 1'b0;
+          rd_done_q   <= 1'b1;
+        end else begin
+          rd_done_q <= 1'b0;
         end
         read_idx <= read_idx + 1;
       end
@@ -173,6 +185,7 @@ module wrapper_ram
       write_base_addr <= '0;
       write_wdata_buf <= '0;
       write_wstrb_buf <= '0;
+      wr_done_q       <= 1'b0;
     end else begin
       if (|wstrb_i && !write_active) begin
         write_active    <= 1'b1;
@@ -187,7 +200,7 @@ module wrapper_ram
         prev_word = ram[write_base_addr+write_idx];
         next_word = prev_word;
         for (b = 0; b < BYTES_PER_WORD; b++) begin
-          int strobe_idx = write_idx * BYTES_PER_WORD + b;
+          automatic int strobe_idx = write_idx * BYTES_PER_WORD + b;
           if (write_wstrb_buf[strobe_idx]) begin
             next_word[b*8+:8] = write_wdata_buf[write_idx*WORD_WIDTH+b*8+:8];
           end
@@ -201,6 +214,9 @@ module wrapper_ram
 
         if (write_idx == WORDS_PER_LINE - 1) begin
           write_active <= 1'b0;
+          wr_done_q    <= 1'b1;
+        end else begin
+          wr_done_q <= 1'b0;
         end
         write_idx <= write_idx + 1;
       end
