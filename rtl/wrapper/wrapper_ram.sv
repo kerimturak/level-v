@@ -134,9 +134,22 @@ module wrapper_ram
   // Read Logic - Burst read for cache line
   // ==========================================================================
   always_ff @(posedge clk_i) begin
-    if (rd_en_i) begin
-      for (int i = 0; i < WORDS_PER_LINE; i++) begin
-        rdata_q[i*WORD_WIDTH+:WORD_WIDTH] <= ram[line_base_addr+i[$clog2(RAM_DEPTH)-1:0]];
+    if (!rst_ni) begin
+      read_active    <= 1'b0;
+      read_idx       <= '0;
+      read_base_addr <= '0;
+      rdata_q        <= '0;
+    end else begin
+      if (rd_en_i && !read_active) begin
+        read_active    <= 1'b1;
+        read_idx       <= '0;
+        read_base_addr <= line_base_addr;
+      end else if (read_active) begin
+        rdata_q[read_idx*WORD_WIDTH+:WORD_WIDTH] <= ram[read_base_addr+read_idx];
+        if (read_idx == WORDS_PER_LINE - 1) begin
+          read_active <= 1'b0;
+        end
+        read_idx <= read_idx + 1;
       end
     end
   end
@@ -146,32 +159,50 @@ module wrapper_ram
   // ==========================================================================
   // Write Logic - Byte-granular with programming support
   // ==========================================================================
-  // Consolidated write: perform per-word read-modify-write to support byte strobes
-  logic [       WORD_WIDTH-1:0] next_word;
-  logic [       WORD_WIDTH-1:0] prev_word;
-  logic [$clog2(RAM_DEPTH)-1:0] word_addr;
-  always_ff @(posedge clk_i) begin
-    // Normal write via strobes across the cache line
-    for (int w = 0; w < WORDS_PER_LINE; w++) begin
-      // compute word address within RAM
-      word_addr = line_base_addr + $unsigned(w);
-      // start with previous content
-      prev_word = ram[word_addr];
-      next_word = prev_word;
-      // Apply byte strobes for this word
-      for (int b = 0; b < BYTES_PER_WORD; b++) begin
-        automatic int strobe_idx = w * BYTES_PER_WORD + b;
-        if (wstrb_i[strobe_idx]) begin
-          next_word[b*8+:8] = wdata_i[w*WORD_WIDTH+b*8+:8];
-        end
-      end
+  // Serialized write: buffer write request and perform one word write per cycle
+  logic                              write_active;
+  logic [$clog2(WORDS_PER_LINE)-1:0] write_idx;
+  logic [     $clog2(RAM_DEPTH)-1:0] write_base_addr;
+  logic [      CACHE_LINE_WIDTH-1:0] write_wdata_buf;
+  logic [    CACHE_LINE_WIDTH/8-1:0] write_wstrb_buf;
 
-      // Write updated word if any strobe set
-      if (|wstrb_i[w*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-        ram[word_addr] <= next_word;
-      end else if (prog_mode && prog_valid && w == 0) begin
-        // Programming write (only to word 0 position)
-        ram[prog_addr[$clog2(RAM_DEPTH)-1:0]] <= prog_data;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      write_active    <= 1'b0;
+      write_idx       <= '0;
+      write_base_addr <= '0;
+      write_wdata_buf <= '0;
+      write_wstrb_buf <= '0;
+    end else begin
+      if (|wstrb_i && !write_active) begin
+        write_active    <= 1'b1;
+        write_idx       <= '0;
+        write_base_addr <= line_base_addr;
+        write_wdata_buf <= wdata_i;
+        write_wstrb_buf <= wstrb_i;
+      end else if (write_active) begin
+        logic   [WORD_WIDTH-1:0] prev_word;
+        logic   [WORD_WIDTH-1:0] next_word;
+        integer                  b;
+        prev_word = ram[write_base_addr+write_idx];
+        next_word = prev_word;
+        for (b = 0; b < BYTES_PER_WORD; b++) begin
+          int strobe_idx = write_idx * BYTES_PER_WORD + b;
+          if (write_wstrb_buf[strobe_idx]) begin
+            next_word[b*8+:8] = write_wdata_buf[write_idx*WORD_WIDTH+b*8+:8];
+          end
+        end
+        if (|write_wstrb_buf[write_idx*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+          ram[write_base_addr+write_idx] <= next_word;
+        end
+        if (prog_mode && prog_valid && write_idx == 0) begin
+          ram[prog_addr[$clog2(RAM_DEPTH)-1:0]] <= prog_data;
+        end
+
+        if (write_idx == WORDS_PER_LINE - 1) begin
+          write_active <= 1'b0;
+        end
+        write_idx <= write_idx + 1;
       end
     end
   end

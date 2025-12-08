@@ -14,15 +14,16 @@ set_property -dict { PACKAGE_PIN U19   IOSTANDARD LVCMOS33 } [get_ports { status
 set_property -dict { PACKAGE_PIN V19   IOSTANDARD LVCMOS33 } [get_ports { status_led_o[3] }]
 
 # Programming mode LED (map to LD4)
-set_property -dict { PACKAGE_PIN W18   IOSTANDARD LVCMOS33 } [get_ports { prog_mode_led_o }]
+set_property -dict { PACKAGE_PIN W18   IOSTANDARD LVCMOS33 } [get_ports { prog_mode_o }]
 
 # Main UART (console) -> onboard USB-RS232 (FTDI)
-set_property -dict { PACKAGE_PIN A18    IOSTANDARD LVCMOS33 } [get_ports { uart_tx_o }]
-set_property -dict { PACKAGE_PIN B18    IOSTANDARD LVCMOS33 } [get_ports { uart_rx_i }]
+# Map to UART0 signals on top-level
+set_property -dict { PACKAGE_PIN A18    IOSTANDARD LVCMOS33 } [get_ports { uart0_tx_o }]
+set_property -dict { PACKAGE_PIN B18    IOSTANDARD LVCMOS33 } [get_ports { uart0_rx_i }]
 
 # Programmer UART -> PMOD JA pin 1 (JA1)
 # Basys3 PMOD JA mapping: JA[0] -> PACKAGE_PIN J1
-set_property -dict { PACKAGE_PIN J1    IOSTANDARD LVCMOS33 } [get_ports { program_rx_i }]
+set_property -dict { PACKAGE_PIN J1    IOSTANDARD LVCMOS33 } [get_ports { prog_rx_i }]
 
 # Notes:
 # - `status_led_o` is a 4-bit port (LD0..LD3). prog_mode_led_o mapped to LD4.

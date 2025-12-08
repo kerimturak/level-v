@@ -406,9 +406,9 @@ module ceres_wrapper
       .wstrb_i        (ram_wstrb),
       .rdata_o        (ram_rdata),
       .rd_en_i        (ram_rd_en),
-      .ram_prog_rx_i  (program_rx_i),
+      .ram_prog_rx_i  (prog_rx_i),
       .system_reset_o (prog_reset),
-      .prog_mode_led_o(prog_mode_led_o)
+      .prog_mode_led_o(prog_mode_o)
   );
 
   // Burst state machine
@@ -543,9 +543,22 @@ module ceres_wrapper
   //   0x2001_0xxx : SPI  (addr[19:16] == 0x1)
   //   0x2002_0xxx : I2C  (addr[19:16] == 0x2)
   // ==========================================================================
-  assign uart_sel = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
-  assign spi_sel  = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
-  assign i2c_sel  = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
+  assign sel_uart0 = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
+  assign sel_spi0 = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
+  assign sel_i2c0 = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
+  // TODO: implement selects for other peripherals
+  // Default peripheral selects (clear unused selects to avoid undriven nets)
+  assign sel_uart1 = 1'b0;
+  assign sel_gpio = 1'b0;
+  assign sel_pwm = 1'b0;
+  assign sel_timer = 1'b0;
+  assign sel_plic = 1'b0;
+  assign sel_wdt = 1'b0;
+  assign sel_dma = 1'b0;
+  assign sel_vga = 1'b0;
+  assign sel_ram = 1'b0;
+  assign sel_clint = 1'b0;
+  assign sel_periph = (sel_uart0 | sel_spi0 | sel_i2c0 | sel_gpio | sel_pwm | sel_timer | sel_plic | sel_wdt | sel_dma | sel_vga | sel_uart1);
 
   // ==========================================================================
   // UART (Connected via Peripheral Bus)
@@ -554,7 +567,7 @@ module ceres_wrapper
   uart i_uart (
       .clk_i     (clk_i),
       .rst_ni    (sys_rst_n),
-      .stb_i     (pbus_valid && uart_sel),
+      .stb_i     (pbus_valid && sel_uart0),
       .adr_i     (pbus_addr[3:2]),
       .byte_sel_i(pbus_wstrb),
       .we_i      (pbus_we),
@@ -573,7 +586,7 @@ module ceres_wrapper
       spi_master i_spi (
           .clk_i     (clk_i),
           .rst_ni    (sys_rst_n),
-          .stb_i     (pbus_valid && spi_sel),
+          .stb_i     (pbus_valid && sel_spi0),
           .adr_i     (pbus_addr[3:2]),
           .byte_sel_i(pbus_wstrb),
           .we_i      (pbus_we),
@@ -596,7 +609,7 @@ module ceres_wrapper
       i2c_master i_i2c (
           .clk_i       (clk_i),
           .rst_ni      (sys_rst_n),
-          .stb_i       (pbus_valid && i2c_sel),
+          .stb_i       (pbus_valid && sel_i2c0),
           .adr_i       (pbus_addr[4:2]),
           .byte_sel_i  (pbus_wstrb),
           .we_i        (pbus_we),
@@ -604,12 +617,19 @@ module ceres_wrapper
           .dat_o       (i2c0_rdata),
           .i2c_scl_o   (i2c0_scl_o),
           .i2c_scl_oe_o(i2c0_scl_oe),
-          .i2c_scl_i   (i2c_scl_i),
+          .i2c_scl_i   (i2c0_scl_i),
           .i2c_sda_o   (i2c0_sda_o),
           .i2c_sda_oe_o(i2c0_sda_oe),
-          .i2c_sda_i   (i2c_sda_i),
-          .irq_o       (i2c_irq)
+          .i2c_sda_i   (i2c0_sda_i),
+          .irq_o       (i2c0_irq)
       );
+    end else begin : gen_no_i2c
+      assign i2c0_rdata  = '0;
+      assign i2c0_scl_o  = 1'b1;
+      assign i2c0_scl_oe = 1'b0;
+      assign i2c0_sda_o  = 1'b1;
+      assign i2c0_sda_oe = 1'b0;
+      assign i2c0_irq    = 1'b0;
     end
   endgenerate
 
@@ -636,8 +656,8 @@ module ceres_wrapper
   // For FPGA: external tri-state buffers
   assign i2c0_scl_io = i2c0_scl_oe ? (i2c0_scl_o ? 1'bz : 1'b0) : 1'bz;
   assign i2c0_sda_io = i2c0_sda_oe ? (i2c0_sda_o ? 1'bz : 1'b0) : 1'bz;
-  assign i2c_scl_i   = i2c0_scl_io;
-  assign i2c_sda_i   = i2c0_sda_io;
+  assign i2c0_scl_i  = i2c0_scl_io;
+  assign i2c0_sda_i  = i2c0_sda_io;
 `endif
 
   // Peripheral read data mux
@@ -977,7 +997,8 @@ module ceres_wrapper
   // UART1 - tied off if not enabled
   generate
     if (NUM_UART < 2) begin : gen_no_uart1
-      assign uart1_tx_o = 1'b1;  // Idle high
+      assign uart1_tx_o  = 1'b1;  // Idle high
+      assign uart1_rdata = '0;
     end
   endgenerate
 
@@ -987,6 +1008,7 @@ module ceres_wrapper
       assign spi0_sclk_o = 1'b0;
       assign spi0_mosi_o = 1'b0;
       assign spi0_ss_o   = 4'hF;  // All slaves deselected
+      assign spi0_rdata  = '0;
     end
   endgenerate
 
