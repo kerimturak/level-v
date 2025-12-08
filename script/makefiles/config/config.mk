@@ -10,7 +10,7 @@
 # -----------------------------------------
 MODE          ?= debug
 TEST_NAME     ?= rv32ui-p-add
-SIM_TIME      := 20000ns
+SIM_TIME      := 200000ns
 
 # -----------------------------------------
 # Auto-detect TEST_TYPE from TEST_NAME pattern

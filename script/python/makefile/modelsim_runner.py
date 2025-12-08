@@ -800,6 +800,17 @@ def main() -> int:
     
     # Memory dizinlerini parse et
     mem_dirs = [Path(d.strip()) for d in args.mem_dirs.split() if d.strip()]
+
+    # Eğer JSON konfigürasyonu logging/trace makrolarını içeriyorsa, debug logging'i aç
+    if json_config:
+        try:
+            macros = [m.upper() for m in json_config.language.define_macros or []]
+        except Exception:
+            macros = []
+
+        logging_macros = {"LOG_COMMIT", "KONATA_TRACER", "COMMIT_TRACER", "LOG_BP", "LOG_RAM", "LOG_UART", "TRACE"}
+        if any(m in logging_macros for m in macros) or getattr(json_config.debug, 'fsmdebug', False) or getattr(json_config.debug, 'classdebug', False):
+            debug_enabled = True
     
     # Config oluştur (JSON + CLI merge)
     config = merge_config_with_cli(json_config, args, mem_dirs)

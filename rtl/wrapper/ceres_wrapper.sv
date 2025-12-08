@@ -550,6 +550,7 @@ module ceres_wrapper
   // ==========================================================================
   // UART (Connected via Peripheral Bus)
   // ==========================================================================
+  // UART0
   uart i_uart (
       .clk_i     (clk_i),
       .rst_ni    (sys_rst_n),
@@ -558,49 +559,59 @@ module ceres_wrapper
       .byte_sel_i(pbus_wstrb),
       .we_i      (pbus_we),
       .dat_i     (pbus_wdata),
-      .dat_o     (uart_rdata),
-      .uart_rx_i (uart_rx_i),
-      .uart_tx_o (uart_tx_o)
+      .dat_o     (uart0_rdata),
+      .uart_rx_i (uart0_rx_i),
+      .uart_tx_o (uart0_tx_o)
   );
 
   // ==========================================================================
   // SPI Master (Connected via Peripheral Bus)
   // ==========================================================================
-  spi_master i_spi (
-      .clk_i     (clk_i),
-      .rst_ni    (sys_rst_n),
-      .stb_i     (pbus_valid && spi_sel),
-      .adr_i     (pbus_addr[3:2]),
-      .byte_sel_i(pbus_wstrb),
-      .we_i      (pbus_we),
-      .dat_i     (pbus_wdata),
-      .dat_o     (spi_rdata),
-      .spi_sck_o (spi0_sclk_o),
-      .spi_mosi_o(spi0_mosi_o),
-      .spi_miso_i(spi0_miso_i),
-      .spi_cs_n_o(spi0_ss_o[0])
-  );
+  // SPI Master (instantiated only when enabled)
+  generate
+    if (SPI_EN) begin : gen_spi
+      spi_master i_spi (
+          .clk_i     (clk_i),
+          .rst_ni    (sys_rst_n),
+          .stb_i     (pbus_valid && spi_sel),
+          .adr_i     (pbus_addr[3:2]),
+          .byte_sel_i(pbus_wstrb),
+          .we_i      (pbus_we),
+          .dat_i     (pbus_wdata),
+          .dat_o     (spi0_rdata),
+          .spi_sck_o (spi0_sclk_o),
+          .spi_mosi_o(spi0_mosi_o),
+          .spi_miso_i(spi0_miso_i),
+          .spi_cs_n_o(spi0_ss_o[0])
+      );
+    end
+  endgenerate
 
   // ==========================================================================
   // I2C Master (Connected via Peripheral Bus)
   // ==========================================================================
-  i2c_master i_i2c (
-      .clk_i       (clk_i),
-      .rst_ni      (sys_rst_n),
-      .stb_i       (pbus_valid && i2c_sel),
-      .adr_i       (pbus_addr[4:2]),
-      .byte_sel_i  (pbus_wstrb),
-      .we_i        (pbus_we),
-      .dat_i       (pbus_wdata),
-      .dat_o       (i2c_rdata),
-      .i2c_scl_o   (i2c_scl_o),
-      .i2c_scl_oe_o(i2c_scl_oe),
-      .i2c_scl_i   (i2c_scl_i),
-      .i2c_sda_o   (i2c_sda_o),
-      .i2c_sda_oe_o(i2c_sda_oe),
-      .i2c_sda_i   (i2c_sda_i),
-      .irq_o       (i2c_irq)
-  );
+  // I2C Master (instantiated only when enabled)
+  generate
+    if (I2C_EN) begin : gen_i2c
+      i2c_master i_i2c (
+          .clk_i       (clk_i),
+          .rst_ni      (sys_rst_n),
+          .stb_i       (pbus_valid && i2c_sel),
+          .adr_i       (pbus_addr[4:2]),
+          .byte_sel_i  (pbus_wstrb),
+          .we_i        (pbus_we),
+          .dat_i       (pbus_wdata),
+          .dat_o       (i2c0_rdata),
+          .i2c_scl_o   (i2c0_scl_o),
+          .i2c_scl_oe_o(i2c0_scl_oe),
+          .i2c_scl_i   (i2c_scl_i),
+          .i2c_sda_o   (i2c0_sda_o),
+          .i2c_sda_oe_o(i2c0_sda_oe),
+          .i2c_sda_i   (i2c_sda_i),
+          .irq_o       (i2c_irq)
+      );
+    end
+  endgenerate
 
   // I2C Tri-state buffers and simulation slave
 `ifdef VERILATOR
@@ -614,19 +625,17 @@ module ceres_wrapper
   ) i_i2c_slave (
       .clk_i   (clk_i),
       .rst_ni  (sys_rst_n),
-      .scl_i   (i2c_scl_oe ? i2c_scl_o : 1'b1),
-      .sda_i   (i2c_sda_oe ? i2c_sda_o : 1'b1),
+      .scl_i   (i2c0_scl_oe ? i2c0_scl_o : 1'b1),
+      .sda_i   (i2c0_sda_oe ? i2c0_sda_o : 1'b1),
       .sda_o   (i2c_slave_sda_o),
       .sda_oe_o(i2c_slave_sda_oe)
   );
 
   // Wired-AND for I2C bus (open-drain simulation)
-  assign i2c_scl_i = i2c_scl_oe ? i2c_scl_o : 1'b1;
-  assign i2c_sda_i = (i2c_sda_oe ? i2c_sda_o : 1'b1) & (i2c_slave_sda_oe ? i2c_slave_sda_o : 1'b1);
 `else
   // For FPGA: external tri-state buffers
-  assign i2c0_scl_io = i2c_scl_oe ? (i2c_scl_o ? 1'bz : 1'b0) : 1'bz;
-  assign i2c0_sda_io = i2c_sda_oe ? (i2c_sda_o ? 1'bz : 1'b0) : 1'bz;
+  assign i2c0_scl_io = i2c0_scl_oe ? (i2c0_scl_o ? 1'bz : 1'b0) : 1'bz;
+  assign i2c0_sda_io = i2c0_sda_oe ? (i2c0_sda_o ? 1'bz : 1'b0) : 1'bz;
   assign i2c_scl_i   = i2c0_scl_io;
   assign i2c_sda_i   = i2c0_sda_io;
 `endif
@@ -906,11 +915,11 @@ module ceres_wrapper
           .we_i       (|cpu_mem_req.rw),
           .dat_i      (cpu_mem_req.data[31:0]),
           .dat_o      (vga_rdata),
-          .vga_hsync_o    (vga_hsync_o),
-          .vga_vsync_o    (vga_vsync_o),
-          .vga_r_o        (vga_r_o),
-          .vga_g_o        (vga_g_o),
-          .vga_b_o        (vga_b_o)
+          .vga_hsync_o(vga_hsync_o),
+          .vga_vsync_o(vga_vsync_o),
+          .vga_r_o    (vga_r_o),
+          .vga_g_o    (vga_g_o),
+          .vga_b_o    (vga_b_o)
       );
     end else begin : gen_no_vga
       assign vga_rdata   = '0;

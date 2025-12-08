@@ -194,11 +194,11 @@ module konata_logger;
     if (!`SOC.rst_ni) begin
       cycle_cnt   <= 0;
       first_cycle <= 1'b1;
-      fetch_s     <= '{default: 0};
-      decode_s    <= '{default: 0};
-      execute_s   <= '{default: 0};
-      memory_s    <= '{default: 0};
-      writeback_s <= '{default: 0};
+      fetch_s     <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+      decode_s    <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+      execute_s   <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+      memory_s    <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+      writeback_s <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
     end else begin
       // ----------------------------------------------------------------------
       // 1) Cycle header

@@ -640,6 +640,12 @@ def main():
         action="store_true",
         help="Konfigürasyonu doğrula"
     )
+
+    parser.add_argument(
+        "--make",
+        action="store_true",
+        help="Makefile için Make değişkenleri çıktısı (Make fragment)"
+    )
     
     parser.add_argument(
         "--no-color",
@@ -677,12 +683,90 @@ def main():
             print_config_summary(config)
             if config.warnings:
                 return 1 if args.strict else 0
-        
+
+        elif args.make:
+            # Print Makefile variable fragment
+            # Emit MODELSIM_* variables and CFG_SV_DEFINES for compatibility
+            def fmt_bool(v):
+                return "1" if v else "0"
+
+            # Basic simulation vars
+            print(f"MODELSIM_TIME_RES ?= {config.simulation.time_resolution}")
+            print(f"SIM_TIME ?= {config.simulation.sim_time}")
+            print(f"MODELSIM_VOPTARGS ?= {config.simulation.voptargs}")
+            if config.simulation.quiet:
+                print("MODELSIM_QUIET ?= -quiet")
+
+            # Compile settings
+            print(f"MODELSIM_SV_MODE ?= {'-sv' if config.compile.sv_mode else ''}")
+            print(f"MODELSIM_MFCU ?= {'-mfcu' if config.compile.mfcu else '-sfcu'}")
+            print(f"MODELSIM_SVINPUTPORT ?= {config.compile.svinputport}")
+
+            # Lint
+            print(f"MODELSIM_LINT_ENABLED ?= {fmt_bool(config.lint.enabled)}")
+            print(f"MODELSIM_LINT_MODE ?= {config.lint.mode}")
+            if config.lint.pedantic:
+                print('MODELSIM_PEDANTIC ?= -pedanticerrors')
+
+            # Debug
+            print(f"MODELSIM_ACC ?= {config.debug.acc}")
+            if config.debug.fsmdebug:
+                print('MODELSIM_FSMDEBUG ?= -fsmdebug')
+            if config.debug.classdebug:
+                print('MODELSIM_CLASSDEBUG ?= -classdebug')
+            if config.debug.assertdebug:
+                print('MODELSIM_ASSERTDEBUG ?= -assertdebug')
+
+            # Coverage
+            if config.coverage.enabled:
+                print(f"MODELSIM_COVERAGE ?= +cover={config.coverage.get_spec_string()}")
+            else:
+                print("MODELSIM_COVERAGE ?=")
+
+            # Language
+            print(f"MODELSIM_SV_COMPAT ?= -{config.language.sv_standard}")
+            print(f"MODELSIM_TIMESCALE ?= {config.language.timescale}")
+
+            # GLS
+            if not config.gls.timing_checks:
+                print('MODELSIM_NOTIMINGCHECKS ?= +notimingchecks')
+            if not config.gls.specify_delays:
+                print('MODELSIM_NOSPECIFY ?= +nospecify')
+            print(f"MODELSIM_DELAY_MODE ?= {config.gls.get_delay_flag()}")
+
+            # Messages
+            if config.messages.suppress:
+                s = ' '.join([f"-suppress {m}" for m in config.messages.suppress])
+                print(f"MODELSIM_SUPPRESS ?= {s}")
+            if config.messages.nowarn:
+                nw = ' '.join([f"-nowarn {m}" for m in config.messages.nowarn])
+                print(f"MODELSIM_NOWARN ?= {nw}")
+            if config.messages.source_on_error:
+                print('MODELSIM_SOURCE ?= -source')
+
+            # Multicore
+            if config.multicore.enabled:
+                print(f"MODELSIM_MULTICORE ?= -mtc {config.multicore.threads}")
+
+            # Pass any language define_macros into MODELSIM_DEFINES and CFG_SV_DEFINES
+            if config.language.define_macros:
+                defines = ' '.join([f"+define+{d}" for d in config.language.define_macros])
+                print(f"MODELSIM_DEFINES ?= {defines}")
+                # Also provide CFG_SV_DEFINES for legacy usage
+                cfg_defs = ' '.join([f"+define+{d}" for d in config.language.define_macros])
+                print(f"CFG_SV_DEFINES := {cfg_defs}")
+
+            # Include dirs (provide INC_DIRS fragment if present)
+            if config.language.include_dirs:
+                incs = ' '.join(config.language.include_dirs)
+                print(f"INC_DIRS ?= {incs}")
+
+            return 0
+
         else:
             # Varsayılan: özet göster
             print_config_summary(config)
-        
-        return 0
+            return 0
     
     except FileNotFoundError as e:
         error(str(e))

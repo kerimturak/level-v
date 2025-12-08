@@ -43,8 +43,15 @@
 
   "language": {
     "sv_standard": "sv12compat",
-    "define_macros": [],
-    "include_dirs": [],
+    "define_macros": ["COMMIT_TRACER",
+    "KONATA_TRACER",
+    "LOG_COMMIT",
+    "LOG_RAM",
+    "LOG_UART",
+    "LOG_BP",
+    "SIM_FAST",
+    "SIM_UART_MONITOR"],
+    "include_dirs": ["./rtl/include"],
     "timescale": "1ns/1ps"
   },
 

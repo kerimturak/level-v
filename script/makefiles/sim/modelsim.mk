@@ -5,7 +5,7 @@
 # -----------------------------------------
 # Configuration Loading (from JSON)
 # -----------------------------------------
-MODELSIM_CONFIG_SCRIPT := $(ROOT_DIR)/script/shell/parse_modelsim_config.sh
+MODELSIM_CONFIG_SCRIPT := $(ROOT_DIR)/script/python/makefile/modelsim_config.py
 MODELSIM_CONFIG_FILE   := $(ROOT_DIR)/script/config/modelsim.json
 
 # Load config if available and no explicit overrides
@@ -23,9 +23,9 @@ ifneq ($(wildcard $(MODELSIM_CONFIG_SCRIPT)),)
       -include $(BUILD_DIR)/.modelsim_config.mk
       
       # Generate config makefile
-      $(BUILD_DIR)/.modelsim_config.mk: $(MODELSIM_CONFIG_FILE) $(wildcard $(ROOT_DIR)/script/config/modelsim.local.json)
+    $(BUILD_DIR)/.modelsim_config.mk: $(MODELSIM_CONFIG_FILE) $(wildcard $(ROOT_DIR)/script/config/modelsim.local.json)
 		@mkdir -p $(BUILD_DIR)
-		@$(MODELSIM_CONFIG_SCRIPT) --make $(MODELSIM_CONFIG_ARGS) > $@ 2>/dev/null || true
+		@python3 $(MODELSIM_CONFIG_SCRIPT) --make $(MODELSIM_CONFIG_ARGS) > $@ 2>/dev/null || true
     endif
   endif
 endif
@@ -367,6 +367,9 @@ simulate: compile
 		--build-dir=$(BUILD_DIR) \
 		--sim-time=$(SIM_TIME) \
 		--tb-level=$(TB_LEVEL) \
+		$(if $(filter 1,$(LOG_COMMIT)),--debug,) \
+		$(if $(filter 1,$(KONATA_TRACER)),--debug,) \
+		$(if $(filter 1,$(TRACE)),--debug,) \
 		$(if $(MODELSIM_PROFILE),--profile=$(MODELSIM_PROFILE)) \
 		$(if $(filter 1,$(GUI)),--gui) \
 		$(if $(DO_FILE),--do-file=$(DO_FILE)) \
@@ -383,6 +386,9 @@ simulate_gui: compile
 		--build-dir=$(BUILD_DIR) \
 		--sim-time=$(SIM_TIME) \
 		--tb-level=$(TB_LEVEL) \
+		$(if $(filter 1,$(LOG_COMMIT)),--debug,) \
+		$(if $(filter 1,$(KONATA_TRACER)),--debug,) \
+		$(if $(filter 1,$(TRACE)),--debug,) \
 		--gui \
 		--do-file=$(DO_FILE) \
 		$(if $(MODELSIM_PROFILE),--profile=$(MODELSIM_PROFILE)) \
