@@ -189,7 +189,7 @@ module cpu
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni || de_flush_en || |priority_flush || fencei_flush) begin
-      pipe1 <= '{exc_type: NO_EXCEPTION, instr_type: instr_invalid, default: 0};
+      pipe1 <= '{exc_type: NO_EXCEPTION, instr_type: instr_invalid, default: '0};
     end else if (de_enable) begin
       pipe1 <= '{
       `ifdef COMMIT_TRACER
@@ -264,7 +264,7 @@ module cpu
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni || ex_flush_en || priority_flush == 3 || priority_flush == 2) begin
-      pipe2 <= '{instr_type: instr_invalid, alu_ctrl: OP_ADD, pc_sel: NO_BJ, default: 0};
+      pipe2 <= '{instr_type: instr_invalid, alu_ctrl: OP_ADD, pc_sel: NO_BJ, default: '0};
     end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL})) begin
       pipe2 <= '{
         `ifdef COMMIT_TRACER
@@ -441,7 +441,7 @@ module cpu
   always_ff @(posedge clk_i) begin
     if (!rst_ni || priority_flush == 3) begin
       `ifdef COMMIT_TRACER
-      pipe3 <= '{instr_type:instr_invalid, default: 0};
+      pipe3 <= '{instr_type:instr_invalid, default: '0};
       `else
       pipe3 <= '0;
       `endif
@@ -517,7 +517,7 @@ module cpu
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       `ifdef COMMIT_TRACER
-      pipe4 <= '{instr_type:instr_invalid, default: 0};
+      pipe4 <= '{instr_type:instr_invalid, default: '0};
       `else
       pipe4 <= '0;
       `endif

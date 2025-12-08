@@ -965,19 +965,10 @@ module ceres_wrapper
   // ==========================================================================
   // Response Multiplexer
   // ==========================================================================
-  always_comb begin
-    cpu_mem_res.valid = 1'b0;
-    cpu_mem_res.ready = 1'b1;
-    cpu_mem_res.data  = '0;
-
-    if (sel_ram) begin
-      cpu_mem_res = ram_res;
-    end else if (sel_clint) begin
-      cpu_mem_res = clint_res;
-    end else if (sel_periph) begin
-      cpu_mem_res = periph_res;
-    end
-  end
+  // NOTE: `cpu_mem_res` is driven by the `wb_master_bridge` instance
+  // (connected to `.iomem_res_o`) and therefore must not be driven
+  // procedurally here. The bridge handles packing responses from
+  // Wishbone slaves and presenting them to the CPU.
 
   // ==========================================================================
   // Unused Peripheral Outputs
