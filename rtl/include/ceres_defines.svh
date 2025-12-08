@@ -58,6 +58,7 @@
 // IMPLICIT DEPENDENCIES
 // ============================================================================
 // LOG_COMMIT kullanıyorsan COMMIT_TRACER gerekli (pipe'da fe_tracer için)
+`ifndef SYNTHESIS
 `ifdef LOG_COMMIT
 `define COMMIT_TRACER
 `endif
@@ -85,4 +86,4 @@
 `ifdef CERES_UART_TX_MONITOR
 `define SIM_UART_MONITOR
 `endif
-
+`endif

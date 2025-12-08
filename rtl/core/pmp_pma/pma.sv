@@ -335,14 +335,113 @@ module pma
     grand_o     = 1'b0;
 
     // Priority encoder - check regions in order
-    for (int i = 0; i < NUM_REGIONS; i++) begin
-      if (region_match[i]) begin
-        uncached_o  = pma_map[i].uncached;
-        memregion_o = pma_map[i].memregion;
-        grand_o     = pma_map[i].x;
-        break;  // First match wins
+    // Use a casez on the match vector so synthesis tools don't need a 'break'
+    // region_match[NUM_REGIONS-1:0] -> bit[19] is MSB, bit[0] is LSB (region 0)
+    casez (region_match)
+      20'b???????????????????1: begin
+        uncached_o  = pma_map[0].uncached;
+        memregion_o = pma_map[0].memregion;
+        grand_o     = pma_map[0].x;
       end
-    end
+      20'b??????????????????10: begin
+        uncached_o  = pma_map[1].uncached;
+        memregion_o = pma_map[1].memregion;
+        grand_o     = pma_map[1].x;
+      end
+      20'b?????????????????100: begin
+        uncached_o  = pma_map[2].uncached;
+        memregion_o = pma_map[2].memregion;
+        grand_o     = pma_map[2].x;
+      end
+      20'b????????????????1000: begin
+        uncached_o  = pma_map[3].uncached;
+        memregion_o = pma_map[3].memregion;
+        grand_o     = pma_map[3].x;
+      end
+      20'b???????????????10000: begin
+        uncached_o  = pma_map[4].uncached;
+        memregion_o = pma_map[4].memregion;
+        grand_o     = pma_map[4].x;
+      end
+      20'b??????????????100000: begin
+        uncached_o  = pma_map[5].uncached;
+        memregion_o = pma_map[5].memregion;
+        grand_o     = pma_map[5].x;
+      end
+      20'b?????????????1000000: begin
+        uncached_o  = pma_map[6].uncached;
+        memregion_o = pma_map[6].memregion;
+        grand_o     = pma_map[6].x;
+      end
+      20'b????????????10000000: begin
+        uncached_o  = pma_map[7].uncached;
+        memregion_o = pma_map[7].memregion;
+        grand_o     = pma_map[7].x;
+      end
+      20'b???????????100000000: begin
+        uncached_o  = pma_map[8].uncached;
+        memregion_o = pma_map[8].memregion;
+        grand_o     = pma_map[8].x;
+      end
+      20'b??????????1000000000: begin
+        uncached_o  = pma_map[9].uncached;
+        memregion_o = pma_map[9].memregion;
+        grand_o     = pma_map[9].x;
+      end
+      20'b?????????10000000000: begin
+        uncached_o  = pma_map[10].uncached;
+        memregion_o = pma_map[10].memregion;
+        grand_o     = pma_map[10].x;
+      end
+      20'b????????100000000000: begin
+        uncached_o  = pma_map[11].uncached;
+        memregion_o = pma_map[11].memregion;
+        grand_o     = pma_map[11].x;
+      end
+      20'b???????1000000000000: begin
+        uncached_o  = pma_map[12].uncached;
+        memregion_o = pma_map[12].memregion;
+        grand_o     = pma_map[12].x;
+      end
+      20'b??????10000000000000: begin
+        uncached_o  = pma_map[13].uncached;
+        memregion_o = pma_map[13].memregion;
+        grand_o     = pma_map[13].x;
+      end
+      20'b?????100000000000000: begin
+        uncached_o  = pma_map[14].uncached;
+        memregion_o = pma_map[14].memregion;
+        grand_o     = pma_map[14].x;
+      end
+      20'b????1000000000000000: begin
+        uncached_o  = pma_map[15].uncached;
+        memregion_o = pma_map[15].memregion;
+        grand_o     = pma_map[15].x;
+      end
+      20'b???10000000000000000: begin
+        uncached_o  = pma_map[16].uncached;
+        memregion_o = pma_map[16].memregion;
+        grand_o     = pma_map[16].x;
+      end
+      20'b??100000000000000000: begin
+        uncached_o  = pma_map[17].uncached;
+        memregion_o = pma_map[17].memregion;
+        grand_o     = pma_map[17].x;
+      end
+      20'b?1000000000000000000: begin
+        uncached_o  = pma_map[18].uncached;
+        memregion_o = pma_map[18].memregion;
+        grand_o     = pma_map[18].x;
+      end
+      20'b10000000000000000000: begin
+        uncached_o  = pma_map[19].uncached;
+        memregion_o = pma_map[19].memregion;
+        grand_o     = pma_map[19].x;
+      end
+      default: begin
+        // No match; keep defaults (already zeroed)
+      end
+    endcase
   end
 
 endmodule

@@ -31,9 +31,9 @@ module wrapper_ram
     parameter int unsigned CACHE_LINE_WIDTH = BLK_SIZE,
 
     // Programming Configuration  
-    parameter int unsigned CPU_CLK          = ceres_param::CPU_CLK,
-    parameter int unsigned PROG_BAUD_RATE   = ceres_param::PROG_BAUD_RATE,
-    parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
+    parameter int unsigned                              CPU_CLK          = ceres_param::CPU_CLK,
+    parameter int unsigned                              PROG_BAUD_RATE   = ceres_param::PROG_BAUD_RATE,
+    parameter logic        [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
 ) (
     input logic clk_i,
     input logic rst_ni,
@@ -63,33 +63,34 @@ module wrapper_ram
   // ==========================================================================
   // Request Xilinx block RAM implementation where possible
   (* ram_style = "block" *)
-  logic   [       WORD_WIDTH-1:0] ram            [0:RAM_DEPTH-1];
+  logic [       WORD_WIDTH-1:0] ram            [0:RAM_DEPTH-1];
 
   // ==========================================================================
   // Internal Signals
   // ==========================================================================
 
   // Address calculation
-  logic   [$clog2(RAM_DEPTH)-1:0] line_base_addr;
+  logic [$clog2(RAM_DEPTH)-1:0] line_base_addr;
 
   // Read data register
-  logic   [ CACHE_LINE_WIDTH-1:0] rdata_q;
+  logic [ CACHE_LINE_WIDTH-1:0] rdata_q;
 
   // Programming interface
-  logic   [                 31:0] prog_addr;
-  logic   [                 31:0] prog_data;
-  logic                           prog_valid;
-  logic                           prog_mode;
-  logic                           prog_sys_rst;
+  logic [                 31:0] prog_addr;
+  logic [                 31:0] prog_data;
+  logic                         prog_valid;
+  logic                         prog_mode;
+  logic                         prog_sys_rst;
 
   // ==========================================================================
   // Memory Initialization
   // ==========================================================================
-  localparam int INIT_FILE_LEN    = 256;
-  reg    [8*INIT_FILE_LEN-1:0]    init_file;
-  integer                         fd;
+  localparam int INIT_FILE_LEN = 256;
+  reg     [8*INIT_FILE_LEN-1:0] init_file;
+  integer                       fd;
 
   initial begin
+`ifndef SYNTHESIS
     if ($value$plusargs("INIT_FILE=%s", init_file)) begin
 `ifdef LOG_RAM
       $display("┌────────────────────────────────────────────────────┐");
@@ -110,34 +111,17 @@ module wrapper_ram
 `ifdef LOG_RAM
       $display("[INFO] Memory loaded successfully.");
 `endif
-        end else begin
-    `ifdef SYNTHESIS
-      // During synthesis (Vivado), default to the top-level `coremark.mem` file
-      // Absolute path to the repository's coremark.mem on Windows
-      init_file = "C:/level-v/coremark.mem";
-    `ifdef LOG_RAM
-      $display("[INFO] No INIT_FILE -> attempting to load default %s", init_file);
-    `endif
-      fd = $fopen(init_file, "r");
-      if (fd == 0) begin
-    `ifdef LOG_RAM
-        $display("[WARN] Default memory file not found: %s -> RAM zeroed", init_file);
-    `endif
-        ram = '{default: '0};
-      end else begin
-        $fclose(fd);
-        $readmemh(init_file, ram, 0, RAM_DEPTH - 1);
-    `ifdef LOG_RAM
-        $display("[INFO] Memory loaded from default: %s", init_file);
-    `endif
-      end
-    `else
-    `ifdef LOG_RAM
+    end else begin
+`ifdef LOG_RAM
       $display("[INFO] No INIT_FILE -> RAM initialized to zero");
-    `endif
+`endif
       ram = '{default: '0};
-    `endif
-        end
+    end
+`else
+    // In synthesis, initialize RAM to zero
+    init_file = "coremark.mem";
+    $readmemh(init_file, ram, 0, RAM_DEPTH - 1);
+`endif
   end
 
   // ==========================================================================
@@ -163,8 +147,8 @@ module wrapper_ram
   // Write Logic - Byte-granular with programming support
   // ==========================================================================
   // Consolidated write: perform per-word read-modify-write to support byte strobes
-  logic [WORD_WIDTH-1:0] next_word;
-  logic [WORD_WIDTH-1:0] prev_word;
+  logic [       WORD_WIDTH-1:0] next_word;
+  logic [       WORD_WIDTH-1:0] prev_word;
   logic [$clog2(RAM_DEPTH)-1:0] word_addr;
   always_ff @(posedge clk_i) begin
     // Normal write via strobes across the cache line
@@ -178,12 +162,12 @@ module wrapper_ram
       for (int b = 0; b < BYTES_PER_WORD; b++) begin
         automatic int strobe_idx = w * BYTES_PER_WORD + b;
         if (wstrb_i[strobe_idx]) begin
-          next_word[b*8 +: 8] = wdata_i[w*WORD_WIDTH + b*8 +: 8];
+          next_word[b*8+:8] = wdata_i[w*WORD_WIDTH+b*8+:8];
         end
       end
 
       // Write updated word if any strobe set
-      if (|wstrb_i[w*BYTES_PER_WORD +: BYTES_PER_WORD]) begin
+      if (|wstrb_i[w*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
         ram[word_addr] <= next_word;
       end else if (prog_mode && prog_valid && w == 0) begin
         // Programming write (only to word 0 position)
