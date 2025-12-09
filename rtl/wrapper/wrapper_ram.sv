@@ -80,8 +80,8 @@ module wrapper_ram
   logic [                      31:0] prog_addr;
   logic [                      31:0] prog_data;
   logic                              prog_valid;
-  logic                              prog_mode;
-  logic                              prog_sys_rst;
+  // Note: `prog_mode` and `prog_sys_rst` removed; connect programmer outputs
+  // directly to module outputs to avoid unused intermediate signals.
   logic                              read_active;
   // Read FSM indices/base address
   logic [$clog2(WORDS_PER_LINE)-1:0] read_idx;
@@ -201,7 +201,7 @@ module wrapper_ram
         if (|write_wstrb_buf[write_idx*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
           ram[write_base_addr+write_idx] <= next_word;
         end
-        if (prog_mode && prog_valid && write_idx == 0) begin
+        if (prog_mode_led_o && prog_valid && write_idx == 0) begin
           ram[prog_addr[$clog2(RAM_DEPTH)-1:0]] <= prog_data;
         end
 
@@ -229,14 +229,13 @@ module wrapper_ram
       .prog_addr_o   (prog_addr),
       .prog_data_o   (prog_data),
       .prog_valid_o  (prog_valid),
-      .prog_mode_o   (prog_mode),
-      .system_reset_o(prog_sys_rst)
+      .prog_mode_o   (prog_mode_led_o),
+      .system_reset_o(system_reset_o)
   );
 
   // ==========================================================================
   // Output Assignments
   // ==========================================================================
-  assign system_reset_o  = prog_sys_rst;
-  assign prog_mode_led_o = prog_mode;
+
 
 endmodule
