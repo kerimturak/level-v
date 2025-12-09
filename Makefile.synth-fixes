@@ -1,0 +1,105 @@
+# Makefile.synth-fixes
+# Tools and convenient targets to analyze Vivado synthesis log and prepare safe repair templates.
+# Usage: make -f Makefile.synth-fixes <target>
+
+SYNTH_LOG ?= synthesis.log
+REPORT_DIR ?= synth-fixes/reports
+PATCH_DIR ?= synth-fixes/patches
+TOOLS_DIR ?= tools
+PYTHON ?= python3
+
+.PHONY: help parse summary list-unconnected list-ram-issues list-timing-loops check-xdc-duplicates generate-todo suggest-tieoffs propose-patches clean
+
+help:
+	@echo "Makefile.synth-fixes targets:"
+	@echo "  parse               -> parse $(SYNTH_LOG) using $(TOOLS_DIR)/synth_parse.py and print counts"
+	@echo "  summary             -> produce a compact summary and save to $(REPORT_DIR)/summary.txt"
+	@echo '  list-unconnected   -> list all "unconnected or has no load" warnings (satir:satir)'
+	@echo "  list-ram-issues     -> list RAM inference warnings and register explosion messages"
+	@echo "  list-timing-loops   -> show timing loop critical warnings with context"
+	@echo "  check-xdc-duplicates-> find duplicate clock definitions/redefining clocks in the log"
+	@echo "  generate-todo       -> create TODO files (non-destructive) with line refs and suggestions"
+	@echo "  suggest-tieoffs     -> emit tie-off suggestions for unconnected top-level ports (file: synth-fixes/tieoffs.suggest)"
+	@echo "  propose-patches     -> produce *safe* patch skeletons for the two most critical problems (timing loops, RAM inference)"
+	@echo "  clean               -> remove generated reports and suggestions"
+
+# Parse the log using Python helper
+parse: $(SYNTH_LOG)
+	@mkdir -p $(REPORT_DIR)
+	@echo "Parsing $(SYNTH_LOG) ..."
+	@$(PYTHON) $(TOOLS_DIR)/synth_parse.py $(SYNTH_LOG) | tee $(REPORT_DIR)/parsed.log
+
+# Produce a short summary report (compact grep)
+summary: $(SYNTH_LOG)
+	@mkdir -p $(REPORT_DIR)
+	@echo "Synthesis compact summary: " > $(REPORT_DIR)/summary.txt
+	@echo "---- Counts ----" >> $(REPORT_DIR)/summary.txt
+	@grep -E "Synthesis finished with|CRITICAL WARNING|WARNING: \[Synth" $(SYNTH_LOG) | sed -n '1,200p' >> $(REPORT_DIR)/summary.txt || true
+	@echo "" >> $(REPORT_DIR)/summary.txt
+	@echo "---- Top issues ----" >> $(REPORT_DIR)/summary.txt
+	@grep -n "Found timing loop\|Trying to implement RAM\|dissolved into\|either unconnected or has no load\|redefining clock\|Found unconnected internal register" $(SYNTH_LOG) | sed -n '1,400p' >> $(REPORT_DIR)/summary.txt || true
+	@echo "Saved to $(REPORT_DIR)/summary.txt"
+	@tail -n 40 $(REPORT_DIR)/summary.txt | sed -n '1,400p'
+
+# List the unconnected ports
+list-unconnected: $(SYNTH_LOG)
+	@echo "== unconnected/no load / occurrences =="
+	@grep -n "either unconnected or has no load" $(SYNTH_LOG) || echo "No matches found"
+
+# RAM inference issues
+list-ram-issues: $(SYNTH_LOG)
+	@echo "== RAM inference & register explosion =="
+	@grep -n -E "Trying to implement RAM|Potential Runtime issue for RAM|dissolved into .* registers bits|large pin count" $(SYNTH_LOG) || echo "No RAM inference warnings found"
+
+# timing loops (critical)
+list-timing-loops: $(SYNTH_LOG)
+	@echo "== Timing loops / critical warnings =="
+	@grep -n -C 5 "found timing loop\|CRITICAL WARNING" $(SYNTH_LOG) || echo "No timing loops found"
+
+# check for redefining clocks
+check-xdc-duplicates: $(SYNTH_LOG)
+	@echo "== XDC clock redefinition warnings =="
+	@grep -n "redefining clock" $(SYNTH_LOG) || echo "No duplicate clocks found"
+
+# Create TODO files for manual edits. Non-destructive + human readable.
+generate-todo: $(SYNTH_LOG)
+	@mkdir -p $(PATCH_DIR)
+	@awk '/Found timing loop|CRITICAL WARNING/{print "---\nFound: " $0 "\nContext:\n"; for(i=NR-5;i<=NR+5;i++){ if(i>0) print i ": " $0}}' $(SYNTH_LOG) > $(PATCH_DIR)/_timing_todo.txt || true
+	@echo "See $(PATCH_DIR)/_timing_todo.txt for manually-reviewed timing loop candidates. (Human review recommended)"
+	@grep -n "Trying to implement RAM\|Potential Runtime issue for RAM\|dissolved into" $(SYNTH_LOG) > $(PATCH_DIR)/_ram_todo.txt || true
+	@echo "See $(PATCH_DIR)/_ram_todo.txt for RAM inference issues."
+	@grep -n "either unconnected or has no load" $(SYNTH_LOG) > $(PATCH_DIR)/_unconnected_todo.txt || true
+	@echo "See $(PATCH_DIR)/_unconnected_todo.txt for ports missing load/connection."
+
+# Suggest tie-offs for commonly unconnected top-level ports (non-destructive, only prints suggestions)
+suggest-tieoffs: list-unconnected
+	@mkdir -p $(PATCH_DIR)
+	@echo "# tie-offs suggestion (manually inspect before applying)" > $(PATCH_DIR)/tieoffs.suggest
+	@grep -n "either unconnected or has no load" $(SYNTH_LOG) | sed -E 's/.*Port ([^ ]+).*/\1/' | sort -u | sed 's/^/suggest_tieoff: /' >> $(PATCH_DIR)/tieoffs.suggest || true
+	@echo "Generated $(PATCH_DIR)/tieoffs.suggest (review and apply manually)"
+
+# Propose patch skeletons (text-only templates) for two critical issues
+propose-patches: list-timing-loops list-ram-issues
+	@mkdir -p $(PATCH_DIR)
+	@echo "# Patch suggestion: break combinatorial timing loop in cpu.sv" > $(PATCH_DIR)/fix-timing-loop-cpu.patch
+	@echo "# Review the logic around cpu.sv and cs_reg_file; add pipeline register or reorder combinatorial logic." >> $(PATCH_DIR)/fix-timing-loop-cpu.patch
+	@echo "# --- Example code snippet (manual copy) ---\n" >> $(PATCH_DIR)/fix-timing-loop-cpu.patch
+	@printf '%s\n' "# Example: add pipeline register between combinatorial outputs and inputs" "// In cpu.sv (sketch) - change combinatorial feedback to registered" "always_ff @(posedge clk_i) begin" "    if (!rst_ni) begin" "        ex_valid_q <= 1'b0;" "    end else begin" "        ex_valid_q <= ex_valid;" "    end" "end" "" "// then use ex_valid_q instead of ex_valid in combinatorial feedback path" >> $(PATCH_DIR)/fix-timing-loop-cpu.patch
+	@echo "# Patch suggestion: change ram_reg inferencing to BRAM-friendly idiom" > $(PATCH_DIR)/fix-ram-inference-wrapper.patch
+	@echo "# Examine wrapper/wrapper_ram.sv and ensure single write port per process, synchronous writes and valid clocks." >> $(PATCH_DIR)/fix-ram-inference-wrapper.patch
+		@printf '%s\n' "# Example: rewrite write logic into single synchronous block" "always_ff @(posedge clk_i) begin" "  if (write_enable) begin" "    ram[write_addr] <= write_data;" "  end" "end" "" "// Ensure other write paths are removed or converted to explicit BRAM primitive" >> $(PATCH_DIR)/fix-ram-inference-wrapper.patch
+	@echo "Created $(PATCH_DIR)/fix-*.patch templates (manual edits required)."
+
+clean:
+	@rm -rf $(REPORT_DIR) synth-fixes
+	@echo "clean: removed generated reports and patches"
+
+# a convenience target to show the top-level critical counts
+counts: $(SYNTH_LOG)
+	@grep -n "Synthesis finished with" $(SYNTH_LOG) || true
+	@grep -n "CRITICAL WARNING" $(SYNTH_LOG) || true
+	@grep -n "WARNING" $(SYNTH_LOG) | wc -l | xargs -I {} echo "Total WARNING lines: {}"
+
+# Example: regenerate synth log summary
+recheck: parse summary
+	@echo "recheck done. See $(REPORT_DIR)/summary.txt"

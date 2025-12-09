@@ -36,8 +36,7 @@ initial begin
     test_name = "default_test";
 
   if (!$value$plusargs("trace_file=%s", trace_path))
-    // Use workspace-relative results directory by default (no absolute paths)
-    trace_path = $sformatf("results/logs/%0s/%0s/commit_trace.log",
+    trace_path = $sformatf("/home/kerim/riscv_git/ceres-riscv/results/logs/%0s/%0s/commit_trace.log",
                             simulator, test_name);
 
   void'($system($sformatf("mkdir -p $(dirname %s)", trace_path)));
