@@ -421,7 +421,17 @@ run_flist:
 			RTL_LOG_DIR=$${TEST_LOG_DIR} > "$${TEST_LOG_DIR}/summary.log" 2>&1; then \
 			PASS=$$(( $${PASS} + 1 )); \
 			echo "$${test}" >> "$(PASS_LIST_FILE)"; \
-			echo -e "$(GREEN)$(SUCCESS) $${test} PASSED$(RESET)"; \
+			if [ -f "$${TEST_LOG_DIR}/diff.log" ]; then \
+				RTL_EXTRA=$$(grep "RTL Extra Entries" "$${TEST_LOG_DIR}/diff.log" | awk '{print $$NF}'); \
+				SPIKE_EXTRA=$$(grep "Spike Extra Entries" "$${TEST_LOG_DIR}/diff.log" | awk '{print $$NF}'); \
+				if [ "$${RTL_EXTRA:-0}" != "0" ] || [ "$${SPIKE_EXTRA:-0}" != "0" ]; then \
+					echo -e "$(YELLOW)⚠ $${test} PASSED (RTL: $$RTL_EXTRA extra, Spike: $$SPIKE_EXTRA extra)$(RESET)"; \
+				else \
+					echo -e "$(GREEN)$(SUCCESS) $${test} PASSED$(RESET)"; \
+				fi; \
+			else \
+				echo -e "$(GREEN)$(SUCCESS) $${test} PASSED$(RESET)"; \
+			fi; \
 		else \
 			TEST_EXIT=$$?; \
 			FAIL=$$(( $${FAIL} + 1 )); \
