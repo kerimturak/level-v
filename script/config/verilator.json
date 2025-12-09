@@ -55,8 +55,8 @@
     "bp_verbose": false,
     "commit_trace": true,
     "pipeline_log": true,
-    "ram_log": true,
-    "uart_log": true
+    "ram_log": false,
+    "uart_log": false
   },
 
   "warnings": {

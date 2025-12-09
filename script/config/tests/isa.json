@@ -13,7 +13,7 @@
     "LOG_COMMIT": true,
     "LOG_RAM": false,
     "LOG_UART": false,
-    "LOG_BP": true,
+    "LOG_BP": false,
     "SIM_FAST": false,
     "SIM_UART_MONITOR": false
   }
