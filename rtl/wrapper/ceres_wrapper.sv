@@ -350,8 +350,6 @@ module ceres_wrapper
   // ==========================================================================
   // SLAVE 0: RAM (Wishbone -> Cache-line RAM adapter with Burst Support)
   // ==========================================================================
-  logic ram_rdata_valid;  // NEW: Add valid signal from RAM
-
   assign ram_wb_req   = wb_slave_m[SLV_RAM].cyc && wb_slave_m[SLV_RAM].stb;
   assign ram_wb_we    = wb_slave_m[SLV_RAM].we;
   assign ram_wb_addr  = wb_slave_m[SLV_RAM].adr;
@@ -407,11 +405,10 @@ module ceres_wrapper
       .wdata_i        (ram_wdata_expanded),
       .wstrb_i        (ram_wstrb),
       .rdata_o        (ram_rdata),
-      .rdata_valid_o  (ram_rdata_valid),     // NEW: Connect valid signal
       .rd_en_i        (ram_rd_en),
-      .ram_prog_rx_i  (prog_rx_i),
+      .ram_prog_rx_i  (program_rx_i),
       .system_reset_o (prog_reset),
-      .prog_mode_led_o(prog_mode_o)
+      .prog_mode_led_o(prog_mode_led_o)
   );
 
   // Burst state machine
@@ -423,14 +420,14 @@ module ceres_wrapper
       ram_burst_data_q     <= '0;
       ram_burst_data_valid <= 1'b0;
     end else begin
-      // CRITICAL: Only capture data when RAM signals valid!
-      if (ram_rdata_valid && !ram_burst_data_valid) begin
+      // First beat of burst - wait for RAM latency then capture data
+      if (ram_delay_q[RAM_LATENCY-1] && !ram_burst_data_valid) begin
         ram_burst_data_q     <= ram_rdata;
         ram_burst_data_valid <= 1'b1;
         ram_burst_active     <= ram_is_burst;
         ram_burst_cnt        <= '0;
 `ifdef WB_INTC
-        $display("[%0t] WB_RAM: BURST_CAPTURE addr=%h rdata=%h is_burst=%b VALID", $time, ram_wb_addr, ram_rdata, ram_is_burst);
+        $display("[%0t] WB_RAM: BURST_CAPTURE addr=%h rdata=%h is_burst=%b", $time, ram_wb_addr, ram_rdata, ram_is_burst);
 `endif
       end  // Subsequent beats - increment counter
       else if (ram_burst_active && ram_wb_req && ram_burst_data_valid) begin
@@ -446,7 +443,7 @@ module ceres_wrapper
 `endif
         end
       end  // Non-burst read complete - clear valid
-      else if (ram_rdata_valid && !ram_is_burst) begin
+      else if (ram_delay_q[RAM_LATENCY-1] && !ram_is_burst) begin
         ram_burst_data_valid <= 1'b0;
       end  // Single access complete
       else if (!ram_wb_req && !ram_burst_active) begin
@@ -467,27 +464,27 @@ module ceres_wrapper
     end
   end
 
-  // RAM Latency Pipeline for Wishbone ACK - NOW BASED ON VALID SIGNAL
+  // RAM Latency Pipeline for Wishbone ACK
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       ram_delay_q   <= '0;
       ram_pending_q <= 1'b0;
     end else begin
-      // Shift the valid signal through pipeline
-      ram_delay_q <= {ram_delay_q[RAM_LATENCY-2:0], ram_rdata_valid};
-
-      // Clear pending when ACK is issued
-      if (ram_wb_ack && !ram_burst_active) begin
+      // Clear delay pipeline on ACK
+      if (ram_wb_ack) begin
+        ram_delay_q   <= '0;
         ram_pending_q <= 1'b0;
-      end else if (ram_rd_en) begin
-        ram_pending_q <= 1'b1;
+      end else begin
+        ram_delay_q   <= {ram_delay_q[RAM_LATENCY-2:0], ram_pending_q};
+        // Only set pending for first beat of burst or single access
+        ram_pending_q <= ram_rd_en;
       end
     end
   end
 
   // RAM Wishbone response
   // - Writes ACK immediately
-  // - First read beat: ACK when RAM asserts valid (via delay pipeline)
+  // - First read beat: ACK after RAM latency
   // - Subsequent burst beats: ACK immediately (data already in buffer)
   assign ram_wb_ack = (ram_wb_req && ram_wb_we) || ram_delay_q[RAM_LATENCY-1] || (ram_burst_active && ram_wb_req && ram_burst_data_valid);
 
@@ -546,22 +543,9 @@ module ceres_wrapper
   //   0x2001_0xxx : SPI  (addr[19:16] == 0x1)
   //   0x2002_0xxx : I2C  (addr[19:16] == 0x2)
   // ==========================================================================
-  assign sel_uart0 = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
-  assign sel_spi0 = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
-  assign sel_i2c0 = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
-  // TODO: implement selects for other peripherals
-  // Default peripheral selects (clear unused selects to avoid undriven nets)
-  assign sel_uart1 = 1'b0;
-  assign sel_gpio = 1'b0;
-  assign sel_pwm = 1'b0;
-  assign sel_timer = 1'b0;
-  assign sel_plic = 1'b0;
-  assign sel_wdt = 1'b0;
-  assign sel_dma = 1'b0;
-  assign sel_vga = 1'b0;
-  assign sel_ram = 1'b0;
-  assign sel_clint = 1'b0;
-  assign sel_periph = (sel_uart0 | sel_spi0 | sel_i2c0 | sel_gpio | sel_pwm | sel_timer | sel_plic | sel_wdt | sel_dma | sel_vga | sel_uart1);
+  assign uart_sel = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
+  assign spi_sel  = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
+  assign i2c_sel  = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
 
   // ==========================================================================
   // UART (Connected via Peripheral Bus)
@@ -570,7 +554,7 @@ module ceres_wrapper
   uart i_uart (
       .clk_i     (clk_i),
       .rst_ni    (sys_rst_n),
-      .stb_i     (pbus_valid && sel_uart0),
+      .stb_i     (pbus_valid && uart_sel),
       .adr_i     (pbus_addr[3:2]),
       .byte_sel_i(pbus_wstrb),
       .we_i      (pbus_we),
@@ -589,7 +573,7 @@ module ceres_wrapper
       spi_master i_spi (
           .clk_i     (clk_i),
           .rst_ni    (sys_rst_n),
-          .stb_i     (pbus_valid && sel_spi0),
+          .stb_i     (pbus_valid && spi_sel),
           .adr_i     (pbus_addr[3:2]),
           .byte_sel_i(pbus_wstrb),
           .we_i      (pbus_we),
@@ -612,7 +596,7 @@ module ceres_wrapper
       i2c_master i_i2c (
           .clk_i       (clk_i),
           .rst_ni      (sys_rst_n),
-          .stb_i       (pbus_valid && sel_i2c0),
+          .stb_i       (pbus_valid && i2c_sel),
           .adr_i       (pbus_addr[4:2]),
           .byte_sel_i  (pbus_wstrb),
           .we_i        (pbus_we),
@@ -620,19 +604,12 @@ module ceres_wrapper
           .dat_o       (i2c0_rdata),
           .i2c_scl_o   (i2c0_scl_o),
           .i2c_scl_oe_o(i2c0_scl_oe),
-          .i2c_scl_i   (i2c0_scl_i),
+          .i2c_scl_i   (i2c_scl_i),
           .i2c_sda_o   (i2c0_sda_o),
           .i2c_sda_oe_o(i2c0_sda_oe),
-          .i2c_sda_i   (i2c0_sda_i),
-          .irq_o       (i2c0_irq)
+          .i2c_sda_i   (i2c_sda_i),
+          .irq_o       (i2c_irq)
       );
-    end else begin : gen_no_i2c
-      assign i2c0_rdata  = '0;
-      assign i2c0_scl_o  = 1'b1;
-      assign i2c0_scl_oe = 1'b0;
-      assign i2c0_sda_o  = 1'b1;
-      assign i2c0_sda_oe = 1'b0;
-      assign i2c0_irq    = 1'b0;
     end
   endgenerate
 
@@ -659,8 +636,8 @@ module ceres_wrapper
   // For FPGA: external tri-state buffers
   assign i2c0_scl_io = i2c0_scl_oe ? (i2c0_scl_o ? 1'bz : 1'b0) : 1'bz;
   assign i2c0_sda_io = i2c0_sda_oe ? (i2c0_sda_o ? 1'bz : 1'b0) : 1'bz;
-  assign i2c0_scl_i  = i2c0_scl_io;
-  assign i2c0_sda_i  = i2c0_sda_io;
+  assign i2c_scl_i   = i2c0_scl_io;
+  assign i2c_sda_i   = i2c0_sda_io;
 `endif
 
   // Peripheral read data mux
@@ -1000,8 +977,7 @@ module ceres_wrapper
   // UART1 - tied off if not enabled
   generate
     if (NUM_UART < 2) begin : gen_no_uart1
-      assign uart1_tx_o  = 1'b1;  // Idle high
-      assign uart1_rdata = '0;
+      assign uart1_tx_o = 1'b1;  // Idle high
     end
   endgenerate
 
@@ -1011,7 +987,6 @@ module ceres_wrapper
       assign spi0_sclk_o = 1'b0;
       assign spi0_mosi_o = 1'b0;
       assign spi0_ss_o   = 4'hF;  // All slaves deselected
-      assign spi0_rdata  = '0;
     end
   endgenerate
 

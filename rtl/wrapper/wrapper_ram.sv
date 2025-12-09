@@ -7,15 +7,13 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 Description:
-  Word-based (32-bit) RAM with cache line burst support - BRAM optimized version.
+  Word-based (32-bit) RAM with cache line burst support.
   
   Features:
     - 32-bit word organization (standard .mem file compatible)
     - Cache line width read/write (128-bit default)
     - UART programming interface via separate module
     - Configurable depth and timing
-    - TRUE DUAL-PORT or SIMPLE DUAL-PORT BRAM inference
-    - Read data valid signal
   
   Memory Organization:
     - Words are 32-bit aligned
@@ -33,9 +31,9 @@ module wrapper_ram
     parameter int unsigned CACHE_LINE_WIDTH = BLK_SIZE,
 
     // Programming Configuration  
-    parameter int unsigned                              CPU_CLK          = ceres_param::CPU_CLK,
-    parameter int unsigned                              PROG_BAUD_RATE   = ceres_param::PROG_BAUD_RATE,
-    parameter logic        [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
+    parameter int unsigned CPU_CLK          = ceres_param::CPU_CLK,
+    parameter int unsigned PROG_BAUD_RATE   = ceres_param::PROG_BAUD_RATE,
+    parameter logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
 ) (
     input logic clk_i,
     input logic rst_ni,
@@ -45,7 +43,6 @@ module wrapper_ram
     input  logic [  CACHE_LINE_WIDTH-1:0] wdata_i,
     input  logic [CACHE_LINE_WIDTH/8-1:0] wstrb_i,
     output logic [  CACHE_LINE_WIDTH-1:0] rdata_o,
-    output logic                          rdata_valid_o,  // NEW: Read data valid signal
     input  logic                          rd_en_i,
 
     // Programming Interface
@@ -62,53 +59,37 @@ module wrapper_ram
   localparam int LINE_ADDR_BITS = $clog2(WORDS_PER_LINE);
 
   // ==========================================================================
-  // Memory Array - BRAM Inference
+  // Memory Array
   // ==========================================================================
+  // Request Xilinx block RAM implementation where possible
   (* ram_style = "block" *)
-  logic [       WORD_WIDTH-1:0] ram            [0:RAM_DEPTH-1];
+  logic   [       WORD_WIDTH-1:0] ram            [0:RAM_DEPTH-1];
 
   // ==========================================================================
   // Internal Signals
   // ==========================================================================
-  logic [$clog2(RAM_DEPTH)-1:0] line_base_addr;
-  logic [ CACHE_LINE_WIDTH-1:0] rdata_q;
-  logic                         rdata_valid_q;
+
+  // Address calculation
+  logic   [$clog2(RAM_DEPTH)-1:0] line_base_addr;
+
+  // Read data register
+  logic   [ CACHE_LINE_WIDTH-1:0] rdata_q;
 
   // Programming interface
-  logic [                 31:0] prog_addr;
-  logic [                 31:0] prog_data;
-  logic                         prog_valid;
-  logic                         prog_mode;
-
-  // FSM states
-  typedef enum logic [1:0] {
-    IDLE,
-    READING,
-    WRITING
-  } state_t;
-  state_t                              state;
-
-  logic   [$clog2(WORDS_PER_LINE)-1:0] access_idx;
-  logic   [     $clog2(RAM_DEPTH)-1:0] access_base_addr;
-  logic   [      CACHE_LINE_WIDTH-1:0] write_wdata_buf;
-  logic   [    CACHE_LINE_WIDTH/8-1:0] write_wstrb_buf;
-
-  // BRAM Port Signals
-  logic                                ram_we;
-  logic   [     $clog2(RAM_DEPTH)-1:0] ram_addr;
-  logic   [            WORD_WIDTH-1:0] ram_wdata;
-  logic   [            WORD_WIDTH-1:0] ram_rdata;
-  logic   [        BYTES_PER_WORD-1:0] ram_we_bytes;
+  logic   [                 31:0] prog_addr;
+  logic   [                 31:0] prog_data;
+  logic                           prog_valid;
+  logic                           prog_mode;
+  logic                           prog_sys_rst;
 
   // ==========================================================================
   // Memory Initialization
   // ==========================================================================
-  localparam int INIT_FILE_LEN = 256;
-  reg     [8*INIT_FILE_LEN-1:0] init_file;
-  integer                       fd;
+  localparam int INIT_FILE_LEN    = 256;
+  reg    [8*INIT_FILE_LEN-1:0]    init_file;
+  integer                         fd;
 
   initial begin
-`ifndef SYNTHESIS
     if ($value$plusargs("INIT_FILE=%s", init_file)) begin
 `ifdef LOG_RAM
       $display("┌────────────────────────────────────────────────────┐");
@@ -129,140 +110,87 @@ module wrapper_ram
 `ifdef LOG_RAM
       $display("[INFO] Memory loaded successfully.");
 `endif
-    end else begin
-`ifdef LOG_RAM
+        end else begin
+    `ifdef SYNTHESIS
+      // During synthesis (Vivado), default to the top-level `coremark.mem` file
+      // Absolute path to the repository's coremark.mem on Windows
+      init_file = "C:/level-v/coremark.mem";
+    `ifdef LOG_RAM
+      $display("[INFO] No INIT_FILE -> attempting to load default %s", init_file);
+    `endif
+      fd = $fopen(init_file, "r");
+      if (fd == 0) begin
+    `ifdef LOG_RAM
+        $display("[WARN] Default memory file not found: %s -> RAM zeroed", init_file);
+    `endif
+        ram = '{default: '0};
+      end else begin
+        $fclose(fd);
+        $readmemh(init_file, ram, 0, RAM_DEPTH - 1);
+    `ifdef LOG_RAM
+        $display("[INFO] Memory loaded from default: %s", init_file);
+    `endif
+      end
+    `else
+    `ifdef LOG_RAM
       $display("[INFO] No INIT_FILE -> RAM initialized to zero");
-`endif
+    `endif
       ram = '{default: '0};
-    end
-`else
-    // In synthesis, initialize RAM to zero
-    init_file = "coremark.mem";
-    $readmemh(init_file, ram, 0, RAM_DEPTH - 1);
-`endif
+    `endif
+        end
   end
 
   // ==========================================================================
   // Address Calculation
   // ==========================================================================
+  // Align to cache line boundary
   assign line_base_addr = {addr_i[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS], {LINE_ADDR_BITS{1'b0}}};
 
   // ==========================================================================
-  // BRAM Access Block - Single Always Block for Optimal Inference
+  // Read Logic - Burst read for cache line
   // ==========================================================================
   always_ff @(posedge clk_i) begin
-    // Default: no write
-    ram_we <= 1'b0;
-
-    // BRAM read/write with byte enables
-    if (ram_we) begin
-      for (int b = 0; b < BYTES_PER_WORD; b++) begin
-        if (ram_we_bytes[b]) begin
-          ram[ram_addr][b*8+:8] <= ram_wdata[b*8+:8];
-        end
+    if (rd_en_i) begin
+      for (int i = 0; i < WORDS_PER_LINE; i++) begin
+        rdata_q[i*WORD_WIDTH+:WORD_WIDTH] <= ram[line_base_addr+i[$clog2(RAM_DEPTH)-1:0]];
       end
     end
-
-    // Always perform read (BRAM behavior)
-    ram_rdata <= ram[ram_addr];
   end
 
+  assign rdata_o = rdata_q;
+
   // ==========================================================================
-  // Control Logic - FSM and Data Path
+  // Write Logic - Byte-granular with programming support
   // ==========================================================================
+  // Consolidated write: perform per-word read-modify-write to support byte strobes
+  logic [WORD_WIDTH-1:0] next_word;
+  logic [WORD_WIDTH-1:0] prev_word;
+  logic [$clog2(RAM_DEPTH)-1:0] word_addr;
   always_ff @(posedge clk_i) begin
-    if (!rst_ni) begin
-      state            <= IDLE;
-      access_idx       <= '0;
-      access_base_addr <= '0;
-      rdata_q          <= '0;
-      rdata_valid_q    <= 1'b0;
-      write_wdata_buf  <= '0;
-      write_wstrb_buf  <= '0;
-      ram_addr         <= '0;
-      ram_wdata        <= '0;
-      ram_we_bytes     <= '0;
-    end else begin
-      // Default: clear valid signal
-      rdata_valid_q <= 1'b0;
-
-      case (state)
-        IDLE: begin
-          if (rd_en_i) begin
-            // Start read operation
-            state            <= READING;
-            access_idx       <= '0;
-            access_base_addr <= line_base_addr;
-            ram_addr         <= line_base_addr;
-          end else if (|wstrb_i) begin
-            // Start write operation
-            state            <= WRITING;
-            access_idx       <= '0;
-            access_base_addr <= line_base_addr;
-            write_wdata_buf  <= wdata_i;
-            write_wstrb_buf  <= wstrb_i;
-            ram_addr         <= line_base_addr;
-          end else if (prog_mode && prog_valid) begin
-            // Programming mode write
-            ram_addr     <= prog_addr[$clog2(RAM_DEPTH)-1:0];
-            ram_wdata    <= prog_data;
-            ram_we       <= 1'b1;
-            ram_we_bytes <= '1;  // Write all bytes
-          end
+    // Normal write via strobes across the cache line
+    for (int w = 0; w < WORDS_PER_LINE; w++) begin
+      // compute word address within RAM
+      word_addr = line_base_addr + $unsigned(w);
+      // start with previous content
+      prev_word = ram[word_addr];
+      next_word = prev_word;
+      // Apply byte strobes for this word
+      for (int b = 0; b < BYTES_PER_WORD; b++) begin
+        automatic int strobe_idx = w * BYTES_PER_WORD + b;
+        if (wstrb_i[strobe_idx]) begin
+          next_word[b*8 +: 8] = wdata_i[w*WORD_WIDTH + b*8 +: 8];
         end
+      end
 
-        READING: begin
-          // Capture read data (first word available after 1 cycle latency)
-          if (access_idx > 0) begin
-            rdata_q[(access_idx-1)*WORD_WIDTH+:WORD_WIDTH] <= ram_rdata;
-          end
-
-          // Setup next read or finish
-          if (access_idx < WORDS_PER_LINE) begin
-            access_idx <= access_idx + 1;
-            if (access_idx < WORDS_PER_LINE - 1) begin
-              ram_addr <= access_base_addr + access_idx + 1;
-            end
-          end else begin
-            // Last word captured - assert valid and return to IDLE
-            rdata_q[(WORDS_PER_LINE-1)*WORD_WIDTH+:WORD_WIDTH] <= ram_rdata;
-            rdata_valid_q                                       <= 1'b1;
-            state                                               <= IDLE;
-          end
-        end
-
-        WRITING: begin
-          // Extract byte enables and data for current word
-          logic [BYTES_PER_WORD-1:0] current_wstrb;
-          logic [    WORD_WIDTH-1:0] current_wdata;
-
-          current_wstrb = write_wstrb_buf[access_idx*BYTES_PER_WORD+:BYTES_PER_WORD];
-          current_wdata = write_wdata_buf[access_idx*WORD_WIDTH+:WORD_WIDTH];
-
-          // Perform write if any byte enables are active
-          if (|current_wstrb) begin
-            ram_addr     <= access_base_addr + access_idx;
-            ram_wdata    <= current_wdata;
-            ram_we       <= 1'b1;
-            ram_we_bytes <= current_wstrb;
-          end
-
-          // Move to next word or finish
-          if (access_idx < WORDS_PER_LINE - 1) begin
-            access_idx <= access_idx + 1;
-          end else begin
-            state <= IDLE;
-          end
-        end
-
-        default: state <= IDLE;
-      endcase
+      // Write updated word if any strobe set
+      if (|wstrb_i[w*BYTES_PER_WORD +: BYTES_PER_WORD]) begin
+        ram[word_addr] <= next_word;
+      end else if (prog_mode && prog_valid && w == 0) begin
+        // Programming write (only to word 0 position)
+        ram[prog_addr[$clog2(RAM_DEPTH)-1:0]] <= prog_data;
+      end
     end
   end
-
-  // Output assignments
-  assign rdata_o       = rdata_q;
-  assign rdata_valid_o = rdata_valid_q;
 
   // ==========================================================================
   // Programming Module Instance
@@ -281,9 +209,13 @@ module wrapper_ram
       .prog_data_o   (prog_data),
       .prog_valid_o  (prog_valid),
       .prog_mode_o   (prog_mode),
-      .system_reset_o(system_reset_o)
+      .system_reset_o(prog_sys_rst)
   );
 
+  // ==========================================================================
+  // Output Assignments
+  // ==========================================================================
+  assign system_reset_o  = prog_sys_rst;
   assign prog_mode_led_o = prog_mode;
 
 endmodule
