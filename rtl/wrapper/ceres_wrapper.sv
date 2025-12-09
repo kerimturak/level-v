@@ -350,6 +350,8 @@ module ceres_wrapper
   // ==========================================================================
   // SLAVE 0: RAM (Wishbone -> Cache-line RAM adapter with Burst Support)
   // ==========================================================================
+  logic ram_rdata_valid;  // NEW: Add valid signal from RAM
+
   assign ram_wb_req   = wb_slave_m[SLV_RAM].cyc && wb_slave_m[SLV_RAM].stb;
   assign ram_wb_we    = wb_slave_m[SLV_RAM].we;
   assign ram_wb_addr  = wb_slave_m[SLV_RAM].adr;
@@ -405,6 +407,7 @@ module ceres_wrapper
       .wdata_i        (ram_wdata_expanded),
       .wstrb_i        (ram_wstrb),
       .rdata_o        (ram_rdata),
+      .rdata_valid_o  (ram_rdata_valid),     // NEW: Connect valid signal
       .rd_en_i        (ram_rd_en),
       .ram_prog_rx_i  (prog_rx_i),
       .system_reset_o (prog_reset),
@@ -420,14 +423,14 @@ module ceres_wrapper
       ram_burst_data_q     <= '0;
       ram_burst_data_valid <= 1'b0;
     end else begin
-      // First beat of burst - wait for RAM latency then capture data
-      if (ram_delay_q[RAM_LATENCY-1] && !ram_burst_data_valid) begin
+      // CRITICAL: Only capture data when RAM signals valid!
+      if (ram_rdata_valid && !ram_burst_data_valid) begin
         ram_burst_data_q     <= ram_rdata;
         ram_burst_data_valid <= 1'b1;
         ram_burst_active     <= ram_is_burst;
         ram_burst_cnt        <= '0;
 `ifdef WB_INTC
-        $display("[%0t] WB_RAM: BURST_CAPTURE addr=%h rdata=%h is_burst=%b", $time, ram_wb_addr, ram_rdata, ram_is_burst);
+        $display("[%0t] WB_RAM: BURST_CAPTURE addr=%h rdata=%h is_burst=%b VALID", $time, ram_wb_addr, ram_rdata, ram_is_burst);
 `endif
       end  // Subsequent beats - increment counter
       else if (ram_burst_active && ram_wb_req && ram_burst_data_valid) begin
@@ -443,7 +446,7 @@ module ceres_wrapper
 `endif
         end
       end  // Non-burst read complete - clear valid
-      else if (ram_delay_q[RAM_LATENCY-1] && !ram_is_burst) begin
+      else if (ram_rdata_valid && !ram_is_burst) begin
         ram_burst_data_valid <= 1'b0;
       end  // Single access complete
       else if (!ram_wb_req && !ram_burst_active) begin
@@ -464,27 +467,27 @@ module ceres_wrapper
     end
   end
 
-  // RAM Latency Pipeline for Wishbone ACK
+  // RAM Latency Pipeline for Wishbone ACK - NOW BASED ON VALID SIGNAL
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       ram_delay_q   <= '0;
       ram_pending_q <= 1'b0;
     end else begin
-      // Clear delay pipeline on ACK
-      if (ram_wb_ack) begin
-        ram_delay_q   <= '0;
+      // Shift the valid signal through pipeline
+      ram_delay_q <= {ram_delay_q[RAM_LATENCY-2:0], ram_rdata_valid};
+
+      // Clear pending when ACK is issued
+      if (ram_wb_ack && !ram_burst_active) begin
         ram_pending_q <= 1'b0;
-      end else begin
-        ram_delay_q   <= {ram_delay_q[RAM_LATENCY-2:0], ram_pending_q};
-        // Only set pending for first beat of burst or single access
-        ram_pending_q <= ram_rd_en;
+      end else if (ram_rd_en) begin
+        ram_pending_q <= 1'b1;
       end
     end
   end
 
   // RAM Wishbone response
   // - Writes ACK immediately
-  // - First read beat: ACK after RAM latency
+  // - First read beat: ACK when RAM asserts valid (via delay pipeline)
   // - Subsequent burst beats: ACK immediately (data already in buffer)
   assign ram_wb_ack = (ram_wb_req && ram_wb_we) || ram_delay_q[RAM_LATENCY-1] || (ram_burst_active && ram_wb_req && ram_burst_data_valid);
 
