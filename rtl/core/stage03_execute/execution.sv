@@ -72,7 +72,9 @@ module execution
   logic        [XLEN-1:0] csr_rdata;
   logic        [XLEN-1:0] mepc;
   logic                   misa_c;
-
+  logic        [XLEN-1:0] tcontrol_effective;
+  logic        [XLEN-1:0] tdata1_effective;
+  logic        [XLEN-1:0] tdata2_effective;
   assign misa_c_o = misa_c;
 
   always_comb begin
@@ -103,21 +105,35 @@ module execution
     pc_sel_o |= (pc_sel_i == JAL);
     pc_sel_o |= (instr_type_i == mret);
 
-    // LOAD/STORE breakpoint detection
+    // ------------------------------------------------------------------------
+    // LOCAL CSR WRITE BYPASS for same-cycle breakpoint detection
+    // ------------------------------------------------------------------------
+    // When writing to trigger CSRs, use alu_result directly to enable
+    // immediate breakpoint detection without waiting for next cycle.
+    // This local bypass does NOT create combinational loop because:
+    // - It's local to execution stage (doesn't feedback through trap_active)
+    // - CSR file outputs are registered (tcontrol_out_reg breaks the loop)
+
+
+    tcontrol_effective = (wr_csr_i && csr_idx_i == 12'h7A5) ? alu_result : tcontrol;
+    tdata1_effective   = (wr_csr_i && csr_idx_i == 12'h7A1) ? alu_result : tdata1;
+    tdata2_effective   = (wr_csr_i && csr_idx_i == 12'h7A2) ? alu_result : tdata2;
+
+    // LOAD/STORE breakpoint detection (using effective values with bypass)
     // tdata1[0] = LOAD match enable, tdata1[1] = STORE match enable
     // tdata1[6] = M-mode match, tdata1[31:28] = type (2 = mcontrol)
     // tcontrol[3] = MTE (M-mode Trigger Enable)
-    if (tcontrol[3] && tdata1[6] && (tdata1[31:28] == 4'h2)) begin
+    if (tcontrol_effective[3] && tdata1_effective[6] && (tdata1_effective[31:28] == 4'h2)) begin
       // Check LOAD breakpoint
-      if (tdata1[0] && (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu})) begin
-        if (alu_result == tdata2) begin
+      if (tdata1_effective[0] && (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu})) begin
+        if (alu_result == tdata2_effective) begin
           exc_type_o = BREAKPOINT;
         end else begin
           exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
         end
         // Check STORE breakpoint
-      end else if (tdata1[1] && (instr_type_i inside {s_sb, s_sh, s_sw})) begin
-        if (alu_result == tdata2) begin
+      end else if (tdata1_effective[1] && (instr_type_i inside {s_sb, s_sh, s_sw})) begin
+        if (alu_result == tdata2_effective) begin
           exc_type_o = BREAKPOINT;
         end else begin
           exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;

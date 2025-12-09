@@ -160,34 +160,23 @@ module wrapper_ram
   assign rdata_o = rdata_q;
 
   // ==========================================================================
-  // Write Logic - Byte-granular with programming support
+  // Write Logic - Simplified for BRAM inference
   // ==========================================================================
-  // Consolidated write: perform per-word read-modify-write to support byte strobes
-  logic [WORD_WIDTH-1:0] next_word;
-  logic [WORD_WIDTH-1:0] prev_word;
-  logic [$clog2(RAM_DEPTH)-1:0] word_addr;
   always_ff @(posedge clk_i) begin
-    // Normal write via strobes across the cache line
-    for (int w = 0; w < WORDS_PER_LINE; w++) begin
-      // compute word address within RAM
-      word_addr = line_base_addr + $unsigned(w);
-      // start with previous content
-      prev_word = ram[word_addr];
-      next_word = prev_word;
-      // Apply byte strobes for this word
-      for (int b = 0; b < BYTES_PER_WORD; b++) begin
-        automatic int strobe_idx = w * BYTES_PER_WORD + b;
-        if (wstrb_i[strobe_idx]) begin
-          next_word[b*8 +: 8] = wdata_i[w*WORD_WIDTH + b*8 +: 8];
+    // Programming mode has priority
+    if (prog_mode && prog_valid) begin
+      ram[prog_addr[$clog2(RAM_DEPTH)-1:0]] <= prog_data;
+    end else begin
+      // Normal cache line write with byte strobes
+      for (int w = 0; w < WORDS_PER_LINE; w++) begin
+        if (|wstrb_i[w*BYTES_PER_WORD +: BYTES_PER_WORD]) begin
+          // Write word with byte enables
+          for (int b = 0; b < BYTES_PER_WORD; b++) begin
+            if (wstrb_i[w*BYTES_PER_WORD + b]) begin
+              ram[line_base_addr + w][b*8 +: 8] <= wdata_i[w*WORD_WIDTH + b*8 +: 8];
+            end
+          end
         end
-      end
-
-      // Write updated word if any strobe set
-      if (|wstrb_i[w*BYTES_PER_WORD +: BYTES_PER_WORD]) begin
-        ram[word_addr] <= next_word;
-      end else if (prog_mode && prog_valid && w == 0) begin
-        // Programming write (only to word 0 position)
-        ram[prog_addr[$clog2(RAM_DEPTH)-1:0]] <= prog_data;
       end
     end
   end

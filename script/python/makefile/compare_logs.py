@@ -512,10 +512,27 @@ def compare_logs(rtl, spike, output_file, enable_resync=False, window=0,
     elapsed_time = time.time() - start_time
 
     # Determine if there are errors
-    # Note: Extra RTL/Spike entries are informational only (e.g., test pass loops)
-    # They should not cause test failure
-    has_errors = (stats['pcinst_mismatch'] > 0 or 
+    # - PC/INST mismatches and register mismatches are critical errors
+    # - Extra entries in EITHER log indicate synchronization issues and should be treated as warnings
+    # - If there are extra entries, we want to alert the user even if PC/INST matches
+    has_errors = (stats['pcinst_mismatch'] > 0 or
                   stats['reg_mismatch'] > 0)
+
+    has_length_mismatch = (stats['insert_rtl'] > 0 or stats['insert_spike'] > 0)
+
+    # Print warning for length mismatches (they don't fail the test but should be noted)
+    if has_length_mismatch and not QUIET:
+        print(f"\n{Fore.YELLOW}{'━' * 80}{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}⚠️  WARNING: Log length mismatch detected!{Style.RESET_ALL}")
+        if stats['insert_rtl'] > 0:
+            print(f"{Fore.YELLOW}    RTL has {stats['insert_rtl']} extra entries not in Spike log{Style.RESET_ALL}")
+        if stats['insert_spike'] > 0:
+            print(f"{Fore.YELLOW}    Spike has {stats['insert_spike']} extra entries not in RTL log{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}    This may indicate:{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}      - Pass/fail address mismatch in address file{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}      - Timing differences in test completion{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}      - One simulator continued running after the other stopped{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}{'━' * 80}{Style.RESET_ALL}")
 
     if not QUIET:
         # Generate all output files

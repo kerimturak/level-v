@@ -203,9 +203,11 @@ module cs_reg_file
 
   logic     [XLEN-1:0] pmpcfg0;
   logic     [XLEN-1:0] pmpaddr0;
+  logic     [XLEN-1:0] tselect_reg;   // Trigger select register (WARL - always reads as 0)
   logic     [XLEN-1:0] tcontrol_reg;  // Trigger control register
   logic     [XLEN-1:0] tdata1_reg;    // Trigger data 1 register
   logic     [XLEN-1:0] tdata2_reg;    // Trigger data 2 register (breakpoint address)
+  logic     [XLEN-1:0] tcontrol_out_reg;  // Registered output to break combinational loop
   // ============================================================================
   // OUTPUT ASSIGNMENTS
   // ============================================================================
@@ -245,27 +247,10 @@ module cs_reg_file
     // mtvec write bypass (benchmark için)
     mtvec_o  = (csr_idx_i == 12'h305 && wr_en_i && de_trap_active_i) ? csr_wdata_i : mtvec;
     mepc_o   = mepc;
-    // Trigger outputs for hardware breakpoint detection (with write-through bypass)
+    // Trigger outputs: tdata1/tdata2 keep bypass, tcontrol uses registered value
     tdata1_o = tdata1_bypass;
     tdata2_o = tdata2_bypass;
-    // tcontrol: handle trap entry and MRET (with write-through bypass as base)
-    if (trap_active_i || de_trap_active_i) begin
-      // On trap entry: mpte <= mte (combinational bypass)
-      tcontrol_o[7]   = tcontrol_bypass[3];  // mpte = mte
-      tcontrol_o[3]   = tcontrol_bypass[3];  // mte unchanged
-      tcontrol_o[6:4] = '0;
-      tcontrol_o[2:0] = '0;
-      tcontrol_o[31:8] = '0;
-    end else if (instr_type_i == mret) begin
-      // On MRET: mte = mpte (mpte is NOT cleared per spec)
-      tcontrol_o[7]   = tcontrol_bypass[7];  // mpte unchanged
-      tcontrol_o[3]   = tcontrol_bypass[7];  // mte = mpte
-      tcontrol_o[6:4] = '0;
-      tcontrol_o[2:0] = '0;
-      tcontrol_o[31:8] = '0;
-    end else begin
-      tcontrol_o = tcontrol_bypass;
-    end
+    tcontrol_o = tcontrol_out_reg;  // KEY: Use registered value (breaks combinational loop)
   end
 
   // ============================================================================
@@ -292,7 +277,9 @@ module cs_reg_file
       minstreth <= '0;
       pmpcfg0   <= '0;
       pmpaddr0  <= '0;
+      tselect_reg <= '0;
       tcontrol_reg <= '0;
+      tcontrol_out_reg <= '0;  // Initialize registered output
       tdata1_reg <= 32'h20000044;  // Default: mcontrol type
       tdata2_reg <= '0;
 
@@ -338,7 +325,7 @@ module cs_reg_file
       // ------------------------------------------------------------------------
       // MRET (trap return)
       // ------------------------------------------------------------------------
-      
+
       else if (instr_type_i == mret) begin
         mstatus.mie  <= mstatus.mpie;
         mstatus.mpie <= 1'b1;
@@ -347,11 +334,11 @@ module cs_reg_file
         tcontrol_reg[3] <= tcontrol_reg[7];  // mte = mpte
         // mpte remains unchanged
       end
-      
+
       // ------------------------------------------------------------------------
       // NORMAL CSR WRITE
       // ------------------------------------------------------------------------
-      
+
       else if (wr_en_i) begin
         unique case (csr_idx_i)
 
@@ -385,8 +372,8 @@ module cs_reg_file
           MCOUNTINHIBIT,
           //PMPCFG0,
           //PMPADDR0,
-          TSELECT,
           TDATA3: ;  // No-op
+          TSELECT:  tselect_reg <= csr_wdata_i;  // WARL: accept writes, but only trigger 0 exists
           TDATA1:   tdata1_reg <= csr_wdata_i;  // Trigger data 1 (writable)
           TDATA2:   tdata2_reg <= csr_wdata_i;  // Trigger data 2 (breakpoint address)
           TCONTROL: tcontrol_reg <= csr_wdata_i;  // Trigger control (writable)
@@ -396,6 +383,31 @@ module cs_reg_file
         endcase
       end
 
+    end
+
+    // ------------------------------------------------------------------------
+    // UPDATE tcontrol_out_reg (sequential logic breaks combinational loop)
+    // ------------------------------------------------------------------------
+    // This must happen EVERY cycle (not just on trap/mret/write) to track changes
+    // Placed outside stall condition to ensure it updates even during stalls
+
+    if (trap_active_i || de_trap_active_i) begin
+      // On trap entry: save mte to mpte
+      tcontrol_out_reg[7]   <= tcontrol_bypass[3];  // mpte = mte
+      tcontrol_out_reg[3]   <= tcontrol_bypass[3];  // mte unchanged
+      tcontrol_out_reg[6:4] <= '0;
+      tcontrol_out_reg[2:0] <= '0;
+      tcontrol_out_reg[31:8] <= '0;
+    end else if (instr_type_i == mret) begin
+      // On MRET: restore mte from mpte
+      tcontrol_out_reg[7]   <= tcontrol_bypass[7];  // mpte unchanged
+      tcontrol_out_reg[3]   <= tcontrol_bypass[7];  // mte = mpte
+      tcontrol_out_reg[6:4] <= '0;
+      tcontrol_out_reg[2:0] <= '0;
+      tcontrol_out_reg[31:8] <= '0;
+    end else begin
+      // Normal operation: track bypass value (includes CSR writes via bypass)
+      tcontrol_out_reg <= tcontrol_bypass;
     end
   end
 
@@ -448,8 +460,9 @@ module cs_reg_file
         MCOUNTINHIBIT,
         //PMPCFG0,
         //PMPADDR0,
-        TSELECT,
         TDATA3: csr_rdata_o = 32'd0;
+        // TSELECT: WARL - accept writes but always read as 0 (only trigger 0 exists)
+        TSELECT:  csr_rdata_o = 32'd0;  // Only trigger slot 0 is implemented
         // tdata1: Return written value (writable trigger data)
         TDATA1:   csr_rdata_o = tdata1_reg;
         TDATA2:   csr_rdata_o = tdata2_reg;  // Breakpoint address
