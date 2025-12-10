@@ -63,7 +63,13 @@ module wrapper_ram
   // ==========================================================================
   // Split into individual BRAMs for proper inference
   (* ram_style = "block" *)
-  logic [                      WORD_WIDTH-1:0] ram          [0:WORDS_PER_LINE-1][0:RAM_DEPTH/WORDS_PER_LINE-1];
+  logic [                      WORD_WIDTH-1:0] ram0         [0:RAM_DEPTH/WORDS_PER_LINE-1];
+  (* ram_style = "block" *)
+  logic [                      WORD_WIDTH-1:0] ram1         [0:RAM_DEPTH/WORDS_PER_LINE-1];
+  (* ram_style = "block" *)
+  logic [                      WORD_WIDTH-1:0] ram2         [0:RAM_DEPTH/WORDS_PER_LINE-1];
+  (* ram_style = "block" *)
+  logic [                      WORD_WIDTH-1:0] ram3         [0:RAM_DEPTH/WORDS_PER_LINE-1];
 
   // ==========================================================================
   // Internal Signals
@@ -91,6 +97,7 @@ module wrapper_ram
   logic   [     WORD_WIDTH-1:0] temp_ram  [0:RAM_DEPTH-1];
 
   initial begin
+`ifndef SYNTHESIS
     if ($value$plusargs("INIT_FILE=%s", init_file)) begin
       fd = $fopen(init_file, "r");
       if (fd == 0) begin
@@ -100,42 +107,29 @@ module wrapper_ram
       $fclose(fd);
       $readmemh(init_file, temp_ram, 0, RAM_DEPTH - 1);
       // Distribute to separate BRAMs
-      for (int i = 0; i < RAM_DEPTH; i++) begin
-        ram[i%WORDS_PER_LINE][i/WORDS_PER_LINE] = temp_ram[i];
+      for (int i = 0; i < RAM_DEPTH; i += 4) begin
+        ram0[i/4] = temp_ram[i];
+        ram1[i/4] = temp_ram[i+1];
+        ram2[i/4] = temp_ram[i+2];
+        ram3[i/4] = temp_ram[i+3];
       end
 `ifdef LOG_RAM
       $display("[INFO] Memory loaded successfully.");
 `endif
     end else begin
-`ifdef SYNTHESIS
-      // During synthesis (Vivado), default to the top-level `coremark.mem` file
-      init_file = "C:/level-v/coremark.mem";
-`ifdef LOG_RAM
-      $display("[INFO] No INIT_FILE -> attempting to load default %s", init_file);
-`endif
-      fd = $fopen(init_file, "r");
-      if (fd == 0) begin
-`ifdef LOG_RAM
-        $display("[WARN] Default memory file not found: %s -> RAM zeroed", init_file);
-`endif
-        for (int w = 0; w < RAM_DEPTH / WORDS_PER_LINE; w++) ram[w] = '{default: '0};
-      end else begin
-        $fclose(fd);
-        $readmemh(init_file, temp_ram, 0, RAM_DEPTH - 1);
-        for (int i = 0; i < RAM_DEPTH; i++) begin
-          ram[i%WORDS_PER_LINE][i/WORDS_PER_LINE] = temp_ram[i];
-        end
-`ifdef LOG_RAM
-        $display("[INFO] Memory loaded from default: %s", init_file);
-`endif
-      end
-`else
 `ifdef LOG_RAM
       $display("[INFO] No INIT_FILE -> RAM initialized to zero");
 `endif
-      for (int w = 0; w < RAM_DEPTH / WORDS_PER_LINE; w++) ram[w] = '{default: '0};
-`endif
     end
+`else
+    // During synthesis, initialize to zero (BRAM will be initialized via .coe or programming interface)
+    for (int i = 0; i < RAM_DEPTH/WORDS_PER_LINE; i++) begin
+      ram0[i] = '0;
+      ram1[i] = '0;
+      ram2[i] = '0;
+      ram3[i] = '0;
+    end
+`endif
   end
 
   // ==========================================================================
@@ -148,29 +142,52 @@ module wrapper_ram
   // ==========================================================================
   always_ff @(posedge clk_i) begin
     if (rd_en_i) begin
-      for (int w = 0; w < WORDS_PER_LINE; w++) begin
-        rdata_q[w*WORD_WIDTH+:WORD_WIDTH] <= ram[w][word_addr];
-      end
+      rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= ram0[word_addr];
+      rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= ram1[word_addr];
+      rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= ram2[word_addr];
+      rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= ram3[word_addr];
     end
   end
 
   assign rdata_o = rdata_q;
 
   // ==========================================================================
-  // Write Logic - Simple BRAM write pattern
+  // Write Logic - Separate always blocks for better BRAM inference
   // ==========================================================================
+
+  // RAM Bank 0
   always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid) begin
-      // Programming mode - write to appropriate BRAM
-      ram[prog_addr[LINE_ADDR_BITS-1:0]][prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-    end else begin
-      // Normal write - each word to its own BRAM
-      for (int w = 0; w < WORDS_PER_LINE; w++) begin
-        if (|wstrb_i[w*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-          // Full word write (byte enables handled externally or ignored for BRAM inference)
-          ram[w][word_addr] <= wdata_i[w*WORD_WIDTH+:WORD_WIDTH];
-        end
-      end
+    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd0) begin
+      ram0[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
+    end else if (!prog_mode && |wstrb_i[0*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+      ram0[word_addr] <= wdata_i[0*WORD_WIDTH+:WORD_WIDTH];
+    end
+  end
+
+  // RAM Bank 1
+  always_ff @(posedge clk_i) begin
+    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd1) begin
+      ram1[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
+    end else if (!prog_mode && |wstrb_i[1*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+      ram1[word_addr] <= wdata_i[1*WORD_WIDTH+:WORD_WIDTH];
+    end
+  end
+
+  // RAM Bank 2
+  always_ff @(posedge clk_i) begin
+    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd2) begin
+      ram2[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
+    end else if (!prog_mode && |wstrb_i[2*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+      ram2[word_addr] <= wdata_i[2*WORD_WIDTH+:WORD_WIDTH];
+    end
+  end
+
+  // RAM Bank 3
+  always_ff @(posedge clk_i) begin
+    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd3) begin
+      ram3[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
+    end else if (!prog_mode && |wstrb_i[3*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+      ram3[word_addr] <= wdata_i[3*WORD_WIDTH+:WORD_WIDTH];
     end
   end
 

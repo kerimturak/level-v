@@ -16,6 +16,27 @@ SHELL := /bin/bash
 # Root directory
 ROOT_DIR := $(shell pwd)
 
+# Common directories needed by test makefiles
+SCRIPT_DIR := $(ROOT_DIR)/script
+SIM_DIR := $(ROOT_DIR)/sim
+ENV_DIR := $(ROOT_DIR)/env
+SUBREPO_DIR := $(ROOT_DIR)/subrepo
+RESULTS_DIR := $(ROOT_DIR)/results
+
+# Test repositories
+ARCH_ROOT := $(SUBREPO_DIR)/riscv-arch-test
+ARCH_REPO_URL := https://github.com/riscv/riscv-arch-test.git
+
+# Common utilities
+MKDIR := mkdir -p
+SUCCESS := ✓
+
+# RISC-V toolchain (needed by test makefiles)
+RISCV_PREFIX ?= riscv32-unknown-elf
+
+# Simulator selection (verilator for this makefile)
+SIM := verilator
+
 # Python
 PYTHON := python3
 
@@ -230,7 +251,12 @@ VERILATOR_RUNNER := $(ROOT_DIR)/script/python/makefile/verilator_runner.py
 MEM_DIRS := $(BUILD_DIR)/tests/riscv-tests/mem \
             $(BUILD_DIR)/tests/riscv-arch-test/mem \
             $(BUILD_DIR)/tests/imperas/mem \
-            $(BUILD_DIR)/tests/bench/mem
+            $(BUILD_DIR)/tests/riscv-benchmarks/mem \
+            $(BUILD_DIR)/tests/coremark \
+            $(BUILD_DIR)/tests/dhrystone \
+            $(BUILD_DIR)/tests/embench/mem \
+            $(BUILD_DIR)/tests/torture/mem \
+            $(BUILD_DIR)/tests/riscv-dv/mem
 
 # Runner arguments
 RUNNER_ARGS := \
@@ -251,6 +277,17 @@ endif
 
 ifeq ($(TRACE),0)
     RUNNER_ARGS += --no-trace
+endif
+
+# Spike comparison settings
+ENABLE_SPIKE ?= 0
+ENABLE_COMPARE ?= 0
+ENABLE_HTML_REPORT ?= 0
+
+ifeq ($(ENABLE_SPIKE),1)
+    SPIKE_ISA ?= rv32imc_zicsr_zicntr_zifencei
+    SPIKE_PC ?= 0x80000000
+    SPIKE_PRIV ?= m
 endif
 
 # -----------------------------------------
@@ -314,6 +351,18 @@ build: dirs
 run: build
 	@echo -e "$(GREEN)[RUN SIMULATION]$(RESET) Test: $(TEST_NAME)"
 	@$(PYTHON) $(VERILATOR_RUNNER) $(RUNNER_ARGS)
+ifeq ($(ENABLE_SPIKE),1)
+	@echo -e "$(CYAN)[SPIKE]$(RESET) Running Spike golden reference..."
+	@$(MAKE) -f Makefile.verilator run-spike TEST_NAME=$(TEST_NAME)
+endif
+ifeq ($(ENABLE_COMPARE),1)
+	@echo -e "$(CYAN)[COMPARE]$(RESET) Comparing RTL and Spike logs..."
+	@$(MAKE) -f Makefile.verilator compare-logs TEST_NAME=$(TEST_NAME)
+endif
+ifeq ($(ENABLE_HTML_REPORT),1)
+	@echo -e "$(CYAN)[REPORT]$(RESET) Generating HTML report..."
+	@$(MAKE) -f Makefile.verilator html-report TEST_NAME=$(TEST_NAME)
+endif
 
 # Clean build artifacts
 clean:
@@ -330,6 +379,101 @@ wave:
 	else \
 		echo -e "$(RED)[ERROR]$(RESET) Waveform not found: $(VERILATOR_LOG)/waveform.fst"; \
 	fi
+
+# ============================================================
+# Spike Integration and Comparison
+# ============================================================
+.PHONY: run-spike compare-logs html-report generate-dashboard
+
+# Run Spike golden reference
+run-spike:
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  Running Spike Golden Reference$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@# Find ELF and address files
+	@ELF_FILE=$$(find $(MEM_DIRS) -name "$(TEST_NAME).elf" -o -name "$(TEST_NAME)" | head -1); \
+	if [ -z "$$ELF_FILE" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) ELF file not found for test: $(TEST_NAME)"; \
+		exit 1; \
+	fi; \
+	ADDR_FILE=$$(dirname $$ELF_FILE)/../pass_fail_addr/$(TEST_NAME)_addr.txt; \
+	SPIKE_LOG=$(VERILATOR_LOG)/spike_commit.log; \
+	DEBUG_CMD=$(VERILATOR_LOG)/spike_debug.cmd; \
+	if [ -f "$$ADDR_FILE" ]; then \
+		PASS_ADDR=$$(head -1 $$ADDR_FILE | awk '{print $$1}'); \
+		echo -e "$(YELLOW)[INFO]$(RESET) PASS address: $$PASS_ADDR"; \
+		echo "until pc 0 $$PASS_ADDR" > $$DEBUG_CMD; \
+		echo "quit" >> $$DEBUG_CMD; \
+		spike -d --debug-cmd=$$DEBUG_CMD \
+			--isa=$(SPIKE_ISA) --pc=$(SPIKE_PC) --priv=$(SPIKE_PRIV) \
+			-l --log-commits $$ELF_FILE > $$SPIKE_LOG 2>&1; \
+	else \
+		echo -e "$(YELLOW)[WARN]$(RESET) Address file not found, running Spike without breakpoint"; \
+		spike --isa=$(SPIKE_ISA) --pc=$(SPIKE_PC) --priv=$(SPIKE_PRIV) \
+			-l --log-commits $$ELF_FILE > $$SPIKE_LOG 2>&1; \
+	fi; \
+	SPIKE_LINES=$$(wc -l < $$SPIKE_LOG); \
+	echo -e "$(GREEN)[SUCCESS]$(RESET) Spike simulation complete ($$SPIKE_LINES commits)"
+
+# Compare RTL and Spike logs
+compare-logs:
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  Comparing RTL and Spike Logs$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@RTL_LOG=$(VERILATOR_LOG)/commit_trace.log; \
+	SPIKE_LOG=$(VERILATOR_LOG)/spike_commit.log; \
+	DIFF_LOG=$(VERILATOR_LOG)/diff.log; \
+	if [ ! -f "$$RTL_LOG" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) RTL log not found: $$RTL_LOG"; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$$SPIKE_LOG" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) Spike log not found: $$SPIKE_LOG"; \
+		exit 1; \
+	fi; \
+	DUMP_FILE=$$(find $(MEM_DIRS) -name "$(TEST_NAME).dump" | head -1); \
+	ADDR_FILE=$$(find $(MEM_DIRS) -name "$(TEST_NAME)_addr.txt" | head -1); \
+	CMD="$(PYTHON) $(SCRIPT_DIR)/python/makefile/compare_logs.py \
+		--rtl $$RTL_LOG \
+		--spike $$SPIKE_LOG \
+		--output $$DIFF_LOG \
+		--test-name $(TEST_NAME)"; \
+	if [ -n "$$DUMP_FILE" ]; then CMD="$$CMD --dump $$DUMP_FILE"; fi; \
+	if [ -n "$$ADDR_FILE" ]; then CMD="$$CMD --addr $$ADDR_FILE"; fi; \
+	eval $$CMD; \
+	if [ $$? -eq 0 ]; then \
+		echo -e "$(GREEN)[SUCCESS]$(RESET) Logs match!"; \
+	else \
+		echo -e "$(RED)[FAILURE]$(RESET) Logs differ - see $$DIFF_LOG"; \
+		exit 1; \
+	fi
+
+# Generate HTML report for single test
+html-report:
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  Generating HTML Report$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@DIFF_LOG=$(VERILATOR_LOG)/diff.log; \
+	if [ ! -f "$$DIFF_LOG" ]; then \
+		echo -e "$(YELLOW)[WARN]$(RESET) diff.log not found, running comparison first..."; \
+		$(MAKE) -f Makefile.verilator compare-logs TEST_NAME=$(TEST_NAME); \
+	fi; \
+	HTML_REPORT=$(VERILATOR_LOG)/test_report.html; \
+	$(PYTHON) $(SCRIPT_DIR)/python/makefile/html_diff_generator.py \
+		--diff-log $$DIFF_LOG \
+		--output $$HTML_REPORT \
+		--test-name $(TEST_NAME); \
+	echo -e "$(GREEN)[SUCCESS]$(RESET) HTML report: $$HTML_REPORT"
+
+# Generate dashboard for all tests
+generate-dashboard:
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  Generating Test Dashboard$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@$(PYTHON) $(SCRIPT_DIR)/python/makefile/generate_test_dashboard.py \
+		--results-dir $(RESULTS_DIR)/logs/verilator \
+		--output $(RESULTS_DIR)/test_dashboard.html
+	@echo -e "$(GREEN)[SUCCESS]$(RESET) Dashboard: $(RESULTS_DIR)/test_dashboard.html"
 
 # ============================================================
 # Batch Test Execution from File
@@ -393,6 +537,111 @@ arch:
 bench:
 	@$(MAKE) -f Makefile.verilator run-flist FLIST=$(ROOT_DIR)/sim/test/benchmark_test_list.flist
 
+# ============================================================
+# Include Test Makefiles
+# ============================================================
+# Include all test build and preparation makefiles
+# These handle test compilation, setup, and mem file generation
+-include $(ROOT_DIR)/script/makefiles/test/coremark.mk
+-include $(ROOT_DIR)/script/makefiles/test/dhrystone.mk
+-include $(ROOT_DIR)/script/makefiles/test/arch_test.mk
+-include $(ROOT_DIR)/script/makefiles/test/embench.mk
+-include $(ROOT_DIR)/script/makefiles/test/imperas_test.mk
+-include $(ROOT_DIR)/script/makefiles/test/torture.mk
+-include $(ROOT_DIR)/script/makefiles/test/riscv_dv.mk
+-include $(ROOT_DIR)/script/makefiles/test/riscv_formal.mk
+
+# ============================================================
+# Verilator-Specific Test Wrappers
+# ============================================================
+# These targets wrap the test preparation with Verilator execution
+
+# -----------------------------------------
+# CoreMark with Verilator
+# -----------------------------------------
+.PHONY: verilator-coremark verilator-cm verilator-cm-quick verilator-cm-validate
+
+verilator-coremark: coremark
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Running CoreMark with Verilator$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@$(MAKE) -f Makefile.verilator run \
+		TEST_NAME=coremark \
+		MEM_FILE=$(BUILD_DIR)/tests/coremark/coremark.mem \
+		MAX_CYCLES=$(or $(MAX_CYCLES),5000000)
+
+verilator-cm: verilator-coremark
+
+verilator-cm-quick: coremark
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  CoreMark Quick Test with Verilator$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@$(MAKE) -f Makefile.verilator run \
+		TEST_NAME=coremark \
+		MEM_FILE=$(BUILD_DIR)/tests/coremark/coremark.mem \
+		MAX_CYCLES=2000000 \
+		TRACE=0
+
+verilator-cm-validate: coremark
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  CoreMark Validation with Verilator$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@$(MAKE) -f Makefile.verilator run \
+		TEST_NAME=coremark \
+		MEM_FILE=$(BUILD_DIR)/tests/coremark/coremark.mem \
+		MAX_CYCLES=10000000
+
+# -----------------------------------------
+# Dhrystone with Verilator
+# -----------------------------------------
+.PHONY: verilator-dhrystone verilator-dhry
+
+verilator-dhrystone: dhrystone
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Running Dhrystone with Verilator$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@$(MAKE) -f Makefile.verilator run \
+		TEST_NAME=dhrystone \
+		MEM_FILE=$(BUILD_DIR)/tests/dhrystone/dhrystone.mem \
+		MAX_CYCLES=$(or $(MAX_CYCLES),5000000)
+
+verilator-dhry: verilator-dhrystone
+
+# -----------------------------------------
+# Architecture Tests with Verilator
+# -----------------------------------------
+.PHONY: verilator-arch verilator-arch-all verilator-arch-I verilator-arch-M verilator-arch-C
+
+verilator-arch-all: arch_auto
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  Running Architecture Tests with Verilator$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@# Generate flist of all arch tests
+	@find $(BUILD_DIR)/tests/riscv-arch-test/mem -name "*.mem" -type f | \
+		xargs -n1 basename | sed 's/.mem$$//' > $(RESULTS_DIR)/arch_tests.flist
+	@$(MAKE) -f Makefile.verilator run-flist FLIST=$(RESULTS_DIR)/arch_tests.flist
+
+verilator-arch: verilator-arch-all
+
+# Run specific extension tests
+verilator-arch-I: arch_build_I arch_import
+	@echo -e "$(YELLOW)Running I extension tests with Verilator...$(RESET)"
+	@find $(BUILD_DIR)/tests/riscv-arch-test/mem -name "I-*.mem" -type f | \
+		xargs -n1 basename | sed 's/.mem$$//' > $(RESULTS_DIR)/arch_I_tests.flist
+	@$(MAKE) -f Makefile.verilator run-flist FLIST=$(RESULTS_DIR)/arch_I_tests.flist
+
+verilator-arch-M: arch_build_M arch_import
+	@echo -e "$(YELLOW)Running M extension tests with Verilator...$(RESET)"
+	@find $(BUILD_DIR)/tests/riscv-arch-test/mem -name "M-*.mem" -type f | \
+		xargs -n1 basename | sed 's/.mem$$//' > $(RESULTS_DIR)/arch_M_tests.flist
+	@$(MAKE) -f Makefile.verilator run-flist FLIST=$(RESULTS_DIR)/arch_M_tests.flist
+
+verilator-arch-C: arch_build_C arch_import
+	@echo -e "$(YELLOW)Running C extension tests with Verilator...$(RESET)"
+	@find $(BUILD_DIR)/tests/riscv-arch-test/mem -name "C-*.mem" -type f | \
+		xargs -n1 basename | sed 's/.mem$$//' > $(RESULTS_DIR)/arch_C_tests.flist
+	@$(MAKE) -f Makefile.verilator run-flist FLIST=$(RESULTS_DIR)/arch_C_tests.flist
+
 # Help
 help:
 	@echo -e ""
@@ -415,6 +664,36 @@ help:
 	@echo -e "  $(GREEN)show-config$(RESET)    - Show current configuration"
 	@echo -e "  $(GREEN)help$(RESET)           - Show this help"
 	@echo -e ""
+	@echo -e "$(YELLOW)Benchmark Targets:$(RESET)"
+	@echo -e "  $(CYAN)verilator-coremark$(RESET)      - Build and run CoreMark"
+	@echo -e "  $(CYAN)verilator-cm$(RESET)            - Short alias for coremark"
+	@echo -e "  $(CYAN)verilator-cm-quick$(RESET)      - Quick CoreMark test (2M cycles, no trace)"
+	@echo -e "  $(CYAN)verilator-cm-validate$(RESET)   - Full CoreMark validation (10M cycles)"
+	@echo -e "  $(CYAN)verilator-dhrystone$(RESET)     - Build and run Dhrystone"
+	@echo -e "  $(CYAN)verilator-dhry$(RESET)          - Short alias for dhrystone"
+	@echo -e ""
+	@echo -e "$(YELLOW)Architecture Test Targets:$(RESET)"
+	@echo -e "  $(CYAN)verilator-arch-all$(RESET)      - Run all architecture tests"
+	@echo -e "  $(CYAN)verilator-arch$(RESET)          - Alias for verilator-arch-all"
+	@echo -e "  $(CYAN)verilator-arch-I$(RESET)        - Run I extension tests only"
+	@echo -e "  $(CYAN)verilator-arch-M$(RESET)        - Run M extension tests only"
+	@echo -e "  $(CYAN)verilator-arch-C$(RESET)        - Run C extension tests only"
+	@echo -e ""
+	@echo -e "$(YELLOW)Test Build Targets (from included makefiles):$(RESET)"
+	@echo -e "  $(CYAN)coremark$(RESET)                - Build CoreMark benchmark"
+	@echo -e "  $(CYAN)coremark_clean$(RESET)          - Clean CoreMark artifacts"
+	@echo -e "  $(CYAN)dhrystone$(RESET)               - Build Dhrystone benchmark"
+	@echo -e "  $(CYAN)dhrystone_clean$(RESET)         - Clean Dhrystone artifacts"
+	@echo -e "  $(CYAN)arch_auto$(RESET)               - Clone, setup, build, import arch tests"
+	@echo -e "  $(CYAN)arch_build$(RESET)              - Build architecture tests"
+	@echo -e "  $(CYAN)arch_clean$(RESET)              - Clean architecture test artifacts"
+	@echo -e ""
+	@echo -e "$(YELLOW)Spike Integration and Reporting:$(RESET)"
+	@echo -e "  $(CYAN)run-spike$(RESET)               - Run Spike golden reference"
+	@echo -e "  $(CYAN)compare-logs$(RESET)            - Compare RTL and Spike commit logs"
+	@echo -e "  $(CYAN)html-report$(RESET)             - Generate HTML report for test"
+	@echo -e "  $(CYAN)generate-dashboard$(RESET)      - Generate test results dashboard"
+	@echo -e ""
 	@echo -e "$(YELLOW)CLI Parameters:$(RESET)"
 	@echo -e "  $(CYAN)TEST_NAME$(RESET)=<name>      - Test to run (default: rv32ui-p-add)"
 	@echo -e "  $(CYAN)MAX_CYCLES$(RESET)=<n>        - Override max cycles"
@@ -430,14 +709,38 @@ help:
 	@echo -e "  $(CYAN)SIM_FAST$(RESET)=1            - Enable fast simulation mode"
 	@echo -e "  $(CYAN)SIM_UART_MONITOR$(RESET)=1   - Enable UART monitor"
 	@echo -e ""
+	@echo -e "$(YELLOW)Spike and Report Parameters:$(RESET)"
+	@echo -e "  $(CYAN)ENABLE_SPIKE$(RESET)=1        - Enable Spike golden reference"
+	@echo -e "  $(CYAN)ENABLE_COMPARE$(RESET)=1      - Enable log comparison after simulation"
+	@echo -e "  $(CYAN)ENABLE_HTML_REPORT$(RESET)=1  - Enable HTML report generation"
+	@echo -e "  $(CYAN)SPIKE_ISA$(RESET)=<isa>       - Spike ISA string (default: rv32imc_zicsr_zicntr_zifencei)"
+	@echo -e "  $(CYAN)SPIKE_PC$(RESET)=<addr>       - Spike start PC (default: 0x80000000)"
+	@echo -e "  $(CYAN)SPIKE_PRIV$(RESET)=<m|s|u>    - Spike privilege mode (default: m)"
+	@echo -e ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
-	@echo -e "  $(CYAN)# Single test$(RESET)"
+	@echo -e "  $(CYAN)# Single ISA test$(RESET)"
 	@echo -e "  make -f Makefile.verilator run TEST_NAME=rv32ui-p-add"
 	@echo -e "  make -f Makefile.verilator run TEST_NAME=rv32ui-p-add LOG_BP=1"
 	@echo -e ""
-	@echo -e "  $(CYAN)# Batch tests$(RESET)"
+	@echo -e "  $(CYAN)# Batch ISA tests$(RESET)"
 	@echo -e "  make -f Makefile.verilator isa"
 	@echo -e "  make -f Makefile.verilator run-flist FLIST=custom_tests.flist"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Benchmarks$(RESET)"
+	@echo -e "  make -f Makefile.verilator verilator-cm-quick"
+	@echo -e "  make -f Makefile.verilator verilator-coremark MAX_CYCLES=10000000"
+	@echo -e "  make -f Makefile.verilator verilator-dhrystone"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Architecture tests$(RESET)"
+	@echo -e "  make -f Makefile.verilator verilator-arch-I"
+	@echo -e "  make -f Makefile.verilator verilator-arch-all"
+	@echo -e ""
+	@echo -e "  $(CYAN)# With Spike comparison and HTML report$(RESET)"
+	@echo -e "  make -f Makefile.verilator run TEST_NAME=rv32ui-p-add ENABLE_SPIKE=1 ENABLE_COMPARE=1 ENABLE_HTML_REPORT=1"
+	@echo -e "  make -f Makefile.verilator run-spike TEST_NAME=rv32ui-p-add"
+	@echo -e "  make -f Makefile.verilator compare-logs TEST_NAME=rv32ui-p-add"
+	@echo -e "  make -f Makefile.verilator html-report TEST_NAME=rv32ui-p-add"
+	@echo -e "  make -f Makefile.verilator generate-dashboard"
 	@echo -e ""
 	@echo -e "  $(CYAN)# Configuration$(RESET)"
 	@echo -e "  make -f Makefile.verilator show-config"

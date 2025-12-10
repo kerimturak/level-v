@@ -13,6 +13,7 @@ module systessis_wrapper
     // UART
     output logic uart0_tx_o,
     input  logic uart0_rx_i,
+    /*
     output logic uart1_tx_o,
     input  logic uart1_rx_i,
 
@@ -48,14 +49,14 @@ module systessis_wrapper
 
     // External interrupts
     input logic [7:0] ext_irq_i,
-
+*/
     // Programming
     input  logic prog_rx_i,
-    output logic prog_mode_o,
+    output logic prog_mode_o
 
     // Debug / Status
-    output logic       cpu_halt_o,
-    output logic [3:0] status_led_o
+    //output logic       cpu_halt_o,
+    //output logic [3:0] status_led_o
 );
 
   logic clk_out1;

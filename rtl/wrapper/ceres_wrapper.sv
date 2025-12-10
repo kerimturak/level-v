@@ -34,7 +34,12 @@ module ceres_wrapper
     // ========================================================================
     // Memory Configuration
     // ========================================================================
-    parameter int unsigned RAM_SIZE_KB     = 128,
+`ifndef SYNTHESIS
+    parameter int unsigned RAM_SIZE_KB = 128,
+`else
+    parameter int unsigned RAM_SIZE_KB = 32,
+`endif
+
     parameter int unsigned RAM_LATENCY     = 16,
     parameter bit          BOOTROM_EN      = 1'b0,
     parameter int unsigned BOOTROM_SIZE_KB = 4,

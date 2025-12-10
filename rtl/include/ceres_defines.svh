@@ -47,7 +47,9 @@
 `define FEAT_WALLACE_SINGLE // Tek cycle Wallace tree
 //`define FEAT_WALLACE_MULTI   // Multi-cycle Wallace tree
 //`define FEAT_DSP_MUL         // DSP block multiplier
-
+`ifdef SYNTHESIS
+`define MINIMAL_SOC
+`endif
 // ============================================================================
 // SIMULATION CONTROLS
 // ============================================================================

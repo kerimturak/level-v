@@ -14,3 +14,5 @@ riscv-privileged.pdf
 riscv-unprivileged.pdf
 # MkDocs site
 site/
+*/__pycache__/
+*.pyc
