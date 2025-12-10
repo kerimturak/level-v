@@ -29,3 +29,35 @@ set_property -dict { PACKAGE_PIN J1    IOSTANDARD LVCMOS33 } [get_ports { prog_r
 # - `status_led_o` is a 4-bit port (LD0..LD3). prog_mode_led_o mapped to LD4.
 # - Main console UART uses on-board USB-RS232; no board changes needed for host PC connection.
 
+## ============================================================================
+## TIMING OPTIMIZATION CONSTRAINTS
+## ============================================================================
+
+# Multi-cycle paths for division unit (takes multiple cycles to complete)
+# Division operations are allowed to take up to 16 cycles (for pipelined div)
+# This relaxes timing constraints on division paths
+set_multicycle_path -setup 16 -through [get_pins -hierarchical -filter {NAME =~ "*i_divu*"}]
+set_multicycle_path -hold 15 -through [get_pins -hierarchical -filter {NAME =~ "*i_divu*"}]
+
+# Multi-cycle paths for pipelined multiplication unit (2 cycles)
+# Allow multiplier 2 cycles to complete operation
+set_multicycle_path -setup 2 -through [get_pins -hierarchical -filter {NAME =~ "*i_mul_pipelined*"}]
+set_multicycle_path -hold 1 -through [get_pins -hierarchical -filter {NAME =~ "*i_mul_pipelined*"}]
+
+# Fanout optimization - replicate high-fanout nets
+set_property MAX_FANOUT 20 [get_nets -hierarchical -filter {NAME =~ "*cache_req*"}]
+set_property MAX_FANOUT 15 [get_nets -hierarchical -filter {NAME =~ "*fwd_*"}]
+
+# Critical path optimization directives
+# Enable retiming for better register placement
+set_property KEEP_HIERARCHY SOFT [get_cells -hierarchical -filter {NAME =~ "*i_alu*"}]
+
+# Division unit specific optimizations
+set_property KEEP_HIERARCHY SOFT [get_cells -hierarchical -filter {NAME =~ "*divu*"}]
+
+# Multiplication unit optimizations
+set_property KEEP_HIERARCHY SOFT [get_cells -hierarchical -filter {NAME =~ "*mul*"}]
+
+# Hazard unit optimization (high fanout paths)
+set_property KEEP_HIERARCHY SOFT [get_cells -hierarchical -filter {NAME =~ "*i_hazard*"}]
+

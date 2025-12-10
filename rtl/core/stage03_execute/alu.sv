@@ -213,10 +213,27 @@ module alu
 
   // ------------------------------------------------------------
   // Multiplication unit
-  // Select one: FEAT_WALLACE_SINGLE, FEAT_WALLACE_MULTI, FEAT_DSP_MUL
+  // Priority: PIPELINED > WALLACE_SINGLE > DSP > Sequential
   // ------------------------------------------------------------
-`ifdef FEAT_WALLACE_SINGLE
+`ifdef FEAT_PIPELINED_MUL
+  // Pipelined multiplier for improved timing (2 cycles, breaks deep comb logic)
+  mul_pipelined #(
+      .XLEN(32),
+      .YLEN(32)
+  ) i_mul_pipelined (
+      .clk_i    (clk_i),
+      .rst_ni   (rst_ni),
+      .start_i  (mul_start),
+      .a_i      (mul_op_A),
+      .b_i      (mul_op_B),
+      .product_o(unsigned_prod),
+      .busy_o   (mul_busy),
+      .done_o   (mul_done),
+      .valid_o  (mul_valid)
+  );
 
+`elsif FEAT_WALLACE_SINGLE
+  // Single-cycle Wallace/Dadda tree (fast but deep combinational logic)
   assign mul_valid = 1'b1;
   assign mul_busy  = 1'b0;
 
@@ -231,7 +248,7 @@ module alu
   );
 
 `elsif FEAT_DSP_MUL
-
+  // DSP block multiplier (uses FPGA DSP slices)
   always_comb begin
     unsigned_prod = mul_op_A * mul_op_B;
     mul_valid     = 1'b1;
@@ -239,7 +256,7 @@ module alu
   end
 
 `else
-
+  // Sequential multiplier (32 cycles, smallest area)
   seq_multiplier #(
       .SIZE(32)
   ) i_seq_multiplier (
@@ -257,8 +274,29 @@ module alu
 `endif
 
   // ------------------------------------------------------------
-  // Division unit (unsigned çekirdek)
+  // Division unit (unsigned core)
+  // Select between original (divu_int) or pipelined version (divu_pipelined)
   // ------------------------------------------------------------
+`ifdef FEAT_PIPELINED_DIV
+  // Pipelined division for improved timing (2 bits/cycle, 16 cycles total)
+  divu_pipelined #(
+      .WIDTH(32),
+      .BITS_PER_CYCLE(2)
+  ) i_divu_pipelined (
+      .clk_i     (clk_i),
+      .rst_ni    (rst_ni),
+      .start_i   (div_start),
+      .busy_o    (div_busy),
+      .done_o    (div_done),
+      .valid_o   (div_valid),
+      .dbz_o     (div_dbz),
+      .dividend_i(div_op_A),
+      .divisor_i (div_op_B),
+      .quotient_o(unsigned_quo),
+      .reminder_o(unsigned_rem)
+  );
+`else
+  // Original sequential division (1 bit/cycle, 32 cycles total)
   divu_int #(
       .WIDTH(32)
   ) i_divu_int (
@@ -274,6 +312,7 @@ module alu
       .quotient_o(unsigned_quo),
       .reminder_o(unsigned_rem)
   );
+`endif
 
   // ------------------------------------------------------------
   // RISC-V DIV/REM final düzeltmeleri (dbz + signed/unsigned)
