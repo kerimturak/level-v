@@ -89,19 +89,18 @@ module cache
   tsram_t tsram  /*verilator split_var*/;
   nsram_t nsram  /*verilator split_var*/;
 
-  typedef struct packed {
-    logic [IDX_WIDTH-1:0] idx;
-    logic [NUM_WAY-1:0]   way;
-    logic                 rw_en;
-    logic                 wdirty;
-  } drsram_wr_t;
+  // Dirty SRAM signals - broken out to avoid combinatorial loops
+  logic [IDX_WIDTH-1:0]   drsram_wr_idx;
+  logic [NUM_WAY-1:0]     drsram_wr_way;
+  logic                   drsram_wr_rw_en;
+  logic                   drsram_wr_wdirty;
+  logic [NUM_WAY-1:0]     drsram_rd_rdirty;
 
-  typedef struct packed {
-    logic [NUM_WAY-1:0]   rdirty;
-  } drsram_rd_t;
-
-  drsram_wr_t             drsram  /*verilator split_var*/;
-  drsram_rd_t             drsram_rd  /*verilator split_var*/;
+  // Temporary variables to break combinatorial loops
+  logic [IDX_WIDTH-1:0]   drsram_idx_temp;
+  logic                   drsram_rw_en_temp;
+  logic [NUM_WAY-1:0]     drsram_way_temp;
+  logic                   drsram_wdirty_temp;
 
   // Additional wires for dcache writeback, mask data, etc.
   logic    [BLK_SIZE-1:0] mask_data;
@@ -305,7 +304,7 @@ module cache
     end
 
     // Check if current way in current set is dirty and valid
-    assign fi_has_dirty = drsram_rd.rdirty[fi_way_idx_q] && tsram.rtag[fi_way_idx_q][TAG_SIZE];
+    assign fi_has_dirty = drsram_rd_rdirty[fi_way_idx_q] && tsram.rtag[fi_way_idx_q][TAG_SIZE];
 
     // Get eviction data for fence.i writeback
     always_comb begin
@@ -442,21 +441,15 @@ module cache
         for (int i = 0; i < NUM_SET; i++) dirty_reg[i] <= '0;
       end else begin
         for (int w = 0; w < NUM_WAY; w++) begin
-          if (drsram.way[w]) begin
-            dirty_reg[drsram.idx][w] <= drsram.wdirty;
+          if (drsram_wr_way[w]) begin
+            dirty_reg[drsram_wr_idx][w] <= drsram_wr_wdirty;
           end
         end
       end
     end
 
-    // Register-based dirty array read (combinational - instant access)
-    always_comb begin
-      for (int w = 0; w < NUM_WAY; w++) begin
-        drsram_rd.rdirty[w] = dirty_reg[drsram.idx][w];
-      end
-    end
-
     // Additional d-cache logic: data masking, writeback, etc.
+    // FIRST: Compute control signals without reading dirty bits
     always_comb begin
       mask_data   = cache_hit ? cache_select_data : lowX_res_i.data;
       data_wr_pre = mask_data;
@@ -468,7 +461,21 @@ module cache
       endcase
 
       word_idx = cache_req_q.addr[(WOFFSET+2)-1:2];
-      write_back = cache_miss && (|(drsram_rd.rdirty & evict_way & cache_valid_vec));
+
+      // Compute index first (used for dirty read)
+      drsram_idx_temp = fi_active ? fi_set_idx_q : cache_idx;
+    end
+
+    // SECOND: Read dirty bits using the computed index
+    always_comb begin
+      for (int w = 0; w < NUM_WAY; w++) begin
+        drsram_rd_rdirty[w] = dirty_reg[drsram_idx_temp][w];
+      end
+    end
+
+    // THIRD: Compute write_back and other signals using dirty bits
+    always_comb begin
+      write_back = cache_miss && (|(drsram_rd_rdirty & evict_way & cache_valid_vec));
 
       data_array_wr_en = ((cache_hit && cache_req_q.rw) ||
            (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !write_back && !fi_active;
@@ -477,18 +484,25 @@ module cache
       // Update dcache specific memories
       // During fence.i writeback, we use fi_mark_clean to clear dirty bit
       // IMPORTANT: During fi_active, we must NOT let flush invalidate tags/dirty bits
-      drsram.wdirty = fi_mark_clean ? 1'b0 : ((flush && !fi_active) ? '0 : (write_back ? '0 : (cache_req_q.rw ? '1 : '0)));
-      drsram.rw_en  = fi_mark_clean || ((cache_req_q.rw && (cache_hit || (cache_miss && lowX_res_i.valid))) ||
+      drsram_wdirty_temp = fi_mark_clean ? 1'b0 : ((flush && !fi_active) ? '0 : (write_back ? '0 : (cache_req_q.rw ? '1 : '0)));
+      drsram_wr_wdirty = drsram_wdirty_temp;
+
+      // Compute rw_en without self-reference
+      drsram_rw_en_temp = fi_mark_clean || ((cache_req_q.rw && (cache_hit || (cache_miss && lowX_res_i.valid))) ||
                         (write_back && lowX_res_i.valid));
+      drsram_wr_rw_en  = drsram_rw_en_temp;
+
       // During fence.i, use fi_set_idx_q for reading dirty bits
-      drsram.idx    = fi_active ? fi_set_idx_q : cache_idx;
+      drsram_wr_idx    = drsram_idx_temp;
+
       for (int i = 0; i < NUM_WAY; i++) begin
         if (fi_mark_clean) begin
-          drsram.way[i] = fi_way_onehot[i];
+          drsram_way_temp[i] = fi_way_onehot[i];
         end else begin
           // Don't let flush write during fi_active
-          drsram.way[i] = (flush && !fi_active) ? '1 : (cache_wr_way[i] && drsram.rw_en);
+          drsram_way_temp[i] = (flush && !fi_active) ? '1 : (cache_wr_way[i] && drsram_rw_en_temp);
         end
+        drsram_wr_way[i] = drsram_way_temp[i];
       end
 
       nsram.rw_en = (flush && !fi_active) || data_array_wr_en;
