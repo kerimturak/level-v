@@ -62,14 +62,10 @@ module wrapper_ram
   // Memory Array - Separate BRAMs for each word position
   // ==========================================================================
   // Split into individual BRAMs for proper inference
-  (* ram_style = "block" *)
-  logic [                      WORD_WIDTH-1:0] ram0         [0:RAM_DEPTH/WORDS_PER_LINE-1];
-  (* ram_style = "block" *)
-  logic [                      WORD_WIDTH-1:0] ram1         [0:RAM_DEPTH/WORDS_PER_LINE-1];
-  (* ram_style = "block" *)
-  logic [                      WORD_WIDTH-1:0] ram2         [0:RAM_DEPTH/WORDS_PER_LINE-1];
-  (* ram_style = "block" *)
-  logic [                      WORD_WIDTH-1:0] ram3         [0:RAM_DEPTH/WORDS_PER_LINE-1];
+  logic [WORD_WIDTH-1:0] ram0[RAM_DEPTH/WORDS_PER_LINE-1:0];
+  logic [WORD_WIDTH-1:0] ram1[RAM_DEPTH/WORDS_PER_LINE-1:0];
+  logic [WORD_WIDTH-1:0] ram2[RAM_DEPTH/WORDS_PER_LINE-1:0];
+  logic [WORD_WIDTH-1:0] ram3[RAM_DEPTH/WORDS_PER_LINE-1:0];
 
   // ==========================================================================
   // Internal Signals
@@ -92,8 +88,8 @@ module wrapper_ram
   // Memory Initialization
   // ==========================================================================
   localparam int INIT_FILE_LEN = 256;
-  reg     [8*INIT_FILE_LEN-1:0] init_file;
-  integer                       fd;
+  reg     [8*INIT_FILE_LEN-1:0] init_file = {INIT_FILE_LEN{8'h00}};
+  integer                       fd = 0;
   logic   [     WORD_WIDTH-1:0] temp_ram  [0:RAM_DEPTH-1];
 
   initial begin
@@ -138,58 +134,64 @@ module wrapper_ram
   assign word_addr = addr_i[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS];
 
   // ==========================================================================
-  // Read Logic - Simple BRAM read pattern
+  // Read/Write Logic - Write-First Mode (Vivado BRAM Template)
   // ==========================================================================
+  // Reference: UG901 - Recommended Single-Port BRAM Template
+  // Write-first mode: Write data appears on output in same cycle as write
+
+  // RAM Bank 0 - Write-first BRAM
   always_ff @(posedge clk_i) begin
-    if (rd_en_i) begin
+    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd0) begin
+      ram0[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
+      rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= prog_data;
+    end else if (!prog_mode && |wstrb_i[0*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+      ram0[word_addr] <= wdata_i[0*WORD_WIDTH+:WORD_WIDTH];
+      rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= wdata_i[0*WORD_WIDTH+:WORD_WIDTH];
+    end else if (!prog_mode && rd_en_i) begin
       rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= ram0[word_addr];
+    end
+  end
+
+  // RAM Bank 1 - Write-first BRAM
+  always_ff @(posedge clk_i) begin
+    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd1) begin
+      ram1[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
+      rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= prog_data;
+    end else if (!prog_mode && |wstrb_i[1*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+      ram1[word_addr] <= wdata_i[1*WORD_WIDTH+:WORD_WIDTH];
+      rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= wdata_i[1*WORD_WIDTH+:WORD_WIDTH];
+    end else if (!prog_mode && rd_en_i) begin
       rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= ram1[word_addr];
+    end
+  end
+
+  // RAM Bank 2 - Write-first BRAM
+  always_ff @(posedge clk_i) begin
+    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd2) begin
+      ram2[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
+      rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= prog_data;
+    end else if (!prog_mode && |wstrb_i[2*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+      ram2[word_addr] <= wdata_i[2*WORD_WIDTH+:WORD_WIDTH];
+      rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= wdata_i[2*WORD_WIDTH+:WORD_WIDTH];
+    end else if (!prog_mode && rd_en_i) begin
       rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= ram2[word_addr];
+    end
+  end
+
+  // RAM Bank 3 - Write-first BRAM
+  always_ff @(posedge clk_i) begin
+    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd3) begin
+      ram3[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
+      rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= prog_data;
+    end else if (!prog_mode && |wstrb_i[3*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
+      ram3[word_addr] <= wdata_i[3*WORD_WIDTH+:WORD_WIDTH];
+      rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= wdata_i[3*WORD_WIDTH+:WORD_WIDTH];
+    end else if (!prog_mode && rd_en_i) begin
       rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= ram3[word_addr];
     end
   end
 
   assign rdata_o = rdata_q;
-
-  // ==========================================================================
-  // Write Logic - Separate always blocks for better BRAM inference
-  // ==========================================================================
-
-  // RAM Bank 0
-  always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd0) begin
-      ram0[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-    end else if (!prog_mode && |wstrb_i[0*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-      ram0[word_addr] <= wdata_i[0*WORD_WIDTH+:WORD_WIDTH];
-    end
-  end
-
-  // RAM Bank 1
-  always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd1) begin
-      ram1[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-    end else if (!prog_mode && |wstrb_i[1*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-      ram1[word_addr] <= wdata_i[1*WORD_WIDTH+:WORD_WIDTH];
-    end
-  end
-
-  // RAM Bank 2
-  always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd2) begin
-      ram2[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-    end else if (!prog_mode && |wstrb_i[2*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-      ram2[word_addr] <= wdata_i[2*WORD_WIDTH+:WORD_WIDTH];
-    end
-  end
-
-  // RAM Bank 3
-  always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd3) begin
-      ram3[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-    end else if (!prog_mode && |wstrb_i[3*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-      ram3[word_addr] <= wdata_i[3*WORD_WIDTH+:WORD_WIDTH];
-    end
-  end
 
   // ==========================================================================
   // Programming Module Instance

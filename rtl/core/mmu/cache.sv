@@ -94,10 +94,14 @@ module cache
     logic [NUM_WAY-1:0]   way;
     logic                 rw_en;
     logic                 wdirty;
-    logic [NUM_WAY-1:0]   rdirty;
-  } drsram_t;
+  } drsram_wr_t;
 
-  drsram_t                drsram  /*verilator split_var*/;
+  typedef struct packed {
+    logic [NUM_WAY-1:0]   rdirty;
+  } drsram_rd_t;
+
+  drsram_wr_t             drsram  /*verilator split_var*/;
+  drsram_rd_t             drsram_rd  /*verilator split_var*/;
 
   // Additional wires for dcache writeback, mask data, etc.
   logic    [BLK_SIZE-1:0] mask_data;
@@ -301,7 +305,7 @@ module cache
     end
 
     // Check if current way in current set is dirty and valid
-    assign fi_has_dirty = drsram.rdirty[fi_way_idx_q] && tsram.rtag[fi_way_idx_q][TAG_SIZE];
+    assign fi_has_dirty = drsram_rd.rdirty[fi_way_idx_q] && tsram.rtag[fi_way_idx_q][TAG_SIZE];
 
     // Get eviction data for fence.i writeback
     always_comb begin
@@ -448,7 +452,7 @@ module cache
     // Register-based dirty array read (combinational - instant access)
     always_comb begin
       for (int w = 0; w < NUM_WAY; w++) begin
-        drsram.rdirty[w] = dirty_reg[drsram.idx][w];
+        drsram_rd.rdirty[w] = dirty_reg[drsram.idx][w];
       end
     end
 
@@ -464,7 +468,7 @@ module cache
       endcase
 
       word_idx = cache_req_q.addr[(WOFFSET+2)-1:2];
-      write_back = cache_miss && (|(drsram.rdirty & evict_way & cache_valid_vec));
+      write_back = cache_miss && (|(drsram_rd.rdirty & evict_way & cache_valid_vec));
 
       data_array_wr_en = ((cache_hit && cache_req_q.rw) ||
            (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !write_back && !fi_active;
@@ -559,7 +563,7 @@ module cache
   // Fonksiyon: PLRU node güncellemesi
   function automatic [NUM_WAY-2:0] update_node(input logic [NUM_WAY-2:0] node_in, input logic [NUM_WAY-1:0] hit_vec);
     logic [NUM_WAY-2:0] node_tmp;
-    int idx_base, shift;
+    int unsigned idx_base, shift;
     node_tmp = node_in;
     for (int unsigned i = 0; i < NUM_WAY; i++) begin
       if (hit_vec[i]) begin
@@ -577,7 +581,7 @@ module cache
   // Fonksiyon: PLRU evict_way belirleme
   function automatic [NUM_WAY-1:0] compute_evict_way(input logic [NUM_WAY-2:0] node_in);
     logic [NUM_WAY-1:0] way;
-    int idx_base, shift;
+    int unsigned idx_base, shift;
     for (int unsigned i = 0; i < NUM_WAY; i++) begin
       logic en;
       en = 1'b1;

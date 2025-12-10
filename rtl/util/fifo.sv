@@ -121,6 +121,7 @@ module wbit_fifo #(
     if (rst) begin
       write_ptr <= 0;
       read_ptr  <= 0;
+      read_data <= '0;
     end else begin
       if (write_en && !full) begin
         fifo_mem[write_ptr[ADDR_WIDTH-1:0]] <= write_data;

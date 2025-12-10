@@ -247,7 +247,7 @@ module ceres_wrapper
   // SPI
   logic       [                 31:0] spi0_rdata;
 
-  // I2C
+  // I2C (currently not instantiated, default to 0)
   logic       [                 31:0] i2c0_rdata;
   logic                               i2c0_scl_o;
   logic                               i2c0_scl_oe;
@@ -256,6 +256,19 @@ module ceres_wrapper
   logic                               i2c0_sda_oe;
   logic                               i2c0_sda_i;
   logic                               i2c0_irq;
+
+  // Default unused I2C signals to 0 (no I2C module instantiated)
+  assign i2c0_rdata  = 32'h0;
+  assign i2c0_scl_o  = 1'b0;
+  assign i2c0_scl_oe = 1'b0;
+  assign i2c0_scl_i  = 1'b0;
+  assign i2c0_sda_o  = 1'b0;
+  assign i2c0_sda_oe = 1'b0;
+  assign i2c0_sda_i  = 1'b0;
+  assign i2c0_irq    = 1'b0;
+
+  // Default unused UART1 signals to 0 (no UART1 module instantiated)
+  assign uart1_rdata = 32'h0;
 
   // GPIO
   logic       [                 31:0] gpio_rdata;
@@ -550,13 +563,28 @@ module ceres_wrapper
   // ==========================================================================
   // Peripheral Bus Address Decoding
   // Memory Map:
-  //   0x2000_0xxx : UART (addr[19:16] == 0x0)
-  //   0x2001_0xxx : SPI  (addr[19:16] == 0x1)
-  //   0x2002_0xxx : I2C  (addr[19:16] == 0x2)
+  //   0x2000_0xxx : UART0 (addr[19:16] == 0x0)
+  //   0x2001_0xxx : SPI0  (addr[19:16] == 0x1)
+  //   0x2002_0xxx : I2C0  (addr[19:16] == 0x2)
+  //   0x2003_0xxx : UART1 (addr[19:16] == 0x3)
   // ==========================================================================
-  assign uart_sel = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
-  assign spi_sel  = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
-  assign i2c_sel  = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
+  assign uart_sel   = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
+  assign spi_sel    = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
+  assign i2c_sel    = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
+
+  assign sel_uart0  = uart_sel;                    // UART0 at 0x2000_0xxx
+  assign sel_uart1  = (pbus_addr[19:16] == 4'h3); // UART1 at 0x2003_0xxx
+  assign sel_spi0   = spi_sel;                     // SPI0 at 0x2001_0xxx
+  assign sel_i2c0   = i2c_sel;                     // I2C0 at 0x2002_0xxx
+
+  // Additional peripheral selects (currently unused/disabled)
+  assign sel_gpio   = 1'b0;
+  assign sel_pwm    = 1'b0;
+  assign sel_timer  = 1'b0;
+  assign sel_plic   = 1'b0;
+  assign sel_wdt    = 1'b0;
+  assign sel_dma    = 1'b0;
+  assign sel_vga    = 1'b0;
 
   // ==========================================================================
   // UART (Connected via Peripheral Bus)

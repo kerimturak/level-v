@@ -271,7 +271,6 @@ initial begin
 end
 
 // Writeback veya memory stage içinde:
-`ifndef SIM_UART_MONITOR
 always_comb begin
   if (addr_check_enabled && pc_i == pass_addr && pass_addr != 32'h0) begin
     $display("🎯 PASS address reached at PC=0x%08h", pc_i);
@@ -312,5 +311,3 @@ always @(posedge clk_i) begin
     end
   end
 end
-
-`endif
