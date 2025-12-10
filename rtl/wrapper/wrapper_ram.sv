@@ -134,58 +134,80 @@ module wrapper_ram
   assign word_addr = addr_i[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS];
 
   // ==========================================================================
-  // Read/Write Logic - Write-First Mode (Vivado BRAM Template)
+  // Read/Write Logic - BRAM-Friendly Template (UG901 Style)
   // ==========================================================================
-  // Reference: UG901 - Recommended Single-Port BRAM Template
-  // Write-first mode: Write data appears on output in same cycle as write
+  // Simplified to match Vivado BRAM inference patterns:
+  // - Separate write enable and read enable
+  // - No complex conditional logic in clocked block
+  // - Write-first behavior through explicit output assignment
 
-  // RAM Bank 0 - Write-first BRAM
+  // Write enable signals for each bank
+  logic we0, we1, we2, we3;
+  logic [$clog2(RAM_DEPTH/WORDS_PER_LINE)-1:0] wr_addr;
+  logic [WORD_WIDTH-1:0] wr_data0, wr_data1, wr_data2, wr_data3;
+
+  // Write enable and data muxing
+  always_comb begin
+    if (prog_mode && prog_valid) begin
+      // Programming mode: write to specific bank based on address[1:0]
+      wr_addr = prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS];
+      we0 = (prog_addr[LINE_ADDR_BITS-1:0] == 2'd0);
+      we1 = (prog_addr[LINE_ADDR_BITS-1:0] == 2'd1);
+      we2 = (prog_addr[LINE_ADDR_BITS-1:0] == 2'd2);
+      we3 = (prog_addr[LINE_ADDR_BITS-1:0] == 2'd3);
+      wr_data0 = prog_data;
+      wr_data1 = prog_data;
+      wr_data2 = prog_data;
+      wr_data3 = prog_data;
+    end else begin
+      // Normal mode: write based on byte strobes
+      wr_addr = word_addr;
+      we0 = |wstrb_i[0*BYTES_PER_WORD+:BYTES_PER_WORD];
+      we1 = |wstrb_i[1*BYTES_PER_WORD+:BYTES_PER_WORD];
+      we2 = |wstrb_i[2*BYTES_PER_WORD+:BYTES_PER_WORD];
+      we3 = |wstrb_i[3*BYTES_PER_WORD+:BYTES_PER_WORD];
+      wr_data0 = wdata_i[0*WORD_WIDTH+:WORD_WIDTH];
+      wr_data1 = wdata_i[1*WORD_WIDTH+:WORD_WIDTH];
+      wr_data2 = wdata_i[2*WORD_WIDTH+:WORD_WIDTH];
+      wr_data3 = wdata_i[3*WORD_WIDTH+:WORD_WIDTH];
+    end
+  end
+
+  // RAM Bank 0 - Simple BRAM Template
   always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd0) begin
-      ram0[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-      rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= prog_data;
-    end else if (!prog_mode && |wstrb_i[0*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-      ram0[word_addr] <= wdata_i[0*WORD_WIDTH+:WORD_WIDTH];
-      rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= wdata_i[0*WORD_WIDTH+:WORD_WIDTH];
+    if (we0) begin
+      ram0[wr_addr] <= wr_data0;
+      rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= wr_data0;  // Write-first
     end else if (!prog_mode && rd_en_i) begin
       rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= ram0[word_addr];
     end
   end
 
-  // RAM Bank 1 - Write-first BRAM
+  // RAM Bank 1 - Simple BRAM Template
   always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd1) begin
-      ram1[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-      rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= prog_data;
-    end else if (!prog_mode && |wstrb_i[1*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-      ram1[word_addr] <= wdata_i[1*WORD_WIDTH+:WORD_WIDTH];
-      rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= wdata_i[1*WORD_WIDTH+:WORD_WIDTH];
+    if (we1) begin
+      ram1[wr_addr] <= wr_data1;
+      rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= wr_data1;  // Write-first
     end else if (!prog_mode && rd_en_i) begin
       rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= ram1[word_addr];
     end
   end
 
-  // RAM Bank 2 - Write-first BRAM
+  // RAM Bank 2 - Simple BRAM Template
   always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd2) begin
-      ram2[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-      rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= prog_data;
-    end else if (!prog_mode && |wstrb_i[2*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-      ram2[word_addr] <= wdata_i[2*WORD_WIDTH+:WORD_WIDTH];
-      rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= wdata_i[2*WORD_WIDTH+:WORD_WIDTH];
+    if (we2) begin
+      ram2[wr_addr] <= wr_data2;
+      rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= wr_data2;  // Write-first
     end else if (!prog_mode && rd_en_i) begin
       rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= ram2[word_addr];
     end
   end
 
-  // RAM Bank 3 - Write-first BRAM
+  // RAM Bank 3 - Simple BRAM Template
   always_ff @(posedge clk_i) begin
-    if (prog_mode && prog_valid && prog_addr[LINE_ADDR_BITS-1:0] == 2'd3) begin
-      ram3[prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS]] <= prog_data;
-      rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= prog_data;
-    end else if (!prog_mode && |wstrb_i[3*BYTES_PER_WORD+:BYTES_PER_WORD]) begin
-      ram3[word_addr] <= wdata_i[3*WORD_WIDTH+:WORD_WIDTH];
-      rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= wdata_i[3*WORD_WIDTH+:WORD_WIDTH];
+    if (we3) begin
+      ram3[wr_addr] <= wr_data3;
+      rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= wr_data3;  // Write-first
     end else if (!prog_mode && rd_en_i) begin
       rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= ram3[word_addr];
     end

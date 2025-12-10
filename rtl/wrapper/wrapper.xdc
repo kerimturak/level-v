@@ -61,3 +61,13 @@ set_property KEEP_HIERARCHY SOFT [get_cells -hierarchical -filter {NAME =~ "*mul
 # Hazard unit optimization (high fanout paths)
 set_property KEEP_HIERARCHY SOFT [get_cells -hierarchical -filter {NAME =~ "*i_hazard*"}]
 
+# ============================================================================
+# BRAM INFERENCE FOR WRAPPER_RAM
+# ============================================================================
+# Force wrapper_ram arrays to use BRAM instead of distributed RAM
+# The ram0_reg through ram3_reg arrays should be implemented as Block RAM
+set_property RAM_STYLE BLOCK [get_cells -hierarchical -filter {NAME =~ "*i_main_ram/ram0_reg*"}]
+set_property RAM_STYLE BLOCK [get_cells -hierarchical -filter {NAME =~ "*i_main_ram/ram1_reg*"}]
+set_property RAM_STYLE BLOCK [get_cells -hierarchical -filter {NAME =~ "*i_main_ram/ram2_reg*"}]
+set_property RAM_STYLE BLOCK [get_cells -hierarchical -filter {NAME =~ "*i_main_ram/ram3_reg*"}]
+
