@@ -303,6 +303,12 @@ module ceres_wrapper
   iomem_res_t                         clint_res;
   iomem_res_t                         periph_res;
 
+  logic                               uart_sel;
+  logic                               spi_sel;
+  logic                               i2c_sel;
+  logic                               i2c_scl_i;
+  logic                               i2c_sda_i;
+  logic                               i2c_irq;
   // ==========================================================================
   // Reset
   // ==========================================================================
@@ -411,9 +417,9 @@ module ceres_wrapper
       .wstrb_i        (ram_wstrb),
       .rdata_o        (ram_rdata),
       .rd_en_i        (ram_rd_en),
-      .ram_prog_rx_i  (program_rx_i),
+      .ram_prog_rx_i  (prog_rx_i),
       .system_reset_o (prog_reset),
-      .prog_mode_led_o(prog_mode_led_o)
+      .prog_mode_led_o(prog_mode_o)
   );
 
   // Burst state machine
