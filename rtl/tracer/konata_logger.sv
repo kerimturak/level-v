@@ -13,6 +13,7 @@
 //
 // Enable with: +define+KONATA_TRACER
 // ============================================================================
+`ifndef KONATA_LOGGER_SV
 
 `timescale 1ns / 1ps
 `include "ceres_defines.svh"
@@ -137,27 +138,27 @@ module konata_logger;
   // Emit helper fonksiyonları
   // ----------------------------------------------------------------------------
   function void log_stage_start(input integer id, input string stg);
-    if (fd) $fwrite(fd, "S\t%0d\t0\t%s\n", id, stg);
+    if (fd != 0) $fwrite(fd, "S\t%0d\t0\t%s\n", id, stg);
   endfunction
 
   function void log_stage_end(input integer id, input string stg);
-    if (fd) $fwrite(fd, "E\t%0d\t0\t%s\n", id, stg);
+    if (fd != 0) $fwrite(fd, "E\t%0d\t0\t%s\n", id, stg);
   endfunction
 
   function void log_issue(input integer id);
-    if (fd) $fwrite(fd, "I\t%0d\t%0d\t0\n", id, id);
+    if (fd != 0) $fwrite(fd, "I\t%0d\t%0d\t0\n", id, id);
   endfunction
 
   function void log_line_pc_inst(input integer id, input logic [31:0] pc, input logic [31:0] inst);
-    if (fd) $fwrite(fd, "L\t%0d\t0\t%08h: %08h\n", id, pc, inst);
+    if (fd != 0) $fwrite(fd, "L\t%0d\t0\t%08h: %08h\n", id, pc, inst);
   endfunction
 
   function void log_retire(input integer id);
-    if (fd) $fwrite(fd, "R\t%0d\t%0d\t0\n", id, id);
+    if (fd != 0) $fwrite(fd, "R\t%0d\t%0d\t0\n", id, id);
   endfunction
 
   function void log_retire_flush(input integer id);
-    if (fd) $fwrite(fd, "R\t%0d\t%0d\t1\n", id, id);
+    if (fd != 0) $fwrite(fd, "R\t%0d\t%0d\t1\n", id, id);
   endfunction
 
   // ----------------------------------------------------------------------------
@@ -267,7 +268,7 @@ module konata_logger;
 
         // Instr grup etiketi (tek seferlik, issue sırasında)
         g_str = instr_group(`SOC.i_fetch.instr_type_o);
-        if (fd) $fwrite(fd, "L\t%0d\t1\tgrp=%s\n", fid, g_str);
+        if (fd != 0) $fwrite(fd, "L\t%0d\t1\tgrp=%s\n", fid, g_str);
 
         log_stage_start(fid, "F");
 
@@ -289,7 +290,7 @@ module konata_logger;
         };
       end else if (adv_front) begin
         // Front ilerliyor ama yeni fetch yok: bubble
-        fetch_s <= '{default: 0};
+        fetch_s <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
       end
       // Front stall/flush durumunda fetch_s olduğu gibi kalır
 
@@ -342,7 +343,7 @@ module konata_logger;
 
           // Metadata satırı:
           //   grp=..., stall=..., stall_cycles=N [mem_latency=M]
-          if (fd) begin
+          if (fd != 0) begin
             $fwrite(fd, "L\t%0d\t1\tgrp=%s stall=%s stall_cycles=%0d", prev_writeback.id, g_str, st_str, prev_writeback.stall_cycles);
             if (mem_lat > 0) $fwrite(fd, " mem_latency=%0d", mem_lat);
             $fwrite(fd, "\n");
@@ -363,11 +364,11 @@ module konata_logger;
       // ----------------------------------------------------------------------
       if (flush_fe) begin
         // Flush'ta hepsini boşalt
-        fetch_s     <= '{default: 0};
-        decode_s    <= '{default: 0};
-        execute_s   <= '{default: 0};
-        memory_s    <= '{default: 0};
-        writeback_s <= '{default: 0};
+        fetch_s     <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        decode_s    <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        execute_s   <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        memory_s    <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        writeback_s <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
       end else begin
         // Back (X/M/Wb) sadece adv_back olduğunda kayıyor
         if (adv_back) begin
@@ -406,4 +407,5 @@ module konata_logger;
 
 endmodule
 
+`endif  // KONATA_TRACER
 `endif  // KONATA_TRACER

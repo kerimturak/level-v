@@ -78,7 +78,7 @@ module cpu
   logic       [XLEN-1:0] ex_wdata;
   logic                  ex_pc_sel;
   logic                  ex_alu_stall;
-  logic                  ex_spec_hit /*verilator split_var*/;
+  logic                  ex_spec_hit;
   exc_type_e             ex_exc_type;
   exc_type_e             ex_alu_exc_type;
   logic                  ex_rd_csr;

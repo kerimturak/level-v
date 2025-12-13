@@ -70,10 +70,10 @@ module align_buffer
   logic [   PARCEL_BITS-1:0] ebram                                                                                 [NUM_PARCELS/2-1:0] [NUM_SET-1:0];
   logic [   PARCEL_BITS-1:0] obram                                                                                 [NUM_PARCELS/2-1:0] [NUM_SET-1:0];
   logic [        TAG_SIZE:0] tag_ram                                                                               [      NUM_SET-1:0];
-  // VERILATOR FIX: word_sel and half_sel are used in dynamic array indexing
+  // VERILATOR FIX: word_sel is used in dynamic array indexing
   // which creates circular paths in Verilator's analysis.
   logic [WORD_SEL_WIDTH-1:0] word_sel  /*verilator split_var*/;
-  logic                      half_sel  /*verilator split_var*/;
+  logic                      half_sel;
   logic                      overflow;  // Overflow flag when unaligned access causes index wrap-around
   logic                      unalign;  // Signal indicating an unaligned access (instruction spans two cache lines)
   logic [      TAG_SIZE-1:0] tag_plus1;
@@ -350,6 +350,8 @@ module align_buffer
   //      Requires TWO memory responses. Second response completes the instruction.
   //      Condition: waiting_second_q && masked_valid
   // ============================================================================
+  localparam int BLOCK_BYTES = BLK_SIZE / 8;  // 128 bits = 16 bytes
+
   always_comb begin : OUTPUT_VALID_GEN
     // Local variables for readability
     logic single_response_sufficient;
@@ -428,7 +430,6 @@ module align_buffer
     //     - Second request: base_addr + BLOCK_BYTES (even bank's line)
     // ========================================================================
     begin
-      localparam int BLOCK_BYTES = BLK_SIZE / 8;  // 128 bits = 16 bytes
       logic [XLEN-1:0] base_addr;
       base_addr = buff_req_i.addr & ~(BLOCK_BYTES - 1);
 

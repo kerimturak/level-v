@@ -35,7 +35,7 @@ module ceres_wrapper
     // Memory Configuration
     // ========================================================================
 `ifndef SYNTHESIS
-    parameter int unsigned RAM_SIZE_KB = 128,
+    parameter int unsigned RAM_SIZE_KB = 1024,
 `else
     parameter int unsigned RAM_SIZE_KB = 32,
 `endif
@@ -271,57 +271,57 @@ module ceres_wrapper
   assign uart1_rdata = 32'h0;
 
   // GPIO
-  logic       [                 31:0] gpio_rdata;
-  logic                               gpio_irq;
+  logic       [31:0] gpio_rdata;
+  logic              gpio_irq;
 
   // PWM
-  logic       [                 31:0] pwm_rdata;
-  logic       [                  7:0] pwm_out;
-  logic       [                  7:0] pwm_n_out;
-  logic                               pwm_irq;
-  logic                               pwm_sync;
+  logic       [31:0] pwm_rdata;
+  logic       [ 7:0] pwm_out;
+  logic       [ 7:0] pwm_n_out;
+  logic              pwm_irq;
+  logic              pwm_sync;
 
   // Timer
-  logic       [                 31:0] timer_rdata;
-  logic       [                  7:0] timer_pwm;
-  logic       [                  3:0] gptimer_irq;
-  logic                               gptimer_irq_combined;
+  logic       [31:0] timer_rdata;
+  logic       [ 7:0] timer_pwm;
+  logic       [ 3:0] gptimer_irq;
+  logic              gptimer_irq_combined;
 
   // PLIC
-  logic       [                 31:0] plic_rdata;
-  logic       [                 31:0] plic_irq_sources;
-  logic                               plic_irq;
+  logic       [31:0] plic_rdata;
+  logic       [31:0] plic_irq_sources;
+  logic              plic_irq;
 
   // Watchdog
-  logic       [                 31:0] wdt_rdata;
-  logic                               wdt_irq;
-  logic                               wdt_reset;
+  logic       [31:0] wdt_rdata;
+  logic              wdt_irq;
+  logic              wdt_reset;
 
   // DMA
-  logic       [                 31:0] dma_rdata;
-  logic       [                  3:0] dma_irq;
-  logic                               dma_req;
-  logic       [                 31:0] dma_addr;
-  logic       [                 31:0] dma_wdata;
-  logic       [                  3:0] dma_wstrb;
-  logic                               dma_ack;
+  logic       [31:0] dma_rdata;
+  logic       [ 3:0] dma_irq;
+  logic              dma_req;
+  logic       [31:0] dma_addr;
+  logic       [31:0] dma_wdata;
+  logic       [ 3:0] dma_wstrb;
+  logic              dma_ack;
 
   // VGA
-  logic       [                 31:0] vga_rdata;
-  logic                               pixel_clk;
-  logic                               pll_locked;
+  logic       [31:0] vga_rdata;
+  logic              pixel_clk;
+  logic              pll_locked;
 
   // Response signals for multiplexer
-  iomem_res_t                         ram_res;
-  iomem_res_t                         clint_res;
-  iomem_res_t                         periph_res;
+  iomem_res_t        ram_res;
+  iomem_res_t        clint_res;
+  iomem_res_t        periph_res;
 
-  logic                               uart_sel;
-  logic                               spi_sel;
-  logic                               i2c_sel;
-  logic                               i2c_scl_i;
-  logic                               i2c_sda_i;
-  logic                               i2c_irq;
+  logic              uart_sel;
+  logic              spi_sel;
+  logic              i2c_sel;
+  logic              i2c_scl_i;
+  logic              i2c_sda_i;
+  logic              i2c_irq;
   // ==========================================================================
   // Reset
   // ==========================================================================
@@ -392,10 +392,12 @@ module ceres_wrapper
   // Expand word data to cache line width with proper byte strobes
   logic [  CACHE_LINE_W-1:0] ram_wdata_expanded;
   logic [CACHE_LINE_W/8-1:0] ram_wstrb_expanded;
+  logic [               1:0] ram_word_offset;
 
   always_comb begin
     ram_wdata_expanded = '0;
     ram_wstrb_expanded = '0;
+    ram_word_offset = ram_wb_addr[3:2];  // Select word within 16-byte cache line
 
     // Replicate write data across all word positions
     for (int i = 0; i < CACHE_LINE_W / 32; i++) begin
@@ -404,9 +406,7 @@ module ceres_wrapper
 
     // Set byte strobes for correct word position
     if (ram_wb_req && ram_wb_we) begin
-      logic [1:0] word_offset;
-      word_offset = ram_wb_addr[3:2];  // Select word within 16-byte cache line
-      ram_wstrb_expanded[word_offset*4+:4] = ram_wb_sel;
+      ram_wstrb_expanded[ram_word_offset*4+:4] = ram_wb_sel;
     end
   end
 
@@ -568,23 +568,23 @@ module ceres_wrapper
   //   0x2002_0xxx : I2C0  (addr[19:16] == 0x2)
   //   0x2003_0xxx : UART1 (addr[19:16] == 0x3)
   // ==========================================================================
-  assign uart_sel   = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
-  assign spi_sel    = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
-  assign i2c_sel    = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
+  assign uart_sel  = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
+  assign spi_sel   = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
+  assign i2c_sel   = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
 
-  assign sel_uart0  = uart_sel;                    // UART0 at 0x2000_0xxx
-  assign sel_uart1  = (pbus_addr[19:16] == 4'h3); // UART1 at 0x2003_0xxx
-  assign sel_spi0   = spi_sel;                     // SPI0 at 0x2001_0xxx
-  assign sel_i2c0   = i2c_sel;                     // I2C0 at 0x2002_0xxx
+  assign sel_uart0 = uart_sel;  // UART0 at 0x2000_0xxx
+  assign sel_uart1 = (pbus_addr[19:16] == 4'h3);  // UART1 at 0x2003_0xxx
+  assign sel_spi0  = spi_sel;  // SPI0 at 0x2001_0xxx
+  assign sel_i2c0  = i2c_sel;  // I2C0 at 0x2002_0xxx
 
   // Additional peripheral selects (currently unused/disabled)
-  assign sel_gpio   = 1'b0;
-  assign sel_pwm    = 1'b0;
-  assign sel_timer  = 1'b0;
-  assign sel_plic   = 1'b0;
-  assign sel_wdt    = 1'b0;
-  assign sel_dma    = 1'b0;
-  assign sel_vga    = 1'b0;
+  assign sel_gpio  = 1'b0;
+  assign sel_pwm   = 1'b0;
+  assign sel_timer = 1'b0;
+  assign sel_plic  = 1'b0;
+  assign sel_wdt   = 1'b0;
+  assign sel_dma   = 1'b0;
+  assign sel_vga   = 1'b0;
 
   // ==========================================================================
   // UART (Connected via Peripheral Bus)
@@ -954,11 +954,19 @@ module ceres_wrapper
           .we_i       (|cpu_mem_req.rw),
           .dat_i      (cpu_mem_req.data[31:0]),
           .dat_o      (vga_rdata),
+          .fb_req_o   (),                        // Framebuffer interface not connected
+          .fb_addr_o  (),
+          .fb_data_i  (32'h0),
+          .fb_ack_i   (1'b0),
+          .char_addr_o(),                        // Character ROM interface not connected
+          .char_data_i(8'h0),
           .vga_hsync_o(vga_hsync_o),
           .vga_vsync_o(vga_vsync_o),
           .vga_r_o    (vga_r_o),
           .vga_g_o    (vga_g_o),
-          .vga_b_o    (vga_b_o)
+          .vga_b_o    (vga_b_o),
+          .vga_de_o   (),                        // Data enable not connected
+          .vsync_irq_o()                         // VSync interrupt not connected
       );
     end else begin : gen_no_vga
       assign vga_rdata   = '0;

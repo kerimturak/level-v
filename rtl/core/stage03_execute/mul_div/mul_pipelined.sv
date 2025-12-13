@@ -28,22 +28,22 @@ module mul_pipelined #(
     input logic clk_i,
     input logic rst_ni,
 
-    input  logic             start_i,      // Start multiplication
-    input  logic [XLEN-1:0]  a_i,          // Multiplicand
-    input  logic [YLEN-1:0]  b_i,          // Multiplier
-    output logic [XLEN+YLEN-1:0] product_o, // Product output
-    output logic             busy_o,       // Calculation in progress
-    output logic             done_o,       // Calculation complete (one tick)
-    output logic             valid_o       // Result is valid
+    input  logic                 start_i,    // Start multiplication
+    input  logic [     XLEN-1:0] a_i,        // Multiplicand
+    input  logic [     YLEN-1:0] b_i,        // Multiplier
+    output logic [XLEN+YLEN-1:0] product_o,  // Product output
+    output logic                 busy_o,     // Calculation in progress
+    output logic                 done_o,     // Calculation complete (one tick)
+    output logic                 valid_o     // Result is valid
 );
 
   // Stage 1: Intermediate products (4 quarters of 8x32 bits each)
-  logic [XLEN-1:0]      a_stage1;
-  logic [YLEN-1:0]      b_stage1;
-  logic [XLEN+7:0]      prod_q0;  // b[7:0] * a
-  logic [XLEN+7:0]      prod_q1;  // b[15:8] * a
-  logic [XLEN+7:0]      prod_q2;  // b[23:16] * a
-  logic [XLEN+7:0]      prod_q3;  // b[31:24] * a
+  logic [     XLEN-1:0] a_stage1;
+  logic [     YLEN-1:0] b_stage1;
+  logic [     XLEN+7:0] prod_q0;  // b[7:0] * a
+  logic [     XLEN+7:0] prod_q1;  // b[15:8] * a
+  logic [     XLEN+7:0] prod_q2;  // b[23:16] * a
+  logic [     XLEN+7:0] prod_q3;  // b[31:24] * a
   logic                 stage1_valid;
 
   // Stage 2: Final accumulation
@@ -51,7 +51,7 @@ module mul_pipelined #(
   logic                 stage2_valid;
 
   // Pipeline control
-  logic pipe_active;
+  logic                 pipe_active;
 
   // ------------------------------------------------------------
   // Stage 1: Compute 4 partial products (8-bit slices)
@@ -60,23 +60,23 @@ module mul_pipelined #(
   // ------------------------------------------------------------
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      a_stage1      <= '0;
-      b_stage1      <= '0;
-      prod_q0       <= '0;
-      prod_q1       <= '0;
-      prod_q2       <= '0;
-      prod_q3       <= '0;
-      stage1_valid  <= 1'b0;
+      a_stage1     <= '0;
+      b_stage1     <= '0;
+      prod_q0      <= '0;
+      prod_q1      <= '0;
+      prod_q2      <= '0;
+      prod_q3      <= '0;
+      stage1_valid <= 1'b0;
     end else begin
       if (start_i) begin
         a_stage1 <= a_i;
         b_stage1 <= b_i;
 
         // Break into 4 quarters - smaller multipliers have better timing
-        prod_q0 <= a_i * b_i[7:0];   // Lower 8 bits
+        prod_q0 <= a_i * b_i[7:0];  // Lower 8 bits
         prod_q1 <= a_i * b_i[15:8];  // Second 8 bits
-        prod_q2 <= a_i * b_i[23:16]; // Third 8 bits
-        prod_q3 <= a_i * b_i[31:24]; // Upper 8 bits
+        prod_q2 <= a_i * b_i[23:16];  // Third 8 bits
+        prod_q3 <= a_i * b_i[31:24];  // Upper 8 bits
 
         stage1_valid <= 1'b1;
       end else begin
@@ -98,11 +98,11 @@ module mul_pipelined #(
       done_o       <= 1'b0;
     end else begin
       if (stage1_valid) begin
-        // Accumulate with proper shifts
-        result <= ({56'b0, prod_q0})       +    // No shift
-                   ({48'b0, prod_q1} << 8)  +    // Shift by 8
-                   ({40'b0, prod_q2} << 16) +    // Shift by 16
-                   ({32'b0, prod_q3} << 24);     // Shift by 24
+        // Accumulate with proper shifts (truncate to 64 bits)
+        result       <= (({56'b0, prod_q0}) +  // No shift
+ ({48'b0, prod_q1} << 8) +  // Shift by 8
+ ({40'b0, prod_q2} << 16) +  // Shift by 16
+ ({32'b0, prod_q3} << 24));  // Shift by 24, then truncate
 
         stage2_valid <= 1'b1;
       end else begin
@@ -115,7 +115,7 @@ module mul_pipelined #(
         valid_o   <= 1'b1;
         done_o    <= 1'b1;
       end else begin
-        done_o    <= 1'b0;
+        done_o <= 1'b0;
         if (!start_i && !stage1_valid) begin
           valid_o <= 1'b0;
         end

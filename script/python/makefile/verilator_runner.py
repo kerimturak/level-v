@@ -375,13 +375,16 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     subheader("Çalıştırılıyor")
     print(f"  {Color.DIM}$ {config.bin_path.name} ...{Color.RESET}")
     print()
-    
+
     # Log dosyası yolu
     run_log = config.log_dir / "verilator_run.log"
-    
+
     start_time = datetime.now()
     logger.note(f"Simulation started at {start_time.isoformat()}")
-    
+
+    # Quiet mode check (environment variable or config)
+    quiet_mode = os.environ.get("VERILATOR_QUIET", "1") == "1"
+
     try:
         with open(run_log, "w") as log_file:
             process = subprocess.Popen(
@@ -391,11 +394,22 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
                 text=True,
                 cwd=config.log_dir,
             )
-            
+
+            line_count = 0
             for line in process.stdout:
-                print(line, end="")
                 log_file.write(line)
-            
+                # Only print to console if not in quiet mode
+                if not quiet_mode:
+                    print(line, end="")
+                else:
+                    line_count += 1
+                    # Show progress dots every 100 lines in quiet mode
+                    if line_count % 100 == 0:
+                        print(".", end="", flush=True)
+
+            if quiet_mode and line_count > 0:
+                print()  # Newline after progress dots
+
             process.wait()
             exit_code = process.returncode
     
@@ -461,7 +475,8 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
         keyval("Test", config.test_name)
         keyval("Süre", f"{elapsed:.1f} saniye")
         keyval("Loglar", str(config.log_dir))
-        
+        keyval("Full Log", str(run_log))
+
         # Waveform bilgisi
         if config.trace_enabled:
             trace_file = config.log_dir / f"waveform.{config.trace_format}"

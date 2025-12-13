@@ -31,7 +31,6 @@ SV_SOURCES := \
   $(wildcard $(RTL_DIR)/core/stage04_memory/*.sv) \
   $(wildcard $(RTL_DIR)/core/stage05_writeback/*.sv) \
   $(wildcard $(RTL_DIR)/core/mmu/*.sv) \
-  $(wildcard $(RTL_DIR)/tracer/*.sv) \
   $(wildcard $(RTL_DIR)/util/*.sv) \
   $(wildcard $(RTL_DIR)/periph/gpio/*.sv) \
   $(wildcard $(RTL_DIR)/periph/plic/*.sv) \

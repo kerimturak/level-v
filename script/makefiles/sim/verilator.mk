@@ -559,6 +559,14 @@ ifeq ($(NO_COLOR),1)
     VERILATOR_RUNNER_ARGS += --no-color
 endif
 
+ifdef EXCEPTION_PASS_ADDR
+    VERILATOR_RUNNER_ARGS += --exception-pass-addr $(EXCEPTION_PASS_ADDR)
+endif
+
+ifdef EXCEPTION_FAIL_ADDR
+    VERILATOR_RUNNER_ARGS += --exception-fail-addr $(EXCEPTION_FAIL_ADDR)
+endif
+
 # Main run target using Python runner
 run_verilator: verilate
 	@$(PYTHON) $(VERILATOR_RUNNER) $(VERILATOR_RUNNER_ARGS)

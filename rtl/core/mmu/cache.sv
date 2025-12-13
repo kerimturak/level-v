@@ -51,15 +51,15 @@ module cache
   // See: docs/verilator/bugs/002_combinational_loop_instruction_corruption.md
   // ============================================================================
   logic       [IDX_WIDTH-1:0] cache_idx  /*verilator split_var*/;
-  logic                       cache_miss  /*verilator split_var*/;
-  logic                       cache_hit  /*verilator split_var*/;
+  logic                       cache_miss;
+  logic                       cache_hit;
   logic       [  NUM_WAY-2:0] updated_node  /*verilator split_var*/;
   logic       [  NUM_WAY-1:0] cache_valid_vec  /*verilator split_var*/;
   logic       [  NUM_WAY-1:0] cache_hit_vec;
   logic       [  NUM_WAY-1:0] evict_way  /*verilator split_var*/;
   logic       [ BLK_SIZE-1:0] cache_select_data  /*verilator split_var*/;
   logic       [  NUM_WAY-1:0] cache_wr_way  /*verilator split_var*/;
-  logic                       cache_wr_en  /*verilator split_var*/;
+  logic                       cache_wr_en;
   logic                       lookup_ack;
 
   // Shared memory structures (used by both caches)
@@ -392,9 +392,9 @@ module cache
 
         FI_NEXT_WAY: begin
           fi_active = 1'b1;
-          if (fi_way_idx_q == NUM_WAY - 1) begin
+          if (fi_way_idx_q == $clog2(NUM_WAY)'(NUM_WAY - 1)) begin
             // All ways checked, move to next set
-            if (fi_set_idx_q == NUM_SET - 1) begin
+            if (fi_set_idx_q == IDX_WIDTH'(NUM_SET - 1)) begin
               // All sets done
               fi_state_d = FI_DONE;
             end else begin
@@ -550,7 +550,7 @@ module cache
         lowX_req_o.rw = write_back ? '1 : (cache_req_q.uncached ? cache_req_q.rw : '0);
         lowX_req_o.rw_size = write_back ? 2'b11 : cache_req_q.rw_size;
         // For uncached writes, pass through the data; for writeback, use evicted data
-        lowX_req_o.data = write_back ? evict_data : (cache_req_q.uncached ? cache_req_q.data : '0);
+        lowX_req_o.data = write_back ? evict_data : (cache_req_q.uncached ? BLK_SIZE'(cache_req_q.data) : '0);
       end
 
       cache_res_o.valid   = !fi_active && (!cache_req_q.rw ? (!write_back && cache_req_q.valid &&

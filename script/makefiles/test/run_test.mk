@@ -201,12 +201,26 @@ run_rtl:
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 ifeq ($(SIM),verilator)
 	@echo -e "$(CYAN)[DEBUG]$(RESET) Calling Verilator with VERILATOR_LOG_DIR=$(RTL_LOG_DIR)"
-	@$(MAKE) --no-print-directory run_verilator \
-		TEST_NAME=$(TEST_NAME) MAX_CYCLES=$(MAX_CYCLES) \
-		VERILATOR_LOG_DIR=$(RTL_LOG_DIR) \
-		MEM_FILE=$(MEM_DIR)/$(TEST_NAME).mem \
-		ADDR_FILE=$(ADDR_DIR)/$(TEST_NAME)_addr.txt \
-		2>&1 | tee $(RTL_LOG); \
+	@EXC_ADDRS="$(call GET_EXCEPTION_ADDR,$(TEST_NAME))"; \
+	if [ -n "$$EXC_ADDRS" ]; then \
+		echo -e "$(YELLOW)[INFO]$(RESET) Exception override for $(TEST_NAME): $$EXC_ADDRS"; \
+		set -- $$EXC_ADDRS; \
+		$(MAKE) --no-print-directory run_verilator \
+			TEST_NAME=$(TEST_NAME) MAX_CYCLES=$(MAX_CYCLES) \
+			VERILATOR_LOG_DIR=$(RTL_LOG_DIR) \
+			MEM_FILE=$(MEM_DIR)/$(TEST_NAME).mem \
+			ADDR_FILE=$(ADDR_DIR)/$(TEST_NAME)_addr.txt \
+			EXCEPTION_PASS_ADDR="$$1" \
+			EXCEPTION_FAIL_ADDR="$$2" \
+			2>&1 | tee $(RTL_LOG); \
+	else \
+		$(MAKE) --no-print-directory run_verilator \
+			TEST_NAME=$(TEST_NAME) MAX_CYCLES=$(MAX_CYCLES) \
+			VERILATOR_LOG_DIR=$(RTL_LOG_DIR) \
+			MEM_FILE=$(MEM_DIR)/$(TEST_NAME).mem \
+			ADDR_FILE=$(ADDR_DIR)/$(TEST_NAME)_addr.txt \
+			2>&1 | tee $(RTL_LOG); \
+	fi; \
 	RTL_EXIT=$$?; \
 	echo "RTL_EXIT_CODE=$$RTL_EXIT" >> $(REPORT_FILE); \
 	if [ $$RTL_EXIT -ne 0 ]; then \

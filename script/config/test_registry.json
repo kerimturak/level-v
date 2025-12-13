@@ -1,0 +1,215 @@
+{
+  "$schema": "./test_registry.schema.json",
+  "_comment": "CERES RISC-V Test Registry - Central database for all tests",
+  "_description": "This file maintains a registry of all available tests with metadata, tags, and configuration",
+
+  "version": "1.0.0",
+  "last_updated": "2025-12-13",
+
+  "test_suites": {
+    "isa_basic": {
+      "description": "Basic RISC-V ISA compliance tests (RV32I)",
+      "config": "script/config/tests/default.json",
+      "flist": "sim/test/riscv_test_list.flist",
+      "tags": ["isa", "compliance", "quick"],
+      "enabled": true,
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "isa_compressed": {
+      "description": "Compressed instruction extension tests (RV32C)",
+      "config": "script/config/tests/default.json",
+      "flist": "sim/test/riscv_test_list.flist",
+      "tags": ["isa", "compliance", "compressed"],
+      "enabled": true,
+      "filter": "rv32uc-*",
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "isa_multiply": {
+      "description": "Multiply/Divide extension tests (RV32M)",
+      "config": "script/config/tests/default.json",
+      "flist": "sim/test/riscv_test_list.flist",
+      "tags": ["isa", "compliance", "multiply"],
+      "enabled": true,
+      "filter": "rv32um-*",
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "arch_tests": {
+      "description": "RISC-V Architecture Tests",
+      "config": "script/config/tests/arch.json",
+      "flist": "sim/test/arch_test.flist",
+      "tags": ["arch", "compliance", "official"],
+      "enabled": true,
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "benchmarks": {
+      "description": "Performance benchmarks",
+      "validation": {
+        "enabled": false,
+        "reason": "Benchmarks measure performance, not correctness - no Spike validation needed"
+      },
+      "tests": {
+        "coremark": {
+          "description": "CoreMark CPU benchmark",
+          "config": "script/config/tests/coremark.json",
+          "tags": ["benchmark", "performance", "slow"],
+          "enabled": true,
+          "timeout_seconds": 300,
+          "max_cycles": 50000000
+        },
+        "dhrystone": {
+          "description": "Dhrystone CPU benchmark",
+          "config": "script/config/tests/dhrystone.json",
+          "tags": ["benchmark", "performance", "medium"],
+          "enabled": true,
+          "timeout_seconds": 120,
+          "max_cycles": 5000000
+        }
+      }
+    },
+
+    "branch_tests": {
+      "description": "Branch predictor and control flow tests",
+      "config": "script/config/tests/branch_test.json",
+      "flist": "sim/test/branch_test.flist",
+      "tags": ["branch", "predictor", "custom"],
+      "enabled": true,
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "exception_tests": {
+      "description": "Exception and interrupt handling tests",
+      "config": "script/config/tests/default.json",
+      "flist": "sim/test/exception_test.flist",
+      "tags": ["exception", "interrupt", "privilege"],
+      "enabled": true,
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "csr_tests": {
+      "description": "Control and Status Register tests",
+      "config": "script/config/tests/csr.json",
+      "flist": "sim/test/machine_csr_test.flist",
+      "tags": ["csr", "privilege", "machine"],
+      "enabled": true,
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "custom_tests": {
+      "description": "Custom user-defined tests",
+      "config": "script/config/tests/custom.json",
+      "flist": "sim/test/custom_tests.flist",
+      "tags": ["custom", "user"],
+      "enabled": true,
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "embench": {
+      "description": "Embench IoT benchmark suite",
+      "config": "script/config/tests/embench.json",
+      "flist": "sim/test/embench.flist",
+      "tags": ["benchmark", "embench", "iot"],
+      "enabled": false,
+      "validation": {
+        "enabled": false,
+        "reason": "Benchmark suite - performance measurement only"
+      }
+    },
+
+    "imperas": {
+      "description": "Imperas RISC-V test suite",
+      "config": "script/config/tests/imperas.json",
+      "flist": "sim/test/imperas_test_list.flist",
+      "tags": ["imperas", "compliance"],
+      "enabled": false,
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "torture": {
+      "description": "RISC-V Torture random instruction tests",
+      "config": "script/config/tests/torture.json",
+      "tags": ["torture", "random", "stress"],
+      "enabled": false,
+      "validation": {
+        "enabled": true,
+        "spike_isa": "rv32imc_zicsr_zicntr_zifencei"
+      }
+    },
+
+    "formal": {
+      "description": "Formal verification tests",
+      "config": "script/config/tests/formal.json",
+      "tags": ["formal", "verification"],
+      "enabled": false,
+      "validation": {
+        "enabled": false,
+        "reason": "Formal verification uses different methodology than Spike validation"
+      }
+    }
+  },
+
+  "tag_groups": {
+    "quick": {
+      "description": "Fast tests for quick validation",
+      "includes": ["isa", "quick"]
+    },
+    "full": {
+      "description": "Full regression suite",
+      "includes": ["isa", "compliance", "arch", "benchmark"]
+    },
+    "performance": {
+      "description": "Performance and benchmark tests",
+      "includes": ["benchmark", "performance"]
+    },
+    "compliance": {
+      "description": "All compliance and conformance tests",
+      "includes": ["isa", "compliance", "arch", "official"]
+    }
+  },
+
+  "default_config": {
+    "simulation": {
+      "max_cycles": 100000,
+      "timeout_seconds": 60,
+      "parallel_jobs": "auto"
+    },
+    "trace": {
+      "enabled": true,
+      "format": "fst"
+    },
+    "logging": {
+      "commit_trace": true,
+      "save_logs": true
+    }
+  }
+}

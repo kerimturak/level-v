@@ -1,0 +1,292 @@
+# ============================================================
+# CERES RISC-V — Standalone Spike Makefile
+# ============================================================
+# Spike (RISC-V ISA Simulator) çalıştırma ve validasyon
+#
+# Kullanım:
+#   make -f Makefile.spike run-spike TEST_NAME=rv32ui-p-add BUILD_DIR=build
+#   make -f Makefile.spike compare TEST_NAME=rv32ui-p-add RTL_LOG=... SPIKE_LOG=...
+#   make -f Makefile.spike validate TEST_NAME=rv32ui-p-add BUILD_DIR=build LOG_DIR=...
+# ============================================================
+
+SHELL := /bin/bash
+.SHELLFLAGS := -e -u -o pipefail -c
+
+# -----------------------------------------
+# Paths
+# -----------------------------------------
+ROOT_DIR := $(shell pwd)
+SCRIPT_DIR := $(ROOT_DIR)/script
+BUILD_DIR ?= $(ROOT_DIR)/build
+RESULTS_DIR ?= $(ROOT_DIR)/results
+
+# Python
+PYTHON := python3
+
+# Colors
+RED     := \033[0;31m
+GREEN   := \033[0;32m
+YELLOW  := \033[1;33m
+CYAN    := \033[0;36m
+RESET   := \033[0m
+
+# -----------------------------------------
+# Spike Configuration
+# -----------------------------------------
+SPIKE := spike
+
+# Default Spike ISA and settings
+SPIKE_ISA ?= rv32imc_zicsr_zicntr_zifencei
+SPIKE_PC ?= 0x80000000
+SPIKE_PRIV ?= m
+SPIKE_MEM ?= 256  # MB
+
+# Spike arguments
+SPIKE_ARGS := -l --log-commits
+SPIKE_ARGS += --isa=$(SPIKE_ISA)
+SPIKE_ARGS += --pc=$(SPIKE_PC)
+SPIKE_ARGS += --priv=$(SPIKE_PRIV)
+SPIKE_ARGS += -m$(SPIKE_MEM)
+
+# -----------------------------------------
+# Test Configuration (must be provided)
+# -----------------------------------------
+TEST_NAME ?=
+LOG_DIR ?=
+
+# Auto-detect test type and paths
+define DETECT_TEST_TYPE
+$(if $(wildcard $(BUILD_DIR)/tests/riscv-tests/elf/$(TEST_NAME)),isa,\
+$(if $(wildcard $(BUILD_DIR)/tests/riscv-tests/elf/$(TEST_NAME).elf),isa,\
+$(if $(wildcard $(BUILD_DIR)/tests/riscv-arch-test/elf/$(TEST_NAME).elf),arch,\
+$(if $(wildcard $(BUILD_DIR)/tests/imperas/elf/$(TEST_NAME).elf),imperas,\
+$(if $(wildcard $(BUILD_DIR)/tests/riscv-benchmarks/elf/$(TEST_NAME)),bench,\
+$(if $(wildcard $(BUILD_DIR)/tests/dhrystone/$(TEST_NAME).elf),dhrystone,\
+$(if $(wildcard $(BUILD_DIR)/tests/coremark/$(TEST_NAME).elf),coremark,\
+$(if $(wildcard $(BUILD_DIR)/tests/embench/elf/$(TEST_NAME).elf),embench,\
+$(if $(wildcard $(BUILD_DIR)/tests/custom/$(TEST_NAME).elf),custom,unknown)))))))))
+endef
+
+TEST_TYPE := $(strip $(call DETECT_TEST_TYPE))
+
+# Test root based on type
+ifeq ($(TEST_TYPE),isa)
+    TEST_ROOT := $(BUILD_DIR)/tests/riscv-tests
+else ifeq ($(TEST_TYPE),arch)
+    TEST_ROOT := $(BUILD_DIR)/tests/riscv-arch-test
+else ifeq ($(TEST_TYPE),imperas)
+    TEST_ROOT := $(BUILD_DIR)/tests/imperas
+else ifeq ($(TEST_TYPE),bench)
+    TEST_ROOT := $(BUILD_DIR)/tests/riscv-benchmarks
+else ifeq ($(TEST_TYPE),dhrystone)
+    TEST_ROOT := $(BUILD_DIR)/tests/dhrystone
+else ifeq ($(TEST_TYPE),coremark)
+    TEST_ROOT := $(BUILD_DIR)/tests/coremark
+else ifeq ($(TEST_TYPE),embench)
+    TEST_ROOT := $(BUILD_DIR)/tests/embench
+else ifeq ($(TEST_TYPE),custom)
+    TEST_ROOT := $(BUILD_DIR)/tests/custom
+else
+    TEST_ROOT := $(BUILD_DIR)/tests
+endif
+
+# File paths
+ELF_DIR := $(TEST_ROOT)/elf
+ADDR_DIR := $(TEST_ROOT)/pass_fail_addr
+DUMP_DIR := $(TEST_ROOT)/dump
+
+# Determine ELF extension
+ifeq ($(TEST_TYPE),isa)
+    ELF_EXT :=
+else ifeq ($(TEST_TYPE),bench)
+    ELF_EXT :=
+else
+    ELF_EXT := .elf
+endif
+
+ELF_FILE := $(ELF_DIR)/$(TEST_NAME)$(ELF_EXT)
+ADDR_FILE := $(ADDR_DIR)/$(TEST_NAME)_addr.txt
+DUMP_FILE := $(DUMP_DIR)/$(TEST_NAME).dump
+
+# Output logs
+SPIKE_LOG := $(LOG_DIR)/spike_commit.log
+DEBUG_CMD_FILE := $(LOG_DIR)/spike_debug.cmd
+
+# -----------------------------------------
+# Targets
+# -----------------------------------------
+.PHONY: run-spike compare validate clean-spike help
+
+# Default help
+help:
+	@echo -e ""
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  Spike (RISC-V ISA Simulator) Makefile$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e ""
+	@echo -e "$(YELLOW)Targets:$(RESET)"
+	@echo -e "  $(GREEN)run-spike$(RESET)       - Run Spike golden model"
+	@echo -e "  $(GREEN)compare$(RESET)         - Compare RTL and Spike logs"
+	@echo -e "  $(GREEN)validate$(RESET)        - Full validation (Spike + Compare)"
+	@echo -e "  $(GREEN)clean-spike$(RESET)     - Clean Spike logs"
+	@echo -e "  $(GREEN)help$(RESET)            - Show this help"
+	@echo -e ""
+	@echo -e "$(YELLOW)Required Parameters:$(RESET)"
+	@echo -e "  $(CYAN)TEST_NAME$(RESET)       - Test name (e.g., rv32ui-p-add)"
+	@echo -e "  $(CYAN)LOG_DIR$(RESET)         - Log directory for outputs"
+	@echo -e ""
+	@echo -e "$(YELLOW)Optional Parameters:$(RESET)"
+	@echo -e "  $(CYAN)BUILD_DIR$(RESET)       - Build directory (default: build)"
+	@echo -e "  $(CYAN)SPIKE_ISA$(RESET)       - Spike ISA string (default: rv32imc_zicsr_zicntr_zifencei)"
+	@echo -e "  $(CYAN)SPIKE_PC$(RESET)        - Start PC (default: 0x80000000)"
+	@echo -e "  $(CYAN)SPIKE_PRIV$(RESET)      - Privilege mode (default: m)"
+	@echo -e "  $(CYAN)RTL_LOG$(RESET)         - RTL commit log (for compare)"
+	@echo -e ""
+	@echo -e "$(YELLOW)Examples:$(RESET)"
+	@echo -e "  $(CYAN)# Run Spike$(RESET)"
+	@echo -e "  make -f Makefile.spike run-spike TEST_NAME=rv32ui-p-add LOG_DIR=build/log/test"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Compare logs$(RESET)"
+	@echo -e "  make -f Makefile.spike compare TEST_NAME=rv32ui-p-add \\"
+	@echo -e "    RTL_LOG=build/log/test/commit_trace.log \\"
+	@echo -e "    SPIKE_LOG=build/log/test/spike_commit.log"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Full validation$(RESET)"
+	@echo -e "  make -f Makefile.spike validate TEST_NAME=rv32ui-p-add \\"
+	@echo -e "    LOG_DIR=build/log/test RTL_LOG=build/log/test/commit_trace.log"
+	@echo -e ""
+
+# Run Spike golden model
+run-spike:
+	@if [ -z "$(TEST_NAME)" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) TEST_NAME is required"; \
+		echo "Usage: make -f Makefile.spike run-spike TEST_NAME=rv32ui-p-add LOG_DIR=..."; \
+		exit 1; \
+	fi
+	@if [ -z "$(LOG_DIR)" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) LOG_DIR is required"; \
+		exit 1; \
+	fi
+	@echo -e ""
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  Running Spike Golden Reference$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  Test:     $(YELLOW)$(TEST_NAME)$(RESET)"
+	@echo -e "  Type:     $(TEST_TYPE)"
+	@echo -e "  ELF:      $(ELF_FILE)"
+	@echo -e "  ISA:      $(SPIKE_ISA)"
+	@echo -e "  Output:   $(SPIKE_LOG)"
+	@echo -e ""
+	@# Check ELF file exists
+	@if [ ! -f "$(ELF_FILE)" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) ELF file not found: $(ELF_FILE)"; \
+		exit 1; \
+	fi
+	@# Create log directory
+	@mkdir -p "$(LOG_DIR)"
+	@# Get PASS address for breakpoint (optional)
+	@if [ -f "$(ADDR_FILE)" ]; then \
+		PASS_ADDR=$$(head -1 "$(ADDR_FILE)" | awk '{print $$1}'); \
+		echo -e "$(GREEN)[INFO]$(RESET) PASS address: $$PASS_ADDR"; \
+		echo "until pc 0 $$PASS_ADDR" > "$(DEBUG_CMD_FILE)"; \
+		echo "quit" >> "$(DEBUG_CMD_FILE)"; \
+		echo -e "$(CYAN)[SPIKE]$(RESET) Running with breakpoint at $$PASS_ADDR..."; \
+		$(SPIKE) -d $(SPIKE_ARGS) \
+			--debug-cmd="$(DEBUG_CMD_FILE)" \
+			"$(ELF_FILE)" \
+			> "$(SPIKE_LOG)" 2>&1; \
+		SPIKE_EXIT=$$?; \
+	else \
+		echo -e "$(YELLOW)[WARN]$(RESET) Address file not found, running without breakpoint"; \
+		$(SPIKE) $(SPIKE_ARGS) "$(ELF_FILE)" > "$(SPIKE_LOG)" 2>&1; \
+		SPIKE_EXIT=$$?; \
+	fi; \
+	if [ $$SPIKE_EXIT -eq 0 ] || [ $$SPIKE_EXIT -eq 1 ]; then \
+		SPIKE_LINES=$$(wc -l < "$(SPIKE_LOG)"); \
+		echo -e "$(GREEN)[SUCCESS]$(RESET) Spike simulation complete ($$SPIKE_LINES commits)"; \
+		echo -e "$(GREEN)[SUCCESS]$(RESET) Log: $(SPIKE_LOG)"; \
+		exit 0; \
+	else \
+		echo -e "$(RED)[ERROR]$(RESET) Spike failed with exit code $$SPIKE_EXIT"; \
+		exit $$SPIKE_EXIT; \
+	fi
+
+# Compare RTL and Spike logs
+compare:
+	@if [ -z "$(TEST_NAME)" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) TEST_NAME is required"; \
+		exit 1; \
+	fi
+	@if [ -z "$(RTL_LOG)" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) RTL_LOG is required"; \
+		echo "Usage: make -f Makefile.spike compare TEST_NAME=... RTL_LOG=... SPIKE_LOG=..."; \
+		exit 1; \
+	fi
+	@if [ -z "$(SPIKE_LOG)" ]; then \
+		SPIKE_LOG="$(LOG_DIR)/spike_commit.log"; \
+	fi
+	@echo -e ""
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(CYAN)  Comparing RTL vs Spike Logs$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  RTL:      $(RTL_LOG)"
+	@echo -e "  Spike:    $(SPIKE_LOG)"
+	@echo -e ""
+	@# Check files exist
+	@if [ ! -f "$(RTL_LOG)" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) RTL log not found: $(RTL_LOG)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(SPIKE_LOG)" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) Spike log not found: $(SPIKE_LOG)"; \
+		exit 1; \
+	fi
+	@# Prepare compare arguments
+	@mkdir -p "$(LOG_DIR)"; \
+	DIFF_LOG="$(LOG_DIR)/diff.log"; \
+	EXTRA_ARGS=""; \
+	[ -f "$(DUMP_FILE)" ] && EXTRA_ARGS="$$EXTRA_ARGS --dump $(DUMP_FILE)"; \
+	[ -f "$(ADDR_FILE)" ] && EXTRA_ARGS="$$EXTRA_ARGS --addr $(ADDR_FILE)"; \
+	echo -e "$(CYAN)[COMPARE]$(RESET) Running comparison..."; \
+	echo -e "  Output: $$DIFF_LOG"; \
+	$(PYTHON) $(SCRIPT_DIR)/python/makefile/compare_logs.py \
+		--rtl "$(RTL_LOG)" \
+		--spike "$(SPIKE_LOG)" \
+		--output "$$DIFF_LOG" \
+		--test-name "$(TEST_NAME)" \
+		$$EXTRA_ARGS \
+		$(if $(SKIP_CSR),--skip-csr,) \
+		$(if $(RESYNC),--resync --window $(or $(RESYNC_WINDOW),8),); \
+	COMPARE_EXIT=$$?; \
+	if [ $$COMPARE_EXIT -eq 0 ]; then \
+		echo -e "$(GREEN)[SUCCESS]$(RESET) Logs match!"; \
+		echo -e "$(GREEN)[SUCCESS]$(RESET) Diff report: $$DIFF_LOG"; \
+		exit 0; \
+	else \
+		echo -e "$(RED)[FAILURE]$(RESET) Logs differ - see $$DIFF_LOG"; \
+		exit $$COMPARE_EXIT; \
+	fi
+
+# Full validation: Run Spike + Compare
+validate: run-spike compare
+	@echo -e ""
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "$(GREEN)  ✓ Validation Complete$(RESET)"
+	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo -e "  Test:     $(TEST_NAME)"
+	@echo -e "  Status:   $(GREEN)VALIDATED_PASS$(RESET)"
+	@echo -e ""
+
+# Clean Spike logs
+clean-spike:
+	@echo -e "$(YELLOW)[CLEAN]$(RESET) Removing Spike logs..."
+	@rm -f "$(SPIKE_LOG)" "$(DEBUG_CMD_FILE)"
+	@if [ -n "$(LOG_DIR)" ] && [ -d "$(LOG_DIR)" ]; then \
+		rm -f "$(LOG_DIR)"/spike*.log "$(LOG_DIR)"/diff.log; \
+	fi
+	@echo -e "$(GREEN)[DONE]$(RESET) Spike logs cleaned"
+
+# -----------------------------------------
+# Phony Targets
+# -----------------------------------------
+.DEFAULT_GOAL := help

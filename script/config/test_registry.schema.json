@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CERES RISC-V Test Registry Schema",
+  "description": "Schema for test_registry.json - central test database",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "_comment": { "type": "string" },
+    "_description": { "type": "string" },
+    "version": { "type": "string" },
+    "last_updated": { "type": "string" },
+
+    "test_suites": {
+      "type": "object",
+      "description": "Collection of test suites",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string" },
+            "config": { "type": "string" },
+            "flist": { "type": "string" },
+            "tags": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "enabled": { "type": "boolean" },
+            "filter": { "type": "string" },
+            "timeout_seconds": { "type": "integer" },
+            "max_cycles": { "type": "integer" },
+            "tests": {
+              "type": "object",
+              "description": "Individual tests in suite",
+              "patternProperties": {
+                ".*": {
+                  "type": "object",
+                  "properties": {
+                    "description": { "type": "string" },
+                    "config": { "type": "string" },
+                    "tags": { "type": "array", "items": { "type": "string" } },
+                    "enabled": { "type": "boolean" },
+                    "timeout_seconds": { "type": "integer" },
+                    "max_cycles": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "tag_groups": {
+      "type": "object",
+      "description": "Logical groupings of tags",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string" },
+            "includes": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "default_config": {
+      "type": "object",
+      "description": "Default configuration for all tests"
+    }
+  },
+  "required": ["test_suites"]
+}

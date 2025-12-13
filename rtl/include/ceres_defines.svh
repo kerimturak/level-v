@@ -70,12 +70,16 @@
 // LOG_COMMIT kullanıyorsan COMMIT_TRACER gerekli (pipe'da fe_tracer için)
 `ifndef SYNTHESIS
 `ifdef LOG_COMMIT
+`ifndef COMMIT_TRACER
 `define COMMIT_TRACER
+`endif
 `endif
 
 // KONATA_TRACER kullanıyorsan COMMIT_TRACER gerekli (sn/inst için)
 `ifdef KONATA_TRACER
+`ifndef COMMIT_TRACER
 `define COMMIT_TRACER
+`endif
 `endif
 
 // ============================================================================

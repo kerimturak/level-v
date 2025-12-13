@@ -130,7 +130,7 @@ module ram_programmer
       end
 
       ST_SEQ_RECEIVE: begin
-        if (uart_byte_valid && seq_cnt_q == SEQ_LENGTH - 1) state_next = ST_SEQ_CHECK;
+        if (uart_byte_valid && seq_cnt_q == 4'(SEQ_LENGTH - 1)) state_next = ST_SEQ_CHECK;
         else if (seq_timeout) state_next = ST_IDLE;
       end
 
@@ -193,7 +193,7 @@ module ram_programmer
         ST_SEQ_RECEIVE: begin
           if (uart_byte_valid) begin
             seq_shift_q <= {seq_shift_q[SEQ_LENGTH*8-9:0], uart_data[7:0]};
-            seq_cnt_q   <= (seq_cnt_q == SEQ_LENGTH - 1) ? '0 : seq_cnt_q + 1;
+            seq_cnt_q   <= (seq_cnt_q == 4'(SEQ_LENGTH - 1)) ? '0 : seq_cnt_q + 1;
             break_cnt_q <= '0;
           end else begin
             break_cnt_q <= break_cnt_q + 1;

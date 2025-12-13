@@ -40,6 +40,14 @@ SIM := verilator
 # Python
 PYTHON := python3
 
+# Python scripts
+TEST_MANAGER := $(PYTHON) $(SCRIPT_DIR)/python/test_manager.py
+DEBUG_VIEWER := $(PYTHON) $(SCRIPT_DIR)/python/debug_viewer.py
+
+# Debug control
+DEBUG_ENABLE ?= 1
+export DEBUG_ENABLE
+
 # Colors for output
 RED     := \033[0;31m
 GREEN   := \033[0;32m
@@ -76,12 +84,14 @@ RTL_DIR        := $(ROOT_DIR)/rtl
 INC_DIR        := $(RTL_DIR)/include
 BUILD_DIR      := $(ROOT_DIR)/build
 OBJ_DIR        := $(BUILD_DIR)/obj_dir
-LOG_DIR        := $(BUILD_DIR)/log
 TB_DIR         := $(ROOT_DIR)/sim/tb
+
+# Results directory (NEW: logs go here, not in build/)
+RESULTS_DIR    := $(ROOT_DIR)/results
 
 # Test-specific directories
 TEST_NAME      ?= rv32ui-p-add
-VERILATOR_LOG  := $(LOG_DIR)/verilator/$(TEST_NAME)
+VERILATOR_LOG  := $(RESULTS_DIR)/logs/verilator/$(TEST_NAME)
 
 # -----------------------------------------
 # RTL Sources
@@ -279,16 +289,8 @@ ifeq ($(TRACE),0)
     RUNNER_ARGS += --no-trace
 endif
 
-# Spike comparison settings
-ENABLE_SPIKE ?= 0
-ENABLE_COMPARE ?= 0
-ENABLE_HTML_REPORT ?= 0
-
-ifeq ($(ENABLE_SPIKE),1)
-    SPIKE_ISA ?= rv32imc_zicsr_zicntr_zifencei
-    SPIKE_PC ?= 0x80000000
-    SPIKE_PRIV ?= m
-endif
+# NOTE: Spike validation settings moved to Makefile.spike
+# Validation is now handled by test_manager.py automatically
 
 # -----------------------------------------
 # Test List Files
@@ -308,7 +310,8 @@ all: build
 
 # Create directories
 dirs:
-	@mkdir -p "$(BUILD_DIR)" "$(OBJ_DIR)" "$(LOG_DIR)" "$(VERILATOR_LOG)"
+	@mkdir -p "$(BUILD_DIR)" "$(OBJ_DIR)" "$(RESULTS_DIR)/logs"
+	@if [ -n "$(TEST_NAME)" ]; then mkdir -p "$(VERILATOR_LOG)"; fi
 
 # Show current configuration
 show-config:
@@ -347,22 +350,11 @@ build: dirs
 		$(SV_DEFINES)
 	@echo -e "$(GREEN)[SUCCESS]$(RESET) Binary: $(RUN_BIN)"
 
-# Run simulation
+# Run simulation (Verilator only - no Spike/validation)
+# For validation, use: make -f Makefile.verilator test-run TEST_NAME=...
 run: build
 	@echo -e "$(GREEN)[RUN SIMULATION]$(RESET) Test: $(TEST_NAME)"
 	@$(PYTHON) $(VERILATOR_RUNNER) $(RUNNER_ARGS)
-ifeq ($(ENABLE_SPIKE),1)
-	@echo -e "$(CYAN)[SPIKE]$(RESET) Running Spike golden reference..."
-	@$(MAKE) -f Makefile.verilator run-spike TEST_NAME=$(TEST_NAME)
-endif
-ifeq ($(ENABLE_COMPARE),1)
-	@echo -e "$(CYAN)[COMPARE]$(RESET) Comparing RTL and Spike logs..."
-	@$(MAKE) -f Makefile.verilator compare-logs TEST_NAME=$(TEST_NAME)
-endif
-ifeq ($(ENABLE_HTML_REPORT),1)
-	@echo -e "$(CYAN)[REPORT]$(RESET) Generating HTML report..."
-	@$(MAKE) -f Makefile.verilator html-report TEST_NAME=$(TEST_NAME)
-endif
 
 # Clean build artifacts
 clean:
@@ -383,88 +375,17 @@ wave:
 # ============================================================
 # Spike Integration and Comparison
 # ============================================================
-.PHONY: run-spike compare-logs html-report generate-dashboard
+.PHONY: generate-dashboard
 
-# Run Spike golden reference
-run-spike:
-	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@echo -e "$(CYAN)  Running Spike Golden Reference$(RESET)"
-	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@# Find ELF and address files
-	@ELF_FILE=$$(find $(MEM_DIRS) -name "$(TEST_NAME).elf" -o -name "$(TEST_NAME)" | head -1); \
-	if [ -z "$$ELF_FILE" ]; then \
-		echo -e "$(RED)[ERROR]$(RESET) ELF file not found for test: $(TEST_NAME)"; \
-		exit 1; \
-	fi; \
-	ADDR_FILE=$$(dirname $$ELF_FILE)/../pass_fail_addr/$(TEST_NAME)_addr.txt; \
-	SPIKE_LOG=$(VERILATOR_LOG)/spike_commit.log; \
-	DEBUG_CMD=$(VERILATOR_LOG)/spike_debug.cmd; \
-	if [ -f "$$ADDR_FILE" ]; then \
-		PASS_ADDR=$$(head -1 $$ADDR_FILE | awk '{print $$1}'); \
-		echo -e "$(YELLOW)[INFO]$(RESET) PASS address: $$PASS_ADDR"; \
-		echo "until pc 0 $$PASS_ADDR" > $$DEBUG_CMD; \
-		echo "quit" >> $$DEBUG_CMD; \
-		spike -d --debug-cmd=$$DEBUG_CMD \
-			--isa=$(SPIKE_ISA) --pc=$(SPIKE_PC) --priv=$(SPIKE_PRIV) \
-			-l --log-commits $$ELF_FILE > $$SPIKE_LOG 2>&1; \
-	else \
-		echo -e "$(YELLOW)[WARN]$(RESET) Address file not found, running Spike without breakpoint"; \
-		spike --isa=$(SPIKE_ISA) --pc=$(SPIKE_PC) --priv=$(SPIKE_PRIV) \
-			-l --log-commits $$ELF_FILE > $$SPIKE_LOG 2>&1; \
-	fi; \
-	SPIKE_LINES=$$(wc -l < $$SPIKE_LOG); \
-	echo -e "$(GREEN)[SUCCESS]$(RESET) Spike simulation complete ($$SPIKE_LINES commits)"
-
-# Compare RTL and Spike logs
-compare-logs:
-	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@echo -e "$(CYAN)  Comparing RTL and Spike Logs$(RESET)"
-	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@RTL_LOG=$(VERILATOR_LOG)/commit_trace.log; \
-	SPIKE_LOG=$(VERILATOR_LOG)/spike_commit.log; \
-	DIFF_LOG=$(VERILATOR_LOG)/diff.log; \
-	if [ ! -f "$$RTL_LOG" ]; then \
-		echo -e "$(RED)[ERROR]$(RESET) RTL log not found: $$RTL_LOG"; \
-		exit 1; \
-	fi; \
-	if [ ! -f "$$SPIKE_LOG" ]; then \
-		echo -e "$(RED)[ERROR]$(RESET) Spike log not found: $$SPIKE_LOG"; \
-		exit 1; \
-	fi; \
-	DUMP_FILE=$$(find $(MEM_DIRS) -name "$(TEST_NAME).dump" | head -1); \
-	ADDR_FILE=$$(find $(MEM_DIRS) -name "$(TEST_NAME)_addr.txt" | head -1); \
-	CMD="$(PYTHON) $(SCRIPT_DIR)/python/makefile/compare_logs.py \
-		--rtl $$RTL_LOG \
-		--spike $$SPIKE_LOG \
-		--output $$DIFF_LOG \
-		--test-name $(TEST_NAME)"; \
-	if [ -n "$$DUMP_FILE" ]; then CMD="$$CMD --dump $$DUMP_FILE"; fi; \
-	if [ -n "$$ADDR_FILE" ]; then CMD="$$CMD --addr $$ADDR_FILE"; fi; \
-	eval $$CMD; \
-	if [ $$? -eq 0 ]; then \
-		echo -e "$(GREEN)[SUCCESS]$(RESET) Logs match!"; \
-	else \
-		echo -e "$(RED)[FAILURE]$(RESET) Logs differ - see $$DIFF_LOG"; \
-		exit 1; \
-	fi
-
-# Generate HTML report for single test
-html-report:
-	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@echo -e "$(CYAN)  Generating HTML Report$(RESET)"
-	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@DIFF_LOG=$(VERILATOR_LOG)/diff.log; \
-	if [ ! -f "$$DIFF_LOG" ]; then \
-		echo -e "$(YELLOW)[WARN]$(RESET) diff.log not found, running comparison first..."; \
-		$(MAKE) -f Makefile.verilator compare-logs TEST_NAME=$(TEST_NAME); \
-	fi; \
-	HTML_REPORT=$(VERILATOR_LOG)/test_report.html; \
-	$(PYTHON) $(SCRIPT_DIR)/python/makefile/html_diff_generator.py \
-		--diff-log $$DIFF_LOG \
-		--output $$HTML_REPORT \
-		--test-name $(TEST_NAME); \
-	echo -e "$(GREEN)[SUCCESS]$(RESET) HTML report: $$HTML_REPORT"
-
+# ============================================================
+# NOTE: Spike validation is now handled by test_manager.py
+# For validation, use:
+#   make -f Makefile.verilator test-run TEST_NAME=...
+#
+# Or manually:
+#   1. make -f Makefile.verilator run TEST_NAME=...  (RTL only)
+#   2. make -f Makefile.spike validate TEST_NAME=... (Spike + Compare)
+# ============================================================
 # Generate dashboard for all tests
 generate-dashboard:
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -642,6 +563,90 @@ verilator-arch-C: arch_build_C arch_import
 		xargs -n1 basename | sed 's/.mem$$//' > $(RESULTS_DIR)/arch_C_tests.flist
 	@$(MAKE) -f Makefile.verilator run-flist FLIST=$(RESULTS_DIR)/arch_C_tests.flist
 
+# ============================================================
+# Test Manager Integration (Python CLI)
+# ============================================================
+.PHONY: test-run test-run-suite test-run-tags test-list test-add test-remove debug-view debug-latest
+
+# Run single test via test manager
+test-run:
+	@$(TEST_MANAGER) run --test $(TEST_NAME) \
+		$(if $(MAX_CYCLES),--max-cycles $(MAX_CYCLES)) \
+		$(if $(NO_TRACE),--no-trace) \
+		$(if $(MODE),--mode $(MODE))
+
+# Run test suite via test manager
+test-run-suite:
+	@$(TEST_MANAGER) run --suite $(SUITE) \
+		$(if $(MAX_CYCLES),--max-cycles $(MAX_CYCLES)) \
+		$(if $(NO_TRACE),--no-trace) \
+		$(if $(MODE),--mode $(MODE))
+
+# Run tests by tags
+test-run-tags:
+	@$(TEST_MANAGER) run --tags $(TAGS) \
+		$(if $(MAX_CYCLES),--max-cycles $(MAX_CYCLES)) \
+		$(if $(NO_TRACE),--no-trace) \
+		$(if $(MODE),--mode $(MODE))
+
+# List tests
+test-list:
+	@$(TEST_MANAGER) list $(if $(SUITE),--suite $(SUITE)) $(if $(TAGS),--tags $(TAGS))
+
+# Add new test to registry
+test-add:
+	@$(TEST_MANAGER) add --test $(TEST_NAME) --suite $(SUITE) \
+		$(if $(CONFIG),--config $(CONFIG))
+
+# Remove test from registry
+test-remove:
+	@$(TEST_MANAGER) remove --test $(TEST_NAME) $(if $(SUITE),--suite $(SUITE))
+
+# ============================================================
+# Debug Report Viewing
+# ============================================================
+
+# View latest debug report
+debug-latest:
+	@$(DEBUG_VIEWER) $(if $(TEST_NAME),--test $(TEST_NAME))
+
+# View specific debug report
+debug-view:
+	@if [ -z "$(REPORT)" ]; then \
+		echo -e "$(RED)Error: REPORT parameter required$(RESET)"; \
+		echo "Usage: make debug-view REPORT=path/to/report.json"; \
+		exit 1; \
+	fi
+	@$(DEBUG_VIEWER) $(REPORT)
+
+# View debug report with errors only
+debug-errors:
+	@$(DEBUG_VIEWER) $(if $(TEST_NAME),--test $(TEST_NAME)) --errors-only
+
+# View debug summary
+debug-summary:
+	@$(DEBUG_VIEWER) $(if $(TEST_NAME),--test $(TEST_NAME)) --summary
+
+# Compare two debug reports
+debug-compare:
+	@if [ -z "$(REPORT1)" ] || [ -z "$(REPORT2)" ]; then \
+		echo -e "$(RED)Error: REPORT1 and REPORT2 parameters required$(RESET)"; \
+		echo "Usage: make debug-compare REPORT1=... REPORT2=..."; \
+		exit 1; \
+	fi
+	@$(DEBUG_VIEWER) --compare $(REPORT1) $(REPORT2)
+
+# List all debug reports
+debug-list:
+	@echo -e "$(CYAN)Debug Reports:$(RESET)"
+	@ls -lht build/debug_reports/*.json 2>/dev/null | head -20 || echo "No reports found"
+
+# Clean debug reports
+debug-clean:
+	@echo -e "$(YELLOW)Cleaning debug reports...$(RESET)"
+	@rm -rf build/debug_reports/
+	@echo -e "$(GREEN)Done$(RESET)"
+
 # Help
 help:
 	@echo -e ""
@@ -688,11 +693,11 @@ help:
 	@echo -e "  $(CYAN)arch_build$(RESET)              - Build architecture tests"
 	@echo -e "  $(CYAN)arch_clean$(RESET)              - Clean architecture test artifacts"
 	@echo -e ""
-	@echo -e "$(YELLOW)Spike Integration and Reporting:$(RESET)"
-	@echo -e "  $(CYAN)run-spike$(RESET)               - Run Spike golden reference"
-	@echo -e "  $(CYAN)compare-logs$(RESET)            - Compare RTL and Spike commit logs"
-	@echo -e "  $(CYAN)html-report$(RESET)             - Generate HTML report for test"
+	@echo -e "$(YELLOW)Validation and Reporting:$(RESET)"
+	@echo -e "  $(CYAN)test-run$(RESET)                - Run test with automatic Spike validation (via test_manager.py)"
 	@echo -e "  $(CYAN)generate-dashboard$(RESET)      - Generate test results dashboard"
+	@echo -e ""
+	@echo -e "  $(DIM)Note: For manual Spike validation, use Makefile.spike directly$(RESET)"
 	@echo -e ""
 	@echo -e "$(YELLOW)CLI Parameters:$(RESET)"
 	@echo -e "  $(CYAN)TEST_NAME$(RESET)=<name>      - Test to run (default: rv32ui-p-add)"
@@ -709,18 +714,58 @@ help:
 	@echo -e "  $(CYAN)SIM_FAST$(RESET)=1            - Enable fast simulation mode"
 	@echo -e "  $(CYAN)SIM_UART_MONITOR$(RESET)=1   - Enable UART monitor"
 	@echo -e ""
-	@echo -e "$(YELLOW)Spike and Report Parameters:$(RESET)"
-	@echo -e "  $(CYAN)ENABLE_SPIKE$(RESET)=1        - Enable Spike golden reference"
-	@echo -e "  $(CYAN)ENABLE_COMPARE$(RESET)=1      - Enable log comparison after simulation"
-	@echo -e "  $(CYAN)ENABLE_HTML_REPORT$(RESET)=1  - Enable HTML report generation"
-	@echo -e "  $(CYAN)SPIKE_ISA$(RESET)=<isa>       - Spike ISA string (default: rv32imc_zicsr_zicntr_zifencei)"
-	@echo -e "  $(CYAN)SPIKE_PC$(RESET)=<addr>       - Spike start PC (default: 0x80000000)"
-	@echo -e "  $(CYAN)SPIKE_PRIV$(RESET)=<m|s|u>    - Spike privilege mode (default: m)"
+	@echo -e "$(YELLOW)Environment Variables:$(RESET)"
+	@echo -e "  $(CYAN)VERILATOR_QUIET$(RESET)=0/1   - Quiet mode for simulation output (default: 1)"
+	@echo -e ""
+	@echo -e "$(YELLOW)Test Manager Targets (NEW):$(RESET)"
+	@echo -e "  $(CYAN)test-run$(RESET)            - Run single test via test manager"
+	@echo -e "  $(CYAN)test-run-suite$(RESET)      - Run entire test suite"
+	@echo -e "  $(CYAN)test-run-tags$(RESET)       - Run tests by tags"
+	@echo -e "  $(CYAN)test-list$(RESET)           - List available tests"
+	@echo -e "  $(CYAN)test-add$(RESET)            - Add test to registry"
+	@echo -e "  $(CYAN)test-remove$(RESET)         - Remove test from registry"
+	@echo -e ""
+	@echo -e "$(YELLOW)Debug Report Targets (NEW):$(RESET)"
+	@echo -e "  $(CYAN)debug-latest$(RESET)        - View latest debug report"
+	@echo -e "  $(CYAN)debug-view$(RESET)          - View specific debug report"
+	@echo -e "  $(CYAN)debug-errors$(RESET)        - Show only errors from debug report"
+	@echo -e "  $(CYAN)debug-summary$(RESET)       - Show debug report summary"
+	@echo -e "  $(CYAN)debug-compare$(RESET)       - Compare two debug reports"
+	@echo -e "  $(CYAN)debug-list$(RESET)          - List all debug reports"
+	@echo -e "  $(CYAN)debug-clean$(RESET)         - Clean debug reports"
 	@echo -e ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
-	@echo -e "  $(CYAN)# Single ISA test$(RESET)"
+	@echo -e "  $(CYAN)# Single ISA test (traditional)$(RESET)"
 	@echo -e "  make -f Makefile.verilator run TEST_NAME=rv32ui-p-add"
 	@echo -e "  make -f Makefile.verilator run TEST_NAME=rv32ui-p-add LOG_BP=1"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Single test via test manager (with debug)$(RESET)"
+	@echo -e "  make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add"
+	@echo -e "  make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add MAX_CYCLES=50000"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Run test suite$(RESET)"
+	@echo -e "  make -f Makefile.verilator test-run-suite SUITE=isa_basic"
+	@echo -e "  make -f Makefile.verilator test-run-suite SUITE=benchmarks"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Run tests by tags$(RESET)"
+	@echo -e "  make -f Makefile.verilator test-run-tags TAGS=quick,isa"
+	@echo -e "  make -f Makefile.verilator test-run-tags TAGS=benchmark"
+	@echo -e ""
+	@echo -e "  $(CYAN)# List tests$(RESET)"
+	@echo -e "  make -f Makefile.verilator test-list"
+	@echo -e "  make -f Makefile.verilator test-list SUITE=benchmarks"
+	@echo -e "  make -f Makefile.verilator test-list TAGS=quick"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Add/remove tests$(RESET)"
+	@echo -e "  make -f Makefile.verilator test-add TEST_NAME=my_test SUITE=custom_tests"
+	@echo -e "  make -f Makefile.verilator test-remove TEST_NAME=my_test"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Debug reports$(RESET)"
+	@echo -e "  make -f Makefile.verilator debug-latest"
+	@echo -e "  make -f Makefile.verilator debug-latest TEST_NAME=rv32ui-p-add"
+	@echo -e "  make -f Makefile.verilator debug-errors TEST_NAME=rv32ui-p-add"
+	@echo -e "  make -f Makefile.verilator debug-summary TEST_NAME=rv32ui-p-add"
+	@echo -e "  make -f Makefile.verilator debug-list"
 	@echo -e ""
 	@echo -e "  $(CYAN)# Batch ISA tests$(RESET)"
 	@echo -e "  make -f Makefile.verilator isa"
@@ -735,14 +780,21 @@ help:
 	@echo -e "  make -f Makefile.verilator verilator-arch-I"
 	@echo -e "  make -f Makefile.verilator verilator-arch-all"
 	@echo -e ""
-	@echo -e "  $(CYAN)# With Spike comparison and HTML report$(RESET)"
-	@echo -e "  make -f Makefile.verilator run TEST_NAME=rv32ui-p-add ENABLE_SPIKE=1 ENABLE_COMPARE=1 ENABLE_HTML_REPORT=1"
-	@echo -e "  make -f Makefile.verilator run-spike TEST_NAME=rv32ui-p-add"
-	@echo -e "  make -f Makefile.verilator compare-logs TEST_NAME=rv32ui-p-add"
-	@echo -e "  make -f Makefile.verilator html-report TEST_NAME=rv32ui-p-add"
-	@echo -e "  make -f Makefile.verilator generate-dashboard"
+	@echo -e "  $(CYAN)# RTL only (no validation)$(RESET)"
+	@echo -e "  make -f Makefile.verilator run TEST_NAME=rv32ui-p-add"
+	@echo -e ""
+	@echo -e "  $(CYAN)# With automatic Spike validation$(RESET)"
+	@echo -e "  make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Manual Spike validation$(RESET)"
+	@echo -e "  make -f Makefile.spike validate TEST_NAME=rv32ui-p-add \\\\"
+	@echo -e "    LOG_DIR=results/logs/verilator/rv32ui-p-add \\\\"
+	@echo -e "    RTL_LOG=results/logs/verilator/rv32ui-p-add/commit_trace.log"
 	@echo -e ""
 	@echo -e "  $(CYAN)# Configuration$(RESET)"
 	@echo -e "  make -f Makefile.verilator show-config"
 	@echo -e "  make -f Makefile.verilator run MODE=release MAX_CYCLES=50000"
+	@echo -e ""
+	@echo -e "  $(CYAN)# Debug control$(RESET)"
+	@echo -e "  DEBUG_ENABLE=0 make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add"
 	@echo -e ""
