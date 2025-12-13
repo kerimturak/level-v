@@ -41,7 +41,7 @@ OBJDUMP="${RISCV_PREFIX}-objdump"
 LINKER_SCRIPT="${PROJ_ROOT}/subrepo/coremark/ceresv/link.ld"
 
 # Derleme bayrakları
-CFLAGS="-march=rv32imc -mabi=ilp32 -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles"
+CFLAGS="-march=rv32imc_zicsr_zifencei -mabi=ilp32 -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles"
 LDFLAGS="-Wl,--gc-sections"
 
 # Startup dosyası
