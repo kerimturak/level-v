@@ -251,7 +251,11 @@ class TestConfig:
     
     # Simulation settings
     max_cycles: int = 100000
-    
+
+    # Exception address override
+    exception_pass_addr: Optional[str] = None
+    exception_fail_addr: Optional[str] = None
+
     # Pipeline control
     skip_spike: bool = False
     skip_compare: bool = False
@@ -379,7 +383,13 @@ def run_rtl_simulation(config: TestConfig, logger: DebugLogger) -> Tuple[bool, i
             "--max-cycles", str(config.max_cycles),
             "--build-dir", str(config.build_dir / "tests"),
         ]
-        
+
+        # Exception address override
+        if config.exception_pass_addr:
+            cmd.extend(["--exception-pass-addr", config.exception_pass_addr])
+        if config.exception_fail_addr:
+            cmd.extend(["--exception-fail-addr", config.exception_fail_addr])
+
         if addr_file and addr_file.exists():
             # addr_file runner'a verilecek (build_dir üzerinden bulacak)
             pass
@@ -480,10 +490,16 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
         except Exception as e:
             logger.warning(f"Failed to read address file: {e}")
     
+    # Exception address override
+    if config.exception_pass_addr:
+        pass_addr = config.exception_pass_addr
+        logger.note(f"Exception override: PASS address overridden to {pass_addr}")
+        info(f"Exception override: PASS address = {pass_addr}")
+
     if not pass_addr:
         logger.warning(f"Address file not found or empty: {addr_file}")
         warn(f"Address file not found: {addr_file} - Spike may run indefinitely")
-    
+
     # Debug command dosyası oluştur (PASS adresinde dur)
     debug_cmd_file = config.log_dir / "spike_debug.cmd"
     if pass_addr:
@@ -881,7 +897,11 @@ Examples:
     parser.add_argument("--skip-csr", action="store_true", help="Skip CSR comparison")
     parser.add_argument("--resync", action="store_true", help="Resync on mismatch")
     parser.add_argument("--resync-window", type=int, default=8, help="Resync window size")
-    
+
+    # Exception address override
+    parser.add_argument("--exception-pass-addr", help="Exception test pass address override (e.g., 0x80000040)")
+    parser.add_argument("--exception-fail-addr", help="Exception test fail address override (e.g., 0x8000103c)")
+
     # Debug
     parser.add_argument(
         "--debug",
@@ -947,6 +967,8 @@ def main() -> int:
         root_dir=root_dir,
         log_dir=log_dir,
         max_cycles=args.max_cycles,
+        exception_pass_addr=args.exception_pass_addr if hasattr(args, 'exception_pass_addr') else None,
+        exception_fail_addr=args.exception_fail_addr if hasattr(args, 'exception_fail_addr') else None,
         skip_spike=skip_spike,
         skip_compare=skip_compare,
         quick_mode=args.quick,

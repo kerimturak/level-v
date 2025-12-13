@@ -142,23 +142,48 @@ run_python:
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  CERES RISC-V Test Runner (Python Mode)$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@python3 $(TEST_RUNNER_SCRIPT) \
-		--test-name "$(TEST_NAME)" \
-		--test-type "$(TEST_TYPE)" \
-		--simulator "$(SIM)" \
-		--build-dir "$(BUILD_DIR)" \
-		--sim-dir "$(SIM_DIR)" \
-		--results-dir "$(RESULTS_DIR)" \
-		--test-log-dir "$(TEST_LOG_DIR)" \
-		--max-cycles $(MAX_CYCLES) \
-		$(if $(filter 1,$(LOG_COMMIT)),--log-commit,) \
-		$(if $(filter 1,$(LOG_BP)),--log-bp,) \
-		$(if $(filter 1,$(KONATA_TRACER)),--konata-tracer,) \
-		$(if $(filter 1,$(TRACE)),--trace,) \
-		$(if $(filter 1,$(CFG_SPIKE)),--enable-spike,--no-spike) \
-		$(if $(filter 1,$(CFG_COMPARE)),--enable-compare,--no-compare) \
-		$(if $(SKIP_CSR),--skip-csr,) \
-		$(if $(RESYNC),--resync --resync-window $(or $(RESYNC_WINDOW),8),)
+	@EXC_ADDRS="$(call GET_EXCEPTION_ADDR,$(TEST_NAME))"; \
+	if [ -n "$$EXC_ADDRS" ]; then \
+		echo -e "$(YELLOW)[INFO]$(RESET) Exception override for $(TEST_NAME): $$EXC_ADDRS"; \
+		set -- $$EXC_ADDRS; \
+		python3 $(TEST_RUNNER_SCRIPT) \
+			--test-name "$(TEST_NAME)" \
+			--test-type "$(TEST_TYPE)" \
+			--simulator "$(SIM)" \
+			--build-dir "$(BUILD_DIR)" \
+			--sim-dir "$(SIM_DIR)" \
+			--results-dir "$(RESULTS_DIR)" \
+			--test-log-dir "$(TEST_LOG_DIR)" \
+			--max-cycles $(MAX_CYCLES) \
+			--exception-pass-addr "$$1" \
+			--exception-fail-addr "$$2" \
+			$(if $(filter 1,$(LOG_COMMIT)),--log-commit,) \
+			$(if $(filter 1,$(LOG_BP)),--log-bp,) \
+			$(if $(filter 1,$(KONATA_TRACER)),--konata-tracer,) \
+			$(if $(filter 1,$(TRACE)),--trace,) \
+			$(if $(filter 1,$(CFG_SPIKE)),--enable-spike,--no-spike) \
+			$(if $(filter 1,$(CFG_COMPARE)),--enable-compare,--no-compare) \
+			$(if $(SKIP_CSR),--skip-csr,) \
+			$(if $(RESYNC),--resync --resync-window $(or $(RESYNC_WINDOW),8),); \
+	else \
+		python3 $(TEST_RUNNER_SCRIPT) \
+			--test-name "$(TEST_NAME)" \
+			--test-type "$(TEST_TYPE)" \
+			--simulator "$(SIM)" \
+			--build-dir "$(BUILD_DIR)" \
+			--sim-dir "$(SIM_DIR)" \
+			--results-dir "$(RESULTS_DIR)" \
+			--test-log-dir "$(TEST_LOG_DIR)" \
+			--max-cycles $(MAX_CYCLES) \
+			$(if $(filter 1,$(LOG_COMMIT)),--log-commit,) \
+			$(if $(filter 1,$(LOG_BP)),--log-bp,) \
+			$(if $(filter 1,$(KONATA_TRACER)),--konata-tracer,) \
+			$(if $(filter 1,$(TRACE)),--trace,) \
+			$(if $(filter 1,$(CFG_SPIKE)),--enable-spike,--no-spike) \
+			$(if $(filter 1,$(CFG_COMPARE)),--enable-compare,--no-compare) \
+			$(if $(SKIP_CSR),--skip-csr,) \
+			$(if $(RESYNC),--resync --resync-window $(or $(RESYNC_WINDOW),8),); \
+	fi
 	@echo -e "$(GREEN)$(SUCCESS) Python test runner completed$(RESET)"
 
 # ============================================================
@@ -200,7 +225,6 @@ run_rtl:
 	@echo -e "$(GREEN)  Step 1/3: Running RTL Simulation$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 ifeq ($(SIM),verilator)
-	@echo -e "$(CYAN)[DEBUG]$(RESET) Calling Verilator with VERILATOR_LOG_DIR=$(RTL_LOG_DIR)"
 	@EXC_ADDRS="$(call GET_EXCEPTION_ADDR,$(TEST_NAME))"; \
 	if [ -n "$$EXC_ADDRS" ]; then \
 		echo -e "$(YELLOW)[INFO]$(RESET) Exception override for $(TEST_NAME): $$EXC_ADDRS"; \

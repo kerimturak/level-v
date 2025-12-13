@@ -268,6 +268,16 @@ initial begin
       addr_check_enabled = 1;
     end
   end
+
+  // Exception address override - bu addr_file'ı override eder
+  if ($value$plusargs("PASS_ADDR=%h", pass_addr)) begin
+    $display("[INFO] PASS address overridden to 0x%08h", pass_addr);
+    addr_check_enabled = 1;
+  end
+  if ($value$plusargs("FAIL_ADDR=%h", fail_addr)) begin
+    $display("[INFO] FAIL address overridden to 0x%08h", fail_addr);
+    addr_check_enabled = 1;
+  end
 end
 
 // Writeback veya memory stage içinde:

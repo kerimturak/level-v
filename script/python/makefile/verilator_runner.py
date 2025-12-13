@@ -110,7 +110,9 @@ class SimRunConfig:
     log_dir: Path
     mem_file: Optional[Path] = None
     addr_file: Optional[Path] = None
-    
+    exception_pass_addr: Optional[str] = None
+    exception_fail_addr: Optional[str] = None
+
     # Simulation params
     max_cycles: int = 100000
     threads: int = 1
@@ -249,7 +251,13 @@ def build_run_command(config: SimRunConfig) -> List[str]:
     # Address file
     if config.addr_file:
         cmd.append(f"+addr_file={config.addr_file}")
-    
+
+    # Exception address overrides (bu addr_file'ı override eder)
+    if config.exception_pass_addr:
+        cmd.append(f"+PASS_ADDR={config.exception_pass_addr}")
+    if config.exception_fail_addr:
+        cmd.append(f"+FAIL_ADDR={config.exception_fail_addr}")
+
     # Trace/waveform output
     if config.trace_enabled:
         trace_file = config.log_dir / f"waveform.{config.trace_format}"
@@ -336,7 +344,16 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
         else:
             logger.note("Address file not found, skipping")
             print(f"  {Color.DIM}Adres dosyası bulunamadı, atlanıyor.{Color.RESET}")
-    
+
+    # Exception override kontrolü
+    if config.exception_pass_addr or config.exception_fail_addr:
+        logger.note(f"Exception address override: PASS={config.exception_pass_addr}, FAIL={config.exception_fail_addr}")
+        print(f"  {Color.YELLOW}Exception Override:{Color.RESET}")
+        if config.exception_pass_addr:
+            print(f"    PASS: {config.exception_pass_addr}")
+        if config.exception_fail_addr:
+            print(f"    FAIL: {config.exception_fail_addr}")
+
     # Executable kontrol
     logger.file_check(config.bin_path, "Verilator executable")
     if not config.bin_path.exists():
@@ -567,6 +584,8 @@ def merge_config_with_cli(
         bin_path=Path(args.bin_path),
         log_dir=Path(args.log_dir),
         mem_file=Path(args.mem_file) if args.mem_file else None,
+        exception_pass_addr=args.exception_pass_addr if hasattr(args, 'exception_pass_addr') else None,
+        exception_fail_addr=args.exception_fail_addr if hasattr(args, 'exception_fail_addr') else None,
         max_cycles=max_cycles,
         threads=threads,
         trace_enabled=trace_enabled,
@@ -689,7 +708,15 @@ Profiller:
         "--mem-file",
         help="Doğrudan memory dosyası belirt"
     )
-    
+    path_group.add_argument(
+        "--exception-pass-addr",
+        help="Exception test için pass adresi override (örn: 0x80000040)"
+    )
+    path_group.add_argument(
+        "--exception-fail-addr",
+        help="Exception test için fail adresi override (örn: 0x8000103c)"
+    )
+
     # Diğer
     parser.add_argument(
         "--no-color",
