@@ -7,18 +7,18 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 Description:
-  Word-based (32-bit) RAM with cache line burst support.
-  
+  Single wide BRAM with cache line width data bus.
+
   Features:
-    - 32-bit word organization (standard .mem file compatible)
-    - Cache line width read/write (128-bit default)
+    - Direct cache line width organization (128-bit default)
+    - Byte-enable support for fine-grained writes
     - UART programming interface via separate module
-    - Configurable depth and timing
-  
+    - Optimized for BRAM inference
+
   Memory Organization:
-    - Words are 32-bit aligned
-    - Cache lines span WORDS_PER_LINE consecutive words
-    - Byte strobes enable fine-grained writes
+    - Single wide RAM array matching cache line width
+    - Byte strobes for partial line writes
+    - Compatible with standard .mem file loading
 */
 `timescale 1ns / 1ps
 
@@ -26,11 +26,10 @@ module wrapper_ram
   import ceres_param::*;
 #(
     // Memory Configuration
-    parameter int unsigned WORD_WIDTH       = 32,
-    parameter int unsigned RAM_DEPTH        = 32768,
     parameter int unsigned CACHE_LINE_WIDTH = BLK_SIZE,
+    parameter int unsigned RAM_DEPTH        = 32768,  // Total words (32-bit)
 
-    // Programming Configuration  
+    // Programming Configuration
     parameter int unsigned                              CPU_CLK          = ceres_param::CPU_CLK,
     parameter int unsigned                              PROG_BAUD_RATE   = ceres_param::PROG_BAUD_RATE,
     parameter logic        [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
@@ -54,38 +53,34 @@ module wrapper_ram
   // ==========================================================================
   // Derived Parameters
   // ==========================================================================
+  localparam int WORD_WIDTH     = 32;
   localparam int WORDS_PER_LINE = CACHE_LINE_WIDTH / WORD_WIDTH;
-  localparam int BYTES_PER_WORD = WORD_WIDTH / 8;
+  localparam int BYTES_PER_LINE = CACHE_LINE_WIDTH / 8;
+  localparam int LINE_DEPTH     = RAM_DEPTH / WORDS_PER_LINE;
   localparam int LINE_ADDR_BITS = $clog2(WORDS_PER_LINE);
 
   // ==========================================================================
-  // Memory Array - Separate BRAMs for each word position
+  // Memory Array - Single Wide BRAM
   // ==========================================================================
-  // Split into individual BRAMs for proper inference
-  (* ram_style = "block" *)logic [                      WORD_WIDTH-1:0] ram0         [RAM_DEPTH/WORDS_PER_LINE-1:0];
-  (* ram_style = "block" *)logic [                      WORD_WIDTH-1:0] ram1         [RAM_DEPTH/WORDS_PER_LINE-1:0];
-  (* ram_style = "block" *)logic [                      WORD_WIDTH-1:0] ram2         [RAM_DEPTH/WORDS_PER_LINE-1:0];
-  (* ram_style = "block" *)logic [                      WORD_WIDTH-1:0] ram3         [RAM_DEPTH/WORDS_PER_LINE-1:0];
+  (* ram_style = "block" *) logic [CACHE_LINE_WIDTH-1:0] ram [LINE_DEPTH-1:0];
 
   // ==========================================================================
   // Internal Signals
   // ==========================================================================
-
-  // Address calculation
-  logic [$clog2(RAM_DEPTH/WORDS_PER_LINE)-1:0] word_addr;
-
-  // Read data registers - separate for each BRAM to enable proper output register inference
-  logic [                      WORD_WIDTH-1:0] rdata_q0;
-  logic [                      WORD_WIDTH-1:0] rdata_q1;
-  logic [                      WORD_WIDTH-1:0] rdata_q2;
-  logic [                      WORD_WIDTH-1:0] rdata_q3;
+  logic [$clog2(LINE_DEPTH)-1:0] line_addr;
+  logic [  CACHE_LINE_WIDTH-1:0] rdata_q;
 
   // Programming interface
-  logic [                                31:0] prog_addr;
-  logic [                                31:0] prog_data;
-  logic                                        prog_valid;
-  logic                                        prog_mode;
-  logic                                        prog_sys_rst;
+  logic [                  31:0] prog_addr;
+  logic [                  31:0] prog_data;
+  logic                          prog_valid;
+  logic                          prog_mode;
+  logic                          prog_sys_rst;
+
+  // Write control signals
+  logic [$clog2(LINE_DEPTH)-1:0] wr_addr;
+  logic [  CACHE_LINE_WIDTH-1:0] wr_data;
+  logic [CACHE_LINE_WIDTH/8-1:0] wr_strb;
 
   // ==========================================================================
   // Memory Initialization
@@ -105,119 +100,74 @@ module wrapper_ram
       end
       $fclose(fd);
       $readmemh(init_file, temp_ram, 0, RAM_DEPTH - 1);
-      // Distribute to separate BRAMs
-      for (int i = 0; i < RAM_DEPTH; i += 4) begin
-        ram0[i/4] = temp_ram[i];
-        ram1[i/4] = temp_ram[i+1];
-        ram2[i/4] = temp_ram[i+2];
-        ram3[i/4] = temp_ram[i+3];
+      // Pack words into cache lines
+      for (int i = 0; i < LINE_DEPTH; i++) begin
+        for (int j = 0; j < WORDS_PER_LINE; j++) begin
+          ram[i][j*WORD_WIDTH+:WORD_WIDTH] = temp_ram[i * WORDS_PER_LINE + j];
+        end
       end
 `ifdef LOG_RAM
-      $display("[INFO] Memory loaded successfully.");
+      $display("[INFO] Memory loaded successfully: %0d cache lines", LINE_DEPTH);
 `endif
     end else begin
 `ifdef LOG_RAM
       $display("[INFO] No INIT_FILE -> RAM initialized to zero");
 `endif
+      ram = '{default: '0};
     end
 `else
-    // During synthesis, initialize to zero (BRAM will be initialized via .coe or programming interface)
-    for (int i = 0; i < RAM_DEPTH / WORDS_PER_LINE; i++) begin
-      ram0[i] = '0;
-      ram1[i] = '0;
-      ram2[i] = '0;
-      ram3[i] = '0;
-    end
+    // During synthesis, initialize to zero
+    ram = '{default: '0};
 `endif
   end
 
   // ==========================================================================
   // Address Calculation
   // ==========================================================================
-  assign word_addr = addr_i[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS];
+  assign line_addr = addr_i[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS];
 
   // ==========================================================================
-  // Read/Write Logic - BRAM-Friendly Template (UG901 Style)
+  // Write Control Muxing
   // ==========================================================================
-  // Simplified to match Vivado BRAM inference patterns:
-  // - Separate write enable and read enable
-  // - No complex conditional logic in clocked block
-  // - Write-first behavior through explicit output assignment
-
-  // Write enable signals for each bank
-  logic we0, we1, we2, we3;
-  logic [$clog2(RAM_DEPTH/WORDS_PER_LINE)-1:0] wr_addr;
-  logic [WORD_WIDTH-1:0] wr_data0, wr_data1, wr_data2, wr_data3;
-
-  // Write enable and data muxing
   always_comb begin
     if (prog_mode && prog_valid) begin
-      // Programming mode: write to specific bank based on address[1:0]
+      // Programming mode: write single word to specific position
       wr_addr = prog_addr[$clog2(RAM_DEPTH)-1:LINE_ADDR_BITS];
-      we0 = (prog_addr[LINE_ADDR_BITS-1:0] == 2'd0);
-      we1 = (prog_addr[LINE_ADDR_BITS-1:0] == 2'd1);
-      we2 = (prog_addr[LINE_ADDR_BITS-1:0] == 2'd2);
-      we3 = (prog_addr[LINE_ADDR_BITS-1:0] == 2'd3);
-      wr_data0 = prog_data;
-      wr_data1 = prog_data;
-      wr_data2 = prog_data;
-      wr_data3 = prog_data;
+      wr_data = {WORDS_PER_LINE{prog_data}};  // Replicate to all positions
+      // Enable only the target word position (little-endian byte order)
+      case (prog_addr[LINE_ADDR_BITS-1:0])
+        2'd0:    wr_strb = 16'b0000_0000_0000_1111;  // Bytes [3:0]   -> Bits [31:0]
+        2'd1:    wr_strb = 16'b0000_0000_1111_0000;  // Bytes [7:4]   -> Bits [63:32]
+        2'd2:    wr_strb = 16'b0000_1111_0000_0000;  // Bytes [11:8]  -> Bits [95:64]
+        2'd3:    wr_strb = 16'b1111_0000_0000_0000;  // Bytes [15:12] -> Bits [127:96]
+        default: wr_strb = '0;
+      endcase
     end else begin
-      // Normal mode: write based on byte strobes
-      wr_addr = word_addr;
-      we0 = |wstrb_i[0*BYTES_PER_WORD+:BYTES_PER_WORD];
-      we1 = |wstrb_i[1*BYTES_PER_WORD+:BYTES_PER_WORD];
-      we2 = |wstrb_i[2*BYTES_PER_WORD+:BYTES_PER_WORD];
-      we3 = |wstrb_i[3*BYTES_PER_WORD+:BYTES_PER_WORD];
-      wr_data0 = wdata_i[0*WORD_WIDTH+:WORD_WIDTH];
-      wr_data1 = wdata_i[1*WORD_WIDTH+:WORD_WIDTH];
-      wr_data2 = wdata_i[2*WORD_WIDTH+:WORD_WIDTH];
-      wr_data3 = wdata_i[3*WORD_WIDTH+:WORD_WIDTH];
+      // Normal mode: use cache line interface
+      wr_addr = line_addr;
+      wr_data = wdata_i;
+      wr_strb = wstrb_i;
     end
   end
 
-  // RAM Bank 0 - Simple BRAM Template
+  // ==========================================================================
+  // RAM Read/Write Logic - Byte-Enable Template
+  // ==========================================================================
+  genvar i;
+  generate
+    for (i = 0; i < BYTES_PER_LINE; i++) begin : byte_write
+      always_ff @(posedge clk_i) begin
+        if (wr_strb[i]) ram[wr_addr][i*8+:8] <= wr_data[i*8+:8];
+      end
+    end
+  endgenerate
+
+  // Read logic with output register
   always_ff @(posedge clk_i) begin
-    if (we0) begin
-      ram0[wr_addr] <= wr_data0;
-      rdata_q0 <= wr_data0;  // Write-first
-    end else begin
-      rdata_q0 <= ram0[word_addr];
-    end
+    if (rd_en_i) rdata_q <= ram[line_addr];
   end
 
-  // RAM Bank 1 - Simple BRAM Template
-  always_ff @(posedge clk_i) begin
-    if (we1) begin
-      ram1[wr_addr] <= wr_data1;
-      rdata_q1 <= wr_data1;  // Write-first
-    end else begin
-      rdata_q1 <= ram1[word_addr];
-    end
-  end
-
-  // RAM Bank 2 - Simple BRAM Template
-  always_ff @(posedge clk_i) begin
-    if (we2) begin
-      ram2[wr_addr] <= wr_data2;
-      rdata_q2 <= wr_data2;  // Write-first
-    end else begin
-      rdata_q2 <= ram2[word_addr];
-    end
-  end
-
-  // RAM Bank 3 - Simple BRAM Template
-  always_ff @(posedge clk_i) begin
-    if (we3) begin
-      ram3[wr_addr] <= wr_data3;
-      rdata_q3 <= wr_data3;  // Write-first
-    end else begin
-      rdata_q3 <= ram3[word_addr];
-    end
-  end
-
-  // Concatenate separate output registers
-  assign rdata_o = {rdata_q3, rdata_q2, rdata_q1, rdata_q0};
+  assign rdata_o = rdata_q;
 
   // ==========================================================================
   // Programming Module Instance

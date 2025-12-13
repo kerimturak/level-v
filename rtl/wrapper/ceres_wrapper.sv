@@ -416,7 +416,6 @@ module ceres_wrapper
   assign ram_rd_en = ram_wb_req && !ram_wb_we && !ram_burst_data_valid;
 
   wrapper_ram #(
-      .WORD_WIDTH      (32),
       .RAM_DEPTH       (RAM_DEPTH),
       .CACHE_LINE_WIDTH(CACHE_LINE_W),
       .CPU_CLK         (CLK_FREQ_HZ),
