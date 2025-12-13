@@ -7,6 +7,8 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
+
+
 /* verilator lint_off VARHIDDEN */
 module cache
   import ceres_param::*;
@@ -85,32 +87,32 @@ module cache
   } nsram_t;
 
   // VERILATOR FIX: Struct types also need split_var for circular dependency resolution
-  dsram_t dsram  /*verilator split_var*/;
-  tsram_t tsram  /*verilator split_var*/;
-  nsram_t nsram  /*verilator split_var*/;
+  dsram_t                 dsram  /*verilator split_var*/;
+  tsram_t                 tsram  /*verilator split_var*/;
+  nsram_t                 nsram  /*verilator split_var*/;
 
   // Dirty SRAM signals - broken out to avoid combinatorial loops
-  logic [IDX_WIDTH-1:0]   drsram_wr_idx;
-  logic [NUM_WAY-1:0]     drsram_wr_way;
+  logic   [IDX_WIDTH-1:0] drsram_wr_idx;
+  logic   [  NUM_WAY-1:0] drsram_wr_way;
   logic                   drsram_wr_rw_en;
   logic                   drsram_wr_wdirty;
-  logic [NUM_WAY-1:0]     drsram_rd_rdirty;
+  logic   [  NUM_WAY-1:0] drsram_rd_rdirty;
 
   // Temporary variables to break combinatorial loops
-  logic [IDX_WIDTH-1:0]   drsram_idx_temp;
+  logic   [IDX_WIDTH-1:0] drsram_idx_temp;
   logic                   drsram_rw_en_temp;
-  logic [NUM_WAY-1:0]     drsram_way_temp;
+  logic   [  NUM_WAY-1:0] drsram_way_temp;
   logic                   drsram_wdirty_temp;
 
   // Additional wires for dcache writeback, mask data, etc.
-  logic    [BLK_SIZE-1:0] mask_data;
+  logic   [ BLK_SIZE-1:0] mask_data;
   logic                   data_array_wr_en;
-  logic    [BLK_SIZE-1:0] data_wr_pre;
+  logic   [ BLK_SIZE-1:0] data_wr_pre;
   logic                   tag_array_wr_en;
-  logic    [ WOFFSET-1:0] word_idx;
+  logic   [  WOFFSET-1:0] word_idx;
   logic                   write_back;
-  logic    [TAG_SIZE-1:0] evict_tag;
-  logic    [BLK_SIZE-1:0] evict_data;
+  logic   [ TAG_SIZE-1:0] evict_tag;
+  logic   [ BLK_SIZE-1:0] evict_data;
 
   // Common non-memory logic (same for both caches)
   always_ff @(posedge clk_i) begin
@@ -453,6 +455,16 @@ module cache
     always_comb begin
       mask_data   = cache_hit ? cache_select_data : lowX_res_i.data;
       data_wr_pre = mask_data;
+
+`ifdef LOG_CACHE_DEBUG
+      // Debug logging for cache operations
+      if (cache_req_q.valid && !IS_ICACHE) begin
+        if (write_back) begin
+          $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h valid=%b ready=%b lowX_ready=%b lowX_valid=%b", $time, cache_req_q.addr, {evict_tag, rd_idx, {BOFFSET{1'b0}}},
+                   lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
+        end
+      end
+`endif
       case (cache_req_q.rw_size)
         2'b11: data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
         2'b10: data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
@@ -541,7 +553,9 @@ module cache
         lowX_req_o.rw_size = 2'b11;  // Full cache line
         lowX_req_o.data = fi_evict_data;
       end else begin
-        lowX_req_o.valid = !lookup_ack && cache_miss;
+        // CRITICAL FIX: During writeback, we need to send request to lowX for eviction write
+        // valid should be high for both cache_miss AND write_back
+        lowX_req_o.valid = !lookup_ack && (cache_miss || write_back);
         lowX_req_o.ready = !flush && !fi_active;
         lowX_req_o.uncached = write_back ? '0 : cache_req_q.uncached;
         // For uncached accesses, preserve full address; for cached, align to cache line
@@ -563,6 +577,8 @@ module cache
       cache_res_o.miss = cache_miss;
       cache_res_o.data = (cache_miss && lowX_res_i.valid) ? lowX_res_i.data[word_idx*32+:32] : cache_select_data[word_idx*32+:32];
     end
+    `include "cache_debug_log.svh"
+
   end
 
   // Final lookup_ack logic common to both modes

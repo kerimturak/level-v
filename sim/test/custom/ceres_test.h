@@ -86,6 +86,23 @@ static inline void uart_putdec(uint32_t val) {
  * Test Utilities
  * ======================================================================== */
 
+#define TEST_PASS 1
+#define TEST_FAIL 0
+
+#define print_str(s) uart_puts(s)
+#define print_hex(v) uart_puthex(v)
+#define print_dec(v) uart_putdec(v)
+
+#define TEST_COMPLETE(result) \
+    do { \
+        if (result == TEST_PASS) { \
+            uart_puts("\n=== TEST PASSED ===\n"); \
+        } else { \
+            uart_puts("\n=== TEST FAILED ===\n"); \
+        } \
+        while(1); \
+    } while(0)
+
 #define TEST_HEADER(name) \
     uart_puts("======================================\n"); \
     uart_puts("  " name "\n"); \

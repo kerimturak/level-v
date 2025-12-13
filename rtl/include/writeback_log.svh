@@ -7,8 +7,9 @@
 //   2. Memory write
 //   3. Register writeback
 //   4. No-write instruction
-// 
+//
 // Enable with: +define+LOG_COMMIT
+// Enable writeback logging: +define+LOG_WRITEBACK
 // ============================================================================
 
 // Define SOC path based on top module name
@@ -17,6 +18,100 @@
 `else
   `define SOC tb_wrapper.ceres_wrapper.i_soc
 `endif
+
+// ============================================================================
+// CACHE WRITEBACK LOGGING
+// Enable with: +define+LOG_WRITEBACK
+// ============================================================================
+`ifdef LOG_WRITEBACK
+
+integer wb_trace_fd;
+string  wb_trace_path;
+string  wb_test_name;
+string  wb_simulator;
+
+initial begin
+  if (!$value$plusargs("simulator=%s", wb_simulator))
+    wb_simulator = "default_simulator";
+
+  if (!$value$plusargs("test_name=%s", wb_test_name))
+    wb_test_name = "default_test";
+
+  if (!$value$plusargs("wb_trace_file=%s", wb_trace_path))
+    wb_trace_path = $sformatf("/home/kerim/level-v/results/logs/%0s/%0s/writeback_trace.log",
+                            wb_simulator, wb_test_name);
+
+  void'($system($sformatf("mkdir -p $(dirname %s)", wb_trace_path)));
+
+  wb_trace_fd = $fopen(wb_trace_path, "w");
+  if (wb_trace_fd == 0) begin
+    $display("[ERROR] Failed to open writeback trace file: %s", wb_trace_path);
+    $finish;
+  end else begin
+    $display("[WB_LOG] Writing to: %s", wb_trace_path);
+    $fwrite(wb_trace_fd, "# Cycle | Event | Address | Data | Info\n");
+    $fwrite(wb_trace_fd, "# ============================================\n");
+  end
+end
+
+// Log dcache writebacks
+always @(posedge clk_i) begin
+  if (rst_ni) begin
+    // Check for normal eviction writeback
+    if (`SOC.dcache.write_back && `SOC.dcache.lowX_req_o.valid) begin
+      $fwrite(wb_trace_fd,
+        "%0d | EVICT_WB | 0x%08h | 0x%032h | set=%0d valid=%b dirty=%b\n",
+        $time,
+        `SOC.dcache.lowX_req_o.addr,
+        `SOC.dcache.lowX_req_o.data,
+        `SOC.dcache.rd_idx,
+        `SOC.dcache.cache_valid_vec,
+        `SOC.dcache.drsram_rd_rdirty
+      );
+    end
+
+    // Check for fence.i writeback
+    if (`SOC.dcache.fi_active && `SOC.dcache.fi_writeback_req) begin
+      $fwrite(wb_trace_fd,
+        "%0d | FENCEI_WB | 0x%08h | 0x%032h | set=%0d way=%0d state=%0d\n",
+        $time,
+        `SOC.dcache.fi_evict_addr,
+        `SOC.dcache.fi_evict_data,
+        `SOC.dcache.fi_set_idx_q,
+        `SOC.dcache.fi_way_idx_q,
+        `SOC.dcache.fi_state_q
+      );
+    end
+
+    // Log dirty bit updates
+    if (`SOC.dcache.drsram_wr_rw_en) begin
+      $fwrite(wb_trace_fd,
+        "%0d | DIRTY_UPD | idx=0x%02h | way=%b | dirty=%b\n",
+        $time,
+        `SOC.dcache.drsram_wr_idx,
+        `SOC.dcache.drsram_wr_way,
+        `SOC.dcache.drsram_wr_wdirty
+      );
+    end
+  end
+end
+
+// Periodic flush
+logic [15:0] wb_flush_counter = '0;
+always @(posedge clk_i) begin
+  if (rst_ni) begin
+    wb_flush_counter <= wb_flush_counter + 1;
+    if (wb_flush_counter == 0 && wb_trace_fd != 0) begin
+      $fflush(wb_trace_fd);
+    end
+  end
+end
+
+final begin
+  if (wb_trace_fd != 0) $fclose(wb_trace_fd);
+end
+
+`endif // LOG_WRITEBACK
 
 `ifdef LOG_COMMIT
 
@@ -36,7 +131,7 @@ initial begin
     test_name = "default_test";
 
   if (!$value$plusargs("trace_file=%s", trace_path))
-    trace_path = $sformatf("/home/kerim/riscv_git/ceres-riscv/results/logs/%0s/%0s/commit_trace.log",
+    trace_path = $sformatf("/home/kerim/level-v/results/logs/%0s/%0s/commit_trace.log",
                             simulator, test_name);
 
   void'($system($sformatf("mkdir -p $(dirname %s)", trace_path)));

@@ -45,15 +45,16 @@
 // ============================================================================
 // Multiplier implementation (sadece biri aktif olmalı)
 // Priority: PIPELINED_MUL > WALLACE_SINGLE > DSP_MUL > Sequential
-`define FEAT_PIPELINED_MUL   // Pipelined multiplier (2 cycles, better timing)
-                              // Breaks 32x32 into 4x 8x32 muls for reduced logic depth
+`define FEAT_PIPELINED_MUL // Pipelined multiplier (2 cycles, better timing)
+`define LOG_CACHE_DEBUG // Pipelined multiplier (2 cycles, better timing)
+// Breaks 32x32 into 4x 8x32 muls for reduced logic depth
 //`define FEAT_WALLACE_SINGLE // Tek cycle Wallace tree (deep comb logic)
 //`define FEAT_WALLACE_MULTI   // Multi-cycle Wallace tree
 //`define FEAT_DSP_MUL         // DSP block multiplier
 
 // Division implementation
-`define FEAT_PIPELINED_DIV   // Pipelined division (2 bits/cycle, better timing)
-                              // If not defined, uses original sequential (1 bit/cycle)
+`define FEAT_PIPELINED_DIV // Pipelined division (2 bits/cycle, better timing)
+// If not defined, uses original sequential (1 bit/cycle)
 
 `ifdef SYNTHESIS
 `define MINIMAL_SOC

@@ -5,12 +5,9 @@
 
 #include "ceres_test.h"
 
-// Memory regions
-#define RAM_BASE      0x80000000
-#define RAM_SIZE      (64 * 1024)  // 64KB
-
-// Test buffer (should be larger than cache)
-#define TEST_BUF_SIZE 4096
+// Memory regions - Use definitions from ceres_test.h
+// Test buffer (smaller to fit in RAM)
+#define TEST_BUF_SIZE 512  // 2KB total
 volatile uint32_t test_buffer[TEST_BUF_SIZE] __attribute__((aligned(64)));
 
 // Timing using mcycle
@@ -253,32 +250,187 @@ int test_memory_ordering(void) {
 // Test 7: Random Access Pattern
 int test_random_access(void) {
     print_str("Random access pattern test:\n");
-    
+
     // Simple pseudo-random generator (LCG)
     uint32_t seed = 12345;
     #define RAND() (seed = seed * 1103515245 + 12345, (seed >> 16) & 0x7fff)
-    
+
     // Initialize with pattern
     for (int i = 0; i < 256; i++) {
         test_buffer[i] = i * 0x01010101;
     }
-    
+
     uint32_t start_cycle = get_cycle();
-    
+
     // Random access reads
     volatile uint32_t sum = 0;
     for (int i = 0; i < 1000; i++) {
         int idx = RAND() % 256;
         sum += test_buffer[idx];
     }
-    
+
     uint32_t cycles = get_cycle() - start_cycle;
-    
+
     print_str("  1000 random reads: ");
     print_hex(cycles);
     print_str(" cycles\n");
-    
+
     return TEST_PASS;
+}
+
+// Test 8: Writeback Stress Test (Force Cache Evictions)
+int test_writeback_stress(void) {
+    int result = TEST_PASS;
+
+    print_str("Writeback stress test:\n");
+    print_str("  This test forces cache writebacks by:\n");
+    print_str("  1. Filling cache with dirty data\n");
+    print_str("  2. Forcing eviction with conflicting addresses\n");
+    print_str("  3. Verifying data integrity after writeback\n\n");
+
+    // Cache parameters (4-way, 1KB total = 256B per way, 16B line)
+    // With 4-way cache: accessing 5+ addresses at same index forces eviction
+
+    #define CACHE_SETS 16       // Assuming 1KB / 4-way / 16B line
+    #define CACHE_LINE_SIZE 16  // 16 bytes = 4 words
+    #define CACHE_SET_STRIDE (CACHE_SETS * CACHE_LINE_SIZE)  // 256 bytes
+
+    print_str("  Phase 1: Fill all 4 ways with dirty data\n");
+
+    // Write to 4 ways of the same cache set (index 0)
+    for (int way = 0; way < 4; way++) {
+        uint32_t offset = way * CACHE_SET_STRIDE / 4;  // 0, 64, 128, 192 words
+        for (int w = 0; w < 4; w++) {  // 4 words per cache line
+            test_buffer[offset + w] = 0xA0000000 | (way << 16) | w;
+        }
+    }
+
+    print_str("  Phase 2: Force eviction with 5th conflicting write\n");
+
+    // Write to 5th conflicting address - should evict one dirty line
+    uint32_t offset5 = 4 * CACHE_SET_STRIDE / 4;  // 256 words
+    for (int w = 0; w < 4; w++) {
+        test_buffer[offset5 + w] = 0xB0000000 | (4 << 16) | w;
+    }
+
+    print_str("  Phase 3: Verify all data (including evicted)\n");
+
+    // Verify first 4 ways - one should have been evicted and written back
+    for (int way = 0; way < 4; way++) {
+        uint32_t offset = way * CACHE_SET_STRIDE / 4;
+        for (int w = 0; w < 4; w++) {
+            uint32_t expected = 0xA0000000 | (way << 16) | w;
+            uint32_t actual = test_buffer[offset + w];
+            if (actual != expected) {
+                print_str("  ERROR: Way ");
+                print_hex(way);
+                print_str(" Word ");
+                print_hex(w);
+                print_str(": expected 0x");
+                print_hex(expected);
+                print_str(", got 0x");
+                print_hex(actual);
+                print_str("\n");
+                result = TEST_FAIL;
+            }
+        }
+    }
+
+    // Verify 5th way
+    for (int w = 0; w < 4; w++) {
+        uint32_t expected = 0xB0000000 | (4 << 16) | w;
+        uint32_t actual = test_buffer[offset5 + w];
+        if (actual != expected) {
+            print_str("  ERROR: Way 5 Word ");
+            print_hex(w);
+            print_str(": expected 0x");
+            print_hex(expected);
+            print_str(", got 0x");
+            print_hex(actual);
+            print_str("\n");
+            result = TEST_FAIL;
+        }
+    }
+
+    if (result == TEST_PASS) {
+        print_str("  All data verified - writeback successful!\n");
+    }
+
+    print_str("\n  Phase 4: Heavy writeback stress (many evictions)\n");
+
+    // Write to many conflicting addresses to force multiple writebacks
+    for (int i = 0; i < 32; i++) {
+        uint32_t offset = i * CACHE_SET_STRIDE / 4;
+        for (int w = 0; w < 4; w++) {
+            test_buffer[offset + w] = 0xC0000000 | (i << 16) | w;
+        }
+    }
+
+    // Verify all 32 blocks
+    int errors = 0;
+    for (int i = 0; i < 32; i++) {
+        uint32_t offset = i * CACHE_SET_STRIDE / 4;
+        for (int w = 0; w < 4; w++) {
+            uint32_t expected = 0xC0000000 | (i << 16) | w;
+            uint32_t actual = test_buffer[offset + w];
+            if (actual != expected) {
+                if (errors < 5) {  // Only print first 5 errors
+                    print_str("  ERROR: Block ");
+                    print_hex(i);
+                    print_str(" Word ");
+                    print_hex(w);
+                    print_str(": expected 0x");
+                    print_hex(expected);
+                    print_str(", got 0x");
+                    print_hex(actual);
+                    print_str("\n");
+                }
+                errors++;
+                result = TEST_FAIL;
+            }
+        }
+    }
+
+    if (errors > 0) {
+        print_str("  Total errors: ");
+        print_hex(errors);
+        print_str("\n");
+    } else {
+        print_str("  Heavy stress test: All 32 blocks verified!\n");
+    }
+
+    // Phase 5: fence.i writeback test
+    print_str("\n  Phase 5: fence.i forced writeback\n");
+
+    // Write some dirty data
+    for (int i = 0; i < 16; i++) {
+        test_buffer[i] = 0xFEED0000 | i;
+    }
+
+    // Execute fence.i to force writeback of all dirty lines
+    asm volatile ("fence.i");
+
+    // Verify data after fence.i
+    for (int i = 0; i < 16; i++) {
+        uint32_t expected = 0xFEED0000 | i;
+        uint32_t actual = test_buffer[i];
+        if (actual != expected) {
+            print_str("  ERROR after fence.i at ");
+            print_hex(i);
+            print_str(": expected 0x");
+            print_hex(expected);
+            print_str(", got 0x");
+            print_hex(actual);
+            print_str("\n");
+            result = TEST_FAIL;
+        }
+    }
+
+    if (result == TEST_PASS) {
+        print_str("  fence.i writeback successful!\n");
+    }
+
+    return result;
 }
 
 int main(void) {
@@ -328,15 +480,21 @@ int main(void) {
     test_result = test_random_access();
     if (test_result != TEST_PASS) result = TEST_FAIL;
     print_str(test_result == TEST_PASS ? "PASSED\n\n" : "FAILED\n\n");
-    
+
+    // Test 8
+    print_str("Test 8: Writeback Stress\n");
+    test_result = test_writeback_stress();
+    if (test_result != TEST_PASS) result = TEST_FAIL;
+    print_str(test_result == TEST_PASS ? "PASSED\n\n" : "FAILED\n\n");
+
     // Summary
     if (result == TEST_PASS) {
         print_str("*** ALL CACHE TESTS PASSED ***\n");
     } else {
         print_str("*** SOME CACHE TESTS FAILED ***\n");
     }
-    
+
     TEST_COMPLETE(result);
-    
+
     return result;
 }
