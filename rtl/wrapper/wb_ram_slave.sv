@@ -76,7 +76,7 @@ module wb_ram_slave #(
   // ============================================================================
   // Latency Pipeline for Reads
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       valid_pipe <= '0;
       we_q       <= 1'b0;

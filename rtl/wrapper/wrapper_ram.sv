@@ -62,10 +62,10 @@ module wrapper_ram
   // Memory Array - Separate BRAMs for each word position
   // ==========================================================================
   // Split into individual BRAMs for proper inference
-  logic [WORD_WIDTH-1:0] ram0[RAM_DEPTH/WORDS_PER_LINE-1:0];
-  logic [WORD_WIDTH-1:0] ram1[RAM_DEPTH/WORDS_PER_LINE-1:0];
-  logic [WORD_WIDTH-1:0] ram2[RAM_DEPTH/WORDS_PER_LINE-1:0];
-  logic [WORD_WIDTH-1:0] ram3[RAM_DEPTH/WORDS_PER_LINE-1:0];
+  (* ram_style = "block" *)logic [                      WORD_WIDTH-1:0] ram0         [RAM_DEPTH/WORDS_PER_LINE-1:0];
+  (* ram_style = "block" *)logic [                      WORD_WIDTH-1:0] ram1         [RAM_DEPTH/WORDS_PER_LINE-1:0];
+  (* ram_style = "block" *)logic [                      WORD_WIDTH-1:0] ram2         [RAM_DEPTH/WORDS_PER_LINE-1:0];
+  (* ram_style = "block" *)logic [                      WORD_WIDTH-1:0] ram3         [RAM_DEPTH/WORDS_PER_LINE-1:0];
 
   // ==========================================================================
   // Internal Signals
@@ -74,8 +74,11 @@ module wrapper_ram
   // Address calculation
   logic [$clog2(RAM_DEPTH/WORDS_PER_LINE)-1:0] word_addr;
 
-  // Read data register
-  logic [                CACHE_LINE_WIDTH-1:0] rdata_q;
+  // Read data registers - separate for each BRAM to enable proper output register inference
+  logic [                      WORD_WIDTH-1:0] rdata_q0;
+  logic [                      WORD_WIDTH-1:0] rdata_q1;
+  logic [                      WORD_WIDTH-1:0] rdata_q2;
+  logic [                      WORD_WIDTH-1:0] rdata_q3;
 
   // Programming interface
   logic [                                31:0] prog_addr;
@@ -90,7 +93,7 @@ module wrapper_ram
   localparam int INIT_FILE_LEN = 256;
   reg     [8*INIT_FILE_LEN-1:0] init_file = {INIT_FILE_LEN{8'h00}};
   integer                       fd = 0;
-  logic   [     WORD_WIDTH-1:0] temp_ram  [0:RAM_DEPTH-1];
+  logic   [     WORD_WIDTH-1:0] temp_ram                           [0:RAM_DEPTH-1];
 
   initial begin
 `ifndef SYNTHESIS
@@ -119,7 +122,7 @@ module wrapper_ram
     end
 `else
     // During synthesis, initialize to zero (BRAM will be initialized via .coe or programming interface)
-    for (int i = 0; i < RAM_DEPTH/WORDS_PER_LINE; i++) begin
+    for (int i = 0; i < RAM_DEPTH / WORDS_PER_LINE; i++) begin
       ram0[i] = '0;
       ram1[i] = '0;
       ram2[i] = '0;
@@ -177,9 +180,9 @@ module wrapper_ram
   always_ff @(posedge clk_i) begin
     if (we0) begin
       ram0[wr_addr] <= wr_data0;
-      rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= wr_data0;  // Write-first
-    end else if (!prog_mode && rd_en_i) begin
-      rdata_q[0*WORD_WIDTH+:WORD_WIDTH] <= ram0[word_addr];
+      rdata_q0 <= wr_data0;  // Write-first
+    end else begin
+      rdata_q0 <= ram0[word_addr];
     end
   end
 
@@ -187,9 +190,9 @@ module wrapper_ram
   always_ff @(posedge clk_i) begin
     if (we1) begin
       ram1[wr_addr] <= wr_data1;
-      rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= wr_data1;  // Write-first
-    end else if (!prog_mode && rd_en_i) begin
-      rdata_q[1*WORD_WIDTH+:WORD_WIDTH] <= ram1[word_addr];
+      rdata_q1 <= wr_data1;  // Write-first
+    end else begin
+      rdata_q1 <= ram1[word_addr];
     end
   end
 
@@ -197,9 +200,9 @@ module wrapper_ram
   always_ff @(posedge clk_i) begin
     if (we2) begin
       ram2[wr_addr] <= wr_data2;
-      rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= wr_data2;  // Write-first
-    end else if (!prog_mode && rd_en_i) begin
-      rdata_q[2*WORD_WIDTH+:WORD_WIDTH] <= ram2[word_addr];
+      rdata_q2 <= wr_data2;  // Write-first
+    end else begin
+      rdata_q2 <= ram2[word_addr];
     end
   end
 
@@ -207,13 +210,14 @@ module wrapper_ram
   always_ff @(posedge clk_i) begin
     if (we3) begin
       ram3[wr_addr] <= wr_data3;
-      rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= wr_data3;  // Write-first
-    end else if (!prog_mode && rd_en_i) begin
-      rdata_q[3*WORD_WIDTH+:WORD_WIDTH] <= ram3[word_addr];
+      rdata_q3 <= wr_data3;  // Write-first
+    end else begin
+      rdata_q3 <= ram3[word_addr];
     end
   end
 
-  assign rdata_o = rdata_q;
+  // Concatenate separate output registers
+  assign rdata_o = {rdata_q3, rdata_q2, rdata_q1, rdata_q0};
 
   // ==========================================================================
   // Programming Module Instance

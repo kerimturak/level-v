@@ -89,7 +89,7 @@ module plic
   logic [  NUM_SOURCES-1:0] irq_prev_q;
   logic [  NUM_SOURCES-1:0] irq_edge;
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       irq_sync1_q <= '0;
       irq_sync2_q <= '0;
@@ -142,7 +142,7 @@ module plic
   assign claim_read = stb_i && !we_i && (adr_i == ADDR_CLAIM);
   assign complete_write = stb_i && we_i && (adr_i == ADDR_CLAIM);
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       for (int i = 0; i < NUM_SOURCES; i++) begin
         priority_q[i] <= '0;

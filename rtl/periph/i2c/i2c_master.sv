@@ -177,7 +177,7 @@ module i2c_master
   // ============================================================================
   // Register Write Logic
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       clk_div     <= 16'd124;  // Default: 100kHz @ 50MHz
       stretch_en  <= 1'b1;
@@ -371,7 +371,7 @@ module i2c_master
   // ============================================================================
   // I2C State Machine (Sequential)
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       state_q       <= I2C_IDLE;
       clk_cnt_q     <= 16'b0;

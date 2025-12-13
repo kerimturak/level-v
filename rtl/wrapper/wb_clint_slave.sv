@@ -96,7 +96,7 @@ module wb_clint_slave (
   // ============================================================================
   // Register Write
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       mtime_q    <= 64'h0;
       mtimecmp_q <= 64'hFFFF_FFFF_FFFF_FFFF;  // Max value to prevent spurious interrupts

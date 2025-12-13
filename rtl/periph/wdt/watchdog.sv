@@ -149,7 +149,7 @@ module watchdog
   // ===========================================================================
   // Register Write Logic
   // ===========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       ctrl_q    <= 32'h0;
       load_q    <= 32'hFFFF_FFFF;  // Maximum timeout by default
@@ -235,7 +235,7 @@ module watchdog
   // ===========================================================================
   // Counter Logic
   // ===========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       count_q <= 32'hFFFF_FFFF;
     end else if (wdt_en) begin
@@ -255,7 +255,7 @@ module watchdog
   // ===========================================================================
   // Reset Pulse Generation
   // ===========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       rst_pulse_cnt    <= '0;
       rst_pulse_active <= 1'b0;

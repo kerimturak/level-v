@@ -21,11 +21,11 @@ Description:
 module ram_programmer
   import ceres_param::*;
 #(
-  parameter int unsigned CLK_FREQ     = CPU_CLK,
-  parameter int unsigned BAUD_RATE    = PROG_BAUD_RATE,
-  parameter int unsigned SEQ_LENGTH   = PROGRAM_SEQUENCE_LEN,
-  parameter logic [SEQ_LENGTH*8-1:0]  MAGIC_SEQ    = PROGRAM_SEQUENCE,
-  parameter int unsigned BREAK_CYCLES = 1_000_000
+    parameter int unsigned                    CLK_FREQ     = CPU_CLK,
+    parameter int unsigned                    BAUD_RATE    = PROG_BAUD_RATE,
+    parameter int unsigned                    SEQ_LENGTH   = PROGRAM_SEQUENCE_LEN,
+    parameter logic        [SEQ_LENGTH*8-1:0] MAGIC_SEQ    = PROGRAM_SEQUENCE,
+    parameter int unsigned                    BREAK_CYCLES = 1_000_000
 ) (
     input logic clk_i,
     input logic rst_ni,
@@ -113,7 +113,7 @@ module ram_programmer
   // ==========================================================================
   // FSM - State Register
   // ==========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) state_q <= ST_IDLE;
     else state_q <= state_next;
   end
@@ -157,7 +157,7 @@ module ram_programmer
   // ==========================================================================
   // FSM - Datapath
   // ==========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       seq_shift_q  <= '0;
       seq_cnt_q    <= '0;

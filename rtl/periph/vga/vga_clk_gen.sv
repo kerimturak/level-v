@@ -55,7 +55,7 @@ module vga_clk_gen #(
 
     end else if (DIVIDER == 2) begin : gen_div2
       // Simple divide by 2
-      always_ff @(posedge clk_i or negedge rst_ni) begin
+      always_ff @(posedge clk_i) begin
         if (!rst_ni) begin
           pixel_clk_reg <= 1'b0;
         end else begin
@@ -70,7 +70,7 @@ module vga_clk_gen #(
       // For proper 50% duty cycle, toggle at DIVIDER/2
       localparam int HALF_DIV = DIVIDER / 2;
 
-      always_ff @(posedge clk_i or negedge rst_ni) begin
+      always_ff @(posedge clk_i) begin
         if (!rst_ni) begin
           div_cnt       <= '0;
           pixel_clk_reg <= 1'b0;

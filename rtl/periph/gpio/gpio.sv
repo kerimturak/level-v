@@ -95,7 +95,7 @@ module gpio
   logic [GPIO_WIDTH-1:0] gpio_sync2_q;
   logic [GPIO_WIDTH-1:0] gpio_prev_q;  // Previous value for edge detection
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       gpio_sync1_q <= '0;
       gpio_sync2_q <= '0;
@@ -151,7 +151,7 @@ module gpio
   logic reg_write;
   assign reg_write = stb_i && we_i;
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       dir_q <= '0;  // All inputs by default
       out_q <= '0;

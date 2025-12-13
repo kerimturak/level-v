@@ -175,7 +175,7 @@ module pwm
   logic [15:0] psc_cnt;
   logic        psc_tick;
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       psc_cnt <= 16'h0;
     end else if (pwm_en) begin
@@ -198,7 +198,7 @@ module pwm
   logic cnt_wrap;
   logic cnt_zero;
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       cnt_q   <= '0;
       cnt_dir <= 1'b0;
@@ -252,7 +252,7 @@ module pwm
   logic       fault_flag;
 
   // Fault input filtering (debounce)
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       fault_filter_cnt <= 8'h0;
       fault_filtered   <= 1'b0;
@@ -273,7 +273,7 @@ module pwm
   assign fault_active = fault_filtered;
 
   // Fault flag (sticky)
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       fault_flag <= 1'b0;
     end else begin
@@ -320,7 +320,7 @@ module pwm
       logic                 pwm_delayed_rise;
       logic                 pwm_delayed_fall;
 
-      always_ff @(posedge clk_i or negedge rst_ni) begin
+      always_ff @(posedge clk_i) begin
         if (!rst_ni) begin
           dt_rise_cnt <= '0;
           dt_fall_cnt <= '0;
@@ -391,7 +391,7 @@ module pwm
   logic period_match_irq;
   logic fault_irq;
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       isr_q <= 32'h0;
     end else begin
@@ -412,7 +412,7 @@ module pwm
   // ===========================================================================
   // Register Write Logic
   // ===========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       gcr_q      <= 32'h0;
       period_q   <= {PWM_WIDTH{1'b1}};

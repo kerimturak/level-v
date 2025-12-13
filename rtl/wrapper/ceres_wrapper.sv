@@ -436,7 +436,7 @@ module ceres_wrapper
   );
 
   // Burst state machine
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       ram_burst_active     <= 1'b0;
       ram_burst_cnt        <= '0;
@@ -489,7 +489,7 @@ module ceres_wrapper
   end
 
   // RAM Latency Pipeline for Wishbone ACK
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       ram_delay_q   <= '0;
       ram_pending_q <= 1'b0;

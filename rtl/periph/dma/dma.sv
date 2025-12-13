@@ -243,7 +243,7 @@ module dma
   // ===========================================================================
   // DMA State Machine Logic
   // ===========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       state_q   <= DMA_IDLE;
       xfer_data <= 32'h0;
@@ -341,7 +341,7 @@ module dma
   // ===========================================================================
   generate
     for (genvar i = 0; i < NUM_CHANNELS; i++) begin : gen_ch_state
-      always_ff @(posedge clk_i or negedge rst_ni) begin
+      always_ff @(posedge clk_i) begin
         if (!rst_ni) begin
           ccr[i]       <= 32'h0;
           cndtr[i]     <= 32'h0;

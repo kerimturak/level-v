@@ -88,7 +88,7 @@ module i2c_slave_sim #(
   // ============================================================================
   // State Machine
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       state_q   <= IDLE;
       shift_reg <= 8'b0;

@@ -163,7 +163,7 @@ module gptimer
   // ============================================================================
   // Counter and Status Logic
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       for (int i = 0; i < NUM_TIMERS; i++) begin
         ctrl_q[i]    <= '0;

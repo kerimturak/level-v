@@ -195,7 +195,7 @@ module vga_controller
   logic        h_sync_raw;
   logic        v_sync_raw;
 
-  always_ff @(posedge pixel_clk_i or negedge rst_ni) begin
+  always_ff @(posedge pixel_clk_i) begin
     if (!rst_ni) begin
       h_cnt_q <= 12'd0;
       v_cnt_q <= 12'd0;
@@ -229,7 +229,7 @@ module vga_controller
   logic v_sync_prev_q;
   logic vsync_irq_raw;
 
-  always_ff @(posedge pixel_clk_i or negedge rst_ni) begin
+  always_ff @(posedge pixel_clk_i) begin
     if (!rst_ni) begin
       v_sync_prev_q <= 1'b0;
     end else begin
@@ -241,7 +241,7 @@ module vga_controller
 
   // Synchronize to system clock
   logic vsync_sync_q, vsync_sync_qq;
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       vsync_sync_q  <= 1'b0;
       vsync_sync_qq <= 1'b0;
@@ -303,7 +303,7 @@ module vga_controller
   localparam PREFETCH_WAIT = 3'd2;
   localparam PREFETCH_DONE = 3'd3;
 
-  always_ff @(posedge pixel_clk_i or negedge rst_ni) begin
+  always_ff @(posedge pixel_clk_i) begin
     if (!rst_ni) begin
       prefetch_state <= PREFETCH_IDLE;
       pixel_data_q   <= 32'h0;
@@ -362,7 +362,7 @@ module vga_controller
   logic [31:0] blink_cnt;
   logic        blink_phase;
 
-  always_ff @(posedge pixel_clk_i or negedge rst_ni) begin
+  always_ff @(posedge pixel_clk_i) begin
     if (!rst_ni) begin
       blink_cnt   <= 32'd0;
       blink_phase <= 1'b0;
@@ -414,7 +414,7 @@ module vga_controller
   // ===========================================================================
   // Register Write Logic (System clock domain)
   // ===========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       ctrl_q          <= 32'h0;
       fb_base_q       <= 32'h8010_0000;  // Default FB at RAM + 1MB

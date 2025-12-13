@@ -110,7 +110,7 @@ module axi_gpio_bridge #(
   // ===========================================================================
   // State Machine Logic
   // ===========================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       state_q <= ST_IDLE;
       rdata_q <= 32'h0;

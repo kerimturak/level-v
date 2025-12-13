@@ -153,7 +153,7 @@ module wb_master_bridge (
 
       BURST_DATA: begin
         if (wb_s_i.ack) begin
-          if (beat_cnt_q == (BEAT_CNT_W+1)'(BURST_LEN - 1)) begin
+          if (beat_cnt_q == (BEAT_CNT_W + 1)'(BURST_LEN - 1)) begin
             state_d = IDLE;  // Burst complete
           end
         end else if (wb_s_i.err) begin
@@ -173,7 +173,7 @@ module wb_master_bridge (
   // ============================================================================
   // Sequential Logic
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       state_q    <= IDLE;
       addr_q     <= '0;
@@ -293,7 +293,7 @@ module wb_master_bridge (
         wb_m_o.adr = {addr_q[WB_ADDR_WIDTH-1:$clog2(BLK_SIZE/8)], beat_cnt_q[BEAT_CNT_W-1:0], 2'b00};
 
         // Set CTI based on position in burst
-        if (beat_cnt_q == (BEAT_CNT_W+1)'(BURST_LEN - 1)) begin
+        if (beat_cnt_q == (BEAT_CNT_W + 1)'(BURST_LEN - 1)) begin
           wb_m_o.cti = WB_CTI_EOB;
         end else begin
           wb_m_o.cti = WB_CTI_INCR;
@@ -355,7 +355,7 @@ module wb_master_bridge (
       end
 
       BURST_DATA: begin
-        iomem_res_o.valid = wb_s_i.ack && (beat_cnt_q == (BEAT_CNT_W+1)'(BURST_LEN - 1));
+        iomem_res_o.valid = wb_s_i.ack && (beat_cnt_q == (BEAT_CNT_W + 1)'(BURST_LEN - 1));
       end
 
       ERROR_HANDLE: begin

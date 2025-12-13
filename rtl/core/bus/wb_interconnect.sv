@@ -84,7 +84,7 @@ module wb_interconnect #(
   // Request Tracking
   // ============================================================================
   // Track which slave has an outstanding request
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       active_slave_q <= '0;
       req_pending_q  <= 1'b0;

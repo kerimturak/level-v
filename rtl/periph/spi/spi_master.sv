@@ -120,7 +120,7 @@ module spi_master
   // ============================================================================
   // Register Interface
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       sck_div  <= 16'd100;  // Default divider
       cpol     <= 1'b0;
@@ -178,7 +178,7 @@ module spi_master
   // ============================================================================
   // SPI State Machine
   // ============================================================================
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       state_q     <= SPI_IDLE;
       clk_cnt_q   <= '0;
