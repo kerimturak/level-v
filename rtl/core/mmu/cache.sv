@@ -552,6 +552,9 @@ module cache
 
     // SECOND: Read dirty bits using the computed index
     always_comb begin
+      // Default to avoid X propagation
+      drsram_rd_rdirty = '0;
+
       for (int w = 0; w < NUM_WAY; w++) begin
         drsram_rd_rdirty[w] = dirty_reg[drsram_idx_temp][w];
       end
@@ -560,7 +563,12 @@ module cache
     // THIRD: Compute write_back and other signals using dirty bits
     always_comb begin
       // write_back is combinational but only used to trigger FSM transition
-      write_back = cache_miss && (|(drsram_rd_rdirty & evict_way & cache_valid_vec)) && !wb_in_progress;
+      // Default to 0 to avoid X propagation
+      write_back = 1'b0;
+
+      if (cache_miss && !wb_in_progress) begin
+        write_back = |(drsram_rd_rdirty & evict_way & cache_valid_vec);
+      end
 
       // Block data/tag array writes during writeback FSM operation
       data_array_wr_en = ((cache_hit && cache_req_q.rw) ||
