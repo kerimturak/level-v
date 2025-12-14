@@ -255,6 +255,78 @@ module cache
     // You can instantiate the dirty array memories here (using a generate block as needed)
 
     // ============================================================================
+    // WRITEBACK STATE MACHINE
+    // ----------------------------------------------------------------------------
+    // Prevents combinational loops by using registered writeback state
+    // ============================================================================
+    typedef enum logic [1:0] {
+      WB_IDLE,     // No writeback in progress
+      WB_REQUEST,  // Sending writeback request to lowX
+      WB_WAIT,     // Waiting for writeback completion
+      WB_DONE      // Writeback complete, return to normal operation
+    } wb_state_e;
+
+    wb_state_e wb_state_q, wb_state_d;
+    logic [ TAG_SIZE-1:0] wb_evict_tag_q;
+    logic [ BLK_SIZE-1:0] wb_evict_data_q;
+    logic [IDX_WIDTH-1:0] wb_evict_idx_q;
+    logic                 write_back;  // Combinational signal indicating writeback needed
+    logic                 wb_in_progress;  // Registered signal indicating writeback FSM active
+
+    // Writeback FSM
+    always_ff @(posedge clk_i) begin
+      if (!rst_ni) begin
+        wb_state_q <= WB_IDLE;
+        wb_evict_tag_q <= '0;
+        wb_evict_data_q <= '0;
+        wb_evict_idx_q <= '0;
+      end else begin
+        wb_state_q <= wb_state_d;
+        // Capture eviction info when entering WB_REQUEST state
+        if (wb_state_d == WB_REQUEST && wb_state_q == WB_IDLE) begin
+          wb_evict_tag_q  <= evict_tag;
+          wb_evict_data_q <= evict_data;
+          wb_evict_idx_q  <= rd_idx;
+        end
+      end
+    end
+
+    always_comb begin
+      wb_state_d = wb_state_q;
+      wb_in_progress = (wb_state_q != WB_IDLE);
+
+      case (wb_state_q)
+        WB_IDLE: begin
+          // Detect if writeback is needed
+          if (write_back && !fi_active) begin
+            wb_state_d = WB_REQUEST;
+          end
+        end
+
+        WB_REQUEST: begin
+          // Wait for lowX to accept the request
+          if (lowX_res_i.ready) begin
+            wb_state_d = WB_WAIT;
+          end
+        end
+
+        WB_WAIT: begin
+          // Wait for writeback completion
+          if (lowX_res_i.valid) begin
+            wb_state_d = WB_DONE;
+          end
+        end
+
+        WB_DONE: begin
+          // Complete writeback and return to idle
+          wb_state_d = WB_IDLE;
+        end
+
+        default: wb_state_d = WB_IDLE;
+      endcase
+    end
+
+    // ============================================================================
     // FENCE.I Dirty Writeback State Machine
     // ----------------------------------------------------------------------------
     // When fence.i is issued (flush_i rises), dcache must:
@@ -487,21 +559,24 @@ module cache
 
     // THIRD: Compute write_back and other signals using dirty bits
     always_comb begin
-      write_back = cache_miss && (|(drsram_rd_rdirty & evict_way & cache_valid_vec));
+      // write_back is combinational but only used to trigger FSM transition
+      write_back = cache_miss && (|(drsram_rd_rdirty & evict_way & cache_valid_vec)) && !wb_in_progress;
 
+      // Block data/tag array writes during writeback FSM operation
       data_array_wr_en = ((cache_hit && cache_req_q.rw) ||
-           (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !write_back && !fi_active;
-      tag_array_wr_en = (cache_miss && lowX_res_i.valid && !cache_req_q.uncached) && !write_back && !fi_active;
+           (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !wb_in_progress && !fi_active;
+      tag_array_wr_en = (cache_miss && lowX_res_i.valid && !cache_req_q.uncached) && !wb_in_progress && !fi_active;
 
       // Update dcache specific memories
       // During fence.i writeback, we use fi_mark_clean to clear dirty bit
       // IMPORTANT: During fi_active, we must NOT let flush invalidate tags/dirty bits
-      drsram_wdirty_temp = fi_mark_clean ? 1'b0 : ((flush && !fi_active) ? '0 : (write_back ? '0 : (cache_req_q.rw ? '1 : '0)));
+      drsram_wdirty_temp = fi_mark_clean ? 1'b0 : ((flush && !fi_active) ? '0 : (wb_in_progress ? '0 : (cache_req_q.rw ? '1 : '0)));
       drsram_wr_wdirty = drsram_wdirty_temp;
 
       // Compute rw_en without self-reference
+      // Clear dirty bit when writeback completes (WB_DONE state)
       drsram_rw_en_temp = fi_mark_clean || ((cache_req_q.rw && (cache_hit || (cache_miss && lowX_res_i.valid))) ||
-                        (write_back && lowX_res_i.valid));
+                        (wb_state_q == WB_DONE));
       drsram_wr_rw_en  = drsram_rw_en_temp;
 
       // During fence.i, use fi_set_idx_q for reading dirty bits
@@ -510,9 +585,12 @@ module cache
       for (int i = 0; i < NUM_WAY; i++) begin
         if (fi_mark_clean) begin
           drsram_way_temp[i] = fi_way_onehot[i];
+        end else if (wb_state_q == WB_DONE) begin
+          // Clear dirty bit of evicted way after writeback completes
+          drsram_way_temp[i] = evict_way[i];
         end else begin
-          // Don't let flush write during fi_active
-          drsram_way_temp[i] = (flush && !fi_active) ? '1 : (cache_wr_way[i] && drsram_rw_en_temp);
+          // Don't let flush write during fi_active or wb_in_progress
+          drsram_way_temp[i] = (flush && !fi_active && !wb_in_progress) ? '1 : (cache_wr_way[i] && drsram_rw_en_temp);
         end
         drsram_wr_way[i] = drsram_way_temp[i];
       end
@@ -543,8 +621,9 @@ module cache
     end
 
     always_comb begin
-      // During fence.i writeback, use fence.i state machine signals
+      // Priority: fence.i writeback > normal writeback > cache miss
       if (fi_writeback_req) begin
+        // fence.i writeback has highest priority
         lowX_req_o.valid = 1'b1;
         lowX_req_o.ready = 1'b1;
         lowX_req_o.uncached = 1'b0;
@@ -552,33 +631,42 @@ module cache
         lowX_req_o.rw = 1'b1;  // Write operation
         lowX_req_o.rw_size = 2'b11;  // Full cache line
         lowX_req_o.data = fi_evict_data;
-      end else begin
-        // CRITICAL FIX: During writeback, we need to send request to lowX for eviction write
-        // valid should be high for both cache_miss AND write_back
-        lowX_req_o.valid = !lookup_ack && (cache_miss || write_back);
+      end else if (wb_in_progress) begin
+        // Use FSM state for writeback to prevent combinational loops
+        lowX_req_o.valid = (wb_state_q == WB_REQUEST || wb_state_q == WB_WAIT);
         lowX_req_o.ready = !flush && !fi_active;
-        lowX_req_o.uncached = write_back ? '0 : cache_req_q.uncached;
+        lowX_req_o.uncached = 1'b0;
+        lowX_req_o.addr = {wb_evict_tag_q, wb_evict_idx_q, {BOFFSET{1'b0}}};
+        lowX_req_o.rw = 1'b1;  // Always write during writeback
+        lowX_req_o.rw_size = 2'b11;  // Full cache line
+        lowX_req_o.data = wb_evict_data_q;
+      end else begin
+        // Normal cache miss handling
+        lowX_req_o.valid = !lookup_ack && cache_miss;
+        lowX_req_o.ready = !flush && !fi_active && !wb_in_progress;
+        lowX_req_o.uncached = cache_req_q.uncached;
         // For uncached accesses, preserve full address; for cached, align to cache line
-        lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : (cache_req_q.uncached ? cache_req_q.addr : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}});
-        // For uncached writes, pass through the write signal; for writeback, always write
-        lowX_req_o.rw = write_back ? '1 : (cache_req_q.uncached ? cache_req_q.rw : '0);
-        lowX_req_o.rw_size = write_back ? 2'b11 : cache_req_q.rw_size;
-        // For uncached writes, pass through the data; for writeback, use evicted data
-        lowX_req_o.data = write_back ? evict_data : (cache_req_q.uncached ? BLK_SIZE'(cache_req_q.data) : '0);
+        lowX_req_o.addr = cache_req_q.uncached ? cache_req_q.addr : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}};
+        // For uncached writes, pass through the write signal; for cache miss, read
+        lowX_req_o.rw = cache_req_q.uncached ? cache_req_q.rw : 1'b0;
+        lowX_req_o.rw_size = cache_req_q.rw_size;
+        // For uncached writes, pass through the data
+        lowX_req_o.data = cache_req_q.uncached ? BLK_SIZE'(cache_req_q.data) : '0;
       end
 
-      cache_res_o.valid   = !fi_active && (!cache_req_q.rw ? (!write_back && cache_req_q.valid &&
-                              (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid))) :
-                              (!write_back && cache_req_q.valid && cache_req_i.ready &&
-                              (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid))));
-      cache_res_o.ready   = !fi_active && (!cache_req_q.rw ? (!write_back && (!cache_miss || lowX_res_i.valid) && !flush && !tag_array_wr_en) :
-                              (!write_back && !tag_array_wr_en && lowX_req_o.ready &&
-                              lowX_res_i.valid && !flush));
+      // Cache response - block during writeback FSM operation
+      cache_res_o.valid   = !fi_active && !wb_in_progress &&
+                            (!cache_req_q.rw ? (cache_req_q.valid && (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid))) :
+                                               (cache_req_q.valid && cache_req_i.ready && (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid))));
+      cache_res_o.ready   = !fi_active && !wb_in_progress &&
+                            (!cache_req_q.rw ? ((!cache_miss || lowX_res_i.valid) && !flush && !tag_array_wr_en) :
+                                               (!tag_array_wr_en && lowX_req_o.ready && lowX_res_i.valid && !flush));
       cache_res_o.miss = cache_miss;
       cache_res_o.data = (cache_miss && lowX_res_i.valid) ? lowX_res_i.data[word_idx*32+:32] : cache_select_data[word_idx*32+:32];
     end
+`ifndef SYNTHESIS
     `include "cache_debug_log.svh"
-
+`endif
   end
 
   // Final lookup_ack logic common to both modes

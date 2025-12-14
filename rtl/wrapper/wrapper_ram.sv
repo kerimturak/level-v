@@ -27,7 +27,7 @@ module wrapper_ram
 #(
     // Memory Configuration
     parameter int unsigned CACHE_LINE_WIDTH = BLK_SIZE,
-    parameter int unsigned RAM_DEPTH        = 32768,  // Total words (32-bit)
+    parameter int unsigned RAM_DEPTH        = 32768,     // Total words (32-bit)
 
     // Programming Configuration
     parameter int unsigned                              CPU_CLK          = ceres_param::CPU_CLK,
@@ -53,16 +53,16 @@ module wrapper_ram
   // ==========================================================================
   // Derived Parameters
   // ==========================================================================
-  localparam int WORD_WIDTH     = 32;
+  localparam int WORD_WIDTH = 32;
   localparam int WORDS_PER_LINE = CACHE_LINE_WIDTH / WORD_WIDTH;
   localparam int BYTES_PER_LINE = CACHE_LINE_WIDTH / 8;
-  localparam int LINE_DEPTH     = RAM_DEPTH / WORDS_PER_LINE;
+  localparam int LINE_DEPTH = RAM_DEPTH / WORDS_PER_LINE;
   localparam int LINE_ADDR_BITS = $clog2(WORDS_PER_LINE);
 
   // ==========================================================================
   // Memory Array - Single Wide BRAM
   // ==========================================================================
-  (* ram_style = "block" *) logic [CACHE_LINE_WIDTH-1:0] ram [LINE_DEPTH-1:0];
+  (* ram_style = "block" *)logic [  CACHE_LINE_WIDTH-1:0] ram          [LINE_DEPTH-1:0];
 
   // ==========================================================================
   // Internal Signals
@@ -103,7 +103,7 @@ module wrapper_ram
       // Pack words into cache lines
       for (int i = 0; i < LINE_DEPTH; i++) begin
         for (int j = 0; j < WORDS_PER_LINE; j++) begin
-          ram[i][j*WORD_WIDTH+:WORD_WIDTH] = temp_ram[i * WORDS_PER_LINE + j];
+          ram[i][j*WORD_WIDTH+:WORD_WIDTH] = temp_ram[i*WORDS_PER_LINE+j];
         end
       end
 `ifdef LOG_RAM
@@ -118,6 +118,16 @@ module wrapper_ram
 `else
     // During synthesis, initialize to zero
     ram = '{default: '0};
+`endif
+
+`ifdef SYNTHESIS
+    $readmemh("coremark.mem", temp_ram);
+    // Pack words into cache lines
+    for (int i = 0; i < LINE_DEPTH; i++) begin
+      for (int j = 0; j < WORDS_PER_LINE; j++) begin
+        ram[i][j*WORD_WIDTH+:WORD_WIDTH] = temp_ram[i*WORDS_PER_LINE+j];
+      end
+    end
 `endif
   end
 
