@@ -51,20 +51,20 @@ end
 // Note: This code should be included inside dcache_impl block where write_back is defined
 always @(posedge clk_i) begin
   if (rst_ni && cache_req_q.valid) begin
-    automatic logic         hit = cache_hit;
-    automatic logic         miss = cache_miss;
-    automatic logic         wb = write_back;
-    automatic logic  [31:0] addr = cache_req_q.addr;
-    automatic logic         lowX_valid = lowX_req_o.valid;
-    automatic logic         lowX_ready = lowX_req_o.ready;
-    automatic logic         lowX_res_r = lowX_res_i.ready;
-    automatic logic         lowX_res_v = lowX_res_i.valid;
-    automatic logic  [ 3:0] valid_vec = cache_valid_vec;
-    automatic logic  [ 3:0] dirty_vec = drsram_rd_rdirty;
-    automatic logic  [31:0] evict_tag = evict_tag;
-    automatic logic  [31:0] req_tag = addr[31:10];  // Assuming 10 bits for idx+offset
-    automatic logic  [ 3:0] set_idx = rd_idx;
-    automatic string        event_str = "";
+    automatic logic                  hit = cache_hit;
+    automatic logic                  miss = cache_miss;
+    automatic logic                  wb = write_back;
+    automatic logic  [         31:0] addr = cache_req_q.addr;
+    automatic logic                  lowX_valid = lowX_req_o.valid;
+    automatic logic                  lowX_ready = lowX_req_o.ready;
+    automatic logic                  lowX_res_r = lowX_res_i.ready;
+    automatic logic                  lowX_res_v = lowX_res_i.valid;
+    automatic logic  [  NUM_WAY-1:0] valid_vec = cache_valid_vec;
+    automatic logic  [  NUM_WAY-1:0] dirty_vec = drsram_rd_rdirty;
+    automatic logic  [ TAG_SIZE-1:0] evict_tag_l = evict_tag;
+    automatic logic  [ TAG_SIZE-1:0] req_tag = addr[XLEN-1:IDX_WIDTH+BOFFSET];
+    automatic logic  [IDX_WIDTH-1:0] set_idx = rd_idx;
+    automatic string                 event_str = "";
 
     // Determine event type
     if (wb && lowX_res_v) begin
@@ -86,7 +86,7 @@ always @(posedge clk_i) begin
     end
 
     // Log entry in table format
-    $fwrite(dcache_log_fd, "║ %5d ║ %08h ║  %s  ║  %s  ║   %s   ║    %b     ║   %b     %b    ║  %b  ║  %b  ║ %b ║ %07h ║ %07h ║   %02h    ║ %-14s ║\n",
+    $fwrite(dcache_log_fd, "║ %5d ║ %08h ║  %s   ║  %s   ║   %s   ║    %b     ║   %b        %b    ║%b ║  %b  ║%b ║ %07h ║ %07h ║   %02h    ║ %-14s ║\n",
             $time / 10,  // Cycle (assuming 10ns period)
             addr,  // Address
             hit ? "Y" : "N",  // Hit?
@@ -118,10 +118,10 @@ end
 // Log fence.i events
 always @(posedge clk_i) begin
   if (rst_ni && fi_active) begin
-    automatic logic  [2:0] fi_state = fi_state_q;
-    automatic logic  [3:0] fi_set = fi_set_idx_q;
-    automatic logic  [1:0] fi_way = fi_way_idx_q;
-    automatic string       state_name = "";
+    automatic logic  [          2:0] fi_state = fi_state_q;
+    automatic logic  [IDX_WIDTH-1:0] fi_set = fi_set_idx_q;
+    automatic logic  [          1:0] fi_way = fi_way_idx_q;
+    automatic string                 state_name = "";
 
     case (fi_state)
       0:       state_name = "FI_IDLE";

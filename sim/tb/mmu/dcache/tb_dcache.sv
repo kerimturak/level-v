@@ -63,6 +63,7 @@ module tb_icache;
 
   // Instance of the icache module
   cache #(
+      .IS_ICACHE  (0),
       .cache_req_t(cache_req_t),
       .cache_res_t(cache_res_t),
       .lowX_req_t (lowX_req_t),

@@ -52,15 +52,15 @@ module cache
   // 2-state simulation may evaluate them in wrong order without this directive.
   // See: docs/verilator/bugs/002_combinational_loop_instruction_corruption.md
   // ============================================================================
-  logic       [IDX_WIDTH-1:0] cache_idx  /*verilator split_var*/;
+  logic       [IDX_WIDTH-1:0] cache_idx;
   logic                       cache_miss;
   logic                       cache_hit;
-  logic       [  NUM_WAY-2:0] updated_node  /*verilator split_var*/;
-  logic       [  NUM_WAY-1:0] cache_valid_vec  /*verilator split_var*/;
+  logic       [  NUM_WAY-2:0] updated_node;
+  logic       [  NUM_WAY-1:0] cache_valid_vec;
   logic       [  NUM_WAY-1:0] cache_hit_vec;
-  logic       [  NUM_WAY-1:0] evict_way  /*verilator split_var*/;
-  logic       [ BLK_SIZE-1:0] cache_select_data  /*verilator split_var*/;
-  logic       [  NUM_WAY-1:0] cache_wr_way  /*verilator split_var*/;
+  logic       [  NUM_WAY-1:0] evict_way;
+  logic       [ BLK_SIZE-1:0] cache_select_data;
+  logic       [  NUM_WAY-1:0] cache_wr_way;
   logic                       cache_wr_en;
   logic                       lookup_ack;
 
@@ -87,9 +87,9 @@ module cache
   } nsram_t;
 
   // VERILATOR FIX: Struct types also need split_var for circular dependency resolution
-  dsram_t                 dsram  /*verilator split_var*/;
-  tsram_t                 tsram  /*verilator split_var*/;
-  nsram_t                 nsram  /*verilator split_var*/;
+  dsram_t                 dsram;
+  tsram_t                 tsram;
+  nsram_t                 nsram;
 
   // Dirty SRAM signals - broken out to avoid combinatorial loops
   logic   [IDX_WIDTH-1:0] drsram_wr_idx;
@@ -171,6 +171,7 @@ module cache
     );
   end
 
+  /* verilator lint_off UNOPTFLAT */
   sp_bram #(
       .DATA_WIDTH(NUM_WAY - 1),
       .NUM_SETS  (NUM_SET)
@@ -182,11 +183,43 @@ module cache
       .wr_data(nsram.wnode),
       .rd_data(nsram.rnode)
   );
+  /* verilator lint_on UNOPTFLAT */
+
+  // Register the node read from BRAM to break combinational loops for PLRU
+  logic [NUM_WAY-2:0] node_q;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) node_q <= '0;
+    else node_q <= nsram.rnode;
+  end
 
   // PLRU functions (assume update_node and compute_evict_way are defined elsewhere)
   always_comb begin
-    updated_node = update_node(nsram.rnode, cache_wr_way);
-    evict_way    = compute_evict_way(nsram.rnode);
+
+    // Prefer an invalid way (if any) when allocating a new line. If all ways
+    // are valid, fall back to PLRU candidate computed from the node bits.
+    logic [NUM_WAY-1:0] invalid_mask;
+    logic [NUM_WAY-1:0] plru_candidate;
+    logic               found_invalid;
+    updated_node = update_node(node_q, cache_wr_way);
+
+
+    invalid_mask = ~cache_valid_vec;
+    plru_candidate = compute_evict_way(node_q);
+
+    evict_way = '0;
+    found_invalid = 1'b0;
+    for (int ii = 0; ii < NUM_WAY; ii++) begin
+      if (!found_invalid && invalid_mask[ii]) begin
+        evict_way[ii] = 1'b1;
+        found_invalid = 1'b1;
+      end else begin
+        evict_way[ii] = 1'b0;
+      end
+    end
+
+    if (!found_invalid) begin
+      evict_way = plru_candidate;
+    end
   end
 
   // Common tag and data selection logic
@@ -588,7 +621,10 @@ module cache
       drsram_wr_rw_en  = drsram_rw_en_temp;
 
       // During fence.i, use fi_set_idx_q for reading dirty bits
-      drsram_wr_idx    = drsram_idx_temp;
+      // When clearing dirty bit after a writeback completes (WB_DONE), make
+      // sure we target the index of the evicted line captured by the FSM
+      // (wb_evict_idx_q). Otherwise we may clear the wrong set's dirty bit.
+      drsram_wr_idx    = (wb_state_q == WB_DONE) ? wb_evict_idx_q : drsram_idx_temp;
 
       for (int i = 0; i < NUM_WAY; i++) begin
         if (fi_mark_clean) begin
