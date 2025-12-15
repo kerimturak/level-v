@@ -99,10 +99,13 @@ module mul_pipelined #(
     end else begin
       if (stage1_valid) begin
         // Accumulate with proper shifts (truncate to 64 bits)
-        result       <= (({56'b0, prod_q0}) +  // No shift
- ({48'b0, prod_q1} << 8) +  // Shift by 8
- ({40'b0, prod_q2} << 16) +  // Shift by 16
- ({32'b0, prod_q3} << 24));  // Shift by 24, then truncate
+        // Pad each partial product so the intermediate addends are 64 bits
+        // prod_q* are 40 bits (XLEN + 8) so compute padding = 64 - width - shift
+        result <= (({24'b0, prod_q0}) +  // No shift: 24 + 40 = 64
+        (({16'b0, prod_q1}) << 8) +  // Pre-pad to 56, <<8 -> 64
+        (({8'b0, prod_q2}) << 16) +  // Pre-pad to 48, <<16 -> 64
+        (prod_q3 << 24)  // prod_q3 is 40 bits, <<24 -> 64
+        );
 
         stage2_valid <= 1'b1;
       end else begin

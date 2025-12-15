@@ -306,6 +306,43 @@ module cache
     logic                 write_back;  // Combinational signal indicating writeback needed
     logic                 wb_in_progress;  // Registered signal indicating writeback FSM active
 
+    // ============================================================================
+    // FENCE.I Dirty Writeback State Machine
+    // ----------------------------------------------------------------------------
+    // When fence.i is issued (flush_i rises), dcache must:
+    // 1. Scan all sets and all ways for dirty lines
+    // 2. Write dirty lines back to memory
+    // 3. Mark written lines as clean
+    // 4. Assert fencei_stall_o until all dirty lines are written back
+    // 5. IMPORTANT: Dcache does NOT invalidate lines on fence.i, only writes back dirty data
+    // ============================================================================
+    // 3. Mark written lines as clean
+    // 4. Assert fencei_stall_o until all dirty lines are written back
+    // ============================================================================
+    typedef enum logic [2:0] {
+      FI_IDLE,            // Normal operation
+      FI_SCAN,            // Scanning sets for dirty lines
+      FI_CHECK_WAY,       // Check each way for dirty data
+      FI_WRITEBACK_REQ,   // Send writeback request to memory
+      FI_WRITEBACK_WAIT,  // Wait for writeback completion
+      FI_MARK_CLEAN,      // Mark the line as clean
+      FI_NEXT_WAY,        // Move to next way
+      FI_DONE             // Writeback complete
+    } fencei_state_e;
+
+    fencei_state_e fi_state_q, fi_state_d;
+    logic [IDX_WIDTH-1:0] fi_set_idx_q, fi_set_idx_d;
+    logic [$clog2(NUM_WAY)-1:0] fi_way_idx_q, fi_way_idx_d;
+    logic                fi_active;
+    logic                fi_writeback_req;
+    logic [TAG_SIZE-1:0] fi_evict_tag;
+    logic [BLK_SIZE-1:0] fi_evict_data;
+    logic [    XLEN-1:0] fi_evict_addr;
+    logic                fi_mark_clean;
+    logic [ NUM_WAY-1:0] fi_way_onehot;
+    logic                fi_has_dirty;
+    logic                flush_i_prev;  // To detect rising edge
+
     // Writeback FSM
     always_ff @(posedge clk_i) begin
       if (!rst_ni) begin
@@ -358,43 +395,6 @@ module cache
         default: wb_state_d = WB_IDLE;
       endcase
     end
-
-    // ============================================================================
-    // FENCE.I Dirty Writeback State Machine
-    // ----------------------------------------------------------------------------
-    // When fence.i is issued (flush_i rises), dcache must:
-    // 1. Scan all sets and all ways for dirty lines
-    // 2. Write dirty lines back to memory
-    // 3. Mark written lines as clean
-    // 4. Assert fencei_stall_o until all dirty lines are written back
-    // 5. IMPORTANT: Dcache does NOT invalidate lines on fence.i, only writes back dirty data
-    // ============================================================================
-    // 3. Mark written lines as clean
-    // 4. Assert fencei_stall_o until all dirty lines are written back
-    // ============================================================================
-    typedef enum logic [2:0] {
-      FI_IDLE,            // Normal operation
-      FI_SCAN,            // Scanning sets for dirty lines
-      FI_CHECK_WAY,       // Check each way for dirty data
-      FI_WRITEBACK_REQ,   // Send writeback request to memory
-      FI_WRITEBACK_WAIT,  // Wait for writeback completion
-      FI_MARK_CLEAN,      // Mark the line as clean
-      FI_NEXT_WAY,        // Move to next way
-      FI_DONE             // Writeback complete
-    } fencei_state_e;
-
-    fencei_state_e fi_state_q, fi_state_d;
-    logic [IDX_WIDTH-1:0] fi_set_idx_q, fi_set_idx_d;
-    logic [$clog2(NUM_WAY)-1:0] fi_way_idx_q, fi_way_idx_d;
-    logic                fi_active;
-    logic                fi_writeback_req;
-    logic [TAG_SIZE-1:0] fi_evict_tag;
-    logic [BLK_SIZE-1:0] fi_evict_data;
-    logic [    XLEN-1:0] fi_evict_addr;
-    logic                fi_mark_clean;
-    logic [ NUM_WAY-1:0] fi_way_onehot;
-    logic                fi_has_dirty;
-    logic                flush_i_prev;  // To detect rising edge
 
     // Detect rising edge of flush_i
     always_ff @(posedge clk_i) begin

@@ -475,7 +475,6 @@ verilate: dirs
 		$(SV_SOURCES) $(LOGGER_SRC) \
 		$(VERILATOR_COMMON_FLAGS) \
 		$(VERILATOR_BUILD_FLAGS) \
-		$(NO_WARNING) \
 		$(VERILATOR_DEFINE)
 	@printf "$(GREEN)[SUCCESS]$(RESET) Built: $(RUN_BIN)\n"
 
