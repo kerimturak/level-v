@@ -87,11 +87,8 @@ module cache
   } nsram_t;
 
   // VERILATOR FIX: Struct types also need split_var for circular dependency resolution
-  /* verilator split_var */
   dsram_t                 dsram;
-  /* verilator split_var */
   tsram_t                 tsram;
-  /* verilator split_var */
   nsram_t                 nsram;
 
   // Dirty SRAM signals - broken out to avoid combinatorial loops
@@ -306,7 +303,7 @@ module cache
     logic [ TAG_SIZE-1:0] wb_evict_tag_q;
     logic [ BLK_SIZE-1:0] wb_evict_data_q;
     logic [IDX_WIDTH-1:0] wb_evict_idx_q;
-    logic                 write_back;  // Combinational signal indicating writeback needed
+    // write_back signal already declared at module level (line 113)
     logic                 wb_in_progress;  // Registered signal indicating writeback FSM active
 
     // ============================================================================
@@ -600,11 +597,11 @@ module cache
 `ifdef LOG_CACHE_DEBUG
       // Debug logging for cache operations
       // Moved here to avoid combinational loop with write_back in FIRST block
-      if (cache_req_q.valid && !IS_ICACHE) begin
-        if (write_back) begin
-          $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h valid=%b ready=%b lowX_ready=%b lowX_valid=%b", $time, cache_req_q.addr, {evict_tag, rd_idx, {BOFFSET{1'b0}}},
-                   lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
-        end
+      // Use registered FSM values (wb_evict_*) to avoid ALWCOMBORDER warning
+      if (wb_in_progress && !IS_ICACHE) begin
+        $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h state=%0d valid=%b ready=%b lowX_ready=%b lowX_valid=%b",
+                 $time, cache_req_q.addr, {wb_evict_tag_q, wb_evict_idx_q, {BOFFSET{1'b0}}},
+                 wb_state_q, lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
       end
 `endif
 

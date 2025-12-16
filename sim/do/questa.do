@@ -20,6 +20,31 @@ set WildcardFilter [lsearch -not -all -inline $WildcardFilter Generic]
 
 set WildcardSizeThreshold 163840
 
+# Safe add-wave wrapper: in batch/non-GUI runs some wave commands fail
+# so use this wrapper to catch and log errors without aborting the script.
+proc aw {args} {
+	if {[catch {eval add $args} err]} {
+		puts "WARN: add wave failed: $err"
+	}
+}
+
+# Wrap generic 'add' command so 'add wave' or other add-* calls
+# won't abort the script in non-GUI/batch mode.
+if {[llength [info commands add]] > 0} {
+	rename add _add
+	proc add {args} {
+		# If the add call requests a divider/separator, skip it (user prefers no separators)
+		foreach a $args {
+			if {[string match *divider* $a]} {
+				return
+			}
+		}
+		if {[catch {eval _add $args} err]} {
+			puts "WARN: add failed: $err"
+		}
+	}
+}
+
 ################## Wave Configuration ##################
 configure wave -namecolwidth 300
 configure wave -valuecolwidth 120
@@ -36,7 +61,7 @@ configure wave -timeline 0
 configure wave -timelineunits ns
 
 ################## Hierarchy Paths ##################
-set TB            "sim:/tb_wrapper"
+set TB            "/tb_wrapper"
 set WRAPPER       "$TB/ceres_wrapper"
 set CPU           "$WRAPPER/i_soc"
 set FETCH         "$CPU/i_fetch"
@@ -54,6 +79,13 @@ set COMP_DECODER  "$FETCH/i_compressed_decoder"
 set GSHARE        "$FETCH/i_gshare_bp"
 set RAS           "$GSHARE/i_ras"
 set IPMA          "$FETCH/i_pma"
+
+# Also add full hierarchical tree for the testbench and key modules so
+# the Wave window shows actual nested hierarchy instead of flat groups.
+# Uses the safe wrapper `aw` to avoid failing in batch mode.
+aw -noupdate -recursive $TB
+aw -noupdate -recursive $WRAPPER
+aw -noupdate -recursive $CPU
 
 # Decode submodules
 set CTRL_UNIT     "$DECODE/i_control_unit"
@@ -87,14 +119,14 @@ add wave -noupdate -divider -height 20 {=============== TESTBENCH ==============
 
 add wave -noupdate -group "TB_WRAPPER" -group "Inputs" -color Gold $TB/clk_i
 add wave -noupdate -group "TB_WRAPPER" -group "Inputs" -color Orange $TB/rst_ni
-add wave -noupdate -group "TB_WRAPPER" -group "Inputs" $TB/program_rx_i
-add wave -noupdate -group "TB_WRAPPER" -group "Inputs" $TB/uart_rx_i
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" $TB/prog_rx_i
+add wave -noupdate -group "TB_WRAPPER" -group "Inputs" $TB/uart0_rx_i
 add wave -noupdate -group "TB_WRAPPER" -group "Inputs" $TB/spi0_miso_i
 add wave -noupdate -group "TB_WRAPPER" -group "Inputs" -radix hexadecimal $TB/gpio_i
 add wave -noupdate -group "TB_WRAPPER" -group "Inputs" -radix hexadecimal $TB/ext_irq_i
 
-add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/prog_mode_led_o
-add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/uart_tx_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/prog_mode_o
+add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/uart0_tx_o
 add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/spi0_sclk_o
 add wave -noupdate -group "TB_WRAPPER" -group "Outputs" $TB/spi0_mosi_o
 add wave -noupdate -group "TB_WRAPPER" -group "Outputs" -radix hexadecimal $TB/spi0_ss_o
@@ -112,14 +144,14 @@ add wave -noupdate -divider -height 20 {=============== CERES_WRAPPER ==========
 
 add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" -color Gold $WRAPPER/clk_i
 add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" -color Orange $WRAPPER/rst_ni
-add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" $WRAPPER/uart_rx_i
-add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" $WRAPPER/program_rx_i
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" $WRAPPER/uart0_rx_i
+add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" $WRAPPER/prog_rx_i
 add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" $WRAPPER/spi0_miso_i
 add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" -radix hexadecimal $WRAPPER/gpio_i
 add wave -noupdate -group "CERES_WRAPPER" -group "Inputs" -radix hexadecimal $WRAPPER/ext_irq_i
 
-add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/uart_tx_o
-add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/prog_mode_led_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/uart0_tx_o
+add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/prog_mode_o
 add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/spi0_sclk_o
 add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" $WRAPPER/spi0_mosi_o
 add wave -noupdate -group "CERES_WRAPPER" -group "Outputs" -radix hexadecimal $WRAPPER/spi0_ss_o

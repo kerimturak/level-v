@@ -120,7 +120,7 @@ always @(posedge clk_i) begin
   if (rst_ni && fi_active) begin
     automatic logic  [          2:0] fi_state = fi_state_q;
     automatic logic  [IDX_WIDTH-1:0] fi_set = fi_set_idx_q;
-    automatic logic  [          2:0] fi_way = fi_way_idx_q;
+    automatic logic  [$clog2(NUM_WAY)-1:0] fi_way = fi_way_idx_q;
     automatic string                 state_name = "";
 
     case (fi_state)
