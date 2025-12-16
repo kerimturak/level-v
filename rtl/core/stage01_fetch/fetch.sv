@@ -48,11 +48,15 @@ module fetch
   logic        [XLEN-1:0] pc_next;
   logic                   pc_en;
   logic                   fetch_valid;
+  logic                   fetch_valid_reg;  // Registered fetch_valid for gshare_bp
   logic                   uncached;
+  logic                   uncached_next;
   /* verilator lint_off UNUSEDSIGNAL */
   logic                   memregion;
+  logic                   memregion_next;
   /* verilator lint_on UNUSEDSIGNAL */
   logic                   grand;
+  logic                   grand_next;
   logic                   illegal_instr;
   logic                   is_comp;
   abuff_res_t             buff_res;
@@ -74,12 +78,21 @@ module fetch
   // ============================================================================
   // PC Register: Program Counter yönetimi
   // Reset'te RESET_VECTOR'e atanır, aksi halde pc_en aktifken güncellenir
+  // PMA attributes are registered together with PC to break combinational loop
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      pc <= RESET_VECTOR;
+      pc              <= RESET_VECTOR;
+      uncached        <= 1'b0;        // Reset vector is cached
+      grand           <= 1'b1;        // Reset vector is executable
+      memregion       <= 1'b1;        // Reset vector is valid memory
+      fetch_valid_reg <= 1'b0;        // No valid fetch at reset
     end else if (pc_en) begin
-      pc <= pc_next;
+      pc              <= pc_next;
+      uncached        <= uncached_next;
+      grand           <= grand_next;
+      memregion       <= memregion_next;
+      fetch_valid_reg <= fetch_valid;  // Register fetch_valid to break comb loop
     end
   end
 
@@ -251,12 +264,14 @@ module fetch
   // ============================================================================
   // Physical Memory Attributes (PMA) Module: Bellek bölgesinin özelliklerini
   // belirler (cached/uncached, erişim izni vb.)
+  // PMA lookup is done for pc_next (combinational), but result is registered
+  // together with PC to break combinational loop while maintaining zero-cycle latency
   // ============================================================================
   pma i_pma (
-      .addr_i     (pc_o),
-      .uncached_o (uncached),
-      .memregion_o(memregion),  // TODO:Şu an kullanılmıyor
-      .grand_o    (grand)
+      .addr_i     (pc_next),
+      .uncached_o (uncached_next),
+      .memregion_o(memregion_next),
+      .grand_o    (grand_next)
   );
 
   // ============================================================================
@@ -271,7 +286,7 @@ module fetch
       .stall_i      (!pc_en),
       .pc_i         (pc_o),
       .pc_incr_i    (pc_incr_o),
-      .fetch_valid_i(buff_res.valid),
+      .fetch_valid_i(fetch_valid_reg),  // Use registered fetch_valid to break comb loop
       .spec_o       (spec_o),
       .de_info_i    (de_info_i),
       .ex_info_i    (ex_info_i)

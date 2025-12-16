@@ -87,8 +87,11 @@ module cache
   } nsram_t;
 
   // VERILATOR FIX: Struct types also need split_var for circular dependency resolution
+  /* verilator split_var */
   dsram_t                 dsram;
+  /* verilator split_var */
   tsram_t                 tsram;
+  /* verilator split_var */
   nsram_t                 nsram;
 
   // Dirty SRAM signals - broken out to avoid combinatorial loops
@@ -561,15 +564,6 @@ module cache
       mask_data   = cache_hit ? cache_select_data : lowX_res_i.data;
       data_wr_pre = mask_data;
 
-`ifdef LOG_CACHE_DEBUG
-      // Debug logging for cache operations
-      if (cache_req_q.valid && !IS_ICACHE) begin
-        if (write_back) begin
-          $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h valid=%b ready=%b lowX_ready=%b lowX_valid=%b", $time, cache_req_q.addr, {evict_tag, rd_idx, {BOFFSET{1'b0}}},
-                   lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
-        end
-      end
-`endif
       case (cache_req_q.rw_size)
         2'b11: data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
         2'b10: data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
@@ -602,6 +596,17 @@ module cache
       if (cache_miss && !wb_in_progress) begin
         write_back = |(drsram_rd_rdirty & evict_way & cache_valid_vec);
       end
+
+`ifdef LOG_CACHE_DEBUG
+      // Debug logging for cache operations
+      // Moved here to avoid combinational loop with write_back in FIRST block
+      if (cache_req_q.valid && !IS_ICACHE) begin
+        if (write_back) begin
+          $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h valid=%b ready=%b lowX_ready=%b lowX_valid=%b", $time, cache_req_q.addr, {evict_tag, rd_idx, {BOFFSET{1'b0}}},
+                   lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
+        end
+      end
+`endif
 
       // Block data/tag array writes during writeback FSM operation
       data_array_wr_en = ((cache_hit && cache_req_q.rw) ||

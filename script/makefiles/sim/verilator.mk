@@ -735,6 +735,22 @@ clean_verilator_deep: clean_verilator
 	@find "$(BUILD_DIR)" -name "*.d" -delete 2>/dev/null || true
 	@find "$(BUILD_DIR)" -name "*.o" -delete 2>/dev/null || true
 
+# Clean ccache - use this when encountering strange C++ compilation errors
+# after Verilator upgrade or when build fails with "invalid preprocessing directive"
+clean_ccache:
+	@echo -e "$(YELLOW)[CLEANING CCACHE]$(RESET) Clearing compiler cache..."
+	@if command -v ccache >/dev/null 2>&1; then \
+		ccache -C; \
+		echo -e "$(GREEN)[OK]$(RESET) ccache cleared successfully"; \
+		ccache -s | head -15; \
+	else \
+		echo -e "$(YELLOW)[INFO]$(RESET) ccache not installed"; \
+	fi
+
+# Nuclear clean - everything including ccache
+clean_verilator_nuclear: clean_verilator_deep clean_ccache
+	@echo -e "$(RED)[NUCLEAR CLEAN COMPLETE]$(RESET)"
+
 # ============================================================
 # Help
 # ============================================================
@@ -775,8 +791,10 @@ verilator_help:
 	@echo -e "  $(GREEN)coverage-html     $(RESET)– Generate HTML report"
 	@echo -e ""
 	@echo -e "$(YELLOW)Clean Targets:$(RESET)"
-	@echo -e "  $(GREEN)clean_verilator   $(RESET)– Clean build files"
-	@echo -e "  $(GREEN)clean_verilator_deep$(RESET)– Deep clean including .d/.o files"
+	@echo -e "  $(GREEN)clean_verilator      $(RESET)– Clean build files"
+	@echo -e "  $(GREEN)clean_verilator_deep $(RESET)– Deep clean including .d/.o files"
+	@echo -e "  $(GREEN)clean_ccache         $(RESET)– Clear compiler cache (fix build errors)"
+	@echo -e "  $(GREEN)clean_verilator_nuclear$(RESET)– Nuclear clean (everything + ccache)"
 	@echo -e ""
 	@echo -e "$(YELLOW)Configuration:$(RESET)"
 	@echo -e "  $(CYAN)Config file$(RESET): script/config/verilator.json"
