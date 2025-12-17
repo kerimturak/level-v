@@ -816,7 +816,7 @@ Examples:
     # Test type
     parser.add_argument(
         "--test-type",
-        choices=["isa", "arch", "imperas", "bench", "coremark", "embench", "dhrystone", "torture", "custom", "riscv-dv"],
+        choices=["isa", "arch", "imperas", "bench", "coremark", "coremark-minimal", "embench", "dhrystone", "torture", "custom", "riscv-dv"],
         help="Test type (auto-detected if not specified)"
     )
     

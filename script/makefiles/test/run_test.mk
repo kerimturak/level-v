@@ -68,6 +68,8 @@ else ifeq ($(TEST_TYPE),dhrystone)
     TEST_ROOT := $(BUILD_DIR)/tests/dhrystone
 else ifeq ($(TEST_TYPE),coremark)
     TEST_ROOT := $(BUILD_DIR)/tests/coremark
+else ifeq ($(TEST_TYPE),coremark-minimal)
+    TEST_ROOT := $(BUILD_DIR)/tests/coremark-minimal
 else ifeq ($(TEST_TYPE),embench)
     TEST_ROOT := $(BUILD_DIR)/tests/embench
 else ifeq ($(TEST_TYPE),torture)
