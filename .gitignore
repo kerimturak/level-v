@@ -16,3 +16,5 @@ riscv-unprivileged.pdf
 site/
 */__pycache__/
 *.pyc
+!env/coremark/spike-pk/
+!env/coremark/spike-pk/**
