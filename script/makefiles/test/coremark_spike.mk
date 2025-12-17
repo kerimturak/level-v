@@ -20,13 +20,16 @@ SPIKE_BIN := $(shell which spike || echo /home/kerim/tools/spike/bin/spike)
 PK_BIN := $(shell which pk || echo /home/kerim/tools/pk32/riscv32-unknown-elf/bin/pk)
 SPIKE_ISA := rv32imc
 
+# Spike log directory (matching Ceres-V structure in results/)
+COREMARK_SPIKE_LOG_DIR := $(RESULTS_DIR)/logs/spike/coremark
+
 # Output files for spike-pk
 COREMARK_SPIKE_EXE := $(COREMARK_SPIKE_BUILD_DIR)/coremark.exe
-COREMARK_SPIKE_LOG := $(COREMARK_SPIKE_BUILD_DIR)/coremark_spike.log
-COREMARK_SPIKE_COMMITS := $(COREMARK_SPIKE_BUILD_DIR)/spike_commits.log
+COREMARK_SPIKE_LOG := $(COREMARK_SPIKE_LOG_DIR)/uart_output.log
+COREMARK_SPIKE_COMMITS := $(COREMARK_SPIKE_LOG_DIR)/spike_commits.log
 
 # Comparison output
-COREMARK_COMPARE_DIR := $(BUILD_DIR)/tests/coremark-compare
+COREMARK_COMPARE_DIR := $(RESULTS_DIR)/comparison/coremark
 COREMARK_COMPARE_REPORT := $(COREMARK_COMPARE_DIR)/comparison_report.txt
 
 # ============================================================
@@ -78,6 +81,12 @@ coremark_spike_run: coremark_spike_build
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Running CoreMark on Spike + pk$(RESET)"
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@# Clean previous Spike logs
+	@if [ -d "$(COREMARK_SPIKE_LOG_DIR)" ]; then \
+		echo -e "$(CYAN)[CLEAN]$(RESET) Removing previous Spike logs: $(COREMARK_SPIKE_LOG_DIR)"; \
+		rm -rf "$(COREMARK_SPIKE_LOG_DIR)"; \
+	fi
+	@$(MKDIR) "$(COREMARK_SPIKE_LOG_DIR)"
 	@if [ ! -f "$(SPIKE_BIN)" ]; then \
 		echo -e "$(RED)[ERROR] Spike not found at: $(SPIKE_BIN)$(RESET)"; \
 		exit 1; \
@@ -86,9 +95,10 @@ coremark_spike_run: coremark_spike_build
 		echo -e "$(RED)[ERROR] pk not found at: $(PK_BIN)$(RESET)"; \
 		exit 1; \
 	fi
-	@echo -e "$(YELLOW)[INFO] Spike: $(SPIKE_BIN)$(RESET)"
-	@echo -e "$(YELLOW)[INFO] pk:    $(PK_BIN)$(RESET)"
-	@echo -e "$(YELLOW)[INFO] ISA:   $(SPIKE_ISA)$(RESET)"
+	@echo -e "$(YELLOW)[INFO] Spike:    $(SPIKE_BIN)$(RESET)"
+	@echo -e "$(YELLOW)[INFO] pk:       $(PK_BIN)$(RESET)"
+	@echo -e "$(YELLOW)[INFO] ISA:      $(SPIKE_ISA)$(RESET)"
+	@echo -e "$(YELLOW)[INFO] Log Dir:  $(COREMARK_SPIKE_LOG_DIR)$(RESET)"
 	@echo -e "$(YELLOW)[INFO] Running CoreMark with commit logging...$(RESET)"
 	@$(SPIKE_BIN) --isa=$(SPIKE_ISA) \
 		--log-commits \
@@ -126,6 +136,11 @@ coremark_both: coremark coremark_spike_build
 # 5. Compare Ceres-V vs Spike Results
 # ============================================================
 
+# Compare script
+COMPARE_SCRIPT := $(SCRIPT_DIR)/python/makefile/compare_logs.py
+COREMARK_DIFF_LOG := $(COREMARK_COMPARE_DIR)/diff.log
+COREMARK_DIFF_HTML := $(COREMARK_COMPARE_DIR)/diff.html
+
 coremark_compare: coremark_both
 	@echo -e ""
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -135,57 +150,90 @@ coremark_compare: coremark_both
 	@mkdir -p $(COREMARK_COMPARE_DIR)
 	@# Step 1: Run on Ceres-V (Verilator)
 	@echo -e ""
-	@echo -e "$(YELLOW)═══ Step 1/3: Running on Ceres-V (Verilator) ═══$(RESET)"
+	@echo -e "$(YELLOW)═══ Step 1/4: Running on Ceres-V (Verilator) ═══$(RESET)"
 	@$(MAKE) --no-print-directory run_coremark COREMARK_ITERATIONS=$(COREMARK_ITERATIONS)
 	@# Step 2: Run on Spike
 	@echo -e ""
-	@echo -e "$(YELLOW)═══ Step 2/3: Running on Spike + pk ═══$(RESET)"
+	@echo -e "$(YELLOW)═══ Step 2/4: Running on Spike + pk ═══$(RESET)"
 	@$(MAKE) --no-print-directory coremark_spike_run COREMARK_ITERATIONS=$(COREMARK_ITERATIONS)
-	@# Step 3: Generate comparison
+	@# Step 3: Compare commit logs
 	@echo -e ""
-	@echo -e "$(YELLOW)═══ Step 3/3: Generating Comparison Report ═══$(RESET)"
-	@echo -e "$(CYAN)[COMPARE] Creating comparison report...$(RESET)"
-	@echo "======================================" > $(COREMARK_COMPARE_REPORT)
-	@echo "  CoreMark Comparison Report" >> $(COREMARK_COMPARE_REPORT)
-	@echo "  Ceres-V (Verilator) vs Spike (ISS)" >> $(COREMARK_COMPARE_REPORT)
-	@echo "======================================" >> $(COREMARK_COMPARE_REPORT)
-	@echo "" >> $(COREMARK_COMPARE_REPORT)
-	@echo "Iterations: $(COREMARK_ITERATIONS)" >> $(COREMARK_COMPARE_REPORT)
-	@echo "Date: $$(date)" >> $(COREMARK_COMPARE_REPORT)
-	@echo "" >> $(COREMARK_COMPARE_REPORT)
-	@echo "--- Ceres-V (Verilator) Output ---" >> $(COREMARK_COMPARE_REPORT)
+	@echo -e "$(YELLOW)═══ Step 3/4: Comparing Commit Logs ═══$(RESET)"
+	@CERES_LOG="$(COREMARK_LOG_DIR)/commit_trace.log"; \
+	SPIKE_LOG="$(COREMARK_SPIKE_COMMITS)"; \
+	if [ ! -f "$$CERES_LOG" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) Ceres-V commit log not found: $$CERES_LOG"; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$$SPIKE_LOG" ]; then \
+		echo -e "$(RED)[ERROR]$(RESET) Spike commit log not found: $$SPIKE_LOG"; \
+		exit 1; \
+	fi; \
+	echo -e "$(CYAN)[INFO]$(RESET) Ceres-V log: $$CERES_LOG"; \
+	echo -e "$(CYAN)[INFO]$(RESET) Spike log:   $$SPIKE_LOG"; \
+	echo -e "$(CYAN)[INFO]$(RESET) Running compare_logs.py..."; \
+	python3 $(COMPARE_SCRIPT) \
+		--rtl "$$CERES_LOG" \
+		--spike "$$SPIKE_LOG" \
+		--output "$(COREMARK_DIFF_LOG)" \
+		--test-name "coremark" \
+		--dump "$(COREMARK_BUILD_DIR)/coremark.dump" \
+		--skip-csr \
+		2>&1 | tee -a $(COREMARK_COMPARE_REPORT); \
+	COMPARE_EXIT=$$?; \
+	if [ $$COMPARE_EXIT -eq 0 ]; then \
+		echo -e "$(GREEN)✓ Commit logs match!$(RESET)"; \
+	else \
+		echo -e "$(YELLOW)[WARNING]$(RESET) Commit logs differ (expected for different implementations)"; \
+	fi
+	@# Step 4: Generate summary report
+	@echo -e ""
+	@echo -e "$(YELLOW)═══ Step 4/4: Generating Summary Report ═══$(RESET)"
+	@echo "======================================" > $(COREMARK_COMPARE_REPORT).tmp
+	@echo "  CoreMark Comparison Report" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "  Ceres-V (Verilator) vs Spike (ISS)" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "======================================" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "Iterations: $(COREMARK_ITERATIONS)" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "Date: $$(date)" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "--- Ceres-V (Verilator) Output ---" >> $(COREMARK_COMPARE_REPORT).tmp
 	@if [ -f "$(COREMARK_LOG_DIR)/uart_output.log" ]; then \
-		cat "$(COREMARK_LOG_DIR)/uart_output.log" >> $(COREMARK_COMPARE_REPORT); \
+		cat "$(COREMARK_LOG_DIR)/uart_output.log" >> $(COREMARK_COMPARE_REPORT).tmp; \
 	else \
-		echo "ERROR: Ceres-V log not found" >> $(COREMARK_COMPARE_REPORT); \
+		echo "ERROR: Ceres-V log not found" >> $(COREMARK_COMPARE_REPORT).tmp; \
 	fi
-	@echo "" >> $(COREMARK_COMPARE_REPORT)
-	@echo "--- Spike + pk Output ---" >> $(COREMARK_COMPARE_REPORT)
+	@echo "" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "--- Spike + pk Output ---" >> $(COREMARK_COMPARE_REPORT).tmp
 	@if [ -f "$(COREMARK_SPIKE_LOG)" ]; then \
-		cat "$(COREMARK_SPIKE_LOG)" >> $(COREMARK_COMPARE_REPORT); \
+		cat "$(COREMARK_SPIKE_LOG)" >> $(COREMARK_COMPARE_REPORT).tmp; \
 	else \
-		echo "ERROR: Spike log not found" >> $(COREMARK_COMPARE_REPORT); \
+		echo "ERROR: Spike log not found" >> $(COREMARK_COMPARE_REPORT).tmp; \
 	fi
-	@echo "" >> $(COREMARK_COMPARE_REPORT)
-	@echo "--- Commit Logs ---" >> $(COREMARK_COMPARE_REPORT)
-	@echo "Ceres-V commits: $(COREMARK_LOG_DIR)/ceres_commits.log" >> $(COREMARK_COMPARE_REPORT)
-	@echo "Spike commits:   $(COREMARK_SPIKE_COMMITS)" >> $(COREMARK_COMPARE_REPORT)
-	@echo "" >> $(COREMARK_COMPARE_REPORT)
-	@# Display report
+	@echo "" >> $(COREMARK_COMPARE_REPORT).tmp
+	@echo "--- Commit Log Comparison Summary ---" >> $(COREMARK_COMPARE_REPORT).tmp
+	@if [ -f "$(COREMARK_DIFF_LOG)" ]; then \
+		tail -100 "$(COREMARK_DIFF_LOG)" >> $(COREMARK_COMPARE_REPORT).tmp; \
+	fi
+	@mv $(COREMARK_COMPARE_REPORT).tmp $(COREMARK_COMPARE_REPORT)
+	@# Display summary
 	@echo -e ""
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Comparison Complete$(RESET)"
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@cat $(COREMARK_COMPARE_REPORT)
 	@echo -e ""
-	@echo -e "$(YELLOW)[REPORT]$(RESET) Full report saved to: $(COREMARK_COMPARE_REPORT)"
-	@echo -e "$(YELLOW)[CERES COMMITS]$(RESET) $(COREMARK_LOG_DIR)/ceres_commits.log"
-	@echo -e "$(YELLOW)[SPIKE COMMITS]$(RESET) $(COREMARK_SPIKE_COMMITS)"
+	@echo -e "$(YELLOW)[COMPARISON REPORT]$(RESET) $(COREMARK_COMPARE_REPORT)"
+	@echo -e "$(YELLOW)[DIFF LOG]$(RESET)          $(COREMARK_DIFF_LOG)"
+	@if [ -f "$(COREMARK_DIFF_HTML)" ]; then \
+		echo -e "$(YELLOW)[HTML REPORT]$(RESET)       $(COREMARK_DIFF_HTML)"; \
+	fi
+	@echo -e "$(YELLOW)[CERES COMMITS]$(RESET)     $(COREMARK_LOG_DIR)/commit_trace.log"
+	@echo -e "$(YELLOW)[SPIKE COMMITS]$(RESET)     $(COREMARK_SPIKE_COMMITS)"
 	@echo -e ""
-	@echo -e "$(CYAN)Use your Python comparison script to analyze commit logs:$(RESET)"
-	@echo -e "  python3 your_compare_script.py \\"
-	@echo -e "    $(COREMARK_LOG_DIR)/ceres_commits.log \\"
-	@echo -e "    $(COREMARK_SPIKE_COMMITS)"
+	@if [ -f "$(COREMARK_DIFF_LOG)" ]; then \
+		echo -e "$(CYAN)[COMPARISON SUMMARY]$(RESET)"; \
+		tail -50 "$(COREMARK_DIFF_LOG)"; \
+	fi
 
 # Short alias
 cm_compare: coremark_compare

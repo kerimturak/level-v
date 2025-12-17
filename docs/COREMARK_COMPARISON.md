@@ -25,8 +25,8 @@ make cm_spike COREMARK_ITERATIONS=10
 
 Output files:
 - `build/tests/coremark-spike/coremark.exe` - Binary for Spike
-- `build/tests/coremark-spike/coremark_spike.log` - Spike output
-- `build/tests/coremark-spike/spike_commits.log` - Instruction trace (commit log)
+- `results/logs/spike/coremark/uart_output.log` - Spike output
+- `results/logs/spike/coremark/spike_commits.log` - Instruction trace (commit log)
 
 ### 3. Run Full Comparison
 
@@ -47,11 +47,11 @@ Output files:
   - `ceres_commits.log` - Instruction commit log
   - `waveform.fst` - Waveform dump (if enabled)
 
-- **Spike logs**: `build/tests/coremark-spike/`
-  - `coremark_spike.log` - Spike output
+- **Spike logs**: `results/logs/spike/coremark/`
+  - `uart_output.log` - Spike output
   - `spike_commits.log` - Instruction commit log
 
-- **Comparison**: `build/tests/coremark-compare/`
+- **Comparison**: `results/comparison/coremark/`
   - `comparison_report.txt` - Side-by-side comparison
 
 ### 4. Quick Test (1 iteration)
@@ -136,7 +136,7 @@ After running the comparison, use your Python script to analyze the commit logs:
 # Compare instruction traces
 python3 your_compare_script.py \
     results/logs/verilator/coremark/ceres_commits.log \
-    build/tests/coremark-spike/spike_commits.log
+    results/logs/spike/coremark/spike_commits.log
 ```
 
 The commit logs contain:
@@ -219,7 +219,7 @@ make cm_compare COREMARK_ITERATIONS=10 MAX_CYCLES=50000000
 # Use your comparison script
 python3 compare_commits.py \
     results/logs/verilator/coremark/ceres_commits.log \
-    build/tests/coremark-spike/spike_commits.log
+    results/logs/spike/coremark/spike_commits.log
 ```
 
 ### 4. Check Results
@@ -228,10 +228,10 @@ python3 compare_commits.py \
 cat results/logs/verilator/coremark/uart_output.log
 
 # View Spike output
-cat build/tests/coremark-spike/coremark_spike.log
+cat results/logs/spike/coremark/uart_output.log
 
 # View comparison report
-cat build/tests/coremark-compare/comparison_report.txt
+cat results/comparison/coremark/comparison_report.txt
 ```
 
 ## File Locations
@@ -254,16 +254,19 @@ level-v/
 │   │   ├── coremark.elf
 │   │   ├── coremark.mem
 │   │   └── coremark.dump
-│   ├── coremark-spike/      # Spike build output
-│   │   ├── coremark.exe
-│   │   ├── coremark_spike.log
-│   │   └── spike_commits.log
-│   └── coremark-compare/    # Comparison output
-│       └── comparison_report.txt
-└── results/logs/verilator/coremark/  # Ceres-V sim logs
-    ├── uart_output.log
-    ├── ceres_commits.log
-    └── waveform.fst
+│   └── coremark-spike/      # Spike build output
+│       └── coremark.exe
+└── results/
+    ├── logs/
+    │   ├── verilator/coremark/    # Ceres-V simulation logs
+    │   │   ├── uart_output.log
+    │   │   ├── ceres_commits.log
+    │   │   └── waveform.fst
+    │   └── spike/coremark/        # Spike simulation logs
+    │       ├── uart_output.log
+    │       └── spike_commits.log
+    └── comparison/coremark/       # Comparison output
+        └── comparison_report.txt
 ```
 
 ## Configuration Files
