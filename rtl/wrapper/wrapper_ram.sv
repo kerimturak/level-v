@@ -116,18 +116,8 @@ module wrapper_ram
       ram = '{default: '0};
     end
 `else
-    // During synthesis, initialize to zero
-    ram = '{default: '0};
-`endif
-
-`ifdef SYNTHESIS
-    $readmemh("coremark.mem", temp_ram);
-    // Pack words into cache lines
-    for (int i = 0; i < LINE_DEPTH; i++) begin
-      for (int j = 0; j < WORDS_PER_LINE; j++) begin
-        ram[i][j*WORD_WIDTH+:WORD_WIDTH] = temp_ram[i*WORDS_PER_LINE+j];
-      end
-    end
+    // During synthesis, directly load 128-bit cache line format
+    $readmemh("coremark_128.mem", ram);
 `endif
   end
 

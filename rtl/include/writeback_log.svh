@@ -155,10 +155,8 @@ always @(posedge clk_i) begin
 
     // Automatic variable for CSR WARL behavior:
     // - mstatus (0x300): MPP always 11 for M-mode only
-    // - tselect (0x7A0): Read-only-zero (single trigger implementation)
-    automatic logic [31:0] csr_log_value = (csr_idx_i == 12'h300) ? 
-                                           (csr_wr_data_i | 32'h00001800) : 
-                                           (csr_idx_i == 12'h7A0) ? 32'h0 :  // tselect: always 0
+    automatic logic [31:0] csr_log_value = (csr_idx_i == 12'h300) ?
+                                           (csr_wr_data_i | 32'h00001800) :
                                            csr_wr_data_i;
 
     // ============================================================

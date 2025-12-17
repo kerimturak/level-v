@@ -374,8 +374,10 @@ module cs_reg_file
           //PMPADDR0,
           TDATA3: ;  // No-op
           TSELECT:  tselect_reg <= csr_wdata_i;  // WARL: accept writes, but only trigger 0 exists
-          TDATA1:   tdata1_reg <= csr_wdata_i;  // Trigger data 1 (writable)
-          TDATA2:   tdata2_reg <= csr_wdata_i;  // Trigger data 2 (breakpoint address)
+          // TDATA1/TDATA2: Always write to trigger 0 (Spike-compatible WARL behavior)
+          // Even if tselect != 0, writes go to trigger 0 since only trigger 0 is implemented
+          TDATA1:   tdata1_reg <= csr_wdata_i;  // Trigger data 1
+          TDATA2:   tdata2_reg <= csr_wdata_i;  // Trigger data 2
           TCONTROL: tcontrol_reg <= csr_wdata_i;  // Trigger control (writable)
           PMPCFG0:  pmpcfg0  <= csr_wdata_i;  // şimdilik düz RW
           PMPADDR0: pmpaddr0 <= csr_wdata_i;  // şimdilik düz RW
@@ -461,11 +463,12 @@ module cs_reg_file
         //PMPCFG0,
         //PMPADDR0,
         TDATA3: csr_rdata_o = 32'd0;
-        // TSELECT: WARL - accept writes but always read as 0 (only trigger 0 exists)
-        TSELECT:  csr_rdata_o = 32'd0;  // Only trigger slot 0 is implemented
-        // tdata1: Return written value (writable trigger data)
+        // TSELECT: WARL - reads back written value (trigger 0 is the only valid one)
+        TSELECT:  csr_rdata_o = tselect_reg;  // Read back written value
+        // TDATA1/TDATA2: Always return trigger 0 values (Spike-compatible WARL behavior)
+        // Since only trigger 0 is implemented, reads always return trigger 0 values
         TDATA1:   csr_rdata_o = tdata1_reg;
-        TDATA2:   csr_rdata_o = tdata2_reg;  // Breakpoint address
+        TDATA2:   csr_rdata_o = tdata2_reg;
         TCONTROL: csr_rdata_o = tcontrol_reg;  // Return written value
         PMPCFG0:  csr_rdata_o = pmpcfg0;
         PMPADDR0: csr_rdata_o = pmpaddr0;

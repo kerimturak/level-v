@@ -600,13 +600,13 @@ package ceres_param;
   // Memory -> Writeback
   typedef struct packed {
     logic [XLEN-1:0] pc_incr;
-    logic [XLEN-1:0] pc;
     logic            rf_rw_en;
     logic [1:0]      result_src;
     logic [4:0]      rd_addr;
     logic [XLEN-1:0] alu_result;
     logic [XLEN-1:0] read_data;
 `ifdef COMMIT_TRACER
+    logic [XLEN-1:0] pc;
     fe_tracer_info_t fe_tracer;
     logic            wr_en;
     logic [1:0]      rw_size;
