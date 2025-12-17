@@ -113,6 +113,14 @@ module memory
       .fencei_stall_o(fencei_stall_o)
   );
 
+`ifdef LOG_CACHE
+  cache_logger i_cache_logger (
+      .clk_i      (clk_i),
+      .rst_ni     (rst_ni),
+      .cache_req_i(dcache_req),
+      .cache_res_i(dcache_res)
+  );
+`endif
   logic [ 7:0] selected_byte;
   logic [15:0] selected_halfword;
 

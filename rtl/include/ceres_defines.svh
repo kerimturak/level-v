@@ -19,6 +19,7 @@
 // LOG_UART      : UART TX file logging (uart_tx.sv)
 // LOG_BP        : Branch predictor statistics (gshare_bp.sv)
 // LOG_BP_VERBOSE: Detailed per-branch logging (gshare_bp.sv)
+// LOG_CACHE     : Cache request/response table logging (cache_logger.sv)
 
 // ============================================================================
 // MINIMAL SOC - Fast Simulation Mode
@@ -43,10 +44,14 @@
 // ============================================================================
 // FEATURE FLAGS
 // ============================================================================
+// Cache implementation selection
+//`define USE_UNIFIED_CACHE // Unified cache module (cache.sv with icache/dcache)
+//`define USE_STANDALONE_DCACHE // Standalone dcache module (dcache.sv - writeback only)
+
 // Multiplier implementation (sadece biri aktif olmalı)
 // Priority: PIPELINED_MUL > WALLACE_SINGLE > DSP_MUL > Sequential
 `define FEAT_PIPELINED_MUL // Pipelined multiplier (2 cycles, better timing)
-`define LOG_CACHE_DEBUG // Pipelined multiplier (2 cycles, better timing)
+//`define LOG_CACHE_DEBUG // Cache debug logging (use LOG_CACHE=1 in Makefile)
 // Breaks 32x32 into 4x 8x32 muls for reduced logic depth
 //`define FEAT_WALLACE_SINGLE // Tek cycle Wallace tree (deep comb logic)
 //`define FEAT_WALLACE_MULTI   // Multi-cycle Wallace tree
