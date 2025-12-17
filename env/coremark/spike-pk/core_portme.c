@@ -83,21 +83,23 @@ void portable_init(core_portable *p, int *argc, char *argv[])
     (void)argc;
     (void)argv;
 
-    printf("\n");
+    printf("\n\n");
     printf("=================================\n");
-    printf("CoreMark on RISC-V (Spike + pk)\n");
+    printf("CoreMark on Ceres-V RV32IMC_Zicsr\n");
     printf("=================================\n");
-    printf("ISA: RV32IMC\n");
-    printf("Timing: gettimeofday() syscall\n");
+    printf("CPU Clock: %d Hz\n", 50000000);
+    printf("UART Baud: %d\n", 115200);
     printf("\n");
 
     if (sizeof(ee_ptr_int) != sizeof(ee_u8 *))
     {
-        printf("ERROR! ee_ptr_int size mismatch!\n");
+        printf(
+            "ERROR! Please define ee_ptr_int to a type that holds a "
+            "pointer!\n");
     }
     if (sizeof(ee_u32) != 4)
     {
-        printf("ERROR! ee_u32 must be 32-bit!\n");
+        printf("ERROR! Please define ee_u32 to a 32b unsigned type!\n");
     }
 
     p->portable_id = 1;

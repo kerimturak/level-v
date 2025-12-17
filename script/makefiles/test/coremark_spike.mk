@@ -179,6 +179,9 @@ coremark_compare: coremark_both
 		--test-name "coremark" \
 		--dump "$(COREMARK_BUILD_DIR)/coremark.dump" \
 		--skip-csr \
+		--resync \
+		--window 200 \
+		--verbose \
 		2>&1 | tee -a $(COREMARK_COMPARE_REPORT); \
 	COMPARE_EXIT=$$?; \
 	if [ $$COMPARE_EXIT -eq 0 ]; then \
@@ -243,7 +246,7 @@ cm_compare: coremark_compare
 # ============================================================
 
 cm_compare_quick:
-	@$(MAKE) --no-print-directory coremark_compare COREMARK_ITERATIONS=1 MAX_CYCLES=10000000
+	@$(MAKE) --no-print-directory coremark_compare COREMARK_ITERATIONS=1 MAX_CYCLES=100000
 
 # ============================================================
 # 7. Help

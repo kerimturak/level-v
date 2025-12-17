@@ -16,5 +16,10 @@ riscv-unprivileged.pdf
 site/
 */__pycache__/
 *.pyc
+
+# Allow tracking spike-pk inside env/coremark (coremark is globally ignored)
+!env/coremark/
 !env/coremark/spike-pk/
 !env/coremark/spike-pk/**
+!env/coremark/minimal/
+!env/coremark/minimal/**
