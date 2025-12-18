@@ -57,12 +57,12 @@ package ceres_param;
   // ── FULL SOC: Büyük cache ──
   // Instruction Cache
   localparam int IC_WAY = 8;
-  localparam int IC_CAPACITY = 32 * 1024 * 8;  // 8KB (bits)
+  localparam int IC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
   localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
 
   // Data Cache  
   localparam int DC_WAY = 8;
-  localparam int DC_CAPACITY = 32 * 1024 * 8;  // 8KB (bits)
+  localparam int DC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
   //`endif
 
