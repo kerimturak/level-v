@@ -83,10 +83,10 @@ module fetch
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       pc              <= RESET_VECTOR;
-      uncached        <= 1'b0;        // Reset vector is cached
-      grand           <= 1'b1;        // Reset vector is executable
-      memregion       <= 1'b1;        // Reset vector is valid memory
-      fetch_valid_reg <= 1'b0;        // No valid fetch at reset
+      uncached        <= 1'b0;  // Reset vector is cached
+      grand           <= 1'b1;  // Reset vector is executable
+      memregion       <= 1'b1;  // Reset vector is valid memory
+      fetch_valid_reg <= 1'b0;  // No valid fetch at reset
     end else if (pc_en) begin
       pc              <= pc_next;
       uncached        <= uncached_next;
@@ -310,10 +310,8 @@ module fetch
   // Instruction Cache: Instruction'ları cache'ler, cache miss durumunda
   // lower level memory'ye istek gönderir
   // ============================================================================
-  logic icache_fencei_stall;  // Not used for icache, always 0
 
-  cache #(
-      .IS_ICACHE  (1),
+  icache #(
       .cache_req_t(icache_req_t),
       .cache_res_t(icache_res_t),
       .lowX_req_t (ilowX_req_t),
@@ -323,14 +321,13 @@ module fetch
       .XLEN       (XLEN),
       .NUM_WAY    (IC_WAY)
   ) i_icache (
-      .clk_i         (clk_i),
-      .rst_ni        (rst_ni),
-      .flush_i       (flush_i),
-      .cache_req_i   (icache_req),
-      .cache_res_o   (icache_res),
-      .lowX_res_i    (lx_ires_i),
-      .lowX_req_o    (lx_ireq_o),
-      .fencei_stall_o(icache_fencei_stall)  // Always 0 for icache
+      .clk_i      (clk_i),
+      .rst_ni     (rst_ni),
+      .flush_i    (flush_i),
+      .cache_req_i(icache_req),
+      .cache_res_o(icache_res),
+      .lowX_res_i (lx_ires_i),
+      .lowX_req_o (lx_ireq_o)
   );
 
   // ============================================================================

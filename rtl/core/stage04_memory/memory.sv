@@ -92,8 +92,7 @@ module memory
       .grand_o    ()                     // Not used
   );
 
-  cache #(
-      .IS_ICACHE  (0),
+  dcache #(
       .cache_req_t(dcache_req_t),
       .cache_res_t(dcache_res_t),
       .lowX_req_t (dlowX_req_t),
