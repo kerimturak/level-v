@@ -42,18 +42,18 @@ package ceres_param;
   // ============================================================================
   localparam int BLK_SIZE = 128;  // Cache block size (bits)
 
-`ifdef MINIMAL_SOC
-  // ── MINIMAL_SOC: Küçük cache (CoreMark için yeterli ~4KB) ──
-  // Instruction Cache: 2-way, 2KB
-  localparam int IC_WAY = 2;
-  localparam int IC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits)
-  localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
-
-  // Data Cache: 2-way, 2KB
-  localparam int DC_WAY = 2;
-  localparam int DC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits)
-  localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
-`else
+  //`ifdef MINIMAL_SOC
+  //  // ── MINIMAL_SOC: Küçük cache (CoreMark için yeterli ~4KB) ──
+  //  // Instruction Cache: 2-way, 2KB
+  //  localparam int IC_WAY = 2;
+  //  localparam int IC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits)
+  //  localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
+  //
+  //  // Data Cache: 2-way, 2KB
+  //  localparam int DC_WAY = 2;
+  //  localparam int DC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits)
+  //  localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
+  //`else
   // ── FULL SOC: Büyük cache ──
   // Instruction Cache
   localparam int IC_WAY = 8;
@@ -64,7 +64,7 @@ package ceres_param;
   localparam int DC_WAY = 8;
   localparam int DC_CAPACITY = 32 * 1024 * 8;  // 8KB (bits)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
-`endif
+  //`endif
 
   // Align Buffer (Fetch unit)
   localparam int ABUFF_SIZE = 512;
@@ -73,15 +73,15 @@ package ceres_param;
   // ============================================================================
   // 3. BRANCH PREDICTOR PARAMETERS
   // ============================================================================
-`ifdef MINIMAL_SOC
-  // ── MINIMAL_SOC: Küçük BP (hızlı compile, yeterli doğruluk) ──
-  localparam int PHT_SIZE = 64;  // Pattern History Table entries
-  localparam int BTB_SIZE = 32;  // Branch Target Buffer entries
-  localparam int GHR_SIZE = 8;  // Global History Register bits
-  localparam int IBTC_SIZE = 8;  // Indirect Branch Target Cache
-  localparam int RAS_SIZE = 8;  // Return Address Stack depth
-  localparam int LOOP_SIZE = 4;
-`else
+  //`ifdef MINIMAL_SOC
+  //  // ── MINIMAL_SOC: Küçük BP (hızlı compile, yeterli doğruluk) ──
+  //  localparam int PHT_SIZE = 64;  // Pattern History Table entries
+  //  localparam int BTB_SIZE = 32;  // Branch Target Buffer entries
+  //  localparam int GHR_SIZE = 8;  // Global History Register bits
+  //  localparam int IBTC_SIZE = 8;  // Indirect Branch Target Cache
+  //  localparam int RAS_SIZE = 8;  // Return Address Stack depth
+  //  localparam int LOOP_SIZE = 4;
+  //`else
   // ── FULL SOC: Büyük BP (yüksek doğruluk) ──
   localparam int PHT_SIZE = 512;  // Pattern History Table entries
   localparam int BTB_SIZE = 256;  // Branch Target Buffer entries
@@ -89,7 +89,7 @@ package ceres_param;
   localparam int IBTC_SIZE = 32;  // Indirect Branch Target Cache
   localparam int RAS_SIZE = 16;  // Return Address Stack depth
   localparam int LOOP_SIZE = 8;
-`endif
+  //`endif
   localparam int BP_LOG_INTERVAL = 10000;
 
   // ============================================================================

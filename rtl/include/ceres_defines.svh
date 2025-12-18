@@ -62,7 +62,7 @@
 // If not defined, uses original sequential (1 bit/cycle)
 
 `ifdef SYNTHESIS
-`define MINIMAL_SOC
+//`define MINIMAL_SOC
 `endif
 // ============================================================================
 // SIMULATION CONTROLS
