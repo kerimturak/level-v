@@ -27,11 +27,12 @@ COREMARK_LINKER_OUT  := $(COREMARK_PORT_DST)/link.ld
 COREMARK_HEADER_OUT  := $(COREMARK_PORT_DST)/memory_map.h
 
 # Output files
-COREMARK_ELF  := $(COREMARK_BUILD_DIR)/coremark.elf
-COREMARK_BIN  := $(COREMARK_BUILD_DIR)/coremark.bin
-COREMARK_HEX  := $(COREMARK_BUILD_DIR)/coremark.hex
-COREMARK_MEM  := $(COREMARK_BUILD_DIR)/coremark.mem
-COREMARK_DUMP := $(COREMARK_BUILD_DIR)/coremark.dump
+COREMARK_ELF      := $(COREMARK_BUILD_DIR)/coremark.elf
+COREMARK_BIN      := $(COREMARK_BUILD_DIR)/coremark.bin
+COREMARK_HEX      := $(COREMARK_BUILD_DIR)/coremark.hex
+COREMARK_MEM      := $(COREMARK_BUILD_DIR)/coremark.mem
+COREMARK_MEM_128  := $(COREMARK_BUILD_DIR)/coremark_128.mem
+COREMARK_DUMP     := $(COREMARK_BUILD_DIR)/coremark.dump
 
 # ============================================================
 # 1 Main Target - Full Pipeline
@@ -40,11 +41,12 @@ COREMARK_DUMP := $(COREMARK_BUILD_DIR)/coremark.dump
 coremark: coremark_check coremark_setup coremark_gen_linker coremark_build
 	@echo -e "$(GREEN)[COREMARK] $(SUCCESS) Build complete$(RESET)"
 	@echo -e "$(GREEN)[COREMARK] Output files:$(RESET)"
-	@echo -e "  ELF:  $(COREMARK_ELF)"
-	@echo -e "  BIN:  $(COREMARK_BIN)"
-	@echo -e "  HEX:  $(COREMARK_HEX)"
-	@echo -e "  MEM:  $(COREMARK_MEM)"
-	@echo -e "  DUMP: $(COREMARK_DUMP)"
+	@echo -e "  ELF:      $(COREMARK_ELF)"
+	@echo -e "  BIN:      $(COREMARK_BIN)"
+	@echo -e "  HEX:      $(COREMARK_HEX)"
+	@echo -e "  MEM (32): $(COREMARK_MEM)"
+	@echo -e "  MEM(128): $(COREMARK_MEM_128)"
+	@echo -e "  DUMP:     $(COREMARK_DUMP)"
 
 # ============================================================
 # 2 Check CoreMark Source Availability
@@ -128,12 +130,22 @@ coremark_build: coremark_gen_linker
 	@cp $(COREMARK_SRC_DIR)/coremark.hex $(COREMARK_HEX) 2>/dev/null || true
 	@cp $(COREMARK_SRC_DIR)/coremark.dump $(COREMARK_DUMP) 2>/dev/null || true
 	@# Generate proper .mem file using elf_to_mem.py (Verilog $readmemh compatible)
-	@echo -e "$(YELLOW)[COREMARK] Generating Verilog-compatible .mem file...$(RESET)"
+	@echo -e "$(YELLOW)[COREMARK] Generating Verilog-compatible .mem file (32-bit)...$(RESET)"
 	@python3 $(ELF_TO_MEM) \
 		--in $(COREMARK_BIN) \
 		--out $(COREMARK_MEM) \
 		--addr 0x80000000 \
 		--block-bytes 4 \
+		--word-size 4 \
+		--word-endian little \
+		--word-order high-to-low
+	@# Generate 128-bit cache line .mem file
+	@echo -e "$(YELLOW)[COREMARK] Generating .mem file for 128-bit cache line...$(RESET)"
+	@python3 $(ELF_TO_MEM) \
+		--in $(COREMARK_BIN) \
+		--out $(COREMARK_MEM_128) \
+		--addr 0x80000000 \
+		--block-bytes 16 \
 		--word-size 4 \
 		--word-endian little \
 		--word-order high-to-low

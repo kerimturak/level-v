@@ -28,7 +28,7 @@ Modified for Ceres-V RV32IMC_Zicsr processor
 /************************/
 /* Ceres-V Hardware Definitions */
 /************************/
-#define CPU_CLK          50000000   /* 50 MHz */
+#define CPU_CLK          40000000   /* 40 MHz */
 #define BAUD_RATE        115200
 
 /* UART Registers */

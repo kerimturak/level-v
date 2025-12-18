@@ -33,7 +33,7 @@ package ceres_param;
   // ============================================================================
   // 1. CORE PARAMETERS
   // ============================================================================
-  localparam int CPU_CLK = 50_000_000;
+  localparam int CPU_CLK = 40_000_000;
   localparam int XLEN = 32;
   localparam logic [31:0] RESET_VECTOR = 32'h8000_0000;
 
