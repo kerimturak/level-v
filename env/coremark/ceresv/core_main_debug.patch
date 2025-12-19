@@ -1,0 +1,138 @@
+--- a/core_main.c
++++ b/core_main.c
+@@ -17,6 +17,7 @@
+ */
+
+ #include "coremark.h"
++#include "../ceresv/debug_log.h"
+
+ /* Function: iterate
+        Run the benchmark for a specified number of iterations.
+@@ -51,6 +52,7 @@ void *
+ iterate(void *pres)
+ {
+     ee_u32        i;
++    debug_log("iterate() started");
+     ee_u16        crc;
+     core_results *res        = (core_results *)pres;
+     ee_u32        iterations = res->iterations;
+@@ -59,14 +61,22 @@ iterate(void *pres)
+     res->crcmatrix           = 0;
+     res->crcstate            = 0;
+
++    debug_log_int("Starting iterations", iterations);
++
+     for (i = 0; i < iterations; i++)
+     {
++        if (i % 10 == 0) {
++            debug_log_int("Iteration progress", i);
++        }
++
+         crc      = core_bench_list(res, 1);
+         res->crc = crcu16(crc, res->crc);
+         crc      = core_bench_list(res, -1);
+         res->crc = crcu16(crc, res->crc);
+         if (i == 0)
+             res->crclist = res->crc;
++        if (i == 0) {
++            debug_log_hex("First iteration crclist", res->crclist);
++        }
+     }
+     return NULL;
+ }
+@@ -124,11 +134,14 @@ main(int argc, char *argv[])
+     ee_u8 stack_memblock[TOTAL_DATA_SIZE * MULTITHREAD];
+ #endif
+     /* first call any initializations needed */
++    debug_checkpoint(10);
+     portable_init(&(results[0].port), &argc, argv);
++    debug_checkpoint(11);
+     /* First some checks to make sure benchmark will run ok */
+     if (sizeof(struct list_head_s) > 128)
+     {
+         ee_printf("list_head structure too big for comparable data!\n");
++        debug_log("ERROR: list_head too big");
+         return MAIN_RETURN_VAL;
+     }
+     results[0].seed1      = get_seed(1);
+@@ -143,6 +156,8 @@ main(int argc, char *argv[])
+     {
+         results[0].execs = ALL_ALGORITHMS_MASK;
+     }
++    debug_log_int("Iterations configured", results[0].iterations);
++    debug_log_hex("Execs mask", results[0].execs);
+     /* put in some default values based on one seed only for easy testing */
+     if ((results[0].seed1 == 0) && (results[0].seed2 == 0)
+         && (results[0].seed3 == 0))
+@@ -215,6 +230,8 @@ main(int argc, char *argv[])
+             j++;
+         }
+     }
++    debug_checkpoint(20);
++    debug_log("Memory allocation and assignment complete");
+     /* call inits */
+     for (i = 0; i < MULTITHREAD; i++)
+     {
+@@ -223,6 +240,7 @@ main(int argc, char *argv[])
+             results[i].list = core_list_init(
+                 results[0].size, results[i].memblock[1], results[i].seed1);
+         }
++        debug_log("List init complete");
+         if (results[i].execs & ID_MATRIX)
+         {
+             core_init_matrix(results[0].size,
+@@ -231,11 +249,14 @@ main(int argc, char *argv[])
+                                  | (((ee_s32)results[i].seed2) << 16),
+                              &(results[i].mat));
+         }
++        debug_log("Matrix init complete");
+         if (results[i].execs & ID_STATE)
+         {
+             core_init_state(
+                 results[0].size, results[i].seed1, results[i].memblock[3]);
+         }
++        debug_log("State init complete");
+     }
++    debug_checkpoint(30);
+
+     /* automatically determine number of iterations if not set */
+     if (results[0].iterations == 0)
+@@ -243,6 +264,8 @@ main(int argc, char *argv[])
+         secs_ret secs_passed = 0;
+         ee_u32   divisor;
+         results[0].iterations = 1;
++        debug_log("Auto-determining iteration count");
++
+         while (secs_passed < (secs_ret)1)
+         {
+             results[0].iterations *= 10;
+@@ -274,6 +297,9 @@ main(int argc, char *argv[])
+             results[0].iterations = divisor;
+         }
+     }
++
++    debug_log_int("Final iteration count", results[0].iterations);
++    debug_checkpoint(40);
+
+     results[0].iterations *= MULTITHREAD;
+     /* get ready to run */
+@@ -302,6 +328,8 @@ main(int argc, char *argv[])
+ #endif
+     }
+     /* go! */
++    debug_log("Starting benchmark timer");
++    debug_checkpoint(50);
+     start_time();
+ #if (MULTITHREAD > 1)
+     if (core_start_parallel(&results[0]) != 0)
+@@ -311,7 +339,10 @@ main(int argc, char *argv[])
+     }
+ #else
+     iterate(&results[0]);
++    debug_log("iterate() returned");
+ #endif
++    debug_checkpoint(60);
++    debug_log("Stopping benchmark timer");
+     stop_time();
+     total_time = get_time();
+     /* get a function of the input to report */

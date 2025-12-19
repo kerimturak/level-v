@@ -1,0 +1,26 @@
+--- a/core_state.c
++++ b/core_state.c
+@@ -16,6 +16,7 @@
+ Original Author: Shay Gal-on
+ */
+ #include "coremark.h"
++#include "../ceresv/debug_log.h"
+
+ #define MAX_FUNC 5
+
+@@ -46,6 +47,7 @@ core_bench_state(ee_u32 blksize,
+                  ee_u16 crc)
+ {
+     ee_u32 final_counts[NUM_CORE_STATES];
++    debug_log("core_bench_state() started");
+     ee_u32 track_counts[NUM_CORE_STATES];
+     ee_u8 *p        = memblock;
+     ee_u32 total    = 0;
+@@ -85,6 +87,7 @@ core_bench_state(ee_u32 blksize,
+     }
+
+     crc = crcu32(total, crc);
++    debug_log_hex("core_bench_state crc", crc);
+
+     return crc;
+ }

@@ -37,9 +37,9 @@ Modified for Ceres-V RV32IMC_Zicsr processor
 #define UART_RDATA       (*(volatile uint32_t*)0x20000008)
 #define UART_WDATA       (*(volatile uint32_t*)0x2000000c)
 
-/* Timer Registers - 64-bit timer */
-#define TIMER_LOW        (*(volatile uint32_t*)0x30000000)
-#define TIMER_HIGH       (*(volatile uint32_t*)0x30000004)
+/* Timer Registers - 64-bit timer (CLINT MTIME @ base+0xBFF8) */
+#define TIMER_LOW        (*(volatile uint32_t*)0x3000BFF8)
+#define TIMER_HIGH       (*(volatile uint32_t*)0x3000BFFC)
 
 /* UART Control Register Bits */
 #define UART_CTRL_TX_EN     (1 << 0)

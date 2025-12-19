@@ -1,0 +1,25 @@
+--- a/core_matrix.c
++++ b/core_matrix.c
+@@ -16,6 +16,7 @@
+ Original Author: Shay Gal-on
+ */
+ #include "coremark.h"
++#include "../ceresv/debug_log.h"
+
+ /*
+ Topic: Description
+@@ -40,6 +41,7 @@ ee_s16 matrix_test(ee_u32 N, MATRES *C, MATDAT *A, MATDAT *B, MATDAT val);
+ ee_u16
+ core_bench_matrix(mat_params *p, ee_s16 seed, ee_u16 crc)
+ {
++    debug_log("core_bench_matrix() started");
+     ee_u32  N   = p->N;
+     MATRES *C   = p->C;
+     MATDAT *A   = p->A;
+@@ -62,6 +64,7 @@ core_bench_matrix(mat_params *p, ee_s16 seed, ee_u16 crc)
+         matrix_test(N, C, A, B, val);
+         crc = crc16(matrix_sum(N, C, clipval), crc);
+     }
++    debug_log_hex("core_bench_matrix crc", crc);
+     return crc;
+ }

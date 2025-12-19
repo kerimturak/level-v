@@ -91,10 +91,13 @@ coremark_setup: coremark_check
 # ============================================================
 
 coremark_gen_linker: coremark_setup
-	@echo -e "$(YELLOW)[COREMARK] Generating linker script from memory map...$(RESET)"
-	@if [ ! -f "$(COREMARK_MEMORY_MAP)" ]; then \
+	@echo -e "$(YELLOW)[COREMARK] Checking linker script...$(RESET)"
+	@if [ -f "$(SUBREPO_DIR)/coremark/ceresv/link.ld" ]; then \
+		echo -e "$(CYAN)[COREMARK] Using manual linker script from subrepo (skipping auto-generation)$(RESET)"; \
+	elif [ ! -f "$(COREMARK_MEMORY_MAP)" ]; then \
 		echo -e "$(YELLOW)[COREMARK] No memory_map.yaml found, using default link.ld$(RESET)"; \
 	else \
+		echo -e "$(YELLOW)[COREMARK] Generating linker script from memory map...$(RESET)"; \
 		python3 $(COREMARK_LINKER_GEN) \
 			$(COREMARK_MEMORY_MAP) \
 			$(COREMARK_LINKER_OUT) \
@@ -117,6 +120,8 @@ coremark_build: coremark_gen_linker
 	@env -u CC -u LD -u AS -u OBJCOPY -u OBJDUMP \
 		$(MAKE) -C $(COREMARK_SRC_DIR) PORT_DIR=ceresv clean 2>/dev/null || true
 	@# Build CoreMark - use env to unset variables that might interfere
+	@echo -e "$(CYAN)[DEBUG] COREMARK_ITERATIONS=$(COREMARK_ITERATIONS)$(RESET)"
+	@echo -e "$(CYAN)[DEBUG] Passing ITERATIONS=$(COREMARK_ITERATIONS) to subrepo Makefile$(RESET)"
 	@env -u CC -u LD -u AS -u OBJCOPY -u OBJDUMP -u RISCV_PREFIX \
 		$(MAKE) -C $(COREMARK_SRC_DIR) \
 		PORT_DIR=ceresv \

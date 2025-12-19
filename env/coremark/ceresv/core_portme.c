@@ -18,6 +18,7 @@ Modified for Ceres-V RV32IMC_Zicsr processor
 */
 #include "coremark.h"
 #include "core_portme.h"
+#include "debug_log.h"
 
 #if VALIDATION_RUN
 volatile ee_s32 seed1_volatile = 0x3415;
@@ -73,7 +74,8 @@ void uart_puts(const char *s)
 /************************/
 
 /* Read 64-bit timer value - returns lower 32 bits for simplicity
-   Timer runs at CPU_CLK (50 MHz) */
+   Timer runs at CPU_CLK (25 MHz)
+   Return raw cycle count - we'll handle division in time_in_secs */
 static CORETIMETYPE read_timer(void)
 {
     return TIMER_LOW;
@@ -98,10 +100,17 @@ barebones_clock()
         Use lower values to increase resolution, but make sure that overflow
    does not occur. If there are issues with the return value overflowing,
    increase this value.
-        
-   Timer runs at 50MHz = 50,000,000 Hz
-   We divide by 50000 to get 1000 Hz (1ms resolution)
-   This allows ~4295 seconds before overflow with 32-bit timer
+
+   Timer runs at 25MHz = 25,000,000 Hz
+
+   For integer division (no float support), we need to carefully choose divider.
+   CoreMark needs at least 10 seconds runtime for valid results.
+
+   With TIMER_RES_DIVIDER=1 (no division):
+   - 10 seconds = 250M cycles
+   - time_in_secs = 250M / 25M = 10 ✓
+
+   This works! We use raw cycle counts and divide by CPU_CLK for time in seconds.
 */
 #define CLOCKS_PER_SEC             CPU_CLK
 #define GETMYTIME(_t)              (*_t = barebones_clock())
@@ -166,6 +175,8 @@ secs_ret
 time_in_secs(CORE_TICKS ticks)
 {
     secs_ret retval = ((secs_ret)ticks) / (secs_ret)EE_TICKS_PER_SEC;
+    ee_printf("[DEBUG] time_in_secs: ticks=%u, EE_TICKS_PER_SEC=%u, result=%u\n",
+              (unsigned int)ticks, (unsigned int)EE_TICKS_PER_SEC, (unsigned int)retval);
     return retval;
 }
 
@@ -180,10 +191,12 @@ portable_init(core_portable *p, int *argc, char *argv[])
 {
     (void)argc; // prevent unused warning
     (void)argv; // prevent unused warning
-    
+
     /* Initialize UART for printf output */
+    debug_checkpoint(1);
     uart_init();
-    
+    debug_checkpoint(2);
+
     ee_printf("\n\n");
     ee_printf("=================================\n");
     ee_printf("CoreMark on Ceres-V RV32IMC_Zicsr\n");
@@ -191,6 +204,8 @@ portable_init(core_portable *p, int *argc, char *argv[])
     ee_printf("CPU Clock: %d Hz\n", CPU_CLK);
     ee_printf("UART Baud: %d\n", BAUD_RATE);
     ee_printf("\n");
+
+    debug_log("portable_init completed");
     
     if (sizeof(ee_ptr_int) != sizeof(ee_u8 *))
     {

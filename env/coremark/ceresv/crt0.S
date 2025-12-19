@@ -54,6 +54,8 @@ _start:
     /* Initialize stack pointer */
     la sp, _stack_top
 
+    /* Note: .data section is already in place (baremetal, no relocation needed) */
+
     /* Clear BSS section */
     la t0, _bss_start
     la t1, _bss_end

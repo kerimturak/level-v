@@ -156,9 +156,13 @@ module plic
       pending_q <= pending_q | irq_edge;
 
       // Priority register writes (0x000 - 0x07C, source 1-31)
+      /* verilator lint_off UNSIGNED */
       if (reg_write && adr_i >= ADDR_PRIORITY_BASE && adr_i < ADDR_PENDING) begin
-        automatic int src_idx = adr_i[6:2];  // Word index (0-31)
+      /* verilator lint_on UNSIGNED */
+        automatic logic [4:0] src_idx = adr_i[6:2];  // Word index (0-31)
+        /* verilator lint_off WIDTHEXPAND */
         if (src_idx > 0 && src_idx < NUM_SOURCES) begin
+        /* verilator lint_on WIDTHEXPAND */
           priority_q[src_idx] <= dat_i[PRIORITY_BITS-1:0];
         end
       end
@@ -186,8 +190,10 @@ module plic
 
       // Complete: writing source ID completes the interrupt
       if (complete_write) begin
-        automatic int complete_id = dat_i[$clog2(NUM_SOURCES)-1:0];
+        automatic logic [$clog2(NUM_SOURCES)-1:0] complete_id = dat_i[$clog2(NUM_SOURCES)-1:0];
+        /* verilator lint_off WIDTHEXPAND */
         if (complete_id > 0 && complete_id < NUM_SOURCES) begin
+        /* verilator lint_on WIDTHEXPAND */
           claimed_q[complete_id] <= 1'b0;
         end
       end
@@ -200,10 +206,14 @@ module plic
   always_comb begin
     dat_o = '0;
 
+    /* verilator lint_off UNSIGNED */
     if (adr_i >= ADDR_PRIORITY_BASE && adr_i < ADDR_PENDING) begin
+    /* verilator lint_on UNSIGNED */
       // Priority registers
-      automatic int src_idx = adr_i[6:2];
+      automatic logic [4:0] src_idx = adr_i[6:2];
+      /* verilator lint_off WIDTHEXPAND */
       if (src_idx < NUM_SOURCES) begin
+      /* verilator lint_on WIDTHEXPAND */
         dat_o = {{(32 - PRIORITY_BITS) {1'b0}}, priority_q[src_idx]};
       end
     end else begin

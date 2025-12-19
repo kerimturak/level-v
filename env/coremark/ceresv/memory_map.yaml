@@ -19,19 +19,12 @@ clock:
 # Memory Bölgeleri
 # Her bölge için: origin (başlangıç adresi), length (boyut), type (rx/rw/rwx)
 memory:
-  # Program Memory (ROM/Flash)
-  rom:
-    origin: 0x80000000
-    length: 32K
-    type: "rx"
-    description: "Program code and read-only data"
-  
-  # Data Memory (RAM)
+  # Unified Memory (Baremetal - everything in one contiguous RAM)
   ram:
-    origin: 0x80008000    # ROM'dan hemen sonra (32K offset)
-    length: 32K
+    origin: 0x80000000
+    length: 64K
     type: "rwx"
-    description: "Data, BSS, Heap and Stack"
+    description: "Unified RAM for code, data, BSS, heap and stack"
 
 # Stack Konfigürasyonu
 stack:

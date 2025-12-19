@@ -1,0 +1,33 @@
+--- a/core_list_join.c
++++ b/core_list_join.c
+@@ -16,6 +16,7 @@
+ Original Author: Shay Gal-on
+ */
+ #include "coremark.h"
++#include "../ceresv/debug_log.h"
+
+ /* local functions */
+ list_head *core_list_find(list_head *list, list_data *info);
+@@ -155,12 +156,14 @@ ee_u16
+ core_bench_list(core_results *res, ee_s16 finder_idx)
+ {
+     ee_u16     retval = 0;
++    debug_log("core_bench_list() started");
+     ee_u16     found  = 0, missed = 0;
+     list_head *list      = res->list;
+     ee_s16     find_num  = res->seed3;
+     list_head *this_find;
+     list_head *finder, *remover;
+     list_data *info = &(res->list->info[finder_idx]);
++    debug_log_int("finder_idx", finder_idx);
+
+     ee_s16 i;
+
+@@ -188,6 +191,7 @@ core_bench_list(core_results *res, ee_s16 finder_idx)
+         }
+     }
+     retval += found * 4 - missed;
++    debug_log_int("core_bench_list retval", retval);
+     /* sort the list */
+     if (finder_idx > 0)
+         list = core_list_mergesort(list, cmp_complex, res);
