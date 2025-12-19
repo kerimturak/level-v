@@ -59,10 +59,11 @@
 
 // Division implementation
 `define FEAT_PIPELINED_DIV // Pipelined division (2 bits/cycle, better timing)
+`define SYNTHESIS // Pipelined division (2 bits/cycle, better timing)
 // If not defined, uses original sequential (1 bit/cycle)
 
 `ifdef SYNTHESIS
-//`define MINIMAL_SOC
+`define MINIMAL_SOC
 `endif
 // ============================================================================
 // SIMULATION CONTROLS

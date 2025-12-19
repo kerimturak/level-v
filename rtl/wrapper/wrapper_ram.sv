@@ -117,7 +117,7 @@ module wrapper_ram
     end
 `else
     // During synthesis, directly load 128-bit cache line format
-    $readmemh("coremark_128.mem", ram);
+    $readmemh("/home/kerim/level-v/coremark_128.mem", ram);
 `endif
   end
 

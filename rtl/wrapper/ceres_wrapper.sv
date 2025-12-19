@@ -35,7 +35,7 @@ module ceres_wrapper
     // Memory Configuration
     // ========================================================================
 `ifndef SYNTHESIS
-    parameter int unsigned RAM_SIZE_KB = 1024,
+    parameter int unsigned RAM_SIZE_KB = ceres_param::WRAPPER_RAM_SIZE_KB,
 `else
     parameter int unsigned RAM_SIZE_KB = 48,
 `endif
@@ -48,18 +48,7 @@ module ceres_wrapper
     // Peripheral Configuration
     // ========================================================================
     // MINIMAL_SOC modunda sadece UART ve Timer aktif, diğerleri kapalı
-    //`ifdef MINIMAL_SOC
-    //    parameter int unsigned NUM_UART = 1,
-    //    parameter bit          SPI_EN   = 1'b0,
-    //    parameter bit          I2C_EN   = 1'b0,
-    //    parameter bit          GPIO_EN  = 1'b0,
-    //    parameter bit          PWM_EN   = 1'b0,
-    //    parameter bit          TIMER_EN = 1'b1,
-    //    parameter bit          PLIC_EN  = 1'b0,
-    //    parameter bit          WDT_EN   = 1'b0,
-    //    parameter bit          DMA_EN   = 1'b0,
-    //    parameter bit          VGA_EN   = 1'b0,
-    //`else
+`ifdef MINIMAL_SOC
     parameter int unsigned NUM_UART = 1,
     parameter bit          SPI_EN   = 1'b0,
     parameter bit          I2C_EN   = 1'b0,
@@ -70,7 +59,18 @@ module ceres_wrapper
     parameter bit          WDT_EN   = 1'b0,
     parameter bit          DMA_EN   = 1'b0,
     parameter bit          VGA_EN   = 1'b0,
-    //`endif
+`else
+    parameter int unsigned NUM_UART = 1,
+    parameter bit          SPI_EN   = 1'b0,
+    parameter bit          I2C_EN   = 1'b0,
+    parameter bit          GPIO_EN  = 1'b0,
+    parameter bit          PWM_EN   = 1'b0,
+    parameter bit          TIMER_EN = 1'b1,
+    parameter bit          PLIC_EN  = 1'b0,
+    parameter bit          WDT_EN   = 1'b0,
+    parameter bit          DMA_EN   = 1'b0,
+    parameter bit          VGA_EN   = 1'b0,
+`endif
 
     // ========================================================================
     // Debug Configuration
