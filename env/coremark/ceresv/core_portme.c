@@ -175,8 +175,6 @@ secs_ret
 time_in_secs(CORE_TICKS ticks)
 {
     secs_ret retval = ((secs_ret)ticks) / (secs_ret)EE_TICKS_PER_SEC;
-    ee_printf("[DEBUG] time_in_secs: ticks=%u, EE_TICKS_PER_SEC=%u, result=%u\n",
-              (unsigned int)ticks, (unsigned int)EE_TICKS_PER_SEC, (unsigned int)retval);
     return retval;
 }
 
