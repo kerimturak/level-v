@@ -194,6 +194,7 @@ module cpu
       pipe1 <= '{
       `ifdef COMMIT_TRACER
         fe_tracer: fe_tracer,
+        flushed: 1'b0,  // Normal instruction, not flushed
       `endif
         pc      : fe_pc, pc_incr : fe_pc_incr, inst : fe_inst, exc_type: fe_active_exc_type, instr_type : fe_instr_type, spec: fe_spec};
     end
@@ -269,6 +270,8 @@ module cpu
       pipe2 <= '{
         `ifdef COMMIT_TRACER
             fe_tracer   : pipe1.fe_tracer,
+            // Propagate flushed flag from previous stage
+            flushed     : pipe1.flushed,
         `endif
           pc           : pipe1.pc,
           pc_incr      : pipe1.pc_incr,
@@ -454,6 +457,8 @@ module cpu
           csr_idx      : pipe2.csr_idx,
           instr_type   : pipe2.instr_type,
           csr_wr_data  : ex_csr_wr_data,
+          // Mark as flushed if this cycle has flush condition or already flushed
+          flushed      : (priority_flush == 3) ? 1'b1 : pipe2.flushed,
         `endif
           pc_incr      : pipe2.pc_incr,
           pc           : pipe2.pc,
@@ -535,6 +540,7 @@ module cpu
           csr_wr_data : pipe3.csr_wr_data,
           dcache_valid : pipe3.dcache_valid,
           pc          : pipe3.pc,
+          flushed     : pipe3.flushed,  // Propagate flushed flag to writeback
         `endif
           pc_incr     : pipe3.pc_incr,
           rf_rw_en    : pipe3.rf_rw_en,
@@ -561,6 +567,7 @@ module cpu
       .trap_active_i   (trap_active),
       .tcontrol_i      (ex_tcontrol),
       .pc_i            (pipe4.pc),
+      .flushed_i       (pipe4.flushed),
 `endif
       .fe_flush_cache_i(fencei_flush),
       .clk_i           (clk_i),

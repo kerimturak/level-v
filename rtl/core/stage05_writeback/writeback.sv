@@ -40,6 +40,7 @@ module writeback
     input  instr_type_e                instr_type_i,
     input  logic            [XLEN-1:0] tcontrol_i,
     input  logic            [XLEN-1:0] pc_i,
+    input  logic                       flushed_i,  // Flushed instruction flag
 `endif
     input  logic                       clk_i,
     input  logic                       rst_ni,
