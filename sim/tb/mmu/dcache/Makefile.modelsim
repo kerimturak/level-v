@@ -1,0 +1,47 @@
+# Makefile for DCache ModelSim Simulation
+
+RTL_DIR = ../../../../rtl
+PKG_DIR = $(RTL_DIR)/pkg
+INC_DIR = $(RTL_DIR)/include
+
+VLOG_FLAGS = +incdir+$(INC_DIR) +incdir+$(PKG_DIR)
+
+RTL_FILES = \
+	$(PKG_DIR)/ceres_param.sv \
+	$(RTL_DIR)/ram/sp_bram.sv \
+	$(RTL_DIR)/core/mmu/dcache.sv
+
+TB_FILE = tb_dcache_writeback.sv
+
+.PHONY: all compile sim clean
+
+all: sim
+
+compile:
+	@echo "Creating work library..."
+	@vlib work
+	@echo "Compiling RTL files..."
+	@vlog $(VLOG_FLAGS) $(RTL_FILES) $(TB_FILE)
+
+sim: compile
+	@echo "Launching ModelSim GUI..."
+	@vsim -do run_modelsim.tcl
+
+sim_batch: compile
+	@echo "Running batch simulation..."
+	@vsim -c -do "run -all; quit" tb_dcache_writeback
+
+clean:
+	@echo "Cleaning up..."
+	@rm -rf work transcript vsim.wlf *.vcd
+
+help:
+	@echo "DCache ModelSim Makefile"
+	@echo ""
+	@echo "Targets:"
+	@echo "  make          - Compile and launch GUI simulation"
+	@echo "  make compile  - Compile RTL only"
+	@echo "  make sim      - Launch ModelSim GUI (default)"
+	@echo "  make sim_batch - Run simulation in batch mode"
+	@echo "  make clean    - Remove generated files"
+	@echo "  make help     - Show this message"

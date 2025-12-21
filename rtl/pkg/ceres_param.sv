@@ -56,13 +56,13 @@ package ceres_param;
   //`else
   // ── FULL SOC: Büyük cache ──
   // Instruction Cache
-  localparam int IC_WAY = 8;
-  localparam int IC_CAPACITY = 128 * 1024 * 8;  // 8KB (bits)
+  localparam int IC_WAY = 2;
+  localparam int IC_CAPACITY = 4 * 1024 * 8;
   localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
 
-  // Data Cache  
-  localparam int DC_WAY = 8;
-  localparam int DC_CAPACITY = 128 * 1024 * 8;  // 8KB (bits)
+  // Data Cache
+  localparam int DC_WAY = 2;
+  localparam int DC_CAPACITY = 8 * 1024 * 8;
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
   //`endif
 
@@ -539,7 +539,7 @@ package ceres_param;
     predict_info_t   spec;
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
-    logic            flushed;  // Mark instruction as flushed, don't commit
+    logic            flushed;     // Mark instruction as flushed, don't commit
 `endif
   } pipe1_t;
 
@@ -571,7 +571,7 @@ package ceres_param;
     logic            dcache_valid;
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
-    logic            flushed;  // Mark instruction as flushed, don't commit
+    logic            flushed;       // Mark instruction as flushed, don't commit
 `endif
   } pipe2_t;
 
@@ -596,7 +596,7 @@ package ceres_param;
     logic [11:0]     csr_idx;
     instr_type_e     instr_type;
     logic [XLEN-1:0] csr_wr_data;
-    logic            flushed;  // Mark instruction as flushed, don't commit
+    logic            flushed;       // Mark instruction as flushed, don't commit
 `endif
   } pipe3_t;
 
@@ -620,7 +620,7 @@ package ceres_param;
     instr_type_e     instr_type;
     logic [XLEN-1:0] csr_wr_data;
     logic            dcache_valid;
-    logic            flushed;  // Mark instruction as flushed, don't commit
+    logic            flushed;       // Mark instruction as flushed, don't commit
 `endif
   } pipe4_t;
 
