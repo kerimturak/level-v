@@ -27,8 +27,8 @@ module fetch
     input  logic            [XLEN-1:0] ex_mtvec_i,
     input  logic                       trap_active_i,
     input  logic                       misa_c_i,       // C extension enabled
-    input  logic            [XLEN-1:0] tdata1_i,       // Trigger data 1 (config)
-    input  logic            [XLEN-1:0] tdata2_i,       // Trigger data 2 (breakpoint addr)
+    input  logic            [XLEN-1:0] tdata1_i[0:1],  // Trigger 0 and 1 data1 (config)
+    input  logic            [XLEN-1:0] tdata2_i[0:1],  // Trigger 0 and 1 data2 (breakpoint addr)
     input  logic            [XLEN-1:0] tcontrol_i,     // Trigger control (mte bit[3] enables triggers)
     input  logic                       spec_hit_i,
     output predict_info_t              spec_o,
@@ -74,6 +74,8 @@ module fetch
   logic                   has_illegal_instr;
   logic                   has_ebreak;
   logic                   has_ecall;
+  logic                   trigger0_execute_hit;
+  logic                   trigger1_execute_hit;
 
   // ============================================================================
   // PC Register: Program Counter yönetimi
@@ -188,7 +190,10 @@ module fetch
 
     // Detect all exceptions present
     // Breakpoint trigger requires: mte bit enabled (tcontrol[3]) + execute bit (tdata1[2]) + address match
-    has_debug_breakpoint   = fetch_valid && tcontrol_i[3] && tdata1_i[2] && (pc_o == tdata2_i);
+    // Check both triggers (Trigger 0 and Trigger 1)
+    trigger0_execute_hit = fetch_valid && tcontrol_i[3] && tdata1_i[0][2] && (pc_o == tdata2_i[0]);
+    trigger1_execute_hit = fetch_valid && tcontrol_i[3] && tdata1_i[1][2] && (pc_o == tdata2_i[1]);
+    has_debug_breakpoint = trigger0_execute_hit || trigger1_execute_hit;
     has_instr_misaligned   = fetch_valid && (misa_c_i ? pc_o[0] : (pc_o[1:0] != 2'b00));
     has_instr_access_fault = fetch_valid && !grand;
     has_illegal_instr      = fetch_valid && illegal_instr && buff_res.valid;

@@ -57,12 +57,12 @@ package ceres_param;
   // ── FULL SOC: Büyük cache ──
   // Instruction Cache
   localparam int IC_WAY = 2;
-  localparam int IC_CAPACITY = 4 * 1024 * 8;
+  localparam int IC_CAPACITY = 1024 * 8;
   localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
 
   // Data Cache
   localparam int DC_WAY = 2;
-  localparam int DC_CAPACITY = 8 * 1024 * 8;
+  localparam int DC_CAPACITY = 1024 * 8;
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
   //`endif
 
@@ -527,6 +527,7 @@ package ceres_param;
     predict_info_t   spec;
     pc_sel_e         bjtype;
     logic [XLEN-1:0] pc;
+    logic            misa_c;  // C extension enabled when this instruction was fetched
   } pipe_info_t;
 
   // Fetch -> Decode
@@ -537,6 +538,7 @@ package ceres_param;
     exc_type_e       exc_type;
     instr_type_e     instr_type;
     predict_info_t   spec;
+    logic            misa_c;      // C extension enabled when this instruction was fetched
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
     logic            flushed;     // Mark instruction as flushed, don't commit
@@ -569,6 +571,7 @@ package ceres_param;
     instr_type_e     instr_type;
     predict_info_t   spec;
     logic            dcache_valid;
+    logic            misa_c;        // C extension enabled when this instruction was fetched
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
     logic            flushed;       // Mark instruction as flushed, don't commit

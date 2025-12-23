@@ -85,8 +85,8 @@ module cpu
   logic                  ex_wr_csr;
   logic       [XLEN-1:0] ex_mtvec;
   logic                  ex_misa_c;
-  logic       [XLEN-1:0] ex_tdata1;
-  logic       [XLEN-1:0] ex_tdata2;
+  logic       [XLEN-1:0] ex_tdata1[0:1];
+  logic       [XLEN-1:0] ex_tdata2[0:1];
   logic       [XLEN-1:0] ex_tcontrol;
   //logic       [XLEN-1:0] ex_mepc;
   pipe_info_t            ex_info;
@@ -196,7 +196,7 @@ module cpu
         fe_tracer: fe_tracer,
         flushed: 1'b0,  // Normal instruction, not flushed
       `endif
-        pc      : fe_pc, pc_incr : fe_pc_incr, inst : fe_inst, exc_type: fe_active_exc_type, instr_type : fe_instr_type, spec: fe_spec};
+        pc      : fe_pc, pc_incr : fe_pc_incr, inst : fe_inst, exc_type: fe_active_exc_type, instr_type : fe_instr_type, spec: fe_spec, misa_c: ex_misa_c};
     end
   end
 
@@ -225,6 +225,7 @@ module cpu
     de_info.spec        = pipe1.spec;
     de_info.bjtype      = is_branch(pipe1.instr_type);
     de_info.pc          = pipe1.pc;
+    de_info.misa_c      = pipe1.misa_c;
   end
 
   decode i_decode (
@@ -296,7 +297,8 @@ module cpu
           rd_addr      : pipe1.inst.rd_addr,
           imm          : de_imm,
           instr_type   : pipe1.instr_type,
-          spec         : pipe1.spec
+          spec         : pipe1.spec,
+          misa_c       : pipe1.misa_c
       };
     end
   end
@@ -378,6 +380,7 @@ module cpu
       .imm_i        (pipe2.imm),
       .pc_sel_i     (pipe2.pc_sel),
       .alu_ctrl_i   (pipe2.alu_ctrl),
+      .misa_c_i     (pipe2.misa_c),
       .write_data_o (ex_wdata),
       .pc_target_o  (ex_pc_target),
       .alu_result_o (ex_alu_result),
@@ -414,6 +417,7 @@ module cpu
     ex_info.spec     = pipe2.spec;
     ex_info.bjtype   = is_branch(pipe2.instr_type);
     ex_info.pc       = pipe2.pc;
+    ex_info.misa_c   = pipe2.misa_c;
 
     ex_trap_cause   = ex_exc_type != NO_EXCEPTION ? trap_cause_decode(ex_exc_type) :
                       de_active_exc_type != NO_EXCEPTION ?  trap_cause_decode(de_active_exc_type) :
