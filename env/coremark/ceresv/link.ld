@@ -36,7 +36,7 @@ SECTIONS
 
     _data_lma = LOADADDR(.data);
 
-    .bss (NOLOAD) : ALIGN(4)
+    .bss : ALIGN(4)
     {
         _bss_start = .;
         *(.bss*)

@@ -135,7 +135,7 @@ coremark_build: coremark_gen_linker
 	@cp $(COREMARK_SRC_DIR)/coremark.hex $(COREMARK_HEX) 2>/dev/null || true
 	@cp $(COREMARK_SRC_DIR)/coremark.dump $(COREMARK_DUMP) 2>/dev/null || true
 	@# Generate proper .mem file using elf_to_mem.py (Verilog $readmemh compatible)
-	@echo -e "$(YELLOW)[COREMARK] Generating Verilog-compatible .mem file (32-bit)...$(RESET)"
+	@echo -e "$(YELLOW)[COREMARK] Generating Verilog-compatible .mem file (32-bit with heap+stack)...$(RESET)"
 	@python3 $(ELF_TO_MEM) \
 		--in $(COREMARK_BIN) \
 		--out $(COREMARK_MEM) \
@@ -143,9 +143,10 @@ coremark_build: coremark_gen_linker
 		--block-bytes 4 \
 		--word-size 4 \
 		--word-endian little \
-		--word-order high-to-low
-	@# Generate 128-bit cache line .mem file
-	@echo -e "$(YELLOW)[COREMARK] Generating .mem file for 128-bit cache line...$(RESET)"
+		--word-order high-to-low \
+		--pad-to-size 34816
+	@# Generate 128-bit cache line .mem file with heap+stack padding (34KB total)
+	@echo -e "$(YELLOW)[COREMARK] Generating .mem file for 128-bit cache line (with heap+stack)...$(RESET)"
 	@python3 $(ELF_TO_MEM) \
 		--in $(COREMARK_BIN) \
 		--out $(COREMARK_MEM_128) \
@@ -153,7 +154,8 @@ coremark_build: coremark_gen_linker
 		--block-bytes 16 \
 		--word-size 4 \
 		--word-endian little \
-		--word-order high-to-low
+		--word-order high-to-low \
+		--pad-to-size 34816
 	@echo -e "$(GREEN)[COREMARK] $(SUCCESS) Build successful$(RESET)"
 
 # ============================================================

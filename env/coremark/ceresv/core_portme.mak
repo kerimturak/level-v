@@ -111,7 +111,7 @@ port_postbuild: $(OUTFILE)
 	@echo "Generating output files for Ceres-V..."
 	$(SIZE) $(OUTFILE)
 	$(OBJDUMP) -D $(OUTFILE) > $(OUTFILE:.elf=.dump)
-	$(OBJCOPY) -O binary $(OUTFILE) $(OUTFILE:.elf=.bin)
+	$(OBJCOPY) --set-section-flags .bss=alloc,load,contents -O binary $(OUTFILE) $(OUTFILE:.elf=.bin)
 	$(OBJCOPY) -O ihex $(OUTFILE) $(OUTFILE:.elf=.hex)
 	@echo "Generating .mem file for simulation..."
 	$(OBJCOPY) -O verilog $(OUTFILE) $(OUTFILE:.elf=.mem)
@@ -119,7 +119,7 @@ port_postbuild: $(OUTFILE)
 	@echo "Output files generated:"
 	@echo "  $(OUTFILE)           - ELF executable"
 	@echo "  $(OUTFILE:.elf=.dump) - Disassembly"
-	@echo "  $(OUTFILE:.elf=.bin)  - Binary"
+	@echo "  $(OUTFILE:.elf=.bin)  - Binary (BSS included)"
 	@echo "  $(OUTFILE:.elf=.hex)  - Intel HEX"
 	@echo "  $(OUTFILE:.elf=.mem)  - Verilog memory file"
 

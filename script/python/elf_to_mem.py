@@ -36,6 +36,7 @@ parser.add_argument('--word-size', dest='word_size', type=int, default=4, help='
 parser.add_argument('--word-endian', dest='word_endian', choices=['little','big'], default='little', help='Byte order inside each word')
 parser.add_argument('--word-order', dest='word_order', choices=['high-to-low','low-to-high'], default='high-to-low', help='Order of words when printing block (which word is printed first)')
 parser.add_argument('--pad', dest='pad_byte', type=lambda x: int(x,0), default=0x00, help='Pad byte value')
+parser.add_argument('--pad-to-size', dest='pad_to_size', type=lambda x: int(x,0), default=0, help='Pad output to minimum size (bytes). For heap/stack allocation.')
 args = parser.parse_args()
 
 infile = Path(args.infile)
@@ -48,6 +49,11 @@ words_per_block = block_bytes // word_size
 
 # read input binary
 data = infile.read_bytes()
+
+# pad to minimum size if specified (for heap/stack)
+if args.pad_to_size > 0 and len(data) < args.pad_to_size:
+    data = data + bytes([args.pad_byte]) * (args.pad_to_size - len(data))
+
 # pad to block boundary
 if len(data) % block_bytes != 0:
     pad_len = block_bytes - (len(data) % block_bytes)
