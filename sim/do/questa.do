@@ -158,14 +158,14 @@ add wave -position insertpoint -radix hexadecimal  -group "WRAPPER" -group "SOC"
 add wave -position insertpoint -radix hexadecimal  -group "WRAPPER" -group "SOC"  -group "MEMORY4" -group "UART"  -group "UART_RX" sim:$UART_RX/*
 
 ################## ARBITER ##################
-add wave -position insertpoint -radix hexadecimal -in       -group "WRAPPER" -group "SOC"  -group "ARBITER" -group in       sim:$HAZARD/*
-add wave -position insertpoint -radix hexadecimal -out      -group "WRAPPER" -group "SOC"  -group "ARBITER" -group out      sim:$HAZARD/*
-add wave -position insertpoint -radix hexadecimal -internal -group "WRAPPER" -group "SOC"  -group "ARBITER" -group internal sim:$HAZARD/*
+add wave -position insertpoint -radix hexadecimal -in       -group "WRAPPER" -group "SOC"  -group "ARBITER" -group in       sim:$ARBITER/*
+add wave -position insertpoint -radix hexadecimal -out      -group "WRAPPER" -group "SOC"  -group "ARBITER" -group out      sim:$ARBITER/*
+add wave -position insertpoint -radix hexadecimal -internal -group "WRAPPER" -group "SOC"  -group "ARBITER" -group internal sim:$ARBITER/*
 
 ################## HAZARD ##################
-add wave -position insertpoint -radix hexadecimal -in       -group "WRAPPER" -group "SOC"  -group "HAZARD" -group in       sim:$ARBITER/*
-add wave -position insertpoint -radix hexadecimal -out      -group "WRAPPER" -group "SOC"  -group "HAZARD" -group out      sim:$ARBITER/*
-add wave -position insertpoint -radix hexadecimal -internal -group "WRAPPER" -group "SOC"  -group "HAZARD" -group internal sim:$ARBITER/*
+add wave -position insertpoint -radix hexadecimal -in       -group "WRAPPER" -group "SOC"  -group "HAZARD" -group in       sim:$HAZARD/*
+add wave -position insertpoint -radix hexadecimal -out      -group "WRAPPER" -group "SOC"  -group "HAZARD" -group out      sim:$HAZARD/*
+add wave -position insertpoint -radix hexadecimal -internal -group "WRAPPER" -group "SOC"  -group "HAZARD" -group internal sim:$HAZARD/*
 
 
 
@@ -249,5 +249,13 @@ add wave -noupdate -group "QUICK_DEBUG" -group "Forwarding" $CPU/de_fwd_a
 add wave -noupdate -group "QUICK_DEBUG" -group "Forwarding" $CPU/de_fwd_b
 add wave -noupdate -group "QUICK_DEBUG" -group "Forwarding" $CPU/ex_fwd_a
 add wave -noupdate -group "QUICK_DEBUG" -group "Forwarding" $CPU/ex_fwd_b
+
+
+
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "WB_MASTER" sim:$WB_MASTER/*
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "WB_INTERCON" sim:$WB_INTERCON/*
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "WB_CLINT" sim:$WB_CLINT/*
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "WB_PBUS" sim:$WB_PBUS/*
+
 run 10000ns
 wave zoom full

@@ -78,32 +78,36 @@ module dcache
     logic [NUM_WAY-2:0]   rnode;
   } nsram_t;
 
-  dsram_t                 dsram;
-  tsram_t                 tsram;
-  nsram_t                 nsram;
+  dsram_t                    dsram;
+  tsram_t                    tsram;
+  nsram_t                    nsram;
 
   // Dirty SRAM signals
-  logic   [IDX_WIDTH-1:0] drsram_wr_idx;
-  logic   [  NUM_WAY-1:0] drsram_wr_way;
-  logic                   drsram_wr_rw_en;
-  logic                   drsram_wr_wdirty;
-  logic   [  NUM_WAY-1:0] drsram_rd_rdirty;
+  logic      [IDX_WIDTH-1:0] drsram_wr_idx;
+  logic      [  NUM_WAY-1:0] drsram_wr_way;
+  logic                      drsram_wr_rw_en;
+  logic                      drsram_wr_wdirty;
+  logic      [  NUM_WAY-1:0] drsram_rd_rdirty;
+
+  // Internal low-level request latch to hold writeback requests
+  lowX_req_t                 lowx_req_q;
+  logic                      lowx_req_valid_q;
 
   // Temporary variables to break combinatorial loops
-  logic   [IDX_WIDTH-1:0] drsram_idx_temp;
-  logic                   drsram_rw_en_temp;
-  logic   [  NUM_WAY-1:0] drsram_way_temp;
-  logic                   drsram_wdirty_temp;
+  logic      [IDX_WIDTH-1:0] drsram_idx_temp;
+  logic                      drsram_rw_en_temp;
+  logic      [  NUM_WAY-1:0] drsram_way_temp;
+  logic                      drsram_wdirty_temp;
 
   // D-cache specific wires
-  logic   [ BLK_SIZE-1:0] mask_data;
-  logic                   data_array_wr_en;
-  logic   [ BLK_SIZE-1:0] data_wr_pre;
-  logic                   tag_array_wr_en;
-  logic   [  WOFFSET-1:0] word_idx;
-  logic                   write_back;
-  logic   [ TAG_SIZE-1:0] evict_tag;
-  logic   [ BLK_SIZE-1:0] evict_data;
+  logic      [ BLK_SIZE-1:0] mask_data;
+  logic                      data_array_wr_en;
+  logic      [ BLK_SIZE-1:0] data_wr_pre;
+  logic                      tag_array_wr_en;
+  logic      [  WOFFSET-1:0] word_idx;
+  logic                      write_back;
+  logic      [ TAG_SIZE-1:0] evict_tag;
+  logic      [ BLK_SIZE-1:0] evict_data;
   // Writeback is handled combinationally like old dcache
   // No FSM needed - writeback and fill happen in same cycle
   // ============================================================================
@@ -474,6 +478,9 @@ module dcache
       write_back = |(drsram_rd_rdirty & evict_way & cache_valid_vec);
     end
 
+    // If we have latched a writeback request, treat writeback as ongoing
+    if (lowx_req_valid_q) write_back = 1'b1;
+
 `ifdef LOG_CACHE_DEBUG
     // Debug logging for cache operations
     if (write_back) begin
@@ -550,6 +557,9 @@ module dcache
       lowX_req_o.rw = 1'b1;  // Write operation
       lowX_req_o.rw_size = 2'b11;  // Full cache line
       lowX_req_o.data = fi_evict_data;
+    end else if (lowx_req_valid_q) begin
+      // Hold previously latched writeback request
+      lowX_req_o = lowx_req_q;
     end else begin
       // Normal cache miss handling (includes writeback)
       // Like old dcache: writeback and fill happen together
@@ -579,6 +589,42 @@ module dcache
       lookup_ack <= '0;
     end else begin
       lookup_ack <= lowX_res_i.valid ? !lowX_req_o.ready : (!lookup_ack ? lowX_req_o.valid && lowX_res_i.ready : lookup_ack);
+    end
+  end
+
+  // Latch normal writeback requests so they are held stable across cycles
+  // when eviction way/addr might change in the next cycle.
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      lowx_req_q <= '0;
+      lowx_req_valid_q <= 1'b0;
+    end else begin
+      if (lowx_req_valid_q) begin
+        // Waiting for low-level response to clear saved request
+        if (lowX_res_i.valid) begin
+          lowx_req_q <= '0;
+          lowx_req_valid_q <= 1'b0;
+        end else begin
+          lowx_req_q <= lowx_req_q;
+          lowx_req_valid_q <= 1'b1;
+        end
+      end else begin
+        // Capture a new writeback request when it would be issued
+        if (write_back && cache_miss && lowX_res_i.ready) begin
+          lowx_req_valid_q    <= 1'b1;
+          lowx_req_q.valid    <= 1'b1;
+          lowx_req_q.ready    <= 1'b1;
+          lowx_req_q.addr     <= {evict_tag, rd_idx, {BOFFSET{1'b0}}};
+          // dcache uses full-line writeback fields (dlowX_req_t)
+          lowx_req_q.rw       <= 1'b1;
+          lowx_req_q.rw_size  <= 2'b11;
+          lowx_req_q.data     <= evict_data;
+          lowx_req_q.uncached <= 1'b0;
+        end else begin
+          lowx_req_q <= '0;
+          lowx_req_valid_q <= 1'b0;
+        end
+      end
     end
   end
 
