@@ -67,6 +67,22 @@ module fetch
   blowX_res_t             buff_lowX_res;
   logic                   buf_lookup_ack;
 
+  // ============================================================================
+  // Reset Flush Cycle Counter
+  // ----------------------------------------------------------------------------
+  // During reset, both icache and dcache perform flush operations.
+  // Each cache takes NUM_SET cycles to complete flush.
+  // If dcache is larger than icache, dcache flush takes longer.
+  // This counter ensures fetch stage stalls until the maximum flush completes.
+  // ============================================================================
+  localparam int IC_NUM_SET = (IC_CAPACITY / BLK_SIZE) / IC_WAY;
+  localparam int DC_NUM_SET = (DC_CAPACITY / BLK_SIZE) / DC_WAY;
+  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ? IC_NUM_SET : DC_NUM_SET;
+  localparam int FLUSH_CNT_WIDTH = $clog2(MAX_FLUSH_CYCLES + 1);
+
+  logic [FLUSH_CNT_WIDTH-1:0] flush_counter;
+  logic                       flush_in_progress;
+
   // Exception priority detection signals
   logic                   has_debug_breakpoint;
   logic                   has_instr_misaligned;
@@ -95,6 +111,28 @@ module fetch
       grand           <= grand_next;
       memregion       <= memregion_next;
       fetch_valid_reg <= fetch_valid;  // Register fetch_valid to break comb loop
+    end
+  end
+
+  // ============================================================================
+  // Flush Counter: Counts cycles during reset flush to ensure dcache completes
+  // ----------------------------------------------------------------------------
+  // Reset triggers flush in both caches. Icache and dcache flush in parallel,
+  // each taking NUM_SET cycles. If dcache has more sets than icache, it needs
+  // more time. This counter stalls fetch until MAX_FLUSH_CYCLES complete.
+  // ============================================================================
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      flush_counter     <= FLUSH_CNT_WIDTH'(MAX_FLUSH_CYCLES);
+      flush_in_progress <= 1'b1;
+    end else begin
+      if (flush_in_progress) begin
+        if (flush_counter > 0) begin
+          flush_counter <= flush_counter - 1'b1;
+        end else begin
+          flush_in_progress <= 1'b0;
+        end
+      end
     end
   end
 
@@ -171,8 +209,11 @@ module fetch
     // Klasik ready valid handshake'i kurulamadı. Buffer isteği registerlamıyor
     // Valid cevabı valid istekle aynı cycle da üretildiği için.
     // TODO: Belki handshake kurulabilir, olası çoğu comp loop sebebi burası
+    // IMPORTANT: Also stall during reset flush to ensure dcache completes flush
+    // before fetch starts requesting from icache. Without this, if dcache is
+    // larger than icache, requests arrive at dcache while it's still flushing.
     // ============================================================================
-    imiss_stall_o          = (buff_req.valid && !buff_res.valid);
+    imiss_stall_o          = (buff_req.valid && !buff_res.valid) || flush_in_progress;
 
     // ============================================================================
     // Exception Type Detection: Parametric priority-based exception selection
