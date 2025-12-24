@@ -599,7 +599,8 @@ package ceres_param;
     logic [11:0]     csr_idx;
     instr_type_e     instr_type;
     logic [XLEN-1:0] csr_wr_data;
-    logic            flushed;       // Mark instruction as flushed, don't commit
+    logic            csr_write_valid;  // CSR write was accepted (not rejected)
+    logic            flushed;          // Mark instruction as flushed, don't commit
 `endif
   } pipe3_t;
 
@@ -622,8 +623,9 @@ package ceres_param;
     logic [11:0]     csr_idx;
     instr_type_e     instr_type;
     logic [XLEN-1:0] csr_wr_data;
+    logic            csr_write_valid;  // CSR write was accepted (not rejected)
     logic            dcache_valid;
-    logic            flushed;       // Mark instruction as flushed, don't commit
+    logic            flushed;          // Mark instruction as flushed, don't commit
 `endif
   } pipe4_t;
 

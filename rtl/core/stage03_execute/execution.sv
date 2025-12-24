@@ -13,6 +13,7 @@ module execution
 (
 `ifdef COMMIT_TRACER
     output logic        [XLEN-1:0] csr_wr_data_o,
+    output logic                   csr_write_valid_o,       // CSR write was accepted
 `endif
     input  logic                   clk_i,
     input  logic                   rst_ni,
@@ -32,19 +33,19 @@ module execution
     input  logic                   trap_active_i,
     input  logic                   de_trap_active_i,
     input  logic        [XLEN-1:0] trap_cause_i,
-    input  logic        [XLEN-1:0] trap_tval_i,       // faulting instruction / adres
+    input  logic        [XLEN-1:0] trap_tval_i,             // faulting instruction / adres
     input  logic        [XLEN-1:0] trap_mepc_i,
     // Hardware interrupt inputs
-    input  logic                   timer_irq_i,       // CLINT timer interrupt
-    input  logic                   sw_irq_i,          // CLINT software interrupt
-    input  logic                   ext_irq_i,         // PLIC external interrupt
+    input  logic                   timer_irq_i,             // CLINT timer interrupt
+    input  logic                   sw_irq_i,                // CLINT software interrupt
+    input  logic                   ext_irq_i,               // PLIC external interrupt
     input  logic        [XLEN-1:0] pc_i,
     input  logic        [XLEN-1:0] pc_incr_i,
     input  logic        [XLEN-1:0] imm_i,
     input  pc_sel_e                pc_sel_i,
     input  alu_op_e                alu_ctrl_i,
     input  instr_type_e            instr_type_i,
-    input  logic                   misa_c_i,          // C extension state when instruction was fetched
+    input  logic                   misa_c_i,                // C extension state when instruction was fetched
     output logic        [XLEN-1:0] write_data_o,
     output logic        [XLEN-1:0] pc_target_o,
     output logic        [XLEN-1:0] alu_result_o,
@@ -53,8 +54,8 @@ module execution
     output exc_type_e              exc_type_o,
     output logic        [XLEN-1:0] mtvec_o,
     output logic                   misa_c_o,
-    output logic        [XLEN-1:0] tdata1_o[0:1],
-    output logic        [XLEN-1:0] tdata2_o[0:1],
+    output logic        [XLEN-1:0] tdata1_o         [0:1],
+    output logic        [XLEN-1:0] tdata2_o         [0:1],
     output logic        [XLEN-1:0] tcontrol_o
 
 );
@@ -66,16 +67,16 @@ module execution
   logic                   ex_zero;
   logic                   ex_slt;
   logic                   ex_sltu;
-  logic        [XLEN-1:0] tdata1[0:1];
-  logic        [XLEN-1:0] tdata2[0:1];
+  logic        [XLEN-1:0] tdata1             [0:1];
+  logic        [XLEN-1:0] tdata2             [0:1];
   logic        [XLEN-1:0] tcontrol;
   logic        [XLEN-1:0] alu_result;
   logic        [XLEN-1:0] csr_rdata;
   logic        [XLEN-1:0] mepc;
   logic                   misa_c;
   logic        [XLEN-1:0] tcontrol_effective;
-  logic        [XLEN-1:0] tdata1_effective[0:1];
-  logic        [XLEN-1:0] tdata2_effective[0:1];
+  logic        [XLEN-1:0] tdata1_effective   [0:1];
+  logic        [XLEN-1:0] tdata2_effective   [0:1];
   logic                   trigger0_hit;
   logic                   trigger1_hit;
   logic                   target_misaligned;
@@ -164,8 +165,16 @@ module execution
     end
 
     // Priority: Trigger hit > Instruction misaligned
+    // Exception check priority:
+    // 1. Hardware breakpoint (trigger)
+    // 2. Jump/Branch target misalignment
+    // Note: MRET target (mepc) is exempt from alignment check because mepc is
+    // aligned when written. This prevents spurious exceptions when MISA.C changes
+    // between trap entry and return.
     if (trigger0_hit || trigger1_hit) begin
       exc_type_o = BREAKPOINT;
+    end else if (instr_type_i == mret) begin
+      exc_type_o = NO_EXCEPTION;  // MRET: mepc already aligned when written
     end else begin
       exc_type_o = pc_sel_o && target_misaligned ? INSTR_MISALIGNED : NO_EXCEPTION;
     end
@@ -213,31 +222,34 @@ module execution
 `endif
 
   cs_reg_file i_cs_reg_file (
-      .clk_i           (clk_i),
-      .rst_ni          (rst_ni),
-      .stall_i         (stall_i),
-      .rd_en_i         (rd_csr_i),
-      .wr_en_i         (wr_csr_i),
-      .csr_idx_i       (csr_idx_i),
-      .csr_wdata_i     (alu_result),
-      .csr_rdata_o     (csr_rdata),
-      .trap_active_i   (trap_active_i),
-      .de_trap_active_i(de_trap_active_i),
-      .trap_cause_i    (trap_cause_i),
-      .trap_mepc_i     (trap_mepc_i),
-      .trap_tval_i     (trap_tval_i),
-      .pc_i            (pc_i),
-      .instr_type_i    (instr_type_i),
+      .clk_i            (clk_i),
+      .rst_ni           (rst_ni),
+      .stall_i          (stall_i),
+      .rd_en_i          (rd_csr_i),
+      .wr_en_i          (wr_csr_i),
+      .csr_idx_i        (csr_idx_i),
+      .csr_wdata_i      (alu_result),
+      .csr_rdata_o      (csr_rdata),
+      .trap_active_i    (trap_active_i),
+      .de_trap_active_i (de_trap_active_i),
+      .trap_cause_i     (trap_cause_i),
+      .trap_mepc_i      (trap_mepc_i),
+      .trap_tval_i      (trap_tval_i),
+      .pc_i             (pc_i),
+      .instr_type_i     (instr_type_i),
       // Hardware interrupt inputs
-      .timer_irq_i     (timer_irq_i),
-      .sw_irq_i        (sw_irq_i),
-      .ext_irq_i       (ext_irq_i),
-      .mtvec_o         (mtvec_o),
-      .mepc_o          (mepc),
-      .misa_c_o        (misa_c),
-      .tdata1_o        (tdata1),
-      .tdata2_o        (tdata2),
-      .tcontrol_o      (tcontrol)
+      .timer_irq_i      (timer_irq_i),
+      .sw_irq_i         (sw_irq_i),
+      .ext_irq_i        (ext_irq_i),
+      .mtvec_o          (mtvec_o),
+      .mepc_o           (mepc),
+      .misa_c_o         (misa_c),
+`ifdef COMMIT_TRACER
+      .csr_write_valid_o(csr_write_valid_o),
+`endif
+      .tdata1_o         (tdata1),
+      .tdata2_o         (tdata2),
+      .tcontrol_o       (tcontrol)
   );
 
   assign tdata1_o   = tdata1;

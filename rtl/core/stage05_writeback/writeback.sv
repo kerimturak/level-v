@@ -32,6 +32,7 @@ module writeback
     input  logic            [     1:0] rw_size_i,
     input  logic            [XLEN-1:0] write_data_i,
     input  logic            [XLEN-1:0] csr_wr_data_i,
+    input  logic                       csr_write_valid_i,
     input  logic            [     4:0] rd_addr_i,
     input  logic                       rd_en_csr_i,
     input  logic                       wr_en_csr_i,

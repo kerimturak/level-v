@@ -165,7 +165,7 @@ always @(posedge clk_i) begin
     // 1) SPIKE-STYLE: CSR + RD WRITE IN SAME INSTRUCTION (CSRRW / CSRRS / CSRRC)
     // ============================================================
     if ((instr_type_i inside {CSR_RW, CSR_RS, CSR_RC, CSR_RWI, CSR_RSI, CSR_RCI}) &&
-        wr_en_csr_i && rf_rw_en_i && rd_addr_i != 0) begin
+        wr_en_csr_i && csr_write_valid_i && rf_rw_en_i && rd_addr_i != 0) begin
 
       // Format:
       // core 0: 3 PC (INST) x<rd> oldCSR  c<idx>_name newCSR
@@ -216,7 +216,7 @@ end
     // ============================================================
     // 2) CSR WRITE ONLY (CSRWI, CSRRW x0,csr)
     // ============================================================
-    else if (wr_en_csr_i) begin
+    else if (wr_en_csr_i && csr_write_valid_i) begin
       $fwrite(trace_fd,
         "core   0: 3 0x%08h (0x%08h) c%0d_%s 0x%08h\n",
         pc_i, fe_tracer_i.inst,

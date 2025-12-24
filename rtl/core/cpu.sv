@@ -94,6 +94,7 @@ module cpu
   logic       [XLEN-1:0] ex_trap_cause;
   logic       [XLEN-1:0] ex_trap_mepc;
     `ifdef COMMIT_TRACER
+  logic                  ex_csr_write_valid;  // CSR write was accepted (not rejected)
   logic       [XLEN-1:0] ex_csr_wr_data;
     `endif
   data_req_t ex_data_req;
@@ -349,6 +350,7 @@ module cpu
   execution i_execution (
     `ifdef COMMIT_TRACER
       .csr_wr_data_o(ex_csr_wr_data),
+      .csr_write_valid_o(ex_csr_write_valid),
     `endif
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
@@ -461,6 +463,7 @@ module cpu
           csr_idx      : pipe2.csr_idx,
           instr_type   : pipe2.instr_type,
           csr_wr_data  : ex_csr_wr_data,
+          csr_write_valid : ex_csr_write_valid,
           // Mark as flushed if this cycle has flush condition or already flushed
           flushed      : (priority_flush == 3) ? 1'b1 : pipe2.flushed,
         `endif
@@ -542,6 +545,7 @@ module cpu
           csr_idx     : pipe3.csr_idx,
           instr_type  : pipe3.instr_type,
           csr_wr_data : pipe3.csr_wr_data,
+          csr_write_valid : pipe3.csr_write_valid,
           dcache_valid : pipe3.dcache_valid,
           pc          : pipe3.pc,
           flushed     : pipe3.flushed,  // Propagate flushed flag to writeback
@@ -568,6 +572,7 @@ module cpu
       .csr_idx_i       (pipe4.csr_idx),
       .instr_type_i    (pipe4.instr_type),
       .csr_wr_data_i   (pipe4.csr_wr_data),
+      .csr_write_valid_i(pipe4.csr_write_valid),
       .trap_active_i   (trap_active),
       .tcontrol_i      (ex_tcontrol),
       .pc_i            (pipe4.pc),

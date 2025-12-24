@@ -36,6 +36,9 @@ module cs_reg_file
     output logic        [XLEN-1:0] mtvec_o,
     output logic        [XLEN-1:0] mepc_o,
     output logic                   misa_c_o,
+`ifdef COMMIT_TRACER
+    output logic                   csr_write_valid_o,  // CSR write was accepted (not rejected)
+`endif
     // Trigger/Debug outputs for hardware breakpoint (both triggers)
     output logic        [XLEN-1:0] tdata1_o[0:1],
     output logic        [XLEN-1:0] tdata2_o[0:1],
@@ -262,7 +265,19 @@ module cs_reg_file
     misa_c_o = misa.C;
     // mtvec write bypass (benchmark için)
     mtvec_o  = (csr_idx_i == 12'h305 && wr_en_i && de_trap_active_i) ? csr_wdata_i : mtvec;
-    mepc_o   = mepc;
+    // mepc output with alignment mask (Spike-compatible)
+    // Clear low bits based on current MISA.C: bit[0] always, bit[1] if C disabled
+    if (misa.C)
+      mepc_o = {mepc[XLEN-1:1], 1'b0};        // 2-byte align
+    else
+      mepc_o = {mepc[XLEN-1:2], 2'b00};       // 4-byte align
+`ifdef COMMIT_TRACER
+    // CSR write validity check - MISA write can be rejected
+    if (wr_en_i && csr_idx_i == MISA && !csr_wdata_i[2] && misa.C && pc_i[1])
+      csr_write_valid_o = 1'b0;  // MISA write rejected (can't disable C when PC misaligned)
+    else
+      csr_write_valid_o = 1'b1;  // All other writes accepted
+`endif
     // Trigger outputs: Output both triggers with bypass logic
     // Trigger 0
     if (wr_en_i && csr_idx_i == TDATA1 && tselect_safe[0] == 1'b0) begin
@@ -386,19 +401,9 @@ module cs_reg_file
           MISA: begin
             // WARL: only C extension bit is writable
             // Spike-compatible behavior: Reject C extension disable if PC is misaligned
-            // (PC is 2-byte aligned but not 4-byte aligned, i.e., pc[1]=1)
-            // This prevents disabling C extension when already at a compressed instruction boundary
-            logic new_c_bit;
-            logic old_c_bit;
-            logic pc_misaligned;
-
-            new_c_bit = csr_wdata_i[2];  // C extension bit in new value
-            old_c_bit = misa.C;           // Current C extension bit
-            pc_misaligned = pc_i[1];      // PC bit 1 (2-byte aligned but not 4-byte)
-
-            // Reject write if: disabling C (new=0, old=1) && PC is misaligned (pc[1]=1)
-            if (!new_c_bit && old_c_bit && pc_misaligned) begin
-              // Write rejected - keep old value
+            // Reject write if: disabling C (new=0, old=1) && PC[1]=1 (misaligned)
+            if (!csr_wdata_i[2] && misa.C && pc_i[1]) begin
+              // Write rejected - keep old value (PC is 2-byte aligned, can't disable C)
               misa <= misa;
             end else begin
               // Write accepted
@@ -412,7 +417,10 @@ module cs_reg_file
           // Trap Handling Registers
           // Note: MIP is read-only - hardware interrupt sources set the pending bits
           MSCRATCH: mscratch  <= csr_wdata_i;
-          MEPC:     mepc      <= csr_wdata_i;
+          MEPC: begin
+            // Spike-compatible: Only clear bit[0] on write, alignment mask applied on read
+            mepc <= {csr_wdata_i[XLEN-1:1], 1'b0};
+          end
           MCAUSE:   mcause    <= csr_wdata_i;
           MTVAL:    mtval_reg <= csr_wdata_i;
 
