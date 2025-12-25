@@ -10,45 +10,45 @@ module tb_dcache_simple;
   localparam int XLEN_TB = 32;
 
   // Clock and reset
-  logic clk = 0;
-  logic rst_n;
+  logic                           clk = 0;
+  logic                           rst_n;
 
   // DCache interfaces
-  ceres_param::dcache_req_t cache_req;
-  ceres_param::dcache_res_t cache_res;
-  ceres_param::dlowX_req_t lowX_req;
-  ceres_param::dlowX_res_t lowX_res;
-  logic flush;
-  logic fencei_stall;
+  ceres_param::dcache_req_t       cache_req;
+  ceres_param::dcache_res_t       cache_res;
+  ceres_param::dlowX_req_t        lowX_req;
+  ceres_param::dlowX_res_t        lowX_res;
+  logic                           flush;
+  logic                           fencei_stall;
 
   // Simple memory model
-  logic [7:0] memory [logic [31:0]];
-  logic [3:0] mem_delay_cnt;
+  logic                     [7:0] memory             [logic [31:0]];
+  logic                     [3:0] mem_delay_cnt;
 
   // Test statistics
-  int load_count = 0;
-  int store_count = 0;
-  int mismatch_count = 0;
-  int total_ops = 0;
+  int                             load_count = 0;
+  int                             store_count = 0;
+  int                             mismatch_count = 0;
+  int                             total_ops = 0;
 
   // DCache instance
   dcache #(
       .cache_req_t(ceres_param::dcache_req_t),
       .cache_res_t(ceres_param::dcache_res_t),
-      .lowX_res_t(ceres_param::dlowX_res_t),
-      .lowX_req_t(ceres_param::dlowX_req_t),
-      .CACHE_SIZE(DC_CAPACITY_TB),
-      .BLK_SIZE(BLK_SIZE_TB),
-      .XLEN(XLEN_TB),
-      .NUM_WAY(DC_WAY_TB)
+      .lowX_res_t (ceres_param::dlowX_res_t),
+      .lowX_req_t (ceres_param::dlowX_req_t),
+      .CACHE_SIZE (DC_CAPACITY_TB),
+      .BLK_SIZE   (BLK_SIZE_TB),
+      .XLEN       (XLEN_TB),
+      .NUM_WAY    (DC_WAY_TB)
   ) dut (
-      .clk_i(clk),
-      .rst_ni(rst_n),
-      .flush_i(flush),
-      .cache_req_i(cache_req),
-      .cache_res_o(cache_res),
-      .lowX_res_i(lowX_res),
-      .lowX_req_o(lowX_req),
+      .clk_i         (clk),
+      .rst_ni        (rst_n),
+      .flush_i       (flush),
+      .cache_req_i   (cache_req),
+      .cache_res_o   (cache_res),
+      .lowX_res_i    (lowX_res),
+      .lowX_req_o    (lowX_req),
       .fencei_stall_o(fencei_stall)
   );
 
@@ -60,29 +60,29 @@ module tb_dcache_simple;
     if (!rst_n) begin
       lowX_res.valid <= 1'b0;
       lowX_res.ready <= 1'b1;
-      lowX_res.data <= '0;
-      mem_delay_cnt <= 0;
+      lowX_res.data  <= '0;
+      mem_delay_cnt  <= 0;
     end else begin
       lowX_res.ready <= 1'b1;
 
       // Simple 1-cycle delay memory
       if (lowX_req.valid && lowX_res.ready && mem_delay_cnt == 0) begin
-        mem_delay_cnt <= 1;
+        mem_delay_cnt  <= 1;
         lowX_res.valid <= 1'b0;
 
         if (lowX_req.rw) begin
           // Write to memory (cache line = 16 bytes)
           for (int i = 0; i < 16; i++) begin
-            memory[lowX_req.addr + i] = lowX_req.data[i*8 +: 8];
+            memory[lowX_req.addr+i] = lowX_req.data[i*8+:8];
           end
         end else begin
           // Read from memory
           for (int i = 0; i < 16; i++) begin
-            lowX_res.data[i*8 +: 8] <= memory[lowX_req.addr + i];
+            lowX_res.data[i*8+:8] <= memory[lowX_req.addr+i];
           end
         end
       end else if (mem_delay_cnt > 0) begin
-        mem_delay_cnt <= 0;
+        mem_delay_cnt  <= 0;
         lowX_res.valid <= 1'b1;
       end else begin
         lowX_res.valid <= 1'b0;
@@ -116,7 +116,7 @@ module tb_dcache_simple;
       cache_req.ready = 1'b1;  // CPU ready to accept response
       cache_req.addr = addr;
       cache_req.rw = 1'b1;  // Write
-      cache_req.rw_size = 2'b11;  // Word
+      cache_req.rw_size = WORD;  // Word
       cache_req.data = data;
       cache_req.uncached = is_uncached(addr);
 
@@ -160,7 +160,7 @@ module tb_dcache_simple;
       cache_req.ready = 1'b1;  // CPU ready to accept response
       cache_req.addr = addr;
       cache_req.rw = 1'b0;  // Read
-      cache_req.rw_size = 2'b11;  // Word
+      cache_req.rw_size = WORD;  // Word
       cache_req.uncached = is_uncached(addr);
 
       // Wait for cache to respond
@@ -186,7 +186,7 @@ module tb_dcache_simple;
 
   // Test sequence
   initial begin
-    int fd;
+    int    fd;
     string line;
     string op_type;
     logic [31:0] addr, expected_data, read_data;
@@ -198,12 +198,11 @@ module tb_dcache_simple;
     flush = 0;
     cache_req = '0;
 
-    repeat(10) @(posedge clk);
+    repeat (10) @(posedge clk);
     rst_n = 1;
-    repeat(5) @(posedge clk);
+    repeat (5) @(posedge clk);
 
-    $display("After reset: cache_res.ready=%b fi_active=%b write_back=%b",
-             cache_res.ready, dut.fi_active, dut.write_back);
+    $display("After reset: cache_res.ready=%b fi_active=%b write_back=%b", cache_res.ready, dut.fi_active, dut.write_back);
 
     // Open memory operations file
     fd = $fopen("/home/kerim/level-v/mem_ops.txt", "r");
@@ -219,7 +218,9 @@ module tb_dcache_simple;
     $display("========================================\n");
 
     // Process each operation
-    while (!$feof(fd) && op_count < max_ops) begin
+    while (!$feof(
+        fd
+    ) && op_count < max_ops) begin
       if ($fgets(line, fd)) begin
         if ($sscanf(line, "%s 0x%h 0x%h", op_type, addr, expected_data) == 3) begin
           total_ops++;
@@ -228,8 +229,7 @@ module tb_dcache_simple;
             do_load(addr, read_data);
 
             if (read_data !== expected_data) begin
-              $display("[MISMATCH %0d] Load @ 0x%08x: expected=0x%08x got=0x%08x",
-                       mismatch_count, addr, expected_data, read_data);
+              $display("[MISMATCH %0d] Load @ 0x%08x: expected=0x%08x got=0x%08x", mismatch_count, addr, expected_data, read_data);
               mismatch_count++;
 
               // Stop after first few mismatches for debugging

@@ -6,40 +6,40 @@ module tb_dcache_writeback;
   // Parameters - Very small 2-way 512B config to force evictions
   localparam int DC_WAY_TB = 2;
   localparam int DC_CAPACITY_TB = 512 * 8;  // 512 bytes total
-  localparam int BLK_SIZE_TB = 128;         // 16 byte cache lines
+  localparam int BLK_SIZE_TB = 128;  // 16 byte cache lines
   localparam int XLEN_TB = 32;
   localparam int NUM_SETS = DC_CAPACITY_TB / (DC_WAY_TB * BLK_SIZE_TB);  // 16 sets
 
   // Clock and reset
-  logic clk = 0;
-  logic rst_n;
+  logic                           clk = 0;
+  logic                           rst_n;
 
   // DCache interfaces
-  ceres_param::dcache_req_t cache_req;
-  ceres_param::dcache_res_t cache_res;
-  ceres_param::dlowX_req_t lowX_req;
-  ceres_param::dlowX_res_t lowX_res;
-  logic flush;
-  logic fencei_stall;
+  ceres_param::dcache_req_t       cache_req;
+  ceres_param::dcache_res_t       cache_res;
+  ceres_param::dlowX_req_t        lowX_req;
+  ceres_param::dlowX_res_t        lowX_res;
+  logic                           flush;
+  logic                           fencei_stall;
 
   // Simple memory model with write-first behavior
-  logic [7:0] memory [logic [31:0]];
+  logic                     [7:0] memory          [logic [31:0]];
 
   // Test statistics
-  int store_count = 0;
-  int load_count = 0;
-  int wb_count = 0;
-  int error_count = 0;
+  int                             store_count = 0;
+  int                             load_count = 0;
+  int                             wb_count = 0;
+  int                             error_count = 0;
 
   // DCache instance - using simple dcache
   dcache_simple dut (
-      .clk_i(clk),
-      .rst_ni(rst_n),
-      .flush_i(flush),
-      .cache_req_i(cache_req),
-      .cache_res_o(cache_res),
-      .lowX_res_i(lowX_res),
-      .lowX_req_o(lowX_req),
+      .clk_i         (clk),
+      .rst_ni        (rst_n),
+      .flush_i       (flush),
+      .cache_req_i   (cache_req),
+      .cache_res_o   (cache_res),
+      .lowX_res_i    (lowX_res),
+      .lowX_req_o    (lowX_req),
       .fencei_stall_o(fencei_stall)
   );
 
@@ -47,9 +47,9 @@ module tb_dcache_writeback;
   always #5 clk = ~clk;
 
   // Memory model - 1 cycle latency (more realistic)
-  logic pending_req;
-  logic pending_rw;
-  logic [31:0] pending_addr;
+  logic         pending_req;
+  logic         pending_rw;
+  logic [ 31:0] pending_addr;
   logic [127:0] pending_data;
 
   always_ff @(posedge clk) begin
@@ -68,8 +68,7 @@ module tb_dcache_writeback;
         pending_addr <= lowX_req.addr;
         pending_data <= lowX_req.data;
         lowX_res.valid <= 1'b0;
-      end
-      // Process pending request (1 cycle later)
+      end  // Process pending request (1 cycle later)
       else if (pending_req) begin
         pending_req <= 1'b0;
         lowX_res.valid <= 1'b1;
@@ -77,30 +76,21 @@ module tb_dcache_writeback;
         if (pending_rw) begin
           // Write to memory - use blocking assignment for associative array
           for (int i = 0; i < 16; i++) begin
-            memory[pending_addr + i] = pending_data[i*8 +: 8];
+            memory[pending_addr+i] = pending_data[i*8+:8];
           end
-          lowX_res.data <= '0;
+          lowX_res.data  <= '0;
           lowX_res.valid <= 1'b1;
-          $display("[MEM] Write @ 0x%08x: data=0x%08x_%08x_%08x_%08x",
-                   pending_addr,
-                   pending_data[127:96], pending_data[95:64],
-                   pending_data[63:32], pending_data[31:0]);
+          $display("[MEM] Write @ 0x%08x: data=0x%08x_%08x_%08x_%08x", pending_addr, pending_data[127:96], pending_data[95:64], pending_data[63:32], pending_data[31:0]);
           wb_count++;
         end else begin
           // Read from memory - return zero for uninitialized locations
           for (int i = 0; i < 16; i++) begin
-            if (memory.exists(pending_addr + i))
-              lowX_res.data[i*8 +: 8] <= memory[pending_addr + i];
-            else
-              lowX_res.data[i*8 +: 8] <= 8'h00;
+            if (memory.exists(pending_addr + i)) lowX_res.data[i*8+:8] <= memory[pending_addr+i];
+            else lowX_res.data[i*8+:8] <= 8'h00;
           end
           lowX_res.valid <= 1'b1;
-          $display("[MEM] Read @ 0x%08x: data=0x%02x_%02x_%02x_%02x",
-                   pending_addr,
-                   memory.exists(pending_addr+3) ? memory[pending_addr+3] : 8'h00,
-                   memory.exists(pending_addr+2) ? memory[pending_addr+2] : 8'h00,
-                   memory.exists(pending_addr+1) ? memory[pending_addr+1] : 8'h00,
-                   memory.exists(pending_addr+0) ? memory[pending_addr+0] : 8'h00);
+          $display("[MEM] Read @ 0x%08x: data=0x%02x_%02x_%02x_%02x", pending_addr, memory.exists(pending_addr + 3) ? memory[pending_addr+3] : 8'h00, memory.exists(pending_addr + 2
+                   ) ? memory[pending_addr+2] : 8'h00, memory.exists(pending_addr + 1) ? memory[pending_addr+1] : 8'h00, memory.exists(pending_addr + 0) ? memory[pending_addr+0] : 8'h00);
         end
       end else begin
         lowX_res.valid <= 1'b0;
@@ -128,7 +118,7 @@ module tb_dcache_writeback;
       cache_req.ready = 1'b1;
       cache_req.addr = addr;
       cache_req.rw = 1'b1;
-      cache_req.rw_size = 2'b11;  // Word
+      cache_req.rw_size = WORD;  // Word
       cache_req.data = data;
       cache_req.uncached = 1'b0;
 
@@ -173,7 +163,7 @@ module tb_dcache_writeback;
       cache_req.ready = 1'b1;
       cache_req.addr = addr;
       cache_req.rw = 1'b0;
-      cache_req.rw_size = 2'b11;  // Word
+      cache_req.rw_size = WORD;  // Word
       cache_req.uncached = 1'b0;
 
       // Wait for cache to respond
@@ -191,8 +181,7 @@ module tb_dcache_writeback;
       end
 
       data = cache_res.data;
-      $display("[LOAD]  @ 0x%08x = 0x%08x (miss=%b lowX_valid=%b lowX_data[31:0]=0x%08x)",
-               addr, data, cache_res.miss, lowX_res.valid, lowX_res.data[31:0]);
+      $display("[LOAD]  @ 0x%08x = 0x%08x (miss=%b lowX_valid=%b lowX_data[31:0]=0x%08x)", addr, data, cache_res.miss, lowX_res.valid, lowX_res.data[31:0]);
 
       @(posedge clk);
       cache_req.valid = 1'b0;
@@ -209,9 +198,9 @@ module tb_dcache_writeback;
     flush = 0;
     cache_req = '0;
 
-    repeat(10) @(posedge clk);
+    repeat (10) @(posedge clk);
     rst_n = 1;
-    repeat(5) @(posedge clk);
+    repeat (5) @(posedge clk);
 
     $display("========================================");
     $display("DCache Writeback Test");
@@ -265,8 +254,7 @@ module tb_dcache_writeback;
     for (int i = 0; i < 8; i++) begin
       do_load(32'h80000000 + (i << 4), read_data);
       if (read_data !== (32'hDEAD0000 + i)) begin
-        $display("ERROR: Set %0d - Expected 0x%08x, got 0x%08x",
-                 i, 32'hDEAD0000 + i, read_data);
+        $display("ERROR: Set %0d - Expected 0x%08x, got 0x%08x", i, 32'hDEAD0000 + i, read_data);
         error_count++;
       end
     end

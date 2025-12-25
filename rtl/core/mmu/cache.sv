@@ -562,10 +562,10 @@ module cache
       data_wr_pre = mask_data;
 
       case (cache_req_q.rw_size)
-        2'b11: data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
-        2'b10: data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
-        2'b01: data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
-        2'b00: data_wr_pre = '0;
+        WORD:    data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
+        HALF:    data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
+        BYTE:    data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
+        NO_SIZE: data_wr_pre = '0;
       endcase
 
       word_idx = cache_req_q.addr[(WOFFSET+2)-1:2];
@@ -599,9 +599,8 @@ module cache
       // Moved here to avoid combinational loop with write_back in FIRST block
       // Use registered FSM values (wb_evict_*) to avoid ALWCOMBORDER warning
       if (wb_in_progress && !IS_ICACHE) begin
-        $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h state=%0d valid=%b ready=%b lowX_ready=%b lowX_valid=%b",
-                 $time, cache_req_q.addr, {wb_evict_tag_q, wb_evict_idx_q, {BOFFSET{1'b0}}},
-                 wb_state_q, lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
+        $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h state=%0d valid=%b ready=%b lowX_ready=%b lowX_valid=%b", $time, cache_req_q.addr, {
+                 wb_evict_tag_q, wb_evict_idx_q, {BOFFSET{1'b0}}}, wb_state_q, lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
       end
 `endif
 
@@ -675,7 +674,7 @@ module cache
         lowX_req_o.uncached = 1'b0;
         lowX_req_o.addr = fi_evict_addr;
         lowX_req_o.rw = 1'b1;  // Write operation
-        lowX_req_o.rw_size = 2'b11;  // Full cache line
+        lowX_req_o.rw_size = WORD;  // Full cache line
         lowX_req_o.data = fi_evict_data;
       end else if (wb_in_progress) begin
         // Use FSM state for writeback to prevent combinational loops
@@ -684,7 +683,7 @@ module cache
         lowX_req_o.uncached = 1'b0;
         lowX_req_o.addr = {wb_evict_tag_q, wb_evict_idx_q, {BOFFSET{1'b0}}};
         lowX_req_o.rw = 1'b1;  // Always write during writeback
-        lowX_req_o.rw_size = 2'b11;  // Full cache line
+        lowX_req_o.rw_size = WORD;  // Full cache line
         lowX_req_o.data = wb_evict_data_q;
       end else begin
         // Normal cache miss handling

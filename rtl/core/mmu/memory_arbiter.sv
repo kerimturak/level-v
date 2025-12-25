@@ -62,17 +62,17 @@ module memory_arbiter (
       if (dcache_req_reg.uncached) begin
         // Uncached write: use rw_size to determine byte enables
         case (dcache_req_reg.rw_size)
-          2'b00:   iomem_req_o.rw = '0;
-          2'b01:   iomem_req_o.rw = 'b1 << dcache_req_reg.addr[BOFFSET-1:0];
-          2'b10:   iomem_req_o.rw = 'b11 << dcache_req_reg.addr[BOFFSET-1:0];
+          NO_SIZE: iomem_req_o.rw = '0;
+          BYTE:    iomem_req_o.rw = 'b1 << dcache_req_reg.addr[BOFFSET-1:0];
+          HALF:    iomem_req_o.rw = 'b11 << dcache_req_reg.addr[BOFFSET-1:0];
           default: iomem_req_o.rw = 'b1111 << dcache_req_reg.addr[BOFFSET-1:0];  // Word write for peripherals
         endcase
       end else begin
         // Cached write: full cache line
         case (dcache_req_reg.rw_size)
-          2'b00:   iomem_req_o.rw = '0;
-          2'b01:   iomem_req_o.rw = 'b1 << dcache_req_reg.addr[BOFFSET-1:0];
-          2'b10:   iomem_req_o.rw = 'b11 << dcache_req_reg.addr[BOFFSET-1:0];
+          NO_SIZE: iomem_req_o.rw = '0;
+          BYTE:    iomem_req_o.rw = 'b1 << dcache_req_reg.addr[BOFFSET-1:0];
+          HALF:    iomem_req_o.rw = 'b11 << dcache_req_reg.addr[BOFFSET-1:0];
           default: iomem_req_o.rw = '1;
         endcase
       end
@@ -84,7 +84,7 @@ module memory_arbiter (
     if (!rst_ni) begin
       round          <= IDLE;
       icache_req_reg <= '{default: 0};
-      dcache_req_reg <= '{default: 0};
+      dcache_req_reg <= '{rw_size: NO_SIZE, default: 0};
     end else begin
       // Yeni istekleri latch’la (varsa). Tek cycle’lık pulse’u register’da tutuyoruz.
       if (!icache_req_reg.valid && icache_req_i.valid) icache_req_reg <= icache_req_i;

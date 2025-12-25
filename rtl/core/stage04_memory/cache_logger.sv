@@ -54,15 +54,15 @@ module cache_logger
 
         // Size decoding
         case (cache_req_i.rw_size)
-          2'b01: begin
+          BYTE: begin
             size_str   = "1B  ";
             size_bytes = 1;
           end
-          2'b10: begin
+          HALF: begin
             size_str   = "2B  ";
             size_bytes = 2;
           end
-          2'b11: begin
+          WORD: begin
             size_str   = "4B  ";
             size_bytes = 4;
           end

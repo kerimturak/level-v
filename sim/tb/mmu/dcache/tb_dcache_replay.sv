@@ -10,44 +10,44 @@ module tb_dcache_replay;
   localparam int XLEN_TB = 32;
 
   // Clock and reset
-  logic clk;
-  logic rst_n;
+  logic                           clk;
+  logic                           rst_n;
 
   // DCache interfaces
-  ceres_param::dcache_req_t cache_req;
-  ceres_param::dcache_res_t cache_res;
-  ceres_param::dlowX_req_t lowX_req;
-  ceres_param::dlowX_res_t lowX_res;
-  logic flush;
-  logic fencei_stall;
+  ceres_param::dcache_req_t       cache_req;
+  ceres_param::dcache_res_t       cache_res;
+  ceres_param::dlowX_req_t        lowX_req;
+  ceres_param::dlowX_res_t        lowX_res;
+  logic                           flush;
+  logic                           fencei_stall;
 
   // Simple memory model
-  logic [7:0] memory [logic [31:0]];
+  logic                     [7:0] memory             [logic [31:0]];
 
   // Test statistics
-  int load_count = 0;
-  int store_count = 0;
-  int mismatch_count = 0;
-  int total_ops = 0;
+  int                             load_count = 0;
+  int                             store_count = 0;
+  int                             mismatch_count = 0;
+  int                             total_ops = 0;
 
   // DCache instance
   dcache #(
       .cache_req_t(ceres_param::dcache_req_t),
       .cache_res_t(ceres_param::dcache_res_t),
-      .lowX_res_t(ceres_param::dlowX_res_t),
-      .lowX_req_t(ceres_param::dlowX_req_t),
-      .CACHE_SIZE(DC_CAPACITY_TB),
-      .BLK_SIZE(BLK_SIZE_TB),
-      .XLEN(XLEN_TB),
-      .NUM_WAY(DC_WAY_TB)
+      .lowX_res_t (ceres_param::dlowX_res_t),
+      .lowX_req_t (ceres_param::dlowX_req_t),
+      .CACHE_SIZE (DC_CAPACITY_TB),
+      .BLK_SIZE   (BLK_SIZE_TB),
+      .XLEN       (XLEN_TB),
+      .NUM_WAY    (DC_WAY_TB)
   ) dut (
-      .clk_i(clk),
-      .rst_ni(rst_n),
-      .flush_i(flush),
-      .cache_req_i(cache_req),
-      .cache_res_o(cache_res),
-      .lowX_res_i(lowX_res),
-      .lowX_req_o(lowX_req),
+      .clk_i         (clk),
+      .rst_ni        (rst_n),
+      .flush_i       (flush),
+      .cache_req_i   (cache_req),
+      .cache_res_o   (cache_res),
+      .lowX_res_i    (lowX_res),
+      .lowX_req_o    (lowX_req),
       .fencei_stall_o(fencei_stall)
   );
 
@@ -62,7 +62,7 @@ module tb_dcache_replay;
     if (!rst_n) begin
       lowX_res.valid <= 1'b0;
       lowX_res.ready <= 1'b1;
-      lowX_res.data <= '0;
+      lowX_res.data  <= '0;
     end else begin
       // Default ready
       lowX_res.ready <= 1'b1;
@@ -72,14 +72,14 @@ module tb_dcache_replay;
         if (lowX_req.rw) begin
           // Write to memory
           for (int i = 0; i < 16; i++) begin
-            memory[lowX_req.addr + i] = lowX_req.data[i*8 +: 8];
+            memory[lowX_req.addr+i] = lowX_req.data[i*8+:8];
           end
           lowX_res.valid <= 1'b1;
-          lowX_res.data <= '0;
+          lowX_res.data  <= '0;
         end else begin
           // Read from memory
           for (int i = 0; i < 16; i++) begin
-            lowX_res.data[i*8 +: 8] = memory[lowX_req.addr + i];
+            lowX_res.data[i*8+:8] = memory[lowX_req.addr+i];
           end
           lowX_res.valid <= 1'b1;
         end
@@ -91,7 +91,7 @@ module tb_dcache_replay;
 
   // Test sequence
   initial begin
-    int fd;
+    int    fd;
     string line;
     string op_type;
     logic [31:0] addr, expected_data, read_data;
@@ -102,9 +102,9 @@ module tb_dcache_replay;
     flush = 0;
     cache_req = '0;
 
-    repeat(10) @(posedge clk);
+    repeat (10) @(posedge clk);
     rst_n = 1;
-    repeat(5) @(posedge clk);
+    repeat (5) @(posedge clk);
 
     // Open memory operations file
     fd = $fopen("/home/kerim/level-v/mem_ops.txt", "r");
@@ -116,7 +116,9 @@ module tb_dcache_replay;
     $display("Starting dcache replay test...");
 
     // Process each operation
-    while (!$feof(fd) && op_count < 1000) begin  // Limit to first 1000 ops for quick test
+    while (!$feof(
+        fd
+    ) && op_count < 1000) begin  // Limit to first 1000 ops for quick test
       if ($fgets(line, fd)) begin
         if ($sscanf(line, "%s 0x%h 0x%h", op_type, addr, expected_data) == 3) begin
           op_count++;
@@ -128,11 +130,11 @@ module tb_dcache_replay;
             cache_req.ready <= 1'b1;
             cache_req.addr <= addr;
             cache_req.rw <= 1'b0;  // Read
-            cache_req.rw_size <= 2'b11;  // Word
+            cache_req.rw_size <= WORD;  // Word
             cache_req.uncached <= 1'b0;
 
             // Wait for response
-            wait(cache_res.valid && cache_res.ready);
+            wait (cache_res.valid && cache_res.ready);
             read_data = cache_res.data;
 
             @(posedge clk);
@@ -140,8 +142,7 @@ module tb_dcache_replay;
 
             // Check result
             if (read_data !== expected_data) begin
-              $display("[MISMATCH] Load addr=0x%08x: expected=0x%08x got=0x%08x",
-                       addr, expected_data, read_data);
+              $display("[MISMATCH] Load addr=0x%08x: expected=0x%08x got=0x%08x", addr, expected_data, read_data);
               mismatch_count++;
             end
             load_count++;
@@ -153,12 +154,12 @@ module tb_dcache_replay;
             cache_req.ready <= 1'b1;
             cache_req.addr <= addr;
             cache_req.rw <= 1'b1;  // Write
-            cache_req.rw_size <= 2'b11;  // Word
+            cache_req.rw_size <= WORD;  // Word
             cache_req.data <= expected_data;
             cache_req.uncached <= 1'b0;
 
             // Wait for response
-            wait(cache_res.valid && cache_res.ready);
+            wait (cache_res.valid && cache_res.ready);
 
             @(posedge clk);
             cache_req.valid <= 1'b0;

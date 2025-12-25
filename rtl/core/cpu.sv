@@ -267,7 +267,7 @@ module cpu
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni || ex_flush_en || priority_flush == 3 || priority_flush == 2) begin
-      pipe2 <= '{instr_type: instr_invalid, alu_ctrl: OP_ADD, pc_sel: NO_BJ, default: '0};
+      pipe2 <= '{rw_size: NO_SIZE, instr_type: instr_invalid, alu_ctrl: OP_ADD, pc_sel: NO_BJ, default: '0};
     end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL})) begin
       pipe2 <= '{
         `ifdef COMMIT_TRACER
@@ -322,17 +322,17 @@ module cpu
     ex_flush_en = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) ? 1'b0 : ex_flush; // !(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) &&  ex_flush;
     if (ex_alu_exc_type != NO_EXCEPTION) begin
       ex_exc_type = ex_alu_exc_type;
-    end else if (pipe2.rw_size != 0) begin
+    end else if (pipe2.rw_size != NO_SIZE) begin
       if (pipe2.wr_en) begin
         unique case (pipe2.rw_size)
-          2'b10:   ex_exc_type = ex_alu_result[0] ? STORE_MISALIGNED : NO_EXCEPTION;
-          2'b11:   ex_exc_type = (ex_alu_result[1] | ex_alu_result[0]) ? STORE_MISALIGNED : NO_EXCEPTION;
+          HALF:   ex_exc_type = ex_alu_result[0] ? STORE_MISALIGNED : NO_EXCEPTION;
+          WORD:   ex_exc_type = (ex_alu_result[1] | ex_alu_result[0]) ? STORE_MISALIGNED : NO_EXCEPTION;
           default: ex_exc_type = NO_EXCEPTION;
         endcase
       end else begin
         unique case (pipe2.rw_size)
-          2'b10:   ex_exc_type = ex_alu_result[0] ? LOAD_MISALIGNED : NO_EXCEPTION;
-          2'b11:   ex_exc_type = (ex_alu_result[1] | ex_alu_result[0]) ? LOAD_MISALIGNED : NO_EXCEPTION;
+          HALF:   ex_exc_type = ex_alu_result[0] ? LOAD_MISALIGNED : NO_EXCEPTION;
+          WORD:   ex_exc_type = (ex_alu_result[1] | ex_alu_result[0]) ? LOAD_MISALIGNED : NO_EXCEPTION;
           default: ex_exc_type = NO_EXCEPTION;
         endcase
       end
@@ -450,7 +450,7 @@ module cpu
   always_ff @(posedge clk_i) begin
     if (!rst_ni || priority_flush == 3) begin
       `ifdef COMMIT_TRACER
-      pipe3 <= '{instr_type:instr_invalid, default: '0};
+      pipe3 <= '{instr_type:instr_invalid, rw_size: NO_SIZE, default: '0};
       `else
       pipe3 <= '0;
       `endif
@@ -529,7 +529,7 @@ module cpu
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       `ifdef COMMIT_TRACER
-      pipe4 <= '{instr_type:instr_invalid, default: '0};
+      pipe4 <= '{instr_type:instr_invalid, rw_size: NO_SIZE, default: '0};
       `else
       pipe4 <= '0;
       `endif

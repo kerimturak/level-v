@@ -446,10 +446,10 @@ module dcache
     data_wr_pre = mask_data;
 
     case (cache_req_q.rw_size)
-      2'b11: data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
-      2'b10: data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
-      2'b01: data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
-      2'b00: data_wr_pre = '0;
+      WORD:    data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
+      HALF:    data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
+      BYTE:    data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
+      NO_SIZE: data_wr_pre = '0;
     endcase
 
     word_idx = cache_req_q.addr[(WOFFSET+2)-1:2];
@@ -555,7 +555,7 @@ module dcache
       lowX_req_o.uncached = 1'b0;
       lowX_req_o.addr = fi_evict_addr;
       lowX_req_o.rw = 1'b1;  // Write operation
-      lowX_req_o.rw_size = 2'b11;  // Full cache line
+      lowX_req_o.rw_size = WORD;  // Full cache line
       lowX_req_o.data = fi_evict_data;
     end else if (lowx_req_valid_q) begin
       // Hold previously latched writeback request
@@ -568,7 +568,7 @@ module dcache
       lowX_req_o.uncached = write_back ? 1'b0 : cache_req_q.uncached;
       lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : (cache_req_q.uncached ? cache_req_q.addr : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}});
       lowX_req_o.rw = write_back ? 1'b1 : (cache_req_q.uncached ? cache_req_q.rw : 1'b0);
-      lowX_req_o.rw_size = write_back ? 2'b11 : cache_req_q.rw_size;
+      lowX_req_o.rw_size = write_back ? WORD : cache_req_q.rw_size;
       lowX_req_o.data = write_back ? evict_data : (cache_req_q.uncached ? BLK_SIZE'(cache_req_q.data) : '0);
     end
 
@@ -617,7 +617,7 @@ module dcache
           lowx_req_q.addr     <= {evict_tag, rd_idx, {BOFFSET{1'b0}}};
           // dcache uses full-line writeback fields (dlowX_req_t)
           lowx_req_q.rw       <= 1'b1;
-          lowx_req_q.rw_size  <= 2'b11;
+          lowx_req_q.rw_size  <= WORD;
           lowx_req_q.data     <= evict_data;
           lowx_req_q.uncached <= 1'b0;
         end else begin
@@ -669,36 +669,39 @@ module dcache
   // ASSERTIONS: Cache Response Data Validity Checks
   // ==========================================================================
 
-  `ifndef SYNTHESIS
+`ifndef SYNTHESIS
   // Assertion: When cache_res_o.valid is high, data must not contain X/Z
   property p_valid_response_no_unknown_data;
-    @(posedge clk_i) disable iff (!rst_ni)
-    cache_res_o.valid |-> !$isunknown(cache_res_o.data);
+    @(posedge clk_i) disable iff (!rst_ni) cache_res_o.valid |-> !$isunknown(
+        cache_res_o.data
+    );
   endproperty
 
-  assert_valid_response_no_unknown_data: assert property (p_valid_response_no_unknown_data)
-    else $error("[DCACHE ASSERTION] Valid response contains unknown (X/Z) data! addr=0x%08x, data=0x%08x",
-                cache_req_q.addr, cache_res_o.data);
+  assert_valid_response_no_unknown_data :
+  assert property (p_valid_response_no_unknown_data)
+  else $error("[DCACHE ASSERTION] Valid response contains unknown (X/Z) data! addr=0x%08x, data=0x%08x", cache_req_q.addr, cache_res_o.data);
 
   // Assertion: When cache_select_data is used (cache hit), it must not be unknown
   property p_cache_hit_data_no_unknown;
-    @(posedge clk_i) disable iff (!rst_ni)
-    (cache_res_o.valid && cache_hit) |-> !$isunknown(cache_select_data);
+    @(posedge clk_i) disable iff (!rst_ni) (cache_res_o.valid && cache_hit) |-> !$isunknown(
+        cache_select_data
+    );
   endproperty
 
-  assert_cache_hit_data_no_unknown: assert property (p_cache_hit_data_no_unknown)
-    else $error("[DCACHE ASSERTION] Cache hit but cache_select_data contains unknown! addr=0x%08x, idx=%0d, way_hit=0b%04b",
-                cache_req_q.addr, rd_idx, cache_hit_vec);
+  assert_cache_hit_data_no_unknown :
+  assert property (p_cache_hit_data_no_unknown)
+  else $error("[DCACHE ASSERTION] Cache hit but cache_select_data contains unknown! addr=0x%08x, idx=%0d, way_hit=0b%04b", cache_req_q.addr, rd_idx, cache_hit_vec);
 
   // Assertion: When lowX response data is used (cache miss), it must not be unknown
   property p_cache_miss_lowx_data_no_unknown;
-    @(posedge clk_i) disable iff (!rst_ni)
-    (cache_res_o.valid && cache_miss && lowX_res_i.valid) |-> !$isunknown(lowX_res_i.data);
+    @(posedge clk_i) disable iff (!rst_ni) (cache_res_o.valid && cache_miss && lowX_res_i.valid) |-> !$isunknown(
+        lowX_res_i.data
+    );
   endproperty
 
-  assert_cache_miss_lowx_data_no_unknown: assert property (p_cache_miss_lowx_data_no_unknown)
-    else $error("[DCACHE ASSERTION] Cache miss but lowX_res_i.data contains unknown! addr=0x%08x",
-                cache_req_q.addr);
-  `endif
+  assert_cache_miss_lowx_data_no_unknown :
+  assert property (p_cache_miss_lowx_data_no_unknown)
+  else $error("[DCACHE ASSERTION] Cache miss but lowX_res_i.data contains unknown! addr=0x%08x", cache_req_q.addr);
+`endif
 
 endmodule

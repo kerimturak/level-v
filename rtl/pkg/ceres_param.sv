@@ -62,7 +62,7 @@ package ceres_param;
 
   // Data Cache
   localparam int DC_WAY = 2;
-  localparam int DC_CAPACITY = 1024;  // Minimum: 512 bits = 64 bytes = 4 cache lines (2 sets, 2-way)
+  localparam int DC_CAPACITY = 512;  // Minimum: 512 bits = 64 bytes = 4 cache lines (2 sets, 2-way)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
   //`endif
 
@@ -287,6 +287,12 @@ package ceres_param;
     BRANCH
   } spec_type_e;
 
+  typedef enum logic [1:0] {
+    NO_SIZE,
+    BYTE,
+    HALF,
+    WORD
+  } rw_size_e;
   // ---------------------------------------------------------------------------
   // 9.3 Stall Reasons
   // ---------------------------------------------------------------------------
@@ -551,7 +557,7 @@ package ceres_param;
     logic [XLEN-1:0] pc_incr;
     logic            rf_rw_en;
     logic            wr_en;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [1:0]      result_src;
     alu_op_e         alu_ctrl;
     pc_sel_e         pc_sel;
@@ -584,7 +590,7 @@ package ceres_param;
     logic [XLEN-1:0] pc;
     logic            rf_rw_en;
     logic            wr_en;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [1:0]      result_src;
     logic            ld_op_sign;
     logic [4:0]      rd_addr;
@@ -616,7 +622,7 @@ package ceres_param;
     logic [XLEN-1:0] pc;
     fe_tracer_info_t fe_tracer;
     logic            wr_en;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [XLEN-1:0] write_data;
     logic            rd_en_csr;
     logic            wr_en_csr;
@@ -636,7 +642,7 @@ package ceres_param;
     logic        rf_rw_en;
     imm_e        imm_sel;
     logic        wr_en;
-    logic [1:0]  rw_size;
+    rw_size_e    rw_size;
     logic [1:0]  result_src;
     alu_op_e     alu_ctrl;
     pc_sel_e     pc_sel;
@@ -687,7 +693,7 @@ package ceres_param;
     logic [XLEN-1:0] addr;
     logic            uncached;
     logic            rw;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [31:0]     data;
   } dcache_req_t;
 
@@ -724,7 +730,7 @@ package ceres_param;
     logic                valid;
     logic                ready;
     logic [XLEN-1:0]     addr;
-    logic [1:0]          rw_size;
+    rw_size_e            rw_size;
     logic                rw;
     logic [BLK_SIZE-1:0] data;
     logic                uncached;
@@ -801,7 +807,7 @@ package ceres_param;
     logic            valid;
     logic [XLEN-1:0] addr;
     logic            rw;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [31:0]     data;
     logic            ld_op_sign;
   } data_req_t;

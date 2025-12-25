@@ -116,7 +116,7 @@ module control_unit
         ctrl_o.alu_in2_sel  = 1'b0;
         ctrl_o.wr_en        = 1'b0;
         ctrl_o.result_src   = 2'b00;
-        ctrl_o.rw_size      = '0;
+        ctrl_o.rw_size      = NO_SIZE;
         ctrl_o.dcache_valid = 1'b0;
       end
       op_i_type: begin
@@ -133,7 +133,7 @@ module control_unit
         ctrl_o.alu_in2_sel  = 1'b1;
         ctrl_o.wr_en        = 1'b0;
         ctrl_o.result_src   = 2'b00;
-        ctrl_o.rw_size      = '0;
+        ctrl_o.rw_size      = NO_SIZE;
         ctrl_o.dcache_valid = 1'b0;
       end
       op_i_type_load: begin
@@ -148,10 +148,10 @@ module control_unit
         ctrl_o.result_src   = 2'b01;
         ctrl_o.dcache_valid = 1'b1;
         case (instr_type_i)
-          i_lb, i_lbu: ctrl_o.rw_size = 2'b01;
-          i_lh, i_lhu: ctrl_o.rw_size = 2'b10;
-          i_lw:        ctrl_o.rw_size = 2'b11;
-          default:     ctrl_o.rw_size = '0;
+          i_lb, i_lbu: ctrl_o.rw_size = BYTE;
+          i_lh, i_lhu: ctrl_o.rw_size = HALF;
+          i_lw:        ctrl_o.rw_size = WORD;
+          default:     ctrl_o.rw_size = NO_SIZE;
         endcase
       end
       op_s_type: begin
@@ -165,10 +165,10 @@ module control_unit
         ctrl_o.wr_en        = 1'b1;
         ctrl_o.dcache_valid = 1'b1;
         case (instr_type_i)  // uniqeu case
-          s_sb:    ctrl_o.rw_size = 2'b01;
-          s_sh:    ctrl_o.rw_size = 2'b10;
-          s_sw:    ctrl_o.rw_size = 2'b11;
-          default: ctrl_o.rw_size = '0;
+          s_sb:    ctrl_o.rw_size = BYTE;
+          s_sh:    ctrl_o.rw_size = HALF;
+          s_sw:    ctrl_o.rw_size = WORD;
+          default: ctrl_o.rw_size = NO_SIZE;
         endcase
         ctrl_o.result_src = 2'b00;
       end
@@ -182,7 +182,7 @@ module control_unit
         ctrl_o.alu_in2_sel  = 1'b0;
         ctrl_o.wr_en        = 1'b0;
         ctrl_o.result_src   = 2'b00;
-        ctrl_o.rw_size      = '0;
+        ctrl_o.rw_size      = NO_SIZE;
         ctrl_o.dcache_valid = 1'b0;
       end
       op_i_type_jump      : //i_jalr
@@ -196,7 +196,7 @@ module control_unit
         ctrl_o.alu_in2_sel  = 1'b1;
         ctrl_o.wr_en        = 1'b0;
         ctrl_o.result_src   = 2'b10;
-        ctrl_o.rw_size      = '0;
+        ctrl_o.rw_size      = NO_SIZE;
         ctrl_o.dcache_valid = 1'b0;
       end
       op_u_type_jump      : //u_jalr
@@ -210,7 +210,7 @@ module control_unit
         ctrl_o.alu_in2_sel  = 1'b0;
         ctrl_o.wr_en        = 1'b0;
         ctrl_o.result_src   = 2'b10;
-        ctrl_o.rw_size      = '0;
+        ctrl_o.rw_size      = NO_SIZE;
         ctrl_o.dcache_valid = 1'b0;
       end
       op_u_type_auipc: begin
@@ -223,7 +223,7 @@ module control_unit
         ctrl_o.alu_in2_sel  = 1'b1;
         ctrl_o.wr_en        = 1'b0;
         ctrl_o.result_src   = 2'b00;
-        ctrl_o.rw_size      = '0;
+        ctrl_o.rw_size      = NO_SIZE;
         ctrl_o.dcache_valid = 1'b0;
       end
       op_u_type_load: begin
@@ -236,7 +236,7 @@ module control_unit
         ctrl_o.alu_in2_sel  = 1'b1;
         ctrl_o.wr_en        = 1'b0;
         ctrl_o.result_src   = 2'b00;
-        ctrl_o.rw_size      = '0;
+        ctrl_o.rw_size      = NO_SIZE;
         ctrl_o.dcache_valid = 1'b0;
       end
       system: begin
@@ -252,7 +252,7 @@ module control_unit
             ctrl_o.alu_in2_sel  = 1'b0;  // rs1
             ctrl_o.wr_en        = 1'b0;
             ctrl_o.result_src   = 2'b00;
-            ctrl_o.rw_size      = '0;
+            ctrl_o.rw_size      = NO_SIZE;
             ctrl_o.dcache_valid = 1'b0;
           end
 
@@ -266,7 +266,7 @@ module control_unit
             ctrl_o.alu_in2_sel  = 1'b0;  // rs1
             ctrl_o.wr_en        = 1'b0;
             ctrl_o.result_src   = 2'b00;
-            ctrl_o.rw_size      = '0;
+            ctrl_o.rw_size      = NO_SIZE;
             ctrl_o.dcache_valid = 1'b0;
           end
 
@@ -280,7 +280,7 @@ module control_unit
             ctrl_o.alu_in2_sel  = 1'b1;  // zimm
             ctrl_o.wr_en        = 1'b0;
             ctrl_o.result_src   = 2'b00;
-            ctrl_o.rw_size      = '0;
+            ctrl_o.rw_size      = NO_SIZE;
             ctrl_o.dcache_valid = 1'b0;
           end
 
@@ -294,7 +294,7 @@ module control_unit
             ctrl_o.alu_in2_sel  = 1'b1;
             ctrl_o.wr_en        = 1'b0;
             ctrl_o.result_src   = 2'b00;
-            ctrl_o.rw_size      = '0;
+            ctrl_o.rw_size      = NO_SIZE;
             ctrl_o.dcache_valid = 1'b0;
           end
           mret, ecall, ebreak, wfi: begin
@@ -307,7 +307,7 @@ module control_unit
             ctrl_o.alu_in2_sel  = 1'b0;
             ctrl_o.wr_en        = 1'b0;
             ctrl_o.result_src   = 2'b00;
-            ctrl_o.rw_size      = '0;
+            ctrl_o.rw_size      = NO_SIZE;
             ctrl_o.dcache_valid = 1'b0;
           end
           default: begin
@@ -320,7 +320,7 @@ module control_unit
             ctrl_o.alu_in2_sel  = 1'b0;
             ctrl_o.wr_en        = 1'b0;
             ctrl_o.result_src   = 2'b00;
-            ctrl_o.rw_size      = '0;
+            ctrl_o.rw_size      = NO_SIZE;
             ctrl_o.dcache_valid = 1'b0;
           end
         endcase
@@ -335,7 +335,7 @@ module control_unit
         ctrl_o.alu_in2_sel  = 1'b0;
         ctrl_o.wr_en        = 1'b0;
         ctrl_o.result_src   = 2'b00;
-        ctrl_o.rw_size      = '0;
+        ctrl_o.rw_size      = NO_SIZE;
         ctrl_o.dcache_valid = 1'b0;
       end
     endcase
