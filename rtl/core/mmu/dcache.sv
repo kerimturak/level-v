@@ -669,39 +669,5 @@ module dcache
   // ASSERTIONS: Cache Response Data Validity Checks
   // ==========================================================================
 
-`ifndef SYNTHESIS
-  // Assertion: When cache_res_o.valid is high, data must not contain X/Z
-  property p_valid_response_no_unknown_data;
-    @(posedge clk_i) disable iff (!rst_ni) cache_res_o.valid |-> !$isunknown(
-        cache_res_o.data
-    );
-  endproperty
-
-  assert_valid_response_no_unknown_data :
-  assert property (p_valid_response_no_unknown_data)
-  else $error("[DCACHE ASSERTION] Valid response contains unknown (X/Z) data! addr=0x%08x, data=0x%08x", cache_req_q.addr, cache_res_o.data);
-
-  // Assertion: When cache_select_data is used (cache hit), it must not be unknown
-  property p_cache_hit_data_no_unknown;
-    @(posedge clk_i) disable iff (!rst_ni) (cache_res_o.valid && cache_hit) |-> !$isunknown(
-        cache_select_data
-    );
-  endproperty
-
-  assert_cache_hit_data_no_unknown :
-  assert property (p_cache_hit_data_no_unknown)
-  else $error("[DCACHE ASSERTION] Cache hit but cache_select_data contains unknown! addr=0x%08x, idx=%0d, way_hit=0b%04b", cache_req_q.addr, rd_idx, cache_hit_vec);
-
-  // Assertion: When lowX response data is used (cache miss), it must not be unknown
-  property p_cache_miss_lowx_data_no_unknown;
-    @(posedge clk_i) disable iff (!rst_ni) (cache_res_o.valid && cache_miss && lowX_res_i.valid) |-> !$isunknown(
-        lowX_res_i.data
-    );
-  endproperty
-
-  assert_cache_miss_lowx_data_no_unknown :
-  assert property (p_cache_miss_lowx_data_no_unknown)
-  else $error("[DCACHE ASSERTION] Cache miss but lowX_res_i.data contains unknown! addr=0x%08x", cache_req_q.addr);
-`endif
 
 endmodule

@@ -29,7 +29,7 @@ TB_FILES = \
 VLOG_FLAGS = -sv -work work +incdir+$(PKG_DIR) +incdir+$(RTL_DIR)/include -timescale=1ns/1ps
 
 # Simulation flags
-VSIM_FLAGS = -c -do "run -all; quit"
+VSIM_FLAGS =  -do "run -all; quit"
 VSIM_GUI_FLAGS = -do "add wave -r /*; run -all"
 
 # Targets
@@ -120,3 +120,15 @@ comprehensive: compile
 	@echo "Running comprehensive test..."
 	$(VLOG) $(VLOG_FLAGS) tb_dcache_comprehensive.sv
 	$(VSIM) $(VSIM_FLAGS) work.tb_dcache_comprehensive
+
+# Single set test (all requests target same set for n-way analysis)
+single_set: compile
+	@echo "Running single set test..."
+	$(VLOG) $(VLOG_FLAGS) tb_dcache_single_set.sv
+	$(VSIM) $(VSIM_FLAGS) work.tb_dcache_single_set
+
+# Single set test with GUI
+single_set_gui: compile
+	@echo "Running single set test with GUI..."
+	$(VLOG) $(VLOG_FLAGS) tb_dcache_single_set.sv
+	$(VSIM) $(VSIM_GUI_FLAGS) work.tb_dcache_single_set &

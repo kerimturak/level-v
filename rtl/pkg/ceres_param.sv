@@ -62,7 +62,7 @@ package ceres_param;
 
   // Data Cache
   localparam int DC_WAY = 2;
-  localparam int DC_CAPACITY = 512;  // Minimum: 512 bits = 64 bytes = 4 cache lines (2 sets, 2-way)
+  localparam int DC_CAPACITY = 1024;  // Minimum: 512 bits = 64 bytes = 4 cache lines (2 sets, 2-way)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
   //`endif
 
