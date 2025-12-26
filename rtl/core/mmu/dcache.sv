@@ -111,6 +111,14 @@ module dcache
   logic                      write_back;
   logic      [ TAG_SIZE-1:0] evict_tag;
   logic      [ BLK_SIZE-1:0] evict_data;
+  logic                      fi_active;
+  logic                      fi_writeback_req;
+  logic                      fi_mark_clean;
+  logic      [ TAG_SIZE-1:0] fi_evict_tag;
+  logic      [ BLK_SIZE-1:0] fi_evict_data;
+  logic      [     XLEN-1:0] fi_evict_addr;
+  logic      [  NUM_WAY-1:0] fi_way_onehot;
+  logic      [IDX_WIDTH-1:0] fi_set_idx_q;
   // Writeback is handled combinationally like old dcache
   // No FSM needed - writeback and fill happen in same cycle
   // ============================================================================
@@ -196,14 +204,7 @@ module dcache
 
   // Fence.i state machine moved to helper module `dcache_fencei`
   // Instantiate fence helper
-  logic                 fi_active;
-  logic                 fi_writeback_req;
-  logic                 fi_mark_clean;
-  logic [ TAG_SIZE-1:0] fi_evict_tag;
-  logic [ BLK_SIZE-1:0] fi_evict_data;
-  logic [     XLEN-1:0] fi_evict_addr;
-  logic [  NUM_WAY-1:0] fi_way_onehot;
-  logic [IDX_WIDTH-1:0] fi_set_idx_q;
+
 
   dcache_fencei #(
       .TAG_SIZE (TAG_SIZE),
@@ -328,13 +329,6 @@ module dcache
       write_back = |(dirty_read_vec & evict_way & cache_valid_vec);
     end
     if (lowx_req_valid_q) write_back = 1'b1;
-
-`ifdef LOG_CACHE_DEBUG
-    if (write_back) begin
-      $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h valid=%b ready=%b lowX_ready=%b lowX_valid=%b", $time, cache_req_q.addr, {evict_tag, rd_idx, {BOFFSET{1'b0}}},
-               lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
-    end
-`endif
   end
 
   // B) block data/tag array writes during writeback
