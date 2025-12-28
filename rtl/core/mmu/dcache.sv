@@ -78,68 +78,51 @@ module dcache
     logic [NUM_WAY-2:0]   rnode;
   } nsram_t;
 
-  dsram_t                 dsram;
-  tsram_t                 tsram;
-  nsram_t                 nsram;
+  dsram_t                    dsram;
+  tsram_t                    tsram;
+  nsram_t                    nsram;
 
-  // Dirty SRAM signals
-  logic   [IDX_WIDTH-1:0] drsram_wr_idx;
-  logic   [  NUM_WAY-1:0] drsram_wr_way;
-  logic                   drsram_wr_rw_en;
-  logic                   drsram_wr_wdirty;
-  logic   [  NUM_WAY-1:0] drsram_rd_rdirty;
+  // Dirty bit array signals (renamed for clarity)
+  // `dirty_reg` holds per-set dirty bits for each way. Signals below
+  // control writes to that register array and read the current dirty
+  // vector for the computed index.
+  logic      [IDX_WIDTH-1:0] dirty_wr_idx;  // set index to write dirty bit
+  logic      [  NUM_WAY-1:0] dirty_wr_way;  // which way(s) to update
+  logic                      dirty_wr_en;  // write enable for dirty write
+  logic                      dirty_wr_val;  // value to write (1 = dirty, 0 = clean)
+  logic      [  NUM_WAY-1:0] dirty_read_vec;  // read vector of dirty bits for current index
+
+  // Internal low-level request latch to hold writeback requests
+  lowX_req_t                 lowx_req_q;
+  logic                      lowx_req_valid_q;
 
   // Temporary variables to break combinatorial loops
-  logic   [IDX_WIDTH-1:0] drsram_idx_temp;
-  logic                   drsram_rw_en_temp;
-  logic   [  NUM_WAY-1:0] drsram_way_temp;
-  logic                   drsram_wdirty_temp;
+  logic      [IDX_WIDTH-1:0] dirty_idx_temp;
+  logic                      dirty_rw_en_temp;
+  logic      [  NUM_WAY-1:0] dirty_way_temp;
+  logic                      dirty_wdirty_temp;
 
   // D-cache specific wires
-  logic   [ BLK_SIZE-1:0] mask_data;
-  logic                   data_array_wr_en;
-  logic   [ BLK_SIZE-1:0] data_wr_pre;
-  logic                   tag_array_wr_en;
-  logic   [  WOFFSET-1:0] word_idx;
-  logic                   write_back;
-  logic   [ TAG_SIZE-1:0] evict_tag;
-  logic   [ BLK_SIZE-1:0] evict_data;
+  logic      [ BLK_SIZE-1:0] mask_data;
+  logic                      data_array_wr_en;
+  logic      [ BLK_SIZE-1:0] data_wr_pre;
+  logic                      tag_array_wr_en;
+  logic      [  WOFFSET-1:0] word_idx;
+  logic                      write_back;
+  logic      [ TAG_SIZE-1:0] evict_tag;
+  logic      [ BLK_SIZE-1:0] evict_data;
+  logic                      fi_active;
+  logic                      fi_writeback_req;
+  logic                      fi_mark_clean;
+  logic      [ TAG_SIZE-1:0] fi_evict_tag;
+  logic      [ BLK_SIZE-1:0] fi_evict_data;
+  logic      [     XLEN-1:0] fi_evict_addr;
+  logic      [  NUM_WAY-1:0] fi_way_onehot;
+  logic      [IDX_WIDTH-1:0] fi_set_idx_q;
   // Writeback is handled combinationally like old dcache
   // No FSM needed - writeback and fill happen in same cycle
   // ============================================================================
-  // FENCE.I Dirty Writeback State Machine
-  // ----------------------------------------------------------------------------
-  // When fence.i is issued (flush_i rises), dcache must:
-  // 1. Scan all sets and all ways for dirty lines
-  // 2. Write dirty lines back to memory
-  // 3. Mark written lines as clean
-  // 4. Assert fencei_stall_o until all dirty lines are written back
-  // 5. IMPORTANT: Dcache does NOT invalidate lines on fence.i, only writes back dirty data
-  // ============================================================================
-  typedef enum logic [2:0] {
-    FI_IDLE,            // Normal operation
-    FI_SCAN,            // Scanning sets for dirty lines
-    FI_CHECK_WAY,       // Check each way for dirty data
-    FI_WRITEBACK_REQ,   // Send writeback request to memory
-    FI_WRITEBACK_WAIT,  // Wait for writeback completion
-    FI_MARK_CLEAN,      // Mark the line as clean
-    FI_NEXT_WAY,        // Move to next way
-    FI_DONE             // Writeback complete
-  } fencei_state_e;
-
-  fencei_state_e fi_state_q, fi_state_d;
-  logic [IDX_WIDTH-1:0] fi_set_idx_q, fi_set_idx_d;
-  logic [$clog2(NUM_WAY)-1:0] fi_way_idx_q, fi_way_idx_d;
-  logic                fi_active;
-  logic                fi_writeback_req;
-  logic [TAG_SIZE-1:0] fi_evict_tag;
-  logic [BLK_SIZE-1:0] fi_evict_data;
-  logic [    XLEN-1:0] fi_evict_addr;
-  logic                fi_mark_clean;
-  logic [ NUM_WAY-1:0] fi_way_onehot;
-  logic                fi_has_dirty;
-  logic                flush_i_prev;  // To detect rising edge
-
+  // Fence.i writeback helper (extracted to separate module)
   // Request pipeline register
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
@@ -213,155 +196,44 @@ module dcache
   );
   /* verilator lint_on UNOPTFLAT */
 
-  // Register the node read from BRAM to break combinational loops for PLRU
-  logic [NUM_WAY-2:0] node_q;
-  always_ff @(posedge clk_i) begin
-    if (!rst_ni) node_q <= '0;
-    else node_q <= nsram.rnode;
-  end
-
   // ============================================================================
   // WRITEBACK - Combinational (like old dcache)
   // ----------------------------------------------------------------------------
   // Writeback and cache fill happen together in the same cycle
   // No FSM needed - simpler and avoids multi-cycle writeback delays
 
-  // Detect rising edge of flush_i
-  always_ff @(posedge clk_i) begin
-    if (!rst_ni) flush_i_prev <= 1'b0;
-    else flush_i_prev <= flush_i;
-  end
+  // Fence.i state machine moved to helper module `dcache_fencei`
+  // Instantiate fence helper
 
-  wire fi_start = flush_i && !flush_i_prev && (fi_state_q == FI_IDLE);
 
-  // One-hot encoding of current way
-  always_comb begin
-    fi_way_onehot = '0;
-    fi_way_onehot[fi_way_idx_q] = 1'b1;
-  end
-
-  // Check if current way in current set is dirty and valid
-  assign fi_has_dirty = drsram_rd_rdirty[fi_way_idx_q] && tsram.rtag[fi_way_idx_q][TAG_SIZE];
-
-  // Get eviction data for fence.i writeback
-  always_comb begin
-    fi_evict_tag  = tsram.rtag[fi_way_idx_q][TAG_SIZE-1:0];
-    fi_evict_data = dsram.rdata[fi_way_idx_q];
-    fi_evict_addr = {fi_evict_tag, fi_set_idx_q, {BOFFSET{1'b0}}};
-  end
-
-  // Fence.i state machine
-  always_ff @(posedge clk_i) begin
-    if (!rst_ni) begin
-      fi_state_q   <= FI_IDLE;
-      fi_set_idx_q <= '0;
-      fi_way_idx_q <= '0;
-    end else begin
-      fi_state_q   <= fi_state_d;
-      fi_set_idx_q <= fi_set_idx_d;
-      fi_way_idx_q <= fi_way_idx_d;
-    end
-  end
-
-  always_comb begin
-    fi_state_d       = fi_state_q;
-    fi_set_idx_d     = fi_set_idx_q;
-    fi_way_idx_d     = fi_way_idx_q;
-    fi_active        = 1'b0;
-    fi_writeback_req = 1'b0;
-    fi_mark_clean    = 1'b0;
-
-    unique case (fi_state_q)
-      FI_IDLE: begin
-        if (fi_start) begin
-          // fence.i detected (rising edge of flush_i), start scanning
-          // Set address for first set, wait one cycle for BRAM read
-          fi_state_d   = FI_SCAN;
-          fi_set_idx_d = '0;
-          fi_way_idx_d = '0;
-          fi_active    = 1'b1;
-        end
-      end
-
-      FI_SCAN: begin
-        fi_active  = 1'b1;
-        // Address is set, wait one cycle for BRAM to output data
-        // Then move to check ways
-        fi_state_d = FI_CHECK_WAY;
-      end
-
-      FI_CHECK_WAY: begin
-        fi_active = 1'b1;
-        // Now BRAM data is valid, check if dirty
-        if (fi_has_dirty) begin
-          // Found a dirty line, initiate writeback
-          fi_state_d = FI_WRITEBACK_REQ;
-        end else begin
-          // Not dirty, move to next way
-          fi_state_d = FI_NEXT_WAY;
-        end
-      end
-
-      FI_WRITEBACK_REQ: begin
-        fi_active = 1'b1;
-        fi_writeback_req = 1'b1;
-        // Wait for memory to accept our request
-        if (lowX_res_i.ready) begin
-          fi_state_d = FI_WRITEBACK_WAIT;
-        end
-      end
-
-      FI_WRITEBACK_WAIT: begin
-        fi_active = 1'b1;
-        fi_writeback_req = 1'b1;
-        // Wait for memory write to complete
-        if (lowX_res_i.valid) begin
-          // Writeback complete, mark line as clean
-          fi_state_d = FI_MARK_CLEAN;
-        end
-      end
-
-      FI_MARK_CLEAN: begin
-        fi_active = 1'b1;
-        fi_mark_clean = 1'b1;
-        fi_state_d = FI_NEXT_WAY;
-      end
-
-      FI_NEXT_WAY: begin
-        fi_active = 1'b1;
-        if (fi_way_idx_q == $clog2(NUM_WAY)'(NUM_WAY - 1)) begin
-          // All ways checked, move to next set
-          if (fi_set_idx_q == IDX_WIDTH'(NUM_SET - 1)) begin
-            // All sets done
-            fi_state_d = FI_DONE;
-          end else begin
-            fi_set_idx_d = fi_set_idx_q + 1'b1;
-            fi_way_idx_d = '0;
-            // Go to SCAN to wait for BRAM read latency
-            fi_state_d   = FI_SCAN;
-          end
-        end else begin
-          fi_way_idx_d = fi_way_idx_q + 1'b1;
-          // Same set, data already available, go directly to check
-          fi_state_d   = FI_CHECK_WAY;
-        end
-      end
-
-      FI_DONE: begin
-        // Writeback complete, no longer stalling
-        // Stay in DONE until flush_i goes low (will happen when pipeline advances)
-        fi_active = 1'b0;  // Release stall - this is the key!
-        if (!flush_i) begin
-          fi_state_d = FI_IDLE;
-        end
-      end
-
-      default: fi_state_d = FI_IDLE;
-    endcase
-  end
+  dcache_fencei #(
+      .TAG_SIZE (TAG_SIZE),
+      .BLK_SIZE (BLK_SIZE),
+      .XLEN     (XLEN),
+      .NUM_WAY  (NUM_WAY),
+      .IDX_WIDTH(IDX_WIDTH),
+      .BOFFSET  (BOFFSET),
+      .NUM_SET  (NUM_SET)
+  ) i_dcache_fencei (
+      .clk_i           (clk_i),
+      .rst_ni          (rst_ni),
+      .flush_i         (flush_i),
+      .lowx_res_ready  (lowX_res_i.ready),
+      .lowx_res_valid  (lowX_res_i.valid),
+      .drsram_rd_rdirty(dirty_read_vec),
+      .tsram_rtag      (tsram.rtag),
+      .dsram_rdata     (dsram.rdata),
+      .fi_active       (fi_active),
+      .fi_writeback_req(fi_writeback_req),
+      .fi_mark_clean   (fi_mark_clean),
+      .fi_evict_tag    (fi_evict_tag),
+      .fi_evict_data   (fi_evict_data),
+      .fi_evict_addr   (fi_evict_addr),
+      .fi_way_onehot   (fi_way_onehot),
+      .fi_set_idx      (fi_set_idx_q)
+  );
 
   // fencei_stall_o: stall CPU while dirty writeback is in progress
-  // fi_active is 0 in FI_IDLE and FI_DONE states
   assign fencei_stall_o = fi_active;
 
   // ============================================================================
@@ -378,8 +250,8 @@ module dcache
       for (int i = 0; i < NUM_SET; i++) dirty_reg[i] <= '0;
     end else begin
       for (int w = 0; w < NUM_WAY; w++) begin
-        if (drsram_wr_way[w]) begin
-          dirty_reg[drsram_wr_idx][w] <= drsram_wr_wdirty;
+        if (dirty_wr_way[w]) begin
+          dirty_reg[dirty_wr_idx][w] <= dirty_wr_val;
         end
       end
     end
@@ -387,28 +259,8 @@ module dcache
 
   // PLRU logic
   always_comb begin
-    logic [NUM_WAY-1:0] invalid_mask;
-    logic [NUM_WAY-1:0] plru_candidate;
-    logic               found_invalid;
-    updated_node = update_node(node_q, cache_wr_way);
-
-    invalid_mask = ~cache_valid_vec;
-    plru_candidate = compute_evict_way(node_q);
-
-    evict_way = '0;
-    found_invalid = 1'b0;
-    for (int ii = 0; ii < NUM_WAY; ii++) begin
-      if (!found_invalid && invalid_mask[ii]) begin
-        evict_way[ii] = 1'b1;
-        found_invalid = 1'b1;
-      end else begin
-        evict_way[ii] = 1'b0;
-      end
-    end
-
-    if (!found_invalid) begin
-      evict_way = plru_candidate;
-    end
+    updated_node = update_node(nsram.rnode, cache_wr_way);
+    evict_way = compute_evict_way(nsram.rnode);
   end
 
   // Common tag and data selection logic
@@ -442,76 +294,72 @@ module dcache
     data_wr_pre = mask_data;
 
     case (cache_req_q.rw_size)
-      2'b11: data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
-      2'b10: data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
-      2'b01: data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
-      2'b00: data_wr_pre = '0;
+      WORD:    data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
+      HALF:    data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
+      BYTE:    data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
+      NO_SIZE: data_wr_pre = '0;
     endcase
 
     word_idx = cache_req_q.addr[(WOFFSET+2)-1:2];
 
     // Compute index first (used for dirty read)
-    drsram_idx_temp = fi_active ? fi_set_idx_q : cache_idx;
+    // During fence.i scanning we use `fi_set_idx_q`, otherwise normal cache index
+    dirty_idx_temp = fi_active ? fi_set_idx_q : cache_idx;
   end
 
   // SECOND: Read dirty bits using the computed index
   always_comb begin
     // Default to avoid X propagation
-    drsram_rd_rdirty = '0;
+    dirty_read_vec = '0;
 
     for (int w = 0; w < NUM_WAY; w++) begin
-      drsram_rd_rdirty[w] = dirty_reg[drsram_idx_temp][w];
+      dirty_read_vec[w] = dirty_reg[dirty_idx_temp][w];
     end
   end
 
+  /* verilator lint_on WIDTHEXPAND */
+
   // THIRD: Compute write_back and other signals using dirty bits
+  // THIRD: Compute write_back (separate smaller blocks)
+
+  // A) write_back decision and debug
   always_comb begin
-    // write_back is combinational but only used to trigger FSM transition
-    // Default to 0 to avoid X propagation
     write_back = 1'b0;
-
-    if (cache_miss && !write_back) begin
-      write_back = |(drsram_rd_rdirty & evict_way & cache_valid_vec);
+    if (cache_miss) begin
+      write_back = |(dirty_read_vec & evict_way & cache_valid_vec);
     end
+    if (lowx_req_valid_q) write_back = 1'b1;
+  end
 
-`ifdef LOG_CACHE_DEBUG
-    // Debug logging for cache operations
-    if (write_back) begin
-      $display("[DCACHE] WRITEBACK @ %0t: addr=0x%08h evict_addr=0x%08h valid=%b ready=%b lowX_ready=%b lowX_valid=%b", $time, cache_req_q.addr, {evict_tag, rd_idx, {BOFFSET{1'b0}}},
-               lowX_req_o.valid, lowX_req_o.ready, lowX_res_i.ready, lowX_res_i.valid);
-    end
-`endif
+  // B) block data/tag array writes during writeback
+  always_comb begin
+    data_array_wr_en = ((cache_hit && cache_req_q.rw) || (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !write_back && !fi_active;
+    tag_array_wr_en  = ((cache_hit && cache_req_q.rw) || (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !write_back && !fi_active;
+  end
 
-    // Block data/tag array writes during writeback
-    // Writeback is combinational so write_back signal directly blocks
-    data_array_wr_en = ((cache_hit && cache_req_q.rw) ||
-      (cache_miss && lowX_res_i.valid && !cache_req_q.uncached)) && !write_back && !fi_active;
-    tag_array_wr_en = (cache_miss && lowX_res_i.valid && !cache_req_q.uncached) && !write_back && !fi_active;
+  // C) DR SRAM dirty control signals
+  always_comb begin
+    dirty_wdirty_temp = fi_mark_clean ? 1'b0 : ((flush && !fi_active) ? '0 : (write_back ? '0 : (cache_req_q.rw ? '1 : '0)));
+    dirty_wr_val = dirty_wdirty_temp;
 
-    // Update dcache specific memories
-    // During fence.i writeback, we use fi_mark_clean to clear dirty bit
-    // IMPORTANT: During fi_active, we must NOT let flush invalidate tags/dirty bits
-    drsram_wdirty_temp = fi_mark_clean ? 1'b0 : ((flush && !fi_active) ? '0 : (write_back ? '0 : (cache_req_q.rw ? '1 : '0)));
-    drsram_wr_wdirty = drsram_wdirty_temp;
-
-    // Compute rw_en - combinational writeback clears dirty when complete
-    drsram_rw_en_temp = fi_mark_clean || ((cache_req_q.rw && (cache_hit || (cache_miss && lowX_res_i.valid))) ||
+    dirty_rw_en_temp = fi_mark_clean || ((cache_req_q.rw && (cache_hit || (cache_miss && lowX_res_i.valid))) ||
                       (write_back && lowX_res_i.valid) || (flush && !fi_active));
-    drsram_wr_rw_en  = drsram_rw_en_temp;
+    dirty_wr_en  = dirty_rw_en_temp;
 
-    // Use cache_idx for normal operation, fi_set_idx_q during fence.i
-    drsram_wr_idx    = drsram_idx_temp;
+    dirty_wr_idx    = dirty_idx_temp;
 
     for (int i = 0; i < NUM_WAY; i++) begin
       if (fi_mark_clean) begin
-        drsram_way_temp[i] = fi_way_onehot[i];
+        dirty_way_temp[i] = fi_way_onehot[i];
       end else begin
-        // Don't let flush write during fi_active or write_back
-        drsram_way_temp[i] = (flush && !fi_active && !write_back) ? '1 : (cache_wr_way[i] && drsram_rw_en_temp);
+        dirty_way_temp[i] = (flush && !fi_active && !write_back) ? '1 : (cache_wr_way[i] && dirty_rw_en_temp);
       end
-      drsram_wr_way[i] = drsram_way_temp[i];
+      dirty_wr_way[i] = dirty_way_temp[i];
     end
+  end
 
+  // D) nsram/tsram/dsram updates and evict selection
+  always_comb begin
     nsram.rw_en = (flush && !fi_active) || data_array_wr_en;
     nsram.wnode = (flush && !fi_active) ? '0 : updated_node;
     nsram.idx   = fi_active ? fi_set_idx_q : cache_idx;
@@ -519,7 +367,6 @@ module dcache
     tsram.way   = '0;
     tsram.idx   = fi_active ? fi_set_idx_q : cache_idx;
     tsram.wtag  = (flush && !fi_active) ? '0 : {1'b1, cache_req_q.addr[XLEN-1:IDX_WIDTH+BOFFSET]};
-    // CRITICAL: Don't invalidate tags during fence.i - only writeback dirty data
     for (int i = 0; i < NUM_WAY; i++) tsram.way[i] = (flush && !fi_active) ? '1 : (cache_wr_way[i] && tag_array_wr_en);
 
     dsram.way   = '0;
@@ -548,8 +395,11 @@ module dcache
       lowX_req_o.uncached = 1'b0;
       lowX_req_o.addr = fi_evict_addr;
       lowX_req_o.rw = 1'b1;  // Write operation
-      lowX_req_o.rw_size = 2'b11;  // Full cache line
+      lowX_req_o.rw_size = WORD;  // Full cache line
       lowX_req_o.data = fi_evict_data;
+    end else if (lowx_req_valid_q) begin
+      // Hold previously latched writeback request
+      lowX_req_o = lowx_req_q;
     end else begin
       // Normal cache miss handling (includes writeback)
       // Like old dcache: writeback and fill happen together
@@ -558,7 +408,7 @@ module dcache
       lowX_req_o.uncached = write_back ? 1'b0 : cache_req_q.uncached;
       lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : (cache_req_q.uncached ? cache_req_q.addr : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}});
       lowX_req_o.rw = write_back ? 1'b1 : (cache_req_q.uncached ? cache_req_q.rw : 1'b0);
-      lowX_req_o.rw_size = write_back ? 2'b11 : cache_req_q.rw_size;
+      lowX_req_o.rw_size = write_back ? WORD : cache_req_q.rw_size;
       lowX_req_o.data = write_back ? evict_data : (cache_req_q.uncached ? BLK_SIZE'(cache_req_q.data) : '0);
     end
 
@@ -579,6 +429,42 @@ module dcache
       lookup_ack <= '0;
     end else begin
       lookup_ack <= lowX_res_i.valid ? !lowX_req_o.ready : (!lookup_ack ? lowX_req_o.valid && lowX_res_i.ready : lookup_ack);
+    end
+  end
+
+  // Latch normal writeback requests so they are held stable across cycles
+  // when eviction way/addr might change in the next cycle.
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      lowx_req_q <= '0;
+      lowx_req_valid_q <= 1'b0;
+    end else begin
+      if (lowx_req_valid_q) begin
+        // Waiting for low-level response to clear saved request
+        if (lowX_res_i.valid) begin
+          lowx_req_q <= '0;
+          lowx_req_valid_q <= 1'b0;
+        end else begin
+          lowx_req_q <= lowx_req_q;
+          lowx_req_valid_q <= 1'b1;
+        end
+      end else begin
+        // Capture a new writeback request when it would be issued
+        if (write_back && cache_miss && lowX_res_i.ready) begin
+          lowx_req_valid_q    <= 1'b1;
+          lowx_req_q.valid    <= 1'b1;
+          lowx_req_q.ready    <= 1'b1;
+          lowx_req_q.addr     <= {evict_tag, rd_idx, {BOFFSET{1'b0}}};
+          // dcache uses full-line writeback fields (dlowX_req_t)
+          lowx_req_q.rw       <= 1'b1;
+          lowx_req_q.rw_size  <= WORD;
+          lowx_req_q.data     <= evict_data;
+          lowx_req_q.uncached <= 1'b0;
+        end else begin
+          lowx_req_q <= '0;
+          lowx_req_valid_q <= 1'b0;
+        end
+      end
     end
   end
 

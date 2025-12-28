@@ -19,10 +19,12 @@ module alu
     input  logic    [XLEN-1:0] alu_b_i,
     input  alu_op_e            op_sel_i,
     output logic               alu_stall_o,
+    /* verilator lint_off UNOPTFLAT */
     output logic               zero_o,
     output logic               slt_o,
     output logic               sltu_o,
     output logic    [XLEN-1:0] alu_o
+    /* verilator lint_on UNOPTFLAT */
 );
 
   // ------------------------------------------------------------

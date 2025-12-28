@@ -40,7 +40,7 @@ module memory
       ex_valid_q   <= 1'b0;
       ex_addr_q    <= '0;
       ex_rw_q      <= 1'b0;
-      ex_rw_size_q <= '0;
+      ex_rw_size_q <= NO_SIZE;
     end else begin
       ex_valid_q   <= ex_data_req_i.valid;
       ex_addr_q    <= ex_data_req_i.addr;
@@ -133,9 +133,9 @@ module memory
 
     // load size + signed/unsigned
     unique case (ex_data_req_i.rw_size)
-      2'b01:   me_data_o = ex_data_req_i.ld_op_sign ? {{24{selected_byte[7]}}, selected_byte} : {24'b0, selected_byte};
-      2'b10:   me_data_o = ex_data_req_i.ld_op_sign ? {{16{selected_halfword[15]}}, selected_halfword} : {16'b0, selected_halfword};
-      2'b11:   me_data_o = rd_data;
+      BYTE:    me_data_o = ex_data_req_i.ld_op_sign ? {{24{selected_byte[7]}}, selected_byte} : {24'b0, selected_byte};
+      HALF:    me_data_o = ex_data_req_i.ld_op_sign ? {{16{selected_halfword[15]}}, selected_halfword} : {16'b0, selected_halfword};
+      WORD:    me_data_o = rd_data;
       default: me_data_o = '0;
     endcase
   end

@@ -27,8 +27,8 @@ module fetch
     input  logic            [XLEN-1:0] ex_mtvec_i,
     input  logic                       trap_active_i,
     input  logic                       misa_c_i,       // C extension enabled
-    input  logic            [XLEN-1:0] tdata1_i,       // Trigger data 1 (config)
-    input  logic            [XLEN-1:0] tdata2_i,       // Trigger data 2 (breakpoint addr)
+    input  logic            [XLEN-1:0] tdata1_i[0:1],  // Trigger 0 and 1 data1 (config)
+    input  logic            [XLEN-1:0] tdata2_i[0:1],  // Trigger 0 and 1 data2 (breakpoint addr)
     input  logic            [XLEN-1:0] tcontrol_i,     // Trigger control (mte bit[3] enables triggers)
     input  logic                       spec_hit_i,
     output predict_info_t              spec_o,
@@ -67,6 +67,22 @@ module fetch
   blowX_res_t             buff_lowX_res;
   logic                   buf_lookup_ack;
 
+  // ============================================================================
+  // Reset Flush Cycle Counter
+  // ----------------------------------------------------------------------------
+  // During reset, both icache and dcache perform flush operations.
+  // Each cache takes NUM_SET cycles to complete flush.
+  // If dcache is larger than icache, dcache flush takes longer.
+  // This counter ensures fetch stage stalls until the maximum flush completes.
+  // ============================================================================
+  localparam int IC_NUM_SET = (IC_CAPACITY / BLK_SIZE) / IC_WAY;
+  localparam int DC_NUM_SET = (DC_CAPACITY / BLK_SIZE) / DC_WAY;
+  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ? IC_NUM_SET : DC_NUM_SET;
+  localparam int FLUSH_CNT_WIDTH = $clog2(MAX_FLUSH_CYCLES + 1);
+
+  logic [FLUSH_CNT_WIDTH-1:0] flush_counter;
+  logic                       flush_in_progress;
+
   // Exception priority detection signals
   logic                   has_debug_breakpoint;
   logic                   has_instr_misaligned;
@@ -74,6 +90,8 @@ module fetch
   logic                   has_illegal_instr;
   logic                   has_ebreak;
   logic                   has_ecall;
+  logic                   trigger0_execute_hit;
+  logic                   trigger1_execute_hit;
 
   // ============================================================================
   // PC Register: Program Counter yönetimi
@@ -93,6 +111,28 @@ module fetch
       grand           <= grand_next;
       memregion       <= memregion_next;
       fetch_valid_reg <= fetch_valid;  // Register fetch_valid to break comb loop
+    end
+  end
+
+  // ============================================================================
+  // Flush Counter: Counts cycles during reset flush to ensure dcache completes
+  // ----------------------------------------------------------------------------
+  // Reset triggers flush in both caches. Icache and dcache flush in parallel,
+  // each taking NUM_SET cycles. If dcache has more sets than icache, it needs
+  // more time. This counter stalls fetch until MAX_FLUSH_CYCLES complete.
+  // ============================================================================
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      flush_counter     <= FLUSH_CNT_WIDTH'(MAX_FLUSH_CYCLES);
+      flush_in_progress <= 1'b1;
+    end else begin
+      if (flush_in_progress) begin
+        if (flush_counter > 0) begin
+          flush_counter <= flush_counter - 1'b1;
+        end else begin
+          flush_in_progress <= 1'b0;
+        end
+      end
     end
   end
 
@@ -169,8 +209,11 @@ module fetch
     // Klasik ready valid handshake'i kurulamadı. Buffer isteği registerlamıyor
     // Valid cevabı valid istekle aynı cycle da üretildiği için.
     // TODO: Belki handshake kurulabilir, olası çoğu comp loop sebebi burası
+    // IMPORTANT: Also stall during reset flush to ensure dcache completes flush
+    // before fetch starts requesting from icache. Without this, if dcache is
+    // larger than icache, requests arrive at dcache while it's still flushing.
     // ============================================================================
-    imiss_stall_o          = (buff_req.valid && !buff_res.valid);
+    imiss_stall_o          = (buff_req.valid && !buff_res.valid) || flush_in_progress;
 
     // ============================================================================
     // Exception Type Detection: Parametric priority-based exception selection
@@ -188,7 +231,10 @@ module fetch
 
     // Detect all exceptions present
     // Breakpoint trigger requires: mte bit enabled (tcontrol[3]) + execute bit (tdata1[2]) + address match
-    has_debug_breakpoint   = fetch_valid && tcontrol_i[3] && tdata1_i[2] && (pc_o == tdata2_i);
+    // Check both triggers (Trigger 0 and Trigger 1)
+    trigger0_execute_hit = fetch_valid && tcontrol_i[3] && tdata1_i[0][2] && (pc_o == tdata2_i[0]);
+    trigger1_execute_hit = fetch_valid && tcontrol_i[3] && tdata1_i[1][2] && (pc_o == tdata2_i[1]);
+    has_debug_breakpoint = trigger0_execute_hit || trigger1_execute_hit;
     has_instr_misaligned   = fetch_valid && (misa_c_i ? pc_o[0] : (pc_o[1:0] != 2'b00));
     has_instr_access_fault = fetch_valid && !grand;
     has_illegal_instr      = fetch_valid && illegal_instr && buff_res.valid;

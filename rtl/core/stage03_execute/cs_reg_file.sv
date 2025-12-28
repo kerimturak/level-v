@@ -28,6 +28,7 @@ module cs_reg_file
     input  logic        [XLEN-1:0] trap_cause_i,
     input  logic        [XLEN-1:0] trap_mepc_i,
     input  logic        [XLEN-1:0] trap_tval_i,
+    input  logic        [XLEN-1:0] pc_i,           // Current PC for MISA write check
     // Hardware interrupt inputs
     input  logic                   timer_irq_i,    // CLINT timer interrupt (MTIP)
     input  logic                   sw_irq_i,       // CLINT software interrupt (MSIP)
@@ -35,9 +36,12 @@ module cs_reg_file
     output logic        [XLEN-1:0] mtvec_o,
     output logic        [XLEN-1:0] mepc_o,
     output logic                   misa_c_o,
-    // Trigger/Debug outputs for hardware breakpoint
-    output logic        [XLEN-1:0] tdata1_o,
-    output logic        [XLEN-1:0] tdata2_o,
+`ifdef COMMIT_TRACER
+    output logic                   csr_write_valid_o,  // CSR write was accepted (not rejected)
+`endif
+    // Trigger/Debug outputs for hardware breakpoint (both triggers)
+    output logic        [XLEN-1:0] tdata1_o[0:1],
+    output logic        [XLEN-1:0] tdata2_o[0:1],
     output logic        [XLEN-1:0] tcontrol_o
 );
 
@@ -203,10 +207,10 @@ module cs_reg_file
 
   logic     [XLEN-1:0] pmpcfg0;
   logic     [XLEN-1:0] pmpaddr0;
-  logic     [XLEN-1:0] tselect_reg;   // Trigger select register (WARL - always reads as 0)
+  logic     [XLEN-1:0] tselect_reg;   // Trigger select register (0 or 1)
   logic     [XLEN-1:0] tcontrol_reg;  // Trigger control register
-  logic     [XLEN-1:0] tdata1_reg;    // Trigger data 1 register
-  logic     [XLEN-1:0] tdata2_reg;    // Trigger data 2 register (breakpoint address)
+  logic     [XLEN-1:0] tdata1_reg[0:1];  // Trigger 0 and 1 data1 registers
+  logic     [XLEN-1:0] tdata2_reg[0:1];  // Trigger 0 and 1 data2 registers
   logic     [XLEN-1:0] tcontrol_out_reg;  // Registered output to break combinational loop
   // ============================================================================
   // OUTPUT ASSIGNMENTS
@@ -234,11 +238,26 @@ module cs_reg_file
   logic [XLEN-1:0] tdata1_bypass;
   logic [XLEN-1:0] tdata2_bypass;
   logic [XLEN-1:0] tcontrol_bypass;
-  
+  logic [XLEN-1:0] tselect_safe;  // Safe tselect value (clamped to 0 or 1)
+
   always_comb begin
+    // Clamp tselect to valid range [0:1]
+    tselect_safe = (tselect_reg > 1) ? 32'd0 : tselect_reg;
+
     // Write-through bypass: if writing this cycle, use write data, else use register
-    tdata1_bypass   = (wr_en_i && csr_idx_i == TDATA1)   ? csr_wdata_i : tdata1_reg;
-    tdata2_bypass   = (wr_en_i && csr_idx_i == TDATA2)   ? csr_wdata_i : tdata2_reg;
+    // Select based on tselect (or tselect being written)
+    if (wr_en_i && csr_idx_i == TDATA1) begin
+      tdata1_bypass = csr_wdata_i;
+    end else begin
+      tdata1_bypass = tdata1_reg[tselect_safe[0]];
+    end
+
+    if (wr_en_i && csr_idx_i == TDATA2) begin
+      tdata2_bypass = csr_wdata_i;
+    end else begin
+      tdata2_bypass = tdata2_reg[tselect_safe[0]];
+    end
+
     tcontrol_bypass = (wr_en_i && csr_idx_i == TCONTROL) ? csr_wdata_i : tcontrol_reg;
   end
 
@@ -246,10 +265,42 @@ module cs_reg_file
     misa_c_o = misa.C;
     // mtvec write bypass (benchmark için)
     mtvec_o  = (csr_idx_i == 12'h305 && wr_en_i && de_trap_active_i) ? csr_wdata_i : mtvec;
-    mepc_o   = mepc;
-    // Trigger outputs: tdata1/tdata2 keep bypass, tcontrol uses registered value
-    tdata1_o = tdata1_bypass;
-    tdata2_o = tdata2_bypass;
+    // mepc output with alignment mask (Spike-compatible)
+    // Clear low bits based on current MISA.C: bit[0] always, bit[1] if C disabled
+    if (misa.C)
+      mepc_o = {mepc[XLEN-1:1], 1'b0};        // 2-byte align
+    else
+      mepc_o = {mepc[XLEN-1:2], 2'b00};       // 4-byte align
+`ifdef COMMIT_TRACER
+    // CSR write validity check - MISA write can be rejected
+    if (wr_en_i && csr_idx_i == MISA && !csr_wdata_i[2] && misa.C && pc_i[1])
+      csr_write_valid_o = 1'b0;  // MISA write rejected (can't disable C when PC misaligned)
+    else
+      csr_write_valid_o = 1'b1;  // All other writes accepted
+`endif
+    // Trigger outputs: Output both triggers with bypass logic
+    // Trigger 0
+    if (wr_en_i && csr_idx_i == TDATA1 && tselect_safe[0] == 1'b0) begin
+      tdata1_o[0] = csr_wdata_i;
+    end else begin
+      tdata1_o[0] = tdata1_reg[0];
+    end
+    if (wr_en_i && csr_idx_i == TDATA2 && tselect_safe[0] == 1'b0) begin
+      tdata2_o[0] = csr_wdata_i;
+    end else begin
+      tdata2_o[0] = tdata2_reg[0];
+    end
+    // Trigger 1
+    if (wr_en_i && csr_idx_i == TDATA1 && tselect_safe[0] == 1'b1) begin
+      tdata1_o[1] = csr_wdata_i;
+    end else begin
+      tdata1_o[1] = tdata1_reg[1];
+    end
+    if (wr_en_i && csr_idx_i == TDATA2 && tselect_safe[0] == 1'b1) begin
+      tdata2_o[1] = csr_wdata_i;
+    end else begin
+      tdata2_o[1] = tdata2_reg[1];
+    end
     tcontrol_o = tcontrol_out_reg;  // KEY: Use registered value (breaks combinational loop)
   end
 
@@ -280,8 +331,10 @@ module cs_reg_file
       tselect_reg <= '0;
       tcontrol_reg <= '0;
       tcontrol_out_reg <= '0;  // Initialize registered output
-      tdata1_reg <= 32'h20000044;  // Default: mcontrol type
-      tdata2_reg <= '0;
+      tdata1_reg[0] <= 32'h20000044;  // Trigger 0: mcontrol type
+      tdata1_reg[1] <= 32'h20000044;  // Trigger 1: mcontrol type
+      tdata2_reg[0] <= '0;
+      tdata2_reg[1] <= '0;
 
     end else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
       
@@ -347,7 +400,15 @@ module cs_reg_file
 
           MISA: begin
             // WARL: only C extension bit is writable
-            misa <= misa_ext_t'((misa & ~MISA_WRITABLE_MASK) | (csr_wdata_i & MISA_WRITABLE_MASK));
+            // Spike-compatible behavior: Reject C extension disable if PC is misaligned
+            // Reject write if: disabling C (new=0, old=1) && PC[1]=1 (misaligned)
+            if (!csr_wdata_i[2] && misa.C && pc_i[1]) begin
+              // Write rejected - keep old value (PC is 2-byte aligned, can't disable C)
+              misa <= misa;
+            end else begin
+              // Write accepted
+              misa <= misa_ext_t'((misa & ~MISA_WRITABLE_MASK) | (csr_wdata_i & MISA_WRITABLE_MASK));
+            end
           end
 
           MIE_ADDR: mie   <= (mie & ~MIE_RW_MASK) | (csr_wdata_i & MIE_RW_MASK);
@@ -356,7 +417,10 @@ module cs_reg_file
           // Trap Handling Registers
           // Note: MIP is read-only - hardware interrupt sources set the pending bits
           MSCRATCH: mscratch  <= csr_wdata_i;
-          MEPC:     mepc      <= csr_wdata_i;
+          MEPC: begin
+            // Spike-compatible: Only clear bit[0] on write, alignment mask applied on read
+            mepc <= {csr_wdata_i[XLEN-1:1], 1'b0};
+          end
           MCAUSE:   mcause    <= csr_wdata_i;
           MTVAL:    mtval_reg <= csr_wdata_i;
 
@@ -373,11 +437,23 @@ module cs_reg_file
           //PMPCFG0,
           //PMPADDR0,
           TDATA3: ;  // No-op
-          TSELECT:  tselect_reg <= csr_wdata_i;  // WARL: accept writes, but only trigger 0 exists
-          // TDATA1/TDATA2: Always write to trigger 0 (Spike-compatible WARL behavior)
-          // Even if tselect != 0, writes go to trigger 0 since only trigger 0 is implemented
-          TDATA1:   tdata1_reg <= csr_wdata_i;  // Trigger data 1
-          TDATA2:   tdata2_reg <= csr_wdata_i;  // Trigger data 2
+          TSELECT:  begin
+            // WARL: Only accept 0 or 1, clamp to 0 if out of range
+            tselect_reg <= (csr_wdata_i > 1) ? 32'd0 : csr_wdata_i;
+          end
+          // TDATA1/TDATA2: Write to selected trigger (0 or 1)
+          TDATA1: begin
+            if (tselect_safe[0] == 1'b0)
+              tdata1_reg[0] <= csr_wdata_i;
+            else
+              tdata1_reg[1] <= csr_wdata_i;
+          end
+          TDATA2: begin
+            if (tselect_safe[0] == 1'b0)
+              tdata2_reg[0] <= csr_wdata_i;
+            else
+              tdata2_reg[1] <= csr_wdata_i;
+          end
           TCONTROL: tcontrol_reg <= csr_wdata_i;  // Trigger control (writable)
           PMPCFG0:  pmpcfg0  <= csr_wdata_i;  // şimdilik düz RW
           PMPADDR0: pmpaddr0 <= csr_wdata_i;  // şimdilik düz RW
@@ -463,12 +539,11 @@ module cs_reg_file
         //PMPCFG0,
         //PMPADDR0,
         TDATA3: csr_rdata_o = 32'd0;
-        // TSELECT: WARL - reads back written value (trigger 0 is the only valid one)
-        TSELECT:  csr_rdata_o = tselect_reg;  // Read back written value
-        // TDATA1/TDATA2: Always return trigger 0 values (Spike-compatible WARL behavior)
-        // Since only trigger 0 is implemented, reads always return trigger 0 values
-        TDATA1:   csr_rdata_o = tdata1_reg;
-        TDATA2:   csr_rdata_o = tdata2_reg;
+        // TSELECT: Read back written value (0 or 1)
+        TSELECT:  csr_rdata_o = tselect_reg;
+        // TDATA1/TDATA2: Return selected trigger's values
+        TDATA1:   csr_rdata_o = tdata1_reg[tselect_safe[0]];
+        TDATA2:   csr_rdata_o = tdata2_reg[tselect_safe[0]];
         TCONTROL: csr_rdata_o = tcontrol_reg;  // Return written value
         PMPCFG0:  csr_rdata_o = pmpcfg0;
         PMPADDR0: csr_rdata_o = pmpaddr0;

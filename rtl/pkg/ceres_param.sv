@@ -57,13 +57,13 @@ package ceres_param;
 `else
   // ── FULL SOC: Büyük cache ──
   // Instruction Cache
-  localparam int IC_WAY = 8;
-  localparam int IC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
+  localparam int IC_WAY = 4;
+  localparam int IC_CAPACITY = 8 * 1024 * 8;
   localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
 
-  // Data Cache  
-  localparam int DC_WAY = 8;
-  localparam int DC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
+  // Data Cache
+  localparam int DC_WAY = 4;
+  localparam int DC_CAPACITY = 8 * 1024 * 8;  // Minimum: 512 bits = 64 bytes = 4 cache lines (2 sets, 2-way)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
 `endif
 
@@ -288,6 +288,12 @@ package ceres_param;
     BRANCH
   } spec_type_e;
 
+  typedef enum logic [1:0] {
+    NO_SIZE,
+    BYTE,
+    HALF,
+    WORD
+  } rw_size_e;
   // ---------------------------------------------------------------------------
   // 9.3 Stall Reasons
   // ---------------------------------------------------------------------------
@@ -528,6 +534,7 @@ package ceres_param;
     predict_info_t   spec;
     pc_sel_e         bjtype;
     logic [XLEN-1:0] pc;
+    logic            misa_c;    // C extension enabled when this instruction was fetched
   } pipe_info_t;
 
   // Fetch -> Decode
@@ -538,8 +545,10 @@ package ceres_param;
     exc_type_e       exc_type;
     instr_type_e     instr_type;
     predict_info_t   spec;
+    logic            misa_c;      // C extension enabled when this instruction was fetched
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
+    logic            flushed;     // Mark instruction as flushed, don't commit
 `endif
   } pipe1_t;
 
@@ -549,7 +558,7 @@ package ceres_param;
     logic [XLEN-1:0] pc_incr;
     logic            rf_rw_en;
     logic            wr_en;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [1:0]      result_src;
     alu_op_e         alu_ctrl;
     pc_sel_e         pc_sel;
@@ -569,8 +578,10 @@ package ceres_param;
     instr_type_e     instr_type;
     predict_info_t   spec;
     logic            dcache_valid;
+    logic            misa_c;        // C extension enabled when this instruction was fetched
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
+    logic            flushed;       // Mark instruction as flushed, don't commit
 `endif
   } pipe2_t;
 
@@ -580,7 +591,7 @@ package ceres_param;
     logic [XLEN-1:0] pc;
     logic            rf_rw_en;
     logic            wr_en;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [1:0]      result_src;
     logic            ld_op_sign;
     logic [4:0]      rd_addr;
@@ -595,6 +606,8 @@ package ceres_param;
     logic [11:0]     csr_idx;
     instr_type_e     instr_type;
     logic [XLEN-1:0] csr_wr_data;
+    logic            csr_write_valid;  // CSR write was accepted (not rejected)
+    logic            flushed;          // Mark instruction as flushed, don't commit
 `endif
   } pipe3_t;
 
@@ -610,14 +623,16 @@ package ceres_param;
     logic [XLEN-1:0] pc;
     fe_tracer_info_t fe_tracer;
     logic            wr_en;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [XLEN-1:0] write_data;
     logic            rd_en_csr;
     logic            wr_en_csr;
     logic [11:0]     csr_idx;
     instr_type_e     instr_type;
     logic [XLEN-1:0] csr_wr_data;
+    logic            csr_write_valid;  // CSR write was accepted (not rejected)
     logic            dcache_valid;
+    logic            flushed;          // Mark instruction as flushed, don't commit
 `endif
   } pipe4_t;
 
@@ -628,7 +643,7 @@ package ceres_param;
     logic        rf_rw_en;
     imm_e        imm_sel;
     logic        wr_en;
-    logic [1:0]  rw_size;
+    rw_size_e    rw_size;
     logic [1:0]  result_src;
     alu_op_e     alu_ctrl;
     pc_sel_e     pc_sel;
@@ -679,7 +694,7 @@ package ceres_param;
     logic [XLEN-1:0] addr;
     logic            uncached;
     logic            rw;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [31:0]     data;
   } dcache_req_t;
 
@@ -716,7 +731,7 @@ package ceres_param;
     logic                valid;
     logic                ready;
     logic [XLEN-1:0]     addr;
-    logic [1:0]          rw_size;
+    rw_size_e            rw_size;
     logic                rw;
     logic [BLK_SIZE-1:0] data;
     logic                uncached;
@@ -793,7 +808,7 @@ package ceres_param;
     logic            valid;
     logic [XLEN-1:0] addr;
     logic            rw;
-    logic [1:0]      rw_size;
+    rw_size_e        rw_size;
     logic [31:0]     data;
     logic            ld_op_sign;
   } data_req_t;

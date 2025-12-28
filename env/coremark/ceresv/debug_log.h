@@ -4,7 +4,7 @@
 #include "core_portme.h"
 
 /* Debug logging enable/disable */
-#define DEBUG_LOGGING_ENABLED 1
+#define DEBUG_LOGGING_ENABLED 0
 
 #if DEBUG_LOGGING_ENABLED
 

@@ -13,6 +13,7 @@ module execution
 (
 `ifdef COMMIT_TRACER
     output logic        [XLEN-1:0] csr_wr_data_o,
+    output logic                   csr_write_valid_o,       // CSR write was accepted
 `endif
     input  logic                   clk_i,
     input  logic                   rst_ni,
@@ -32,18 +33,19 @@ module execution
     input  logic                   trap_active_i,
     input  logic                   de_trap_active_i,
     input  logic        [XLEN-1:0] trap_cause_i,
-    input  logic        [XLEN-1:0] trap_tval_i,       // faulting instruction / adres
+    input  logic        [XLEN-1:0] trap_tval_i,             // faulting instruction / adres
     input  logic        [XLEN-1:0] trap_mepc_i,
     // Hardware interrupt inputs
-    input  logic                   timer_irq_i,       // CLINT timer interrupt
-    input  logic                   sw_irq_i,          // CLINT software interrupt
-    input  logic                   ext_irq_i,         // PLIC external interrupt
+    input  logic                   timer_irq_i,             // CLINT timer interrupt
+    input  logic                   sw_irq_i,                // CLINT software interrupt
+    input  logic                   ext_irq_i,               // PLIC external interrupt
     input  logic        [XLEN-1:0] pc_i,
     input  logic        [XLEN-1:0] pc_incr_i,
     input  logic        [XLEN-1:0] imm_i,
     input  pc_sel_e                pc_sel_i,
     input  alu_op_e                alu_ctrl_i,
     input  instr_type_e            instr_type_i,
+    input  logic                   misa_c_i,                // C extension state when instruction was fetched
     output logic        [XLEN-1:0] write_data_o,
     output logic        [XLEN-1:0] pc_target_o,
     output logic        [XLEN-1:0] alu_result_o,
@@ -52,8 +54,8 @@ module execution
     output exc_type_e              exc_type_o,
     output logic        [XLEN-1:0] mtvec_o,
     output logic                   misa_c_o,
-    output logic        [XLEN-1:0] tdata1_o,
-    output logic        [XLEN-1:0] tdata2_o,
+    output logic        [XLEN-1:0] tdata1_o         [0:1],
+    output logic        [XLEN-1:0] tdata2_o         [0:1],
     output logic        [XLEN-1:0] tcontrol_o
 
 );
@@ -65,16 +67,19 @@ module execution
   logic                   ex_zero;
   logic                   ex_slt;
   logic                   ex_sltu;
-  logic        [XLEN-1:0] tdata1;
-  logic        [XLEN-1:0] tdata2;
+  logic        [XLEN-1:0] tdata1             [0:1];
+  logic        [XLEN-1:0] tdata2             [0:1];
   logic        [XLEN-1:0] tcontrol;
   logic        [XLEN-1:0] alu_result;
   logic        [XLEN-1:0] csr_rdata;
   logic        [XLEN-1:0] mepc;
   logic                   misa_c;
   logic        [XLEN-1:0] tcontrol_effective;
-  logic        [XLEN-1:0] tdata1_effective;
-  logic        [XLEN-1:0] tdata2_effective;
+  logic        [XLEN-1:0] tdata1_effective   [0:1];
+  logic        [XLEN-1:0] tdata2_effective   [0:1];
+  logic                   trigger0_hit;
+  logic                   trigger1_hit;
+  logic                   target_misaligned;
   assign misa_c_o = misa_c;
 
   always_comb begin
@@ -116,33 +121,62 @@ module execution
 
 
     tcontrol_effective = (wr_csr_i && csr_idx_i == 12'h7A5) ? alu_result : tcontrol;
-    tdata1_effective   = (wr_csr_i && csr_idx_i == 12'h7A1) ? alu_result : tdata1;
-    tdata2_effective   = (wr_csr_i && csr_idx_i == 12'h7A2) ? alu_result : tdata2;
+    // Trigger 0 bypass
+    tdata1_effective[0] = (wr_csr_i && csr_idx_i == 12'h7A1) ? alu_result : tdata1[0];
+    tdata2_effective[0] = (wr_csr_i && csr_idx_i == 12'h7A2) ? alu_result : tdata2[0];
+    // Trigger 1 bypass
+    tdata1_effective[1] = (wr_csr_i && csr_idx_i == 12'h7A1) ? alu_result : tdata1[1];
+    tdata2_effective[1] = (wr_csr_i && csr_idx_i == 12'h7A2) ? alu_result : tdata2[1];
 
-    // LOAD/STORE breakpoint detection (using effective values with bypass)
+    // LOAD/STORE breakpoint detection for both triggers
     // tdata1[0] = LOAD match enable, tdata1[1] = STORE match enable
     // tdata1[6] = M-mode match, tdata1[31:28] = type (2 = mcontrol)
     // tcontrol[3] = MTE (M-mode Trigger Enable)
-    if (tcontrol_effective[3] && tdata1_effective[6] && (tdata1_effective[31:28] == 4'h2)) begin
-      // Check LOAD breakpoint
-      if (tdata1_effective[0] && (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu})) begin
-        if (alu_result == tdata2_effective) begin
-          exc_type_o = BREAKPOINT;
-        end else begin
-          exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
-        end
-        // Check STORE breakpoint
-      end else if (tdata1_effective[1] && (instr_type_i inside {s_sb, s_sh, s_sw})) begin
-        if (alu_result == tdata2_effective) begin
-          exc_type_o = BREAKPOINT;
-        end else begin
-          exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
-        end
-      end else begin
-        exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
+
+    // Check Trigger 0
+    trigger0_hit = 1'b0;
+    if (tcontrol_effective[3] && tdata1_effective[0][6] && (tdata1_effective[0][31:28] == 4'h2)) begin
+      if (tdata1_effective[0][0] && (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu})) begin
+        trigger0_hit = (alu_result == tdata2_effective[0]);
+      end else if (tdata1_effective[0][1] && (instr_type_i inside {s_sb, s_sh, s_sw})) begin
+        trigger0_hit = (alu_result == tdata2_effective[0]);
       end
+    end
+
+    // Check Trigger 1
+    trigger1_hit = 1'b0;
+    if (tcontrol_effective[3] && tdata1_effective[1][6] && (tdata1_effective[1][31:28] == 4'h2)) begin
+      if (tdata1_effective[1][0] && (instr_type_i inside {i_lb, i_lh, i_lw, i_lbu, i_lhu})) begin
+        trigger1_hit = (alu_result == tdata2_effective[1]);
+      end else if (tdata1_effective[1][1] && (instr_type_i inside {s_sb, s_sh, s_sw})) begin
+        trigger1_hit = (alu_result == tdata2_effective[1]);
+      end
+    end
+
+    // Jump/Branch target misalignment check:
+    // - If C extension enabled (misa_c=1): target must be 2-byte aligned (pc_target[0]=0)
+    // - If C extension disabled (misa_c=0): target must be 4-byte aligned (pc_target[1:0]=00)
+    // IMPORTANT: Use misa_c_i (pipelined value from when instruction was fetched)
+    // instead of misa_c (current CSR value) to handle MISA.C changes in flight
+    if (misa_c_i) begin
+      target_misaligned = pc_target_o[0];  // 2-byte alignment check
     end else begin
-      exc_type_o = pc_sel_o && pc_target_o[0] ? INSTR_MISALIGNED : NO_EXCEPTION;
+      target_misaligned = (pc_target_o[1:0] != 2'b00);  // 4-byte alignment check
+    end
+
+    // Priority: Trigger hit > Instruction misaligned
+    // Exception check priority:
+    // 1. Hardware breakpoint (trigger)
+    // 2. Jump/Branch target misalignment
+    // Note: MRET target (mepc) is exempt from alignment check because mepc is
+    // aligned when written. This prevents spurious exceptions when MISA.C changes
+    // between trap entry and return.
+    if (trigger0_hit || trigger1_hit) begin
+      exc_type_o = BREAKPOINT;
+    end else if (instr_type_i == mret) begin
+      exc_type_o = NO_EXCEPTION;  // MRET: mepc already aligned when written
+    end else begin
+      exc_type_o = pc_sel_o && target_misaligned ? INSTR_MISALIGNED : NO_EXCEPTION;
     end
   end
 
@@ -188,30 +222,34 @@ module execution
 `endif
 
   cs_reg_file i_cs_reg_file (
-      .clk_i           (clk_i),
-      .rst_ni          (rst_ni),
-      .stall_i         (stall_i),
-      .rd_en_i         (rd_csr_i),
-      .wr_en_i         (wr_csr_i),
-      .csr_idx_i       (csr_idx_i),
-      .csr_wdata_i     (alu_result),
-      .csr_rdata_o     (csr_rdata),
-      .trap_active_i   (trap_active_i),
-      .de_trap_active_i(de_trap_active_i),
-      .trap_cause_i    (trap_cause_i),
-      .trap_mepc_i     (trap_mepc_i),
-      .trap_tval_i     (trap_tval_i),
-      .instr_type_i    (instr_type_i),
+      .clk_i            (clk_i),
+      .rst_ni           (rst_ni),
+      .stall_i          (stall_i),
+      .rd_en_i          (rd_csr_i),
+      .wr_en_i          (wr_csr_i),
+      .csr_idx_i        (csr_idx_i),
+      .csr_wdata_i      (alu_result),
+      .csr_rdata_o      (csr_rdata),
+      .trap_active_i    (trap_active_i),
+      .de_trap_active_i (de_trap_active_i),
+      .trap_cause_i     (trap_cause_i),
+      .trap_mepc_i      (trap_mepc_i),
+      .trap_tval_i      (trap_tval_i),
+      .pc_i             (pc_i),
+      .instr_type_i     (instr_type_i),
       // Hardware interrupt inputs
-      .timer_irq_i     (timer_irq_i),
-      .sw_irq_i        (sw_irq_i),
-      .ext_irq_i       (ext_irq_i),
-      .mtvec_o         (mtvec_o),
-      .mepc_o          (mepc),
-      .misa_c_o        (misa_c),
-      .tdata1_o        (tdata1),
-      .tdata2_o        (tdata2),
-      .tcontrol_o      (tcontrol)
+      .timer_irq_i      (timer_irq_i),
+      .sw_irq_i         (sw_irq_i),
+      .ext_irq_i        (ext_irq_i),
+      .mtvec_o          (mtvec_o),
+      .mepc_o           (mepc),
+      .misa_c_o         (misa_c),
+`ifdef COMMIT_TRACER
+      .csr_write_valid_o(csr_write_valid_o),
+`endif
+      .tdata1_o         (tdata1),
+      .tdata2_o         (tdata2),
+      .tcontrol_o       (tcontrol)
   );
 
   assign tdata1_o   = tdata1;

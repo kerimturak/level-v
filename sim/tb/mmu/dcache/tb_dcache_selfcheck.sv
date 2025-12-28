@@ -340,7 +340,7 @@ module tb_dcache_selfcheck;
     cache_req_i.ready = 1'b1;
     cache_req_i.addr = addr;
     cache_req_i.rw = 1'b0;  // Read
-    cache_req_i.rw_size = 2'b11;  // Word
+    cache_req_i.rw_size = WORD;  // Word
     cache_req_i.uncached = 1'b0;
     cache_req_i.data = '0;
 
@@ -358,7 +358,7 @@ module tb_dcache_selfcheck;
     cache_req_i.ready = 1'b1;
     cache_req_i.addr = addr;
     cache_req_i.rw = 1'b1;  // Write
-    cache_req_i.rw_size = 2'b11;  // Word
+    cache_req_i.rw_size = WORD;  // Word
     cache_req_i.uncached = 1'b0;
     cache_req_i.data = data;
 

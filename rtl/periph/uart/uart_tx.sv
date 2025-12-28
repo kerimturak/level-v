@@ -138,37 +138,4 @@ module uart_tx
   // Enable with: +define+SIM_UART_MONITOR
   // ============================================================================
 
-`ifdef SIM_UART_MONITOR
-  logic   [7:0] shadow_buf                                             [0:4095];  // 4KB buffer for longer outputs
-  integer       shadow_wr_ptr = 0;  // Reset-independent initialization
-  parameter int MONITOR_THRESHOLD = 2000;  // Wait for more output before stopping
-
-  always_ff @(posedge clk_i) begin
-    // Reset-independent: only operate when rst_ni is active
-    if (rst_ni) begin
-      if (tx_we_i && !full_o) begin
-        shadow_buf[shadow_wr_ptr] <= din_i;
-        shadow_wr_ptr <= shadow_wr_ptr + 1;
-      end
-
-      if (shadow_wr_ptr >= MONITOR_THRESHOLD) begin
-        integer i;
-        $display("=====================================================");
-        $display(" CERES UART TX BUFFER DUMP (ASCII)");
-        $display("=====================================================");
-        $write(" DATA: \"");
-        for (i = 0; i < shadow_wr_ptr; i++) begin
-          if (shadow_buf[i] >= 8'h20 && shadow_buf[i] <= 8'h7E) $write("%c", shadow_buf[i]);
-          else $write("\\x%02x", shadow_buf[i]);
-        end
-        $write("\"\n");
-        $display("=====================================================");
-        $display(" Simulation halted by CERES UART TX monitor.");
-        $display("=====================================================");
-        $finish;
-      end
-    end
-  end
-`endif  // SIM_UART_MONITOR
-
 endmodule

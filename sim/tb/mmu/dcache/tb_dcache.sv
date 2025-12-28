@@ -6,7 +6,7 @@ typedef struct packed {
   logic [XLEN-1:0] addr;
   logic            uncached;
   logic            rw;
-  logic [1:0]      rw_size;
+  rw_size_e        rw_size;
   logic [31:0]     data;
 } cache_req_t;
 
@@ -26,7 +26,7 @@ typedef struct packed {
   logic                valid;
   logic                ready;
   logic [XLEN-1:0]     addr;
-  logic [1:0]          rw_size;
+  rw_size_e            rw_size;
   logic                rw;
   logic [BLK_SIZE-1:0] data;
   logic                uncached;

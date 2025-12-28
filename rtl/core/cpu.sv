@@ -85,8 +85,8 @@ module cpu
   logic                  ex_wr_csr;
   logic       [XLEN-1:0] ex_mtvec;
   logic                  ex_misa_c;
-  logic       [XLEN-1:0] ex_tdata1;
-  logic       [XLEN-1:0] ex_tdata2;
+  logic       [XLEN-1:0] ex_tdata1[0:1];
+  logic       [XLEN-1:0] ex_tdata2[0:1];
   logic       [XLEN-1:0] ex_tcontrol;
   //logic       [XLEN-1:0] ex_mepc;
   pipe_info_t            ex_info;
@@ -94,6 +94,7 @@ module cpu
   logic       [XLEN-1:0] ex_trap_cause;
   logic       [XLEN-1:0] ex_trap_mepc;
     `ifdef COMMIT_TRACER
+  logic                  ex_csr_write_valid;  // CSR write was accepted (not rejected)
   logic       [XLEN-1:0] ex_csr_wr_data;
     `endif
   data_req_t ex_data_req;
@@ -194,8 +195,9 @@ module cpu
       pipe1 <= '{
       `ifdef COMMIT_TRACER
         fe_tracer: fe_tracer,
+        flushed: 1'b0,  // Normal instruction, not flushed
       `endif
-        pc      : fe_pc, pc_incr : fe_pc_incr, inst : fe_inst, exc_type: fe_active_exc_type, instr_type : fe_instr_type, spec: fe_spec};
+        pc      : fe_pc, pc_incr : fe_pc_incr, inst : fe_inst, exc_type: fe_active_exc_type, instr_type : fe_instr_type, spec: fe_spec, misa_c: ex_misa_c};
     end
   end
 
@@ -224,6 +226,7 @@ module cpu
     de_info.spec        = pipe1.spec;
     de_info.bjtype      = is_branch(pipe1.instr_type);
     de_info.pc          = pipe1.pc;
+    de_info.misa_c      = pipe1.misa_c;
   end
 
   decode i_decode (
@@ -264,11 +267,13 @@ module cpu
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni || ex_flush_en || priority_flush == 3 || priority_flush == 2) begin
-      pipe2 <= '{instr_type: instr_invalid, alu_ctrl: OP_ADD, pc_sel: NO_BJ, default: '0};
+      pipe2 <= '{rw_size: NO_SIZE, instr_type: instr_invalid, alu_ctrl: OP_ADD, pc_sel: NO_BJ, default: '0};
     end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL})) begin
       pipe2 <= '{
         `ifdef COMMIT_TRACER
             fe_tracer   : pipe1.fe_tracer,
+            // Propagate flushed flag from previous stage
+            flushed     : pipe1.flushed,
         `endif
           pc           : pipe1.pc,
           pc_incr      : pipe1.pc_incr,
@@ -293,7 +298,8 @@ module cpu
           rd_addr      : pipe1.inst.rd_addr,
           imm          : de_imm,
           instr_type   : pipe1.instr_type,
-          spec         : pipe1.spec
+          spec         : pipe1.spec,
+          misa_c       : pipe1.misa_c
       };
     end
   end
@@ -316,17 +322,17 @@ module cpu
     ex_flush_en = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) ? 1'b0 : ex_flush; // !(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) &&  ex_flush;
     if (ex_alu_exc_type != NO_EXCEPTION) begin
       ex_exc_type = ex_alu_exc_type;
-    end else if (pipe2.rw_size != 0) begin
+    end else if (pipe2.rw_size != NO_SIZE) begin
       if (pipe2.wr_en) begin
         unique case (pipe2.rw_size)
-          2'b10:   ex_exc_type = ex_alu_result[0] ? STORE_MISALIGNED : NO_EXCEPTION;
-          2'b11:   ex_exc_type = (ex_alu_result[1] | ex_alu_result[0]) ? STORE_MISALIGNED : NO_EXCEPTION;
+          HALF:   ex_exc_type = ex_alu_result[0] ? STORE_MISALIGNED : NO_EXCEPTION;
+          WORD:   ex_exc_type = (ex_alu_result[1] | ex_alu_result[0]) ? STORE_MISALIGNED : NO_EXCEPTION;
           default: ex_exc_type = NO_EXCEPTION;
         endcase
       end else begin
         unique case (pipe2.rw_size)
-          2'b10:   ex_exc_type = ex_alu_result[0] ? LOAD_MISALIGNED : NO_EXCEPTION;
-          2'b11:   ex_exc_type = (ex_alu_result[1] | ex_alu_result[0]) ? LOAD_MISALIGNED : NO_EXCEPTION;
+          HALF:   ex_exc_type = ex_alu_result[0] ? LOAD_MISALIGNED : NO_EXCEPTION;
+          WORD:   ex_exc_type = (ex_alu_result[1] | ex_alu_result[0]) ? LOAD_MISALIGNED : NO_EXCEPTION;
           default: ex_exc_type = NO_EXCEPTION;
         endcase
       end
@@ -344,6 +350,7 @@ module cpu
   execution i_execution (
     `ifdef COMMIT_TRACER
       .csr_wr_data_o(ex_csr_wr_data),
+      .csr_write_valid_o(ex_csr_write_valid),
     `endif
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
@@ -375,6 +382,7 @@ module cpu
       .imm_i        (pipe2.imm),
       .pc_sel_i     (pipe2.pc_sel),
       .alu_ctrl_i   (pipe2.alu_ctrl),
+      .misa_c_i     (pipe2.misa_c),
       .write_data_o (ex_wdata),
       .pc_target_o  (ex_pc_target),
       .alu_result_o (ex_alu_result),
@@ -411,6 +419,7 @@ module cpu
     ex_info.spec     = pipe2.spec;
     ex_info.bjtype   = is_branch(pipe2.instr_type);
     ex_info.pc       = pipe2.pc;
+    ex_info.misa_c   = pipe2.misa_c;
 
     ex_trap_cause   = ex_exc_type != NO_EXCEPTION ? trap_cause_decode(ex_exc_type) :
                       de_active_exc_type != NO_EXCEPTION ?  trap_cause_decode(de_active_exc_type) :
@@ -441,7 +450,7 @@ module cpu
   always_ff @(posedge clk_i) begin
     if (!rst_ni || priority_flush == 3) begin
       `ifdef COMMIT_TRACER
-      pipe3 <= '{instr_type:instr_invalid, default: '0};
+      pipe3 <= '{instr_type:instr_invalid, rw_size: NO_SIZE, default: '0};
       `else
       pipe3 <= '0;
       `endif
@@ -454,6 +463,9 @@ module cpu
           csr_idx      : pipe2.csr_idx,
           instr_type   : pipe2.instr_type,
           csr_wr_data  : ex_csr_wr_data,
+          csr_write_valid : ex_csr_write_valid,
+          // Mark as flushed if this cycle has flush condition or already flushed
+          flushed      : (priority_flush == 3) ? 1'b1 : pipe2.flushed,
         `endif
           pc_incr      : pipe2.pc_incr,
           pc           : pipe2.pc,
@@ -517,7 +529,7 @@ module cpu
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       `ifdef COMMIT_TRACER
-      pipe4 <= '{instr_type:instr_invalid, default: '0};
+      pipe4 <= '{instr_type:instr_invalid, rw_size: NO_SIZE, default: '0};
       `else
       pipe4 <= '0;
       `endif
@@ -533,8 +545,10 @@ module cpu
           csr_idx     : pipe3.csr_idx,
           instr_type  : pipe3.instr_type,
           csr_wr_data : pipe3.csr_wr_data,
+          csr_write_valid : pipe3.csr_write_valid,
           dcache_valid : pipe3.dcache_valid,
           pc          : pipe3.pc,
+          flushed     : pipe3.flushed,  // Propagate flushed flag to writeback
         `endif
           pc_incr     : pipe3.pc_incr,
           rf_rw_en    : pipe3.rf_rw_en,
@@ -558,9 +572,11 @@ module cpu
       .csr_idx_i       (pipe4.csr_idx),
       .instr_type_i    (pipe4.instr_type),
       .csr_wr_data_i   (pipe4.csr_wr_data),
+      .csr_write_valid_i(pipe4.csr_write_valid),
       .trap_active_i   (trap_active),
       .tcontrol_i      (ex_tcontrol),
       .pc_i            (pipe4.pc),
+      .flushed_i       (pipe4.flushed),
 `endif
       .fe_flush_cache_i(fencei_flush),
       .clk_i           (clk_i),

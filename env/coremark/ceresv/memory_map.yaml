@@ -22,7 +22,7 @@ memory:
   # Unified Memory (Baremetal - everything in one contiguous RAM)
   ram:
     origin: 0x80000000
-    length: 64K
+    length: 32K
     type: "rwx"
     description: "Unified RAM for code, data, BSS, heap and stack"
 

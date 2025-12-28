@@ -35,9 +35,9 @@ module ceres_wrapper
     // Memory Configuration
     // ========================================================================
 `ifndef SYNTHESIS
-    parameter int unsigned RAM_SIZE_KB = ceres_param::WRAPPER_RAM_SIZE_KB,
+    parameter int unsigned RAM_SIZE_KB = 40,
 `else
-    parameter int unsigned RAM_SIZE_KB = 48,
+    parameter int unsigned RAM_SIZE_KB = 40,
 `endif
 
     parameter int unsigned RAM_LATENCY     = 16,
