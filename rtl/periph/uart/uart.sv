@@ -35,15 +35,9 @@ module uart
   logic [ 7:0] tx_data;
 
   // Select correct byte based on byte_sel
-  always_comb begin
-    case (byte_sel_i)
-      4'b0001: tx_data = dat_i[7:0];
-      4'b0010: tx_data = dat_i[15:8];
-      4'b0100: tx_data = dat_i[23:16];
-      4'b1000: tx_data = dat_i[31:24];
-      default: tx_data = dat_i[7:0];
-    endcase
-  end
+  // For UART, always use the lowest byte (dat_i[7:0]) regardless of byte_sel
+  // This maintains compatibility with both byte and word writes
+  assign tx_data = dat_i[7:0];
 
   uart_tx i_uart_tx (
       .clk_i     (clk_i),
@@ -96,6 +90,19 @@ module uart
         tx_we = stb_i && ~tx_full && we_i && byte_sel_i[0];
       end
     endcase
+  end
+
+  always_ff @(posedge clk_i) begin
+    if (stb_i && we_i && adr_i == 2'b11) begin
+      $display("[%0t] UART_MODULE: stb=%b we=%b adr=%b byte_sel=%b tx_full=%b", $time, stb_i, we_i, adr_i, byte_sel_i, tx_full);
+      $display("              dat_i=%h tx_data=%h (from byte_sel)", dat_i, tx_data);
+      $display("              tx_we=%b (final enable)", tx_we);
+      if (tx_we) begin
+        $display("              ✓ TX FIFO WRITE: char='%c' (0x%h)", tx_data, tx_data);
+      end else begin
+        $display("              ✗ TX BLOCKED: tx_full=%b byte_sel[0]=%b", tx_full, byte_sel_i[0]);
+      end
+    end
   end
 
 endmodule

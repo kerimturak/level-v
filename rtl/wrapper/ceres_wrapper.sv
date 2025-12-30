@@ -602,6 +602,14 @@ module ceres_wrapper
       .uart_tx_o (uart0_tx_o)
   );
 
+  always_ff @(posedge clk_i) begin
+    if (pbus_valid && uart_sel && pbus_we) begin
+      $display("[%0t] WRAPPER_UART: pbus_valid=%b uart_sel=%b pbus_we=%b", $time, pbus_valid, uart_sel, pbus_we);
+      $display("              pbus_addr=%h adr_i=%b pbus_wstrb=%b", pbus_addr, pbus_addr[3:2], pbus_wstrb);
+      $display("              pbus_wdata=%h", pbus_wdata);
+    end
+  end
+
   // ==========================================================================
   // SPI Master (Connected via Peripheral Bus)
   // ==========================================================================

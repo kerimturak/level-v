@@ -86,9 +86,13 @@ module wb_master_bridge (
   assign is_write = mem_bus_req_i.rw;
 
   // Uncached detection:
-  // - For writes: check if rw_size is not WORD or if not cache-line aligned
-  // - For reads: check if address is NOT cache-line aligned (lower 4 bits != 0)
-  assign is_uncached = is_write ? (mem_bus_req_i.rw_size != WORD) : (mem_bus_req_i.addr[3:0] != 4'h0);
+  // Use the uncached signal from cache/arbiter which properly identifies:
+  // - Peripheral addresses (0x2xxxxxxx, 0xFxxxxxxx)
+  // - Non-cacheable regions
+  // - Misaligned accesses
+  // Fallback: For writes with non-WORD size, force uncached (byte/halfword stores)
+  assign is_uncached = mem_bus_req_i.uncached ||
+                       (is_write && mem_bus_req_i.rw_size != WORD);
 
   // ============================================================================
   // State Machine
@@ -366,13 +370,11 @@ module wb_master_bridge (
   end
 `endif
 
-`ifdef PBUS_DEBUG
   always_ff @(posedge clk_i) begin
-    if (state_q == IDLE && mem_bus_req_i.valid && is_uncached && is_write) begin
-      $display("[%0t] WB_MASTER_UART: addr=%h rw_size=%0d byte_sel=%b data=%h",
-               $time, mem_bus_req_i.addr, mem_bus_req_i.rw_size, byte_sel_comb, mem_bus_req_i.data[31:0]);
+    if (state_q == IDLE && mem_bus_req_i.valid && is_write) begin
+      if (mem_bus_req_i.addr[31:28] == 4'h2) begin  // Peripheral address space
+        $display("[%0t] WB_MASTER: addr=%h rw_size=%0d is_uncached=%b byte_sel=%b data=%h", $time, mem_bus_req_i.addr, mem_bus_req_i.rw_size, is_uncached, byte_sel_comb, mem_bus_req_i.data[31:0]);
+      end
     end
   end
-`endif
-
 endmodule
