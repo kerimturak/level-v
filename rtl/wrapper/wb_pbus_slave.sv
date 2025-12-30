@@ -77,4 +77,20 @@ module wb_pbus_slave (
   assign wb_s_o.rty   = 1'b0;
   assign wb_s_o.stall = req_valid && !pbus_ready_i;
 
+  // ============================================================================
+  // Debug Logger for UART writes
+  // ============================================================================
+`ifdef PBUS_DEBUG
+  always_ff @(posedge clk_i) begin
+    if (req_valid && req_we && wb_s_o.ack) begin
+      // UART0 address range: 0x2000_0xxx
+      if (pbus_addr_o[15:12] == 4'h0) begin
+        $display("[%0t] PBUS_UART: addr=%h wdata=%h wstrb=%b sel=%b data_byte=%h",
+                 $time, pbus_addr_o, pbus_wdata_o, pbus_wstrb_o, wb_m_i.sel,
+                 pbus_wdata_o[7:0]);
+      end
+    end
+  end
+`endif
+
 endmodule

@@ -27,9 +27,9 @@ module wb_master_bridge (
     input logic clk_i,
     input logic rst_ni,
 
-    // Internal iomem interface (from memory_arbiter)
-    input  iomem_req_t iomem_req_i,
-    output iomem_res_t iomem_res_o,
+    // Internal mem_bus interface (from memory_arbiter)
+    input  lowX_req_t mem_bus_req_i,
+    output lowX_res_t mem_bus_res_o,
 
     // Wishbone B4 Master interface
     output wb_master_t wb_m_o,
@@ -78,17 +78,17 @@ module wb_master_bridge (
   // Pack input data into burst format
   always_comb begin
     for (int i = 0; i < BURST_LEN; i++) begin
-      wdata_packed[i] = iomem_req_i.data[i*WB_DATA_WIDTH+:WB_DATA_WIDTH];
+      wdata_packed[i] = mem_bus_req_i.data[i*WB_DATA_WIDTH+:WB_DATA_WIDTH];
     end
   end
 
   // Determine if this is a write and uncached access
-  assign is_write = |iomem_req_i.rw;
+  assign is_write = mem_bus_req_i.rw;
 
-  // Uncached detection: 
-  // - For writes: check if all 16 bytes are enabled (cache line write has all 16 bits set)
+  // Uncached detection:
+  // - For writes: check if rw_size is not WORD or if not cache-line aligned
   // - For reads: check if address is NOT cache-line aligned (lower 4 bits != 0)
-  assign is_uncached = is_write ? ($countones(iomem_req_i.rw) < 16) : (iomem_req_i.addr[3:0] != 4'h0);
+  assign is_uncached = is_write ? (mem_bus_req_i.rw_size != WORD) : (mem_bus_req_i.addr[3:0] != 4'h0);
 
   // ============================================================================
   // State Machine
@@ -98,13 +98,13 @@ module wb_master_bridge (
 
     case (state_q)
       IDLE: begin
-        if (iomem_req_i.valid) begin
+        if (mem_bus_req_i.valid) begin
           if (is_uncached) begin
             // Check for immediate ACK (combinational path through interconnect)
             if (wb_s_i.ack) begin
               state_d = IDLE;  // Stay in IDLE, transaction completes immediately
 `ifdef WB_INTC
-              $display("[%0t] WB_MASTER: IDLE_IMMEDIATE addr=%h write=%b rw=%h sel=%b", $time, iomem_req_i.addr, is_write, iomem_req_i.rw, byte_sel_comb);
+              $display("[%0t] WB_MASTER: IDLE_IMMEDIATE addr=%h write=%b rw_size=%0d sel=%b", $time, mem_bus_req_i.addr, is_write, mem_bus_req_i.rw_size, byte_sel_comb);
 `endif
             end else begin
               state_d = SINGLE_REQ;
@@ -188,17 +188,17 @@ module wb_master_bridge (
 
       case (state_q)
         IDLE: begin
-          if (iomem_req_i.valid) begin
-            addr_q     <= iomem_req_i.addr;
+          if (mem_bus_req_i.valid) begin
+            addr_q     <= mem_bus_req_i.addr;
             wdata_q    <= wdata_packed;
             beat_cnt_q <= '0;
             write_q    <= is_write;
             uncached_q <= is_uncached;
 `ifdef WB_INTC
-            $display("[%0t] WB_MASTER: NEW_REQ addr=%h uncached=%b write=%b", $time, iomem_req_i.addr, is_uncached, is_write);
+            $display("[%0t] WB_MASTER: NEW_REQ addr=%h uncached=%b write=%b rw_size=%0d", $time, mem_bus_req_i.addr, is_uncached, is_write, mem_bus_req_i.rw_size);
 `endif
 
-            // Extract byte select for uncached writes based on word offset
+            // Extract byte select for uncached writes based on word offset and rw_size
             if (is_uncached && is_write) begin
               byte_sel_q <= byte_sel_comb;
             end else begin
@@ -237,18 +237,8 @@ module wb_master_bridge (
   // Wishbone Output Signals
   // ============================================================================
   // Combinational byte select for immediate use in SINGLE_REQ
-  // Extract correct 4-bit byte select based on word offset within cache line
-  logic [1:0] word_offset;
-  assign word_offset = iomem_req_i.addr[3:2];  // Which word within 16-byte cache line
-
-  always_comb begin
-    case (word_offset)
-      2'b00: byte_sel_comb = iomem_req_i.rw[3:0];
-      2'b01: byte_sel_comb = iomem_req_i.rw[7:4];
-      2'b10: byte_sel_comb = iomem_req_i.rw[11:8];
-      2'b11: byte_sel_comb = iomem_req_i.rw[15:12];
-    endcase
-  end
+  // Generate byte select based on rw_size and address offset using package function
+  assign byte_sel_comb = gen_byte_sel(mem_bus_req_i.rw_size, mem_bus_req_i.addr);
 
   always_comb begin
     // Default values
@@ -264,13 +254,13 @@ module wb_master_bridge (
     case (state_q)
       IDLE: begin
         // For immediate transition to SINGLE_REQ, prepare outputs
-        if (iomem_req_i.valid && is_uncached) begin
+        if (mem_bus_req_i.valid && is_uncached) begin
           wb_m_o.cyc = 1'b1;
           wb_m_o.stb = 1'b1;
-          wb_m_o.adr = iomem_req_i.addr;
+          wb_m_o.adr = mem_bus_req_i.addr;
           wb_m_o.we  = is_write;
           wb_m_o.sel = byte_sel_comb;
-          wb_m_o.dat = iomem_req_i.data[31:0];
+          wb_m_o.dat = mem_bus_req_i.data[31:0];
         end
       end
 
@@ -306,21 +296,21 @@ module wb_master_bridge (
   end
 
   // ============================================================================
-  // iomem Response Signals
+  // mem_bus Response Signals
   // ============================================================================
   always_comb begin
-    iomem_res_o.valid = 1'b0;
-    iomem_res_o.ready = (state_q == IDLE);
-    iomem_res_o.data  = '0;
+    mem_bus_res_o.valid = 1'b0;
+    mem_bus_res_o.ready = (state_q == IDLE);
+    mem_bus_res_o.blk   = '0;
 
     // Pack read data back to cache line format
     // For last beat, use current wb_s_i.dat directly since rdata_q not yet updated
     for (int i = 0; i < BURST_LEN; i++) begin
       if (state_q == BURST_DATA && wb_s_i.ack && beat_cnt_q[BEAT_CNT_W-1:0] == i[BEAT_CNT_W-1:0]) begin
         // Last beat - use incoming data directly
-        iomem_res_o.data[i*WB_DATA_WIDTH+:WB_DATA_WIDTH] = wb_s_i.dat;
+        mem_bus_res_o.blk[i*WB_DATA_WIDTH+:WB_DATA_WIDTH] = wb_s_i.dat;
       end else begin
-        iomem_res_o.data[i*WB_DATA_WIDTH+:WB_DATA_WIDTH] = rdata_q[i];
+        mem_bus_res_o.blk[i*WB_DATA_WIDTH+:WB_DATA_WIDTH] = rdata_q[i];
       end
     end
 
@@ -328,12 +318,12 @@ module wb_master_bridge (
     case (state_q)
       IDLE: begin
         // Immediate completion for fast uncached slaves (combinational ACK in same cycle)
-        if (iomem_req_i.valid && is_uncached && wb_s_i.ack) begin
-          iomem_res_o.valid = 1'b1;
+        if (mem_bus_req_i.valid && is_uncached && wb_s_i.ack) begin
+          mem_bus_res_o.valid = 1'b1;
           // For reads, use incoming data directly
           if (!is_write) begin
             for (int i = 0; i < BURST_LEN; i++) begin
-              iomem_res_o.data[i*WB_DATA_WIDTH+:WB_DATA_WIDTH] = wb_s_i.dat;
+              mem_bus_res_o.blk[i*WB_DATA_WIDTH+:WB_DATA_WIDTH] = wb_s_i.dat;
             end
           end
         end
@@ -341,26 +331,26 @@ module wb_master_bridge (
 
       SINGLE_REQ: begin
         // Immediate ACK for fast slaves (like PBUS)
-        iomem_res_o.valid = !wb_s_i.stall && wb_s_i.ack;
+        mem_bus_res_o.valid = !wb_s_i.stall && wb_s_i.ack;
         // For reads, use incoming data directly
         if (!write_q) begin
           for (int i = 0; i < BURST_LEN; i++) begin
-            iomem_res_o.data[i*WB_DATA_WIDTH+:WB_DATA_WIDTH] = wb_s_i.dat;
+            mem_bus_res_o.blk[i*WB_DATA_WIDTH+:WB_DATA_WIDTH] = wb_s_i.dat;
           end
         end
       end
 
       SINGLE_WAIT: begin
-        iomem_res_o.valid = wb_s_i.ack;
+        mem_bus_res_o.valid = wb_s_i.ack;
       end
 
       BURST_DATA: begin
-        iomem_res_o.valid = wb_s_i.ack && (beat_cnt_q == (BEAT_CNT_W + 1)'(BURST_LEN - 1));
+        mem_bus_res_o.valid = wb_s_i.ack && (beat_cnt_q == (BEAT_CNT_W + 1)'(BURST_LEN - 1));
       end
 
       ERROR_HANDLE: begin
         // Signal completion even on error
-        iomem_res_o.valid = 1'b1;
+        mem_bus_res_o.valid = 1'b1;
       end
 
       default: ;
@@ -369,8 +359,18 @@ module wb_master_bridge (
 
 `ifdef WB_INTC
   always_ff @(posedge clk_i) begin
-    if (iomem_res_o.valid && !write_q) begin
-      $display("[%0t] WB_MASTER: COMPLETE addr=%h data[0]=%h [1]=%h [2]=%h [3]=%h", $time, addr_q, iomem_res_o.data[31:0], iomem_res_o.data[63:32], iomem_res_o.data[95:64], iomem_res_o.data[127:96]);
+    if (mem_bus_res_o.valid && !write_q) begin
+      $display("[%0t] WB_MASTER: COMPLETE addr=%h data[0]=%h [1]=%h [2]=%h [3]=%h", $time, addr_q, mem_bus_res_o.blk[31:0], mem_bus_res_o.blk[63:32], mem_bus_res_o.blk[95:64],
+               mem_bus_res_o.blk[127:96]);
+    end
+  end
+`endif
+
+`ifdef PBUS_DEBUG
+  always_ff @(posedge clk_i) begin
+    if (state_q == IDLE && mem_bus_req_i.valid && is_uncached && is_write) begin
+      $display("[%0t] WB_MASTER_UART: addr=%h rw_size=%0d byte_sel=%b data=%h",
+               $time, mem_bus_req_i.addr, mem_bus_req_i.rw_size, byte_sel_comb, mem_bus_req_i.data[31:0]);
     end
   end
 `endif

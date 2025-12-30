@@ -174,8 +174,8 @@ module ceres_wrapper
   // ==========================================================================
 
   // CPU Interface
-  iomem_req_t                         cpu_mem_req;
-  iomem_res_t                         cpu_mem_res;
+  lowX_req_t                          cpu_mem_req;
+  lowX_res_t                          cpu_mem_res;
 
   // Wishbone Bus
   wb_master_t                         wb_cpu_m;
@@ -271,57 +271,57 @@ module ceres_wrapper
   assign uart1_rdata = 32'h0;
 
   // GPIO
-  logic       [31:0] gpio_rdata;
-  logic              gpio_irq;
+  logic [31:0] gpio_rdata;
+  logic        gpio_irq;
 
   // PWM
-  logic       [31:0] pwm_rdata;
-  logic       [ 7:0] pwm_out;
-  logic       [ 7:0] pwm_n_out;
-  logic              pwm_irq;
-  logic              pwm_sync;
+  logic [31:0] pwm_rdata;
+  logic [ 7:0] pwm_out;
+  logic [ 7:0] pwm_n_out;
+  logic        pwm_irq;
+  logic        pwm_sync;
 
   // Timer
-  logic       [31:0] timer_rdata;
-  logic       [ 7:0] timer_pwm;
-  logic       [ 3:0] gptimer_irq;
-  logic              gptimer_irq_combined;
+  logic [31:0] timer_rdata;
+  logic [ 7:0] timer_pwm;
+  logic [ 3:0] gptimer_irq;
+  logic        gptimer_irq_combined;
 
   // PLIC
-  logic       [31:0] plic_rdata;
-  logic       [31:0] plic_irq_sources;
-  logic              plic_irq;
+  logic [31:0] plic_rdata;
+  logic [31:0] plic_irq_sources;
+  logic        plic_irq;
 
   // Watchdog
-  logic       [31:0] wdt_rdata;
-  logic              wdt_irq;
-  logic              wdt_reset;
+  logic [31:0] wdt_rdata;
+  logic        wdt_irq;
+  logic        wdt_reset;
 
   // DMA
-  logic       [31:0] dma_rdata;
-  logic       [ 3:0] dma_irq;
-  logic              dma_req;
-  logic       [31:0] dma_addr;
-  logic       [31:0] dma_wdata;
-  logic       [ 3:0] dma_wstrb;
-  logic              dma_ack;
+  logic [31:0] dma_rdata;
+  logic [ 3:0] dma_irq;
+  logic        dma_req;
+  logic [31:0] dma_addr;
+  logic [31:0] dma_wdata;
+  logic [ 3:0] dma_wstrb;
+  logic        dma_ack;
 
   // VGA
-  logic       [31:0] vga_rdata;
-  logic              pixel_clk;
-  logic              pll_locked;
+  logic [31:0] vga_rdata;
+  logic        pixel_clk;
+  logic        pll_locked;
 
-  // Response signals for multiplexer
-  iomem_res_t        ram_res;
-  iomem_res_t        clint_res;
-  iomem_res_t        periph_res;
+  // Response signals for multiplexer (now unused - using Wishbone interconnect)
+  // lowX_res_t        ram_res;
+  // lowX_res_t        clint_res;
+  // lowX_res_t        periph_res;
 
-  logic              uart_sel;
-  logic              spi_sel;
-  logic              i2c_sel;
-  logic              i2c_scl_i;
-  logic              i2c_sda_i;
-  logic              i2c_irq;
+  logic        uart_sel;
+  logic        spi_sel;
+  logic        i2c_sel;
+  logic        i2c_scl_i;
+  logic        i2c_sda_i;
+  logic        i2c_irq;
   // ==========================================================================
   // Reset
   // ==========================================================================
@@ -335,26 +335,26 @@ module ceres_wrapper
   // CPU Core
   // ==========================================================================
   cpu i_soc (
-      .clk_i      (clk_i),
-      .rst_ni     (sys_rst_n),
+      .clk_i        (clk_i),
+      .rst_ni       (sys_rst_n),
       // Hardware interrupt inputs
-      .timer_irq_i(timer_irq),    // CLINT timer interrupt
-      .sw_irq_i   (sw_irq),       // CLINT software interrupt  
-      .ext_irq_i  (|ext_irq_i),   // External interrupt (directly from external pins)
-      .iomem_req_o(cpu_mem_req),
-      .iomem_res_i(cpu_mem_res)
+      .timer_irq_i  (timer_irq),    // CLINT timer interrupt
+      .sw_irq_i     (sw_irq),       // CLINT software interrupt
+      .ext_irq_i    (|ext_irq_i),   // External interrupt (directly from external pins)
+      .mem_bus_req_o(cpu_mem_req),
+      .mem_bus_res_i(cpu_mem_res)
   );
 
   // ==========================================================================
-  // WISHBONE MASTER BRIDGE (iomem -> Wishbone B4)
+  // WISHBONE MASTER BRIDGE (mem_bus -> Wishbone B4)
   // ==========================================================================
   wb_master_bridge i_wb_master (
-      .clk_i      (clk_i),
-      .rst_ni     (sys_rst_n),
-      .iomem_req_i(cpu_mem_req),
-      .iomem_res_o(cpu_mem_res),
-      .wb_m_o     (wb_cpu_m),
-      .wb_s_i     (wb_cpu_s)
+      .clk_i        (clk_i),
+      .rst_ni       (sys_rst_n),
+      .mem_bus_req_i(cpu_mem_req),
+      .mem_bus_res_o(cpu_mem_res),
+      .wb_m_o       (wb_cpu_m),
+      .wb_s_i       (wb_cpu_s)
   );
 
   // ==========================================================================
@@ -718,16 +718,16 @@ module ceres_wrapper
           .clk_i     (clk_i),
           .rst_ni    (sys_rst_n),
           .stb_i     (sel_gpio),
-          .adr_i     (cpu_mem_req.addr[5:2]),   // Register address (word aligned)
-          .byte_sel_i(cpu_mem_req.rw[3:0]),     // Byte enables
-          .we_i      (|cpu_mem_req.rw),         // Write enable
+          .adr_i     (cpu_mem_req.addr[5:2]),                                // Register address (word aligned)
+          .byte_sel_i(gen_byte_sel(cpu_mem_req.rw_size, cpu_mem_req.addr)),  // Byte select based on rw_size
+          .we_i      (cpu_mem_req.rw),                                       // Write enable
           .dat_i     (cpu_mem_req.data[31:0]),
           .dat_o     (gpio_rdata),
           .gpio_i    (gpio_i),
           .gpio_o    (gpio_o),
           .gpio_oe_o (gpio_oe_o),
-          .gpio_pue_o(),                        // Pull-up (connect to pads if needed)
-          .gpio_pde_o(),                        // Pull-down (connect to pads if needed)
+          .gpio_pue_o(),                                                     // Pull-up (connect to pads if needed)
+          .gpio_pde_o(),                                                     // Pull-down (connect to pads if needed)
           .irq_o     (gpio_irq)
       );
     end else begin : gen_no_gpio_internal
@@ -770,9 +770,9 @@ module ceres_wrapper
           .clk_i        (clk_i),
           .rst_ni       (sys_rst_n),
           .stb_i        (sel_plic),
-          .adr_i        (cpu_mem_req.addr[11:2]),  // 10-bit word address
-          .byte_sel_i   (cpu_mem_req.rw[3:0]),
-          .we_i         (|cpu_mem_req.rw),
+          .adr_i        (cpu_mem_req.addr[11:2]),                               // 10-bit word address
+          .byte_sel_i   (gen_byte_sel(cpu_mem_req.rw_size, cpu_mem_req.addr)),  // Byte select based on rw_size
+          .we_i         (cpu_mem_req.rw),                                       // Write enable
           .dat_i        (cpu_mem_req.data[31:0]),
           .dat_o        (plic_rdata),
           .irq_sources_i(plic_irq_sources),
@@ -795,9 +795,9 @@ module ceres_wrapper
           .clk_i         (clk_i),
           .rst_ni        (sys_rst_n),
           .stb_i         (sel_timer),
-          .adr_i         (cpu_mem_req.addr[9:2]),   // 8-bit word address
-          .byte_sel_i    (cpu_mem_req.rw[3:0]),
-          .we_i          (|cpu_mem_req.rw),
+          .adr_i         (cpu_mem_req.addr[9:2]),
+          .byte_sel_i    (gen_byte_sel(cpu_mem_req.rw_size, cpu_mem_req.addr)),  // Byte select based on rw_size
+          .we_i          (cpu_mem_req.rw),                                       // Write enable
           .dat_i         (cpu_mem_req.data[31:0]),
           .dat_o         (timer_rdata),
           .pwm_o         (timer_pwm),
@@ -823,12 +823,12 @@ module ceres_wrapper
           .clk_i      (clk_i),
           .rst_ni     (sys_rst_n),
           .stb_i      (sel_wdt),
-          .adr_i      (cpu_mem_req.addr[5:2]),   // 4-bit word address
-          .byte_sel_i (cpu_mem_req.rw[3:0]),
-          .we_i       (|cpu_mem_req.rw),
+          .adr_i      (cpu_mem_req.addr[5:2]),
+          .byte_sel_i (gen_byte_sel(cpu_mem_req.rw_size, cpu_mem_req.addr)),  // Byte select based on rw_size
+          .we_i       (cpu_mem_req.rw),                                       // Write enable
           .dat_i      (cpu_mem_req.data[31:0]),
           .dat_o      (wdt_rdata),
-          .dbg_halt_i (1'b0),                    // TODO: Connect to debug module
+          .dbg_halt_i (1'b0),
           .wdt_reset_o(wdt_reset),
           .irq_o      (wdt_irq)
       );
@@ -853,18 +853,18 @@ module ceres_wrapper
           .clk_i      (clk_i),
           .rst_ni     (sys_rst_n),
           .stb_i      (sel_dma),
-          .adr_i      (cpu_mem_req.addr[7:2]),   // 6-bit word address
-          .byte_sel_i (cpu_mem_req.rw[3:0]),
-          .we_i       (|cpu_mem_req.rw),
+          .adr_i      (cpu_mem_req.addr[7:2]),
+          .byte_sel_i (gen_byte_sel(cpu_mem_req.rw_size, cpu_mem_req.addr)),  // Byte select based on rw_size
+          .we_i       (cpu_mem_req.rw),                                       // Write enable
           .dat_i      (cpu_mem_req.data[31:0]),
           .dat_o      (dma_rdata),
           .dma_req_o  (dma_req),
           .dma_addr_o (dma_addr),
           .dma_wdata_o(dma_wdata),
           .dma_wstrb_o(dma_wstrb),
-          .dma_rdata_i(32'h0),                   // TODO: Connect DMA master port
+          .dma_rdata_i(32'h0),
           .dma_ack_i  (1'b0),
-          .dreq_i     (4'b0),                    // TODO: Connect peripheral DMA requests
+          .dreq_i     (4'b0),
           .irq_o      (dma_irq)
       );
     end else begin : gen_no_dma
@@ -889,16 +889,16 @@ module ceres_wrapper
           .clk_i     (clk_i),
           .rst_ni    (sys_rst_n),
           .stb_i     (sel_pwm),
-          .adr_i     (cpu_mem_req.addr[7:2]),   // 6-bit word address
-          .byte_sel_i(cpu_mem_req.rw[3:0]),
-          .we_i      (|cpu_mem_req.rw),
+          .adr_i     (cpu_mem_req.addr[7:2]),
+          .byte_sel_i(gen_byte_sel(cpu_mem_req.rw_size, cpu_mem_req.addr)),  // Byte select based on rw_size
+          .we_i      (cpu_mem_req.rw),                                       // Write enable
           .dat_i     (cpu_mem_req.data[31:0]),
           .dat_o     (pwm_rdata),
           .fault_i   (pwm_fault_i),
           .pwm_o     (pwm_out),
           .pwm_n_o   (pwm_n_out),
           .sync_o    (pwm_sync),
-          .drq_o     (),                        // DMA request (connect if needed)
+          .drq_o     (),
           .irq_o     (pwm_irq)
       );
     end else begin : gen_no_pwm
@@ -948,24 +948,24 @@ module ceres_wrapper
           .rst_ni     (sys_rst_n),
           .pixel_clk_i(pixel_clk),
           .stb_i      (sel_vga),
-          .adr_i      (cpu_mem_req.addr[11:2]),  // 10-bit word address (4KB)
-          .byte_sel_i (cpu_mem_req.rw[3:0]),
-          .we_i       (|cpu_mem_req.rw),
+          .adr_i      (cpu_mem_req.addr[11:2]),                               // 10-bit word address (4KB)
+          .byte_sel_i (gen_byte_sel(cpu_mem_req.rw_size, cpu_mem_req.addr)),  // Byte select based on rw_size
+          .we_i       (cpu_mem_req.rw),
           .dat_i      (cpu_mem_req.data[31:0]),
           .dat_o      (vga_rdata),
-          .fb_req_o   (),                        // Framebuffer interface not connected
+          .fb_req_o   (),                                                     // Framebuffer interface not connected
           .fb_addr_o  (),
           .fb_data_i  (32'h0),
           .fb_ack_i   (1'b0),
-          .char_addr_o(),                        // Character ROM interface not connected
+          .char_addr_o(),                                                     // Character ROM interface not connected
           .char_data_i(8'h0),
           .vga_hsync_o(vga_hsync_o),
           .vga_vsync_o(vga_vsync_o),
           .vga_r_o    (vga_r_o),
           .vga_g_o    (vga_g_o),
           .vga_b_o    (vga_b_o),
-          .vga_de_o   (),                        // Data enable not connected
-          .vsync_irq_o()                         // VSync interrupt not connected
+          .vga_de_o   (),                                                     // Data enable not connected
+          .vsync_irq_o()                                                      // VSync interrupt not connected
       );
     end else begin : gen_no_vga
       assign vga_rdata   = '0;
@@ -980,33 +980,32 @@ module ceres_wrapper
   endgenerate
 
   // ==========================================================================
-  // Peripheral Response Multiplexer
+  // Peripheral Response Multiplexer (UNUSED - now using Wishbone bus)
   // ==========================================================================
-  always_comb begin
-    periph_res.valid = sel_periph;
-    periph_res.ready = 1'b1;
-    periph_res.data  = '0;
-
-    if (sel_gpio) begin
-      periph_res.data = {96'b0, gpio_rdata};
-    end else if (sel_plic) begin
-      periph_res.data = {96'b0, plic_rdata};
-    end else if (sel_timer) begin
-      periph_res.data = {96'b0, timer_rdata};
-    end else if (sel_wdt) begin
-      periph_res.data = {96'b0, wdt_rdata};
-    end else if (sel_dma) begin
-      periph_res.data = {96'b0, dma_rdata};
-    end else if (sel_pwm) begin
-      periph_res.data = {96'b0, pwm_rdata};
-    end else if (sel_vga) begin
-      periph_res.data = {96'b0, vga_rdata};
-    end
-    // Add more peripherals here as they are implemented:
-    // else if (sel_uart0) begin
-    //   periph_res.data = {96'b0, uart0_rdata};
-    // end
-  end
+  // NOTE: This code is no longer used. All peripherals are now accessed via
+  // the Wishbone interconnect and wb_pbus_slave bridge.
+  //
+  // always_comb begin
+  //   periph_res.valid = sel_periph;
+  //   periph_res.ready = 1'b1;
+  //   periph_res.data  = '0;
+  //
+  //   if (sel_gpio) begin
+  //     periph_res.data = {96'b0, gpio_rdata};
+  //   end else if (sel_plic) begin
+  //     periph_res.data = {96'b0, plic_rdata};
+  //   end else if (sel_timer) begin
+  //     periph_res.data = {96'b0, timer_rdata};
+  //   end else if (sel_wdt) begin
+  //     periph_res.data = {96'b0, wdt_rdata};
+  //   end else if (sel_dma) begin
+  //     periph_res.data = {96'b0, dma_rdata};
+  //   end else if (sel_pwm) begin
+  //     periph_res.data = {96'b0, pwm_rdata};
+  //   end else if (sel_vga) begin
+  //     periph_res.data = {96'b0, vga_rdata};
+  //   end
+  // end
 
   // ==========================================================================
   // Response Multiplexer

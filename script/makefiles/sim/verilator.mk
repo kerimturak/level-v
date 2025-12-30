@@ -57,6 +57,11 @@ ifeq ($(LOG_UART),1)
   SV_DEFINES += +define+LOG_UART
 endif
 
+# PBUS debug logging - PBUS_DEBUG=1
+ifeq ($(PBUS_DEBUG),1)
+  SV_DEFINES += +define+PBUS_DEBUG
+endif
+
 # Branch Predictor stats - LOG_BP=1
 ifeq ($(LOG_BP),1)
   SV_DEFINES += +define+LOG_BP

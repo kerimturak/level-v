@@ -744,10 +744,13 @@ package ceres_param;
   } lowX_res_t;
 
   typedef struct packed {
-    logic            valid;
-    logic            ready;
-    logic [XLEN-1:0] addr;
-    logic            uncached;
+    logic                 valid;
+    logic                 ready;
+    logic                 rw;
+    rw_size_e             rw_size;
+    logic [XLEN-1:0]      addr;
+    logic [BLK_SIZE -1:0] data;
+    logic                 uncached;
   } lowX_req_t;
 
   typedef struct packed {
@@ -787,22 +790,6 @@ package ceres_param;
     logic            uncached;
   } blowX_req_t;
 
-  // ---------------------------------------------------------------------------
-  // 10.10 IO/Memory Interface
-  // ---------------------------------------------------------------------------
-  typedef struct packed {
-    logic                 valid;
-    logic                 ready;
-    logic [15:0]          rw;
-    logic [XLEN-1:0]      addr;
-    logic [BLK_SIZE -1:0] data;
-  } iomem_req_t;
-
-  typedef struct packed {
-    logic                 valid;
-    logic                 ready;
-    logic [BLK_SIZE -1:0] data;
-  } iomem_res_t;
 
   typedef struct packed {
     logic            valid;
@@ -1113,6 +1100,35 @@ package ceres_param;
       12'h300: csr_wmask = wdata & 32'h00001888;
       default: csr_wmask = wdata;
     endcase
+  endfunction
+
+  // ---------------------------------------------------------------------------
+  // 11.8 Byte Select Generation
+  // ---------------------------------------------------------------------------
+  // Generate byte select mask based on rw_size and address offset
+  function automatic logic [3:0] gen_byte_sel(input rw_size_e rw_size, input logic [31:0] addr);
+    logic [1:0] byte_offset;
+    logic [3:0] byte_sel;
+
+    byte_offset = addr[1:0];  // Byte offset within word
+    byte_sel    = '0;
+
+    case (rw_size)
+      BYTE: begin
+        byte_sel = 4'b0001 << byte_offset;
+      end
+      HALF: begin
+        byte_sel = 4'b0011 << (byte_offset & 2'b10);  // Align to 2-byte boundary
+      end
+      WORD: begin
+        byte_sel = 4'b1111;  // All bytes
+      end
+      default: begin
+        byte_sel = '0;
+      end
+    endcase
+
+    return byte_sel;
   endfunction
 
 endpackage

@@ -11,14 +11,14 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 module cpu
   import ceres_param::*;
 (
-    input  logic       clk_i,
-    input  logic       rst_ni,
+    input  logic         clk_i,
+    input  logic         rst_ni,
     // Hardware interrupt inputs
-    input  logic       timer_irq_i,    // CLINT timer interrupt (MTIP)
-    input  logic       sw_irq_i,       // CLINT software interrupt (MSIP)
-    input  logic       ext_irq_i,      // PLIC external interrupt (MEIP)
-    output iomem_req_t iomem_req_o,
-    input  iomem_res_t iomem_res_i
+    input  logic         timer_irq_i,    // CLINT timer interrupt (MTIP)
+    input  logic         sw_irq_i,       // CLINT software interrupt (MSIP)
+    input  logic         ext_irq_i,      // PLIC external interrupt (MEIP)
+    output lowX_req_t mem_bus_req_o,
+    input  lowX_res_t mem_bus_res_i
 );
 
   stall_e                   stall_cause;
@@ -618,14 +618,14 @@ module cpu
   );
 
   memory_arbiter i_memory_arbiter (
-      .clk_i       (clk_i),
-      .rst_ni      (rst_ni),
-      .icache_req_i(lx_ireq),
-      .dcache_req_i(lx_dreq),
-      .icache_res_o(fe_lx_ires),
-      .dcache_res_o(lx_dres),
-      .iomem_res_i (iomem_res_i),
-      .iomem_req_o (iomem_req_o)
+      .clk_i         (clk_i),
+      .rst_ni        (rst_ni),
+      .icache_req_i  (lx_ireq),
+      .dcache_req_i  (lx_dreq),
+      .icache_res_o  (fe_lx_ires),
+      .dcache_res_o  (lx_dres),
+      .mem_bus_res_i (mem_bus_res_i),
+      .mem_bus_req_o (mem_bus_req_o)
   );
 
   // ============================================================================

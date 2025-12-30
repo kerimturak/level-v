@@ -32,6 +32,18 @@ module uart
   logic        rx_full;
   logic        rx_empty;
   logic        rx_re;
+  logic [ 7:0] tx_data;
+
+  // Select correct byte based on byte_sel
+  always_comb begin
+    case (byte_sel_i)
+      4'b0001: tx_data = dat_i[7:0];
+      4'b0010: tx_data = dat_i[15:8];
+      4'b0100: tx_data = dat_i[23:16];
+      4'b1000: tx_data = dat_i[31:24];
+      default: tx_data = dat_i[7:0];
+    endcase
+  end
 
   uart_tx i_uart_tx (
       .clk_i     (clk_i),
@@ -39,7 +51,7 @@ module uart
       .baud_div_i(baud_div),
       .tx_we_i   (tx_we),
       .tx_en_i   (tx_en),
-      .din_i     (dat_i[7:0]),
+      .din_i     (tx_data),
       .full_o    (tx_full),
       .empty_o   (tx_empty),
       .tx_bit_o  (uart_tx_o)
