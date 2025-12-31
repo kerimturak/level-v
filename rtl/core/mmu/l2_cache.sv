@@ -104,6 +104,33 @@ module l2_cache
   logic                      write_back;
   logic      [ TAG_SIZE-1:0] evict_tag;
   logic      [ BLK_SIZE-1:0] evict_data;
+  logic                      mem_res_id_match;  // Memory response ID matches expected ID
+
+  // ============================================================================
+  // MSHR (Miss Status Holding Registers) for Non-Blocking Cache
+  // ============================================================================
+  // MSHR tracks outstanding cache misses and enables hit-under-miss operation
+  localparam NUM_MSHR = 4;  // 4 outstanding misses per bank
+  localparam MSHR_IDX_WIDTH = $clog2(NUM_MSHR);
+
+  typedef struct packed {
+    logic                 valid;           // Entry is valid
+    logic [TAG_SIZE-1:0]  tag;             // Cache line tag
+    logic [IDX_WIDTH-1:0] index;           // Cache line index
+    logic [3:0]           request_id;      // Original request ID
+    logic                 is_write;        // Is this a write request
+    logic                 allocate_done;   // Cache line allocation completed
+  } mshr_entry_t;
+
+  mshr_entry_t [NUM_MSHR-1:0] mshr;
+  logic [NUM_MSHR-1:0] mshr_valid_vec;
+  logic [NUM_MSHR-1:0] mshr_match_vec;
+  logic [NUM_MSHR-1:0] mshr_alloc_vec;
+  logic [MSHR_IDX_WIDTH-1:0] mshr_alloc_idx;
+  logic [MSHR_IDX_WIDTH-1:0] mshr_match_idx;
+  logic mshr_full;
+  logic mshr_hit;
+  logic mshr_can_accept;
 
   // Request pipeline register with ID tracking
   always_ff @(posedge clk_i) begin
@@ -112,7 +139,7 @@ module l2_cache
       cache_req_id_q <= '0;
     end else begin
       if (cache_miss) begin
-        if (!(mem_res_i.valid && !write_back) || !l1_req_i.ready) begin
+        if (!(mem_res_i.valid && mem_res_id_match && !write_back) || !l1_req_i.ready) begin
           cache_req_q    <= cache_req_q;
           cache_req_id_q <= cache_req_id_q;
         end else begin
@@ -233,7 +260,10 @@ module l2_cache
     rd_idx = cache_req_q.valid ? cache_req_q.addr[IDX_WIDTH+BOFFSET-1:BOFFSET] : l1_req_i.addr[IDX_WIDTH+BOFFSET-1:BOFFSET];
     wr_idx = flush ? flush_index : (cache_miss ? cache_req_q.addr[IDX_WIDTH+BOFFSET-1:BOFFSET] : rd_idx);
 
-    cache_wr_en = (cache_miss && mem_res_i.valid && !cache_req_q.uncached) || flush;
+    // Check ID match for memory responses to avoid accepting responses meant for other banks
+    mem_res_id_match = (mem_res_i.id == cache_req_id_q);
+
+    cache_wr_en = (cache_miss && mem_res_i.valid && mem_res_id_match && !cache_req_q.uncached) || flush;
     cache_idx = cache_wr_en ? wr_idx : rd_idx;
 
     cache_wr_way = cache_hit ? cache_hit_vec : evict_way;
@@ -274,8 +304,8 @@ module l2_cache
 
   // Block data/tag array writes during writeback
   always_comb begin
-    data_array_wr_en = ((cache_hit && cache_req_q.rw) || (cache_miss && mem_res_i.valid && !cache_req_q.uncached)) && !write_back;
-    tag_array_wr_en  = ((cache_hit && cache_req_q.rw) || (cache_miss && mem_res_i.valid && !cache_req_q.uncached)) && !write_back;
+    data_array_wr_en = ((cache_hit && cache_req_q.rw) || (cache_miss && mem_res_i.valid && mem_res_id_match && !cache_req_q.uncached)) && !write_back;
+    tag_array_wr_en  = ((cache_hit && cache_req_q.rw) || (cache_miss && mem_res_i.valid && mem_res_id_match && !cache_req_q.uncached)) && !write_back;
   end
 
   // Dirty control signals
@@ -283,8 +313,8 @@ module l2_cache
     dirty_wdirty_temp = (flush) ? '0 : (write_back ? '0 : (cache_req_q.rw ? '1 : '0));
     dirty_wr_val = dirty_wdirty_temp;
 
-    dirty_rw_en_temp = ((cache_req_q.rw && (cache_hit || (cache_miss && mem_res_i.valid))) ||
-                      (write_back && mem_res_i.valid) || (flush));
+    dirty_rw_en_temp = ((cache_req_q.rw && (cache_hit || (cache_miss && mem_res_i.valid && mem_res_id_match))) ||
+                      (write_back && mem_res_i.valid && mem_res_id_match) || (flush));
     dirty_wr_en  = dirty_rw_en_temp;
 
     dirty_wr_idx    = dirty_idx_temp;
@@ -339,12 +369,10 @@ module l2_cache
     end
 
     // Cache response with ID matching to prevent stale responses
-    // Only respond if current L1 request ID matches the latched request ID
-    l1_res_o.valid   = !write_back && (l1_req_i.id == cache_req_id_q) &&
-                          (!cache_req_q.rw ? (cache_req_q.valid && (cache_hit || (cache_miss && mem_req_o.ready && mem_res_i.valid))) :
-                                             (cache_req_q.valid && l1_req_i.ready && (cache_hit || (cache_miss && mem_req_o.ready && mem_res_i.valid))));
-    l1_res_o.ready = !write_back && (l1_req_i.id == cache_req_id_q) && (!cache_req_q.rw ? ((!cache_miss || mem_res_i.valid) && !flush && !tag_array_wr_en) : (!tag_array_wr_en && mem_req_o.ready && mem_res_i.valid && !flush));
-    l1_res_o.blk = (cache_miss && mem_res_i.valid) ? mem_res_i.blk : cache_select_data;
+    // Generate response when data is ready (either hit or miss with memory response)
+    l1_res_o.valid   = !write_back && cache_req_q.valid && (cache_hit || (cache_miss && mem_res_i.valid && mem_res_id_match));
+    l1_res_o.ready = !write_back && (!cache_miss || (mem_res_i.valid && mem_res_id_match)) && !flush && !tag_array_wr_en;
+    l1_res_o.blk = (cache_miss && mem_res_i.valid && mem_res_id_match) ? mem_res_i.blk : cache_select_data;
     l1_res_o.id  = cache_req_id_q;  // Return the request ID
   end
 
@@ -353,7 +381,7 @@ module l2_cache
     if (!rst_ni) begin
       lookup_ack <= '0;
     end else begin
-      lookup_ack <= mem_res_i.valid ? !mem_req_o.ready : (!lookup_ack ? mem_req_o.valid && mem_res_i.ready : lookup_ack);
+      lookup_ack <= (mem_res_i.valid && mem_res_id_match) ? !mem_req_o.ready : (!lookup_ack ? mem_req_o.valid && mem_res_i.ready : lookup_ack);
     end
   end
 
@@ -364,7 +392,7 @@ module l2_cache
       lowx_req_valid_q <= 1'b0;
     end else begin
       if (lowx_req_valid_q) begin
-        if (mem_res_i.valid) begin
+        if (mem_res_i.valid && mem_res_id_match) begin
           lowx_req_q <= '0;
           lowx_req_valid_q <= 1'b0;
         end else begin

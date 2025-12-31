@@ -36,15 +36,18 @@ module l2_cache_multibank
     parameter BLK_SIZE   = ceres_param::BLK_SIZE,
     parameter XLEN       = ceres_param::XLEN,
     parameter NUM_WAY    = 8,                      // 8-way per bank
-    parameter NUM_BANKS  = 2                       // 2 banks
+    parameter NUM_BANKS  = 2,                      // 2 banks
+    parameter NUM_L1_PORTS = 2                     // 2 L1 ports (icache + dcache)
 ) (
     input  logic      clk_i,
     input  logic      rst_ni,
     input  logic      flush_i,
-    input  lowX_req_t l1_req_i,   // Request from L1 (via arbiter)
-    output lowX_res_t l1_res_o,   // Response to L1 (via arbiter)
-    input  lowX_res_t mem_res_i,  // Response from memory
-    output lowX_req_t mem_req_o   // Request to memory
+    // Multiple L1 request ports (from icache and dcache)
+    input  lowX_req_t [NUM_L1_PORTS-1:0] l1_req_i,
+    output lowX_res_t [NUM_L1_PORTS-1:0] l1_res_o,
+    // Single memory interface
+    input  lowX_res_t mem_res_i,
+    output lowX_req_t mem_req_o
 );
 
   // ============================================================================
@@ -61,31 +64,37 @@ module l2_cache_multibank
   // ============================================================================
   // Bank Interfaces
   // ============================================================================
-  lowX_req_t [NUM_BANKS-1:0] bank_req;
-  lowX_res_t [NUM_BANKS-1:0] bank_res;
+  localparam NUM_PORTS_PER_BANK = 2;  // Each bank has 2 request ports
+
+  lowX_req_t [NUM_BANKS-1:0][NUM_PORTS_PER_BANK-1:0] bank_req;
+  lowX_res_t [NUM_BANKS-1:0][NUM_PORTS_PER_BANK-1:0] bank_res;
 
   // Memory interface from each bank
   lowX_req_t [NUM_BANKS-1:0] bank_mem_req;
   lowX_res_t [NUM_BANKS-1:0] bank_mem_res;
 
   // ============================================================================
-  // Bank Selection Logic
+  // Bank Selection and Request Routing
   // ============================================================================
-  logic [NUM_BANKS-1:0] bank_select;
-  logic bank_id;
-
-  assign bank_id = l1_req_i.addr[BANK_SEL_BIT];
+  // Route each L1 request to appropriate bank based on address
+  // Each bank can receive requests from multiple L1 ports simultaneously
 
   always_comb begin
-    bank_select = '0;
-    bank_select[bank_id] = l1_req_i.valid;
-  end
+    // Initialize all bank ports
+    for (int b = 0; b < NUM_BANKS; b++) begin
+      for (int p = 0; p < NUM_PORTS_PER_BANK; p++) begin
+        bank_req[b][p] = '0;
+      end
+    end
 
-  // Route request to selected bank
-  always_comb begin
-    for (int i = 0; i < NUM_BANKS; i++) begin
-      bank_req[i] = l1_req_i;
-      bank_req[i].valid = bank_select[i];
+    // Simple routing: L1 port N goes to bank port N
+    // Bank selection is based on address bit
+    for (int l1_port = 0; l1_port < NUM_L1_PORTS; l1_port++) begin
+      automatic int target_bank = l1_req_i[l1_port].valid ?
+                                  int'(l1_req_i[l1_port].addr[BANK_SEL_BIT]) : 0;
+      if (target_bank < NUM_BANKS && l1_port < NUM_PORTS_PER_BANK) begin
+        bank_req[target_bank][l1_port] = l1_req_i[l1_port];
+      end
     end
   end
 
@@ -98,7 +107,7 @@ module l2_cache_multibank
 
   always_comb begin
     for (int i = 0; i < NUM_BANKS; i++) begin
-      bank_has_response[i] = bank_res[i].valid;
+      bank_has_response[i] = bank_res[i][0].valid || bank_res[i][1].valid;
     end
   end
 
@@ -136,12 +145,28 @@ module l2_cache_multibank
     end
   end
 
-  // Mux response based on grant
+  // Mux responses back to L1 ports
+  // Simple routing: bank port N goes back to L1 port N
+  // Responses from both banks for the same L1 port need arbitration
   always_comb begin
-    l1_res_o = '0;
-    for (int i = 0; i < NUM_BANKS; i++) begin
-      if (grant[i]) begin
-        l1_res_o = bank_res[i];
+    // Initialize L1 responses - ready=1 means L2 can accept requests
+    for (int l1_port = 0; l1_port < NUM_L1_PORTS; l1_port++) begin
+      l1_res_o[l1_port] = '0;
+      l1_res_o[l1_port].ready = 1'b1;  // L2 is always ready to accept requests (has internal buffering)
+    end
+
+    // Collect responses from all banks
+    // Priority: bank 0 has priority over bank 1 for each L1 port
+    for (int l1_port = 0; l1_port < NUM_L1_PORTS; l1_port++) begin
+      if (l1_port < NUM_PORTS_PER_BANK) begin
+        // Check bank 0 first
+        if (bank_res[0][l1_port].valid) begin
+          l1_res_o[l1_port] = bank_res[0][l1_port];
+        end
+        // Then bank 1 (if bank 0 doesn't have response)
+        else if (bank_res[1][l1_port].valid) begin
+          l1_res_o[l1_port] = bank_res[1][l1_port];
+        end
       end
     end
   end
@@ -210,21 +235,22 @@ module l2_cache_multibank
   end
 
   // ============================================================================
-  // Bank Instances
+  // Bank Instances (Multi-Ported)
   // ============================================================================
   generate
     for (genvar b = 0; b < NUM_BANKS; b++) begin : gen_banks
-      l2_cache #(
+      l2_bank_multiport #(
           .CACHE_SIZE(BANK_SIZE),
           .BLK_SIZE  (BLK_SIZE),
           .XLEN      (XLEN),
-          .NUM_WAY   (NUM_WAY)
+          .NUM_WAY   (NUM_WAY),
+          .NUM_PORTS (NUM_PORTS_PER_BANK)
       ) i_l2_bank (
           .clk_i     (clk_i),
           .rst_ni    (rst_ni),
           .flush_i   (flush_i),
-          .l1_req_i  (bank_req[b]),
-          .l1_res_o  (bank_res[b]),
+          .req_i     (bank_req[b]),
+          .res_o     (bank_res[b]),
           .mem_res_i (bank_mem_res[b]),
           .mem_req_o (bank_mem_req[b])
       );

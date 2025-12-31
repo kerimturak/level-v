@@ -66,6 +66,7 @@ module wb_master_bridge (
   logic [ WB_SEL_WIDTH-1:0]                    byte_sel_q;  // Byte select for single transfers
   logic                                        write_q;  // Write operation flag
   logic                                        uncached_q;  // Uncached access flag
+  logic [              3:0]                    id_q;  // Request ID (latched from request)
 
   // ============================================================================
   // Combinational Logic
@@ -187,6 +188,7 @@ module wb_master_bridge (
       byte_sel_q <= '0;
       write_q    <= 1'b0;
       uncached_q <= 1'b0;
+      id_q       <= '0;
     end else begin
       state_q <= state_d;
 
@@ -198,6 +200,7 @@ module wb_master_bridge (
             beat_cnt_q <= '0;
             write_q    <= is_write;
             uncached_q <= is_uncached;
+            id_q       <= mem_bus_req_i.id;  // Latch request ID
 `ifdef WB_INTC
             $display("[%0t] WB_MASTER: NEW_REQ addr=%h uncached=%b write=%b rw_size=%0d", $time, mem_bus_req_i.addr, is_uncached, is_write, mem_bus_req_i.rw_size);
 `endif
@@ -306,6 +309,7 @@ module wb_master_bridge (
     mem_bus_res_o.valid = 1'b0;
     mem_bus_res_o.ready = (state_q == IDLE);
     mem_bus_res_o.blk   = '0;
+    mem_bus_res_o.id    = id_q;  // Return latched request ID
 
     // Pack read data back to cache line format
     // For last beat, use current wb_s_i.dat directly since rdata_q not yet updated

@@ -11,6 +11,17 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 `include "ceres_defines.svh"
 import ceres_param::*;
 
+// ============================================================================
+// Memory Arbiter - Pass-Through for Multi-Port L2
+// ============================================================================
+// Since L2 now has multiple ports (one for icache, one for dcache),
+// the arbiter simply forwards requests and responses without arbitration.
+//
+// Port mapping:
+//   - L2 Port 0: ICache requests/responses
+//   - L2 Port 1: DCache requests/responses
+// ============================================================================
+
 module memory_arbiter (
     input logic clk_i,
     input logic rst_ni,
@@ -18,92 +29,57 @@ module memory_arbiter (
     input dlowX_req_t dcache_req_i,
     output ilowX_res_t icache_res_o,
     output dlowX_res_t dcache_res_o,
-    input lowX_res_t l2_res_i,       // Response from L2 cache
-    output lowX_req_t l2_req_o       // Request to L2 cache
+    // Multi-port L2 interface (2 ports)
+    input lowX_res_t [1:0] l2_res_i,   // Responses from L2 cache (port 0: icache, port 1: dcache)
+    output lowX_req_t [1:0] l2_req_o   // Requests to L2 cache (port 0: icache, port 1: dcache)
 );
 
-  localparam BOFFSET = $clog2(BLK_SIZE / 8);
+  // ============================================================================
+  // Request Forwarding
+  // ============================================================================
 
-  // Round-robin state for selecting which latched request to send
-  typedef enum logic [1:0] {
-    IDLE,
-    ICACHE,
-    DCACHE
-  } round_e;
-  round_e     round;
-
-  // Latching registers for incoming requests
-  ilowX_req_t icache_req_reg;
-  dlowX_req_t dcache_req_reg;
-
-  // Combinational logic for outputs using the latched request data
+  // Forward icache request to L2 port 0
   always_comb begin
-    // Response paths: l2_res_i.valid, artık L2 cache cevabının geçerli olduğunu bildiriyor.
-    icache_res_o.valid = (round == ICACHE) && l2_res_i.valid;
-    icache_res_o.ready = 1'b1;
-    icache_res_o.blk   = l2_res_i.blk;
-    icache_res_o.id    = l2_res_i.id;  // Pass through response ID
-
-    dcache_res_o.valid = (round == DCACHE) && l2_res_i.valid;
-    dcache_res_o.ready = 1'b1;
-    dcache_res_o.data  = l2_res_i.blk;
-    dcache_res_o.id    = l2_res_i.id;  // Pass through response ID
-    // L2 cache request: seçimi latched veriden yapıyoruz.
-    if (round == DCACHE) begin
-      l2_req_o.addr     = dcache_req_reg.addr;
-      l2_req_o.valid    = dcache_req_reg.valid;
-      l2_req_o.ready    = dcache_req_reg.ready;
-      l2_req_o.rw       = dcache_req_reg.rw;
-      l2_req_o.rw_size  = dcache_req_reg.rw_size;
-      l2_req_o.data     = dcache_req_reg.data;
-      l2_req_o.uncached = dcache_req_reg.uncached;
-      l2_req_o.id       = dcache_req_reg.id;  // Pass through ID from dcache
-    end else begin  // ICACHE veya IDLE durumunda icache isteklerine öncelik veriyoruz.
-      l2_req_o.addr     = icache_req_reg.addr;
-      l2_req_o.valid    = icache_req_reg.valid;
-      l2_req_o.ready    = icache_req_reg.ready;
-      l2_req_o.rw       = 1'b0;  // ICache always reads
-      l2_req_o.rw_size  = NO_SIZE;  // ICache reads full cache line
-      l2_req_o.data     = '0;
-      l2_req_o.uncached = icache_req_reg.uncached;
-      l2_req_o.id       = icache_req_reg.id;  // Pass through ID from icache
-    end
+    l2_req_o[0].valid    = icache_req_i.valid;
+    l2_req_o[0].ready    = icache_req_i.ready;
+    l2_req_o[0].addr     = icache_req_i.addr;
+    l2_req_o[0].uncached = icache_req_i.uncached;
+    l2_req_o[0].id       = icache_req_i.id;
+    l2_req_o[0].rw       = 1'b0;  // ICache always reads
+    l2_req_o[0].rw_size  = NO_SIZE;
+    l2_req_o[0].data     = '0;
   end
 
-  // Sequential block: Latching istekler ve round state güncellemesi
-  always_ff @(posedge clk_i) begin
-    if (!rst_ni) begin
-      round          <= IDLE;
-      icache_req_reg <= '{default: 0};
-      dcache_req_reg <= '{rw_size: NO_SIZE, default: 0};
-    end else begin
-      // Yeni istekleri latch’la (varsa). Tek cycle’lık pulse’u register’da tutuyoruz.
-      if (!icache_req_reg.valid && icache_req_i.valid) icache_req_reg <= icache_req_i;
-      if (!dcache_req_reg.valid && dcache_req_i.valid) dcache_req_reg <= dcache_req_i;
+  // Forward dcache request to L2 port 1
+  always_comb begin
+    l2_req_o[1].valid    = dcache_req_i.valid;
+    l2_req_o[1].ready    = dcache_req_i.ready;
+    l2_req_o[1].addr     = dcache_req_i.addr;
+    l2_req_o[1].uncached = dcache_req_i.uncached;
+    l2_req_o[1].id       = dcache_req_i.id;
+    l2_req_o[1].rw       = dcache_req_i.rw;
+    l2_req_o[1].rw_size  = dcache_req_i.rw_size;
+    l2_req_o[1].data     = dcache_req_i.data;
+  end
 
-      // L2 cache cevabı geçerli ise (l2_res_i.valid aktifse) latched istek temizlenir ve round state güncellenir.
-      if (l2_res_i.valid || round == IDLE) begin
-        case (round)
-          ICACHE: begin
-            icache_req_reg.valid <= 1'b0;  // İstek işlendi, temizle
-            // Eğer dcache'te bekleyen istek varsa onu seç, yoksa ICACHE'da kal.
-            round <= dcache_req_reg.valid ? DCACHE : icache_req_reg.valid && !l2_res_i.valid ? ICACHE : IDLE;
-          end
-          DCACHE: begin
-            dcache_req_reg.valid <= 1'b0;  // İstek işlendi, temizle
-            // Eğer icache'te bekleyen istek varsa onu seç, yoksa DCACHE'te kal.
-            round <= icache_req_reg.valid ? ICACHE : dcache_req_reg.valid && !l2_res_i.valid ? DCACHE : IDLE;
-          end
-          IDLE: begin
-            if (icache_req_reg.valid) round <= ICACHE;
-            else if (dcache_req_reg.valid) round <= DCACHE;
-            else round <= IDLE;
-          end
-          default: round <= IDLE;
-        endcase
-      end
-      // Eğer l2_res_i.valid düşükse, round sabit kalır ve latch'lenen istek sürekli gönderilir.
-    end
+  // ============================================================================
+  // Response Forwarding
+  // ============================================================================
+
+  // Forward L2 port 0 response to icache
+  always_comb begin
+    icache_res_o.valid = l2_res_i[0].valid;
+    icache_res_o.ready = 1'b1;
+    icache_res_o.blk   = l2_res_i[0].blk;
+    icache_res_o.id    = l2_res_i[0].id;
+  end
+
+  // Forward L2 port 1 response to dcache
+  always_comb begin
+    dcache_res_o.valid = l2_res_i[1].valid;
+    dcache_res_o.ready = 1'b1;
+    dcache_res_o.data  = l2_res_i[1].blk;
+    dcache_res_o.id    = l2_res_i[1].id;
   end
 
 endmodule
