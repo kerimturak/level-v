@@ -23,6 +23,22 @@ lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*drsram*"
 lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*updated_node*"
 lint_off -rule UNOPTFLAT -file "*/cache.sv" -match "*fi_active*"
 
+// L2 Cache Combinational Loops
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*cache_select_data*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*cache_idx*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*cache_hit*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*cache_miss*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*cache_wr_way*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*evict_way*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*evict_data*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*cache_valid_vec*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*dsram*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*tsram*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*nsram*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*updated_node*"
+lint_off -rule UNOPTFLAT -file "*/l2_cache.sv" -match "*i_node_array*"
+lint_off -rule UNOPTFLAT -file "*/sp_bram.sv" -match "*i_soc.i_l2_cache*"
+
 // CPU Top-Level Signal Loops
 lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_pc*"
 lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_inst*"
@@ -31,6 +47,7 @@ lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_exc_type*"
 lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*fe_imiss_stall*"
 lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*ex_spec_hit*"
 lint_off -rule UNOPTFLAT -file "*/cpu.sv" -match "*de_active_exc_type*"
+lint_off -rule UNOPTFLAT -file "*/ceres_wrapper.sv" -match "*cpu_mem_res*"
 
 // Fetch Stage Combinational Loops
 lint_off -rule UNOPTFLAT -file "*/fetch.sv" -match "*buff_res*"

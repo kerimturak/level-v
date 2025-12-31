@@ -70,14 +70,17 @@ module fetch
   // ============================================================================
   // Reset Flush Cycle Counter
   // ----------------------------------------------------------------------------
-  // During reset, both icache and dcache perform flush operations.
+  // During reset, icache, dcache, and L2 cache perform flush operations.
   // Each cache takes NUM_SET cycles to complete flush.
-  // If dcache is larger than icache, dcache flush takes longer.
+  // L2 cache is typically the largest, so it determines the flush duration.
   // This counter ensures fetch stage stalls until the maximum flush completes.
   // ============================================================================
   localparam int IC_NUM_SET = (IC_CAPACITY / BLK_SIZE) / IC_WAY;
   localparam int DC_NUM_SET = (DC_CAPACITY / BLK_SIZE) / DC_WAY;
-  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ? IC_NUM_SET : DC_NUM_SET;
+  localparam int L2_NUM_SET = (16384 / BLK_SIZE) / 8;  // L2: 16KB, 8-way
+  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ?
+                                     ((IC_NUM_SET > L2_NUM_SET) ? IC_NUM_SET : L2_NUM_SET) :
+                                     ((DC_NUM_SET > L2_NUM_SET) ? DC_NUM_SET : L2_NUM_SET);
   localparam int FLUSH_CNT_WIDTH = $clog2(MAX_FLUSH_CYCLES + 1);
 
   logic [FLUSH_CNT_WIDTH-1:0] flush_counter;
@@ -115,11 +118,11 @@ module fetch
   end
 
   // ============================================================================
-  // Flush Counter: Counts cycles during reset flush to ensure dcache completes
+  // Flush Counter: Counts cycles during reset flush to ensure all caches complete
   // ----------------------------------------------------------------------------
-  // Reset triggers flush in both caches. Icache and dcache flush in parallel,
-  // each taking NUM_SET cycles. If dcache has more sets than icache, it needs
-  // more time. This counter stalls fetch until MAX_FLUSH_CYCLES complete.
+  // Reset triggers flush in icache, dcache, and L2 cache. All flush in parallel,
+  // each taking NUM_SET cycles. L2 cache typically has the most sets and needs
+  // the most time. This counter stalls fetch until MAX_FLUSH_CYCLES complete.
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin

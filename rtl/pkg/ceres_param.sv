@@ -741,6 +741,7 @@ package ceres_param;
     logic                valid;
     logic                ready;
     logic [BLK_SIZE-1:0] blk;
+    logic [3:0]          id;  // Request ID for tracking
   } lowX_res_t;
 
   typedef struct packed {
@@ -751,6 +752,7 @@ package ceres_param;
     logic [XLEN-1:0]      addr;
     logic [BLK_SIZE -1:0] data;
     logic                 uncached;
+    logic [3:0]           id;  // Request ID: MSB for source (1=icache, 0=dcache)
   } lowX_req_t;
 
   typedef struct packed {

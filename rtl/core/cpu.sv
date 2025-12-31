@@ -617,15 +617,35 @@ module cpu
       .fwd_b_de_o   (de_fwd_b)
   );
 
+  // L2 cache interface signals
+  lowX_req_t l2_req;
+  lowX_res_t l2_res;
+
   memory_arbiter i_memory_arbiter (
-      .clk_i         (clk_i),
-      .rst_ni        (rst_ni),
-      .icache_req_i  (lx_ireq),
-      .dcache_req_i  (lx_dreq),
-      .icache_res_o  (fe_lx_ires),
-      .dcache_res_o  (lx_dres),
-      .mem_bus_res_i (mem_bus_res_i),
-      .mem_bus_req_o (mem_bus_req_o)
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .icache_req_i (lx_ireq),
+      .dcache_req_i (lx_dreq),
+      .icache_res_o (fe_lx_ires),
+      .dcache_res_o (lx_dres),
+      .l2_res_i     (l2_res),
+      .l2_req_o     (l2_req)
+  );
+
+  // L2 cache instance between arbiter and memory
+  l2_cache #(
+      .CACHE_SIZE(16384),  // 16KB L2 cache
+      .BLK_SIZE  (BLK_SIZE),
+      .XLEN      (XLEN),
+      .NUM_WAY   (8)        // 8-way associative
+  ) i_l2_cache (
+      .clk_i     (clk_i),
+      .rst_ni    (rst_ni),
+      .flush_i   (1'b0),         // L2 cache flush control (currently disabled)
+      .l1_req_i  (l2_req),       // From arbiter
+      .l1_res_o  (l2_res),       // To arbiter
+      .mem_res_i (mem_bus_res_i), // From memory
+      .mem_req_o (mem_bus_req_o)  // To memory
   );
 
   // ============================================================================
