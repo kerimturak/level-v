@@ -42,10 +42,12 @@ module memory_arbiter (
     icache_res_o.valid = (round == ICACHE) && l2_res_i.valid;
     icache_res_o.ready = 1'b1;
     icache_res_o.blk   = l2_res_i.blk;
+    icache_res_o.id    = l2_res_i.id;  // Pass through response ID
 
     dcache_res_o.valid = (round == DCACHE) && l2_res_i.valid;
     dcache_res_o.ready = 1'b1;
     dcache_res_o.data  = l2_res_i.blk;
+    dcache_res_o.id    = l2_res_i.id;  // Pass through response ID
     // L2 cache request: seçimi latched veriden yapıyoruz.
     if (round == DCACHE) begin
       l2_req_o.addr     = dcache_req_reg.addr;
@@ -55,7 +57,7 @@ module memory_arbiter (
       l2_req_o.rw_size  = dcache_req_reg.rw_size;
       l2_req_o.data     = dcache_req_reg.data;
       l2_req_o.uncached = dcache_req_reg.uncached;
-      l2_req_o.id       = 4'b0000;  // dcache ID: MSB=0
+      l2_req_o.id       = dcache_req_reg.id;  // Pass through ID from dcache
     end else begin  // ICACHE veya IDLE durumunda icache isteklerine öncelik veriyoruz.
       l2_req_o.addr     = icache_req_reg.addr;
       l2_req_o.valid    = icache_req_reg.valid;
@@ -64,7 +66,7 @@ module memory_arbiter (
       l2_req_o.rw_size  = NO_SIZE;  // ICache reads full cache line
       l2_req_o.data     = '0;
       l2_req_o.uncached = icache_req_reg.uncached;
-      l2_req_o.id       = 4'b1000;  // icache ID: MSB=1
+      l2_req_o.id       = icache_req_reg.id;  // Pass through ID from icache
     end
   end
 

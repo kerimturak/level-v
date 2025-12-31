@@ -233,10 +233,12 @@ module icache
     lowX_req_o.ready    = !flush;
     lowX_req_o.addr     = cache_req_q.addr;
     lowX_req_o.uncached = cache_req_q.uncached;
+    lowX_req_o.id       = cache_req_q.id;  // Pass through ID from fetch module
     cache_res_o.miss    = cache_miss;
     cache_res_o.valid   = cache_req_i.ready && (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid));
     cache_res_o.ready   = (!cache_miss || lowX_res_i.valid) && !flush;
     cache_res_o.blk     = (cache_miss && lowX_res_i.valid) ? lowX_res_i.blk : cache_select_data;
+    cache_res_o.id      = lowX_res_i.valid ? lowX_res_i.id : cache_req_q.id;  // Return ID from response or request
   end
 
   // Lookup acknowledgment logic

@@ -397,6 +397,7 @@ module dcache
       lowX_req_o.rw = 1'b1;  // Write operation
       lowX_req_o.rw_size = WORD;  // Full cache line
       lowX_req_o.data = fi_evict_data;
+      lowX_req_o.id = cache_req_q.id;  // Use ID from current request for fence.i writeback
     end else if (lowx_req_valid_q) begin
       // Hold previously latched writeback request
       lowX_req_o = lowx_req_q;
@@ -410,6 +411,7 @@ module dcache
       lowX_req_o.rw = write_back ? 1'b1 : (cache_req_q.uncached ? cache_req_q.rw : 1'b0);
       lowX_req_o.rw_size = write_back ? WORD : cache_req_q.rw_size;
       lowX_req_o.data = write_back ? evict_data : (cache_req_q.uncached ? BLK_SIZE'(cache_req_q.data) : '0);
+      lowX_req_o.id = cache_req_q.id;  // Pass through ID from memory module
     end
 
     // Cache response - simpler now without FSM
@@ -421,6 +423,7 @@ module dcache
                                              (!tag_array_wr_en && lowX_req_o.ready && lowX_res_i.valid && !flush));
     cache_res_o.miss = cache_miss;
     cache_res_o.data = (cache_miss && lowX_res_i.valid) ? lowX_res_i.data[word_idx*32+:32] : cache_select_data[word_idx*32+:32];
+    cache_res_o.id = lowX_res_i.valid ? lowX_res_i.id : cache_req_q.id;  // Return ID from response or request
   end
 
   // Lookup acknowledgment logic

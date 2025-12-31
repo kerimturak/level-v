@@ -67,6 +67,12 @@ module fetch
   blowX_res_t             buff_lowX_res;
   logic                   buf_lookup_ack;
 
+  // ID allocator signals for icache requests
+  logic        [     3:0] icache_req_id;
+  logic                   icache_id_available;
+  logic                   alloc_icache_id;
+  logic                   dealloc_icache_id;
+
   // ============================================================================
   // Reset Flush Cycle Counter
   // ----------------------------------------------------------------------------
@@ -205,7 +211,7 @@ module fetch
     // Buffer Request Formation: Align buffer'a gönderilecek istek oluşturulur
     // ============================================================================
     buff_req               = '{valid    : fetch_valid, ready    : !flush_i && rst_ni,  // Sadece PC güncellenebiliyorsa ready
- addr     : pc_o, uncached : uncached};
+ addr     : pc_o, uncached : uncached, id      : icache_req_id};
 
     // ============================================================================
     // Instruction Cache Miss Stall: Fetch geçerli ama buffer hazır değilse stall
@@ -279,10 +285,19 @@ module fetch
     // We gate it with buf_lookup_ack to create a one-cycle handshake:
     //   - buf_lookup_ack=0: Allow request through
     //   - buf_lookup_ack=1: Request already sent, suppress until response
-    icache_req.valid    = abuff_icache_req.valid && !buf_lookup_ack;
+    icache_req.valid    = abuff_icache_req.valid && !buf_lookup_ack && icache_id_available;
     icache_req.ready    = abuff_icache_req.ready;
     icache_req.addr     = abuff_icache_req.addr;
     icache_req.uncached = abuff_icache_req.uncached;
+    icache_req.id       = icache_req_id;
+
+    // ============================================================================
+    // ID Allocation/Deallocation Control
+    // ============================================================================
+    // Allocate ID when sending new request to cache
+    alloc_icache_id   = abuff_icache_req.valid && !buf_lookup_ack && icache_id_available && buff_lowX_res.ready;
+    // Deallocate ID when response is received
+    dealloc_icache_id = icache_res.valid;
   end
 
   // Track pending request to icache - reset on response or new request from buffer
@@ -377,6 +392,26 @@ module fetch
       .cache_res_o(icache_res),
       .lowX_res_i (lx_ires_i),
       .lowX_req_o (lx_ireq_o)
+  );
+
+  // ============================================================================
+  // ID Allocator for ICache Requests
+  // ============================================================================
+  // Allocates unique 4-bit IDs to icache requests to track them through the
+  // memory hierarchy. IDs with MSB=1 indicate icache requests.
+  // ============================================================================
+  id_allocator #(
+      .NUM_IDS  (8),         // 8 IDs for icache (half of 16 total)
+      .ID_WIDTH (4),         // 4-bit ID
+      .ID_PREFIX(4'b1000)    // MSB=1 for icache
+  ) i_icache_id_allocator (
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .alloc_i      (alloc_icache_id),
+      .id_o         (icache_req_id),
+      .available_o  (icache_id_available),
+      .dealloc_i    (dealloc_icache_id),
+      .dealloc_id_i (icache_res.id)
   );
 
   // ============================================================================

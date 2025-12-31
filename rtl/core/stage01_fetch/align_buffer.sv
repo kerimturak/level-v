@@ -384,6 +384,7 @@ module align_buffer
     // ========================================================================
     lowX_req_o.valid = 1'b0;
     lowX_req_o.uncached = buff_req_i.uncached;
+    lowX_req_o.id = buff_req_i.id;  // Pass through ID from fetch module
 
     // Request valid generation
     if (waiting_second_q && !masked_valid) begin

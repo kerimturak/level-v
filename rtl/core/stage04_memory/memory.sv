@@ -26,6 +26,12 @@ module memory
   logic                   mem_txn_active;  // "request in flight" flag
   logic                   mem_req_fire;  // this cycle we start a new cache request
 
+  // ID allocator signals for dcache requests
+  logic        [     3:0] dcache_req_id;
+  logic                   dcache_id_available;
+  logic                   alloc_dcache_id;
+  logic                   dealloc_dcache_id;
+
   // Yalnızca ex_data_req_i.valid 0→1 olduğunda (yükselen kenar) ve
   // aktif transaction yokken yeni istek başlat.
 
@@ -74,15 +80,20 @@ module memory
   end
 
   always_comb begin
-    dcache_req.valid    = mem_req_fire;
+    dcache_req.valid    = mem_req_fire && dcache_id_available;
     dcache_req.addr     = ex_data_req_i.addr;
     dcache_req.ready    = 1'b1;
     dcache_req.rw       = ex_data_req_i.rw;
     dcache_req.rw_size  = ex_data_req_i.rw_size;
     dcache_req.data     = ex_data_req_i.data;
     dcache_req.uncached = uncached;
+    dcache_req.id       = dcache_req_id;
 
     dmiss_stall_o       = mem_req_fire || (mem_txn_active && !dcache_res.valid);
+
+    // ID allocation/deallocation control
+    alloc_dcache_id     = mem_req_fire && dcache_id_available;
+    dealloc_dcache_id   = dcache_res.valid;
   end
 
   pma i_dpma (
@@ -90,6 +101,23 @@ module memory
       .uncached_o (uncached),
       .memregion_o(),                    // Not used - all accesses go through dcache
       .grand_o    ()                     // Not used
+  );
+
+  // ID Allocator for DCache Requests
+  // Allocates unique 4-bit IDs to dcache requests to track them through the
+  // memory hierarchy. IDs with MSB=0 indicate dcache requests.
+  id_allocator #(
+      .NUM_IDS  (8),         // 8 IDs for dcache (half of 16 total)
+      .ID_WIDTH (4),         // 4-bit ID
+      .ID_PREFIX(4'b0000)    // MSB=0 for dcache
+  ) i_dcache_id_allocator (
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .alloc_i      (alloc_dcache_id),
+      .id_o         (dcache_req_id),
+      .available_o  (dcache_id_available),
+      .dealloc_i    (dealloc_dcache_id),
+      .dealloc_id_i (dcache_res.id)
   );
 
   dcache #(

@@ -666,6 +666,7 @@ package ceres_param;
     logic            ready;
     logic [XLEN-1:0] addr;
     logic            uncached;
+    logic [3:0]      id;  // Request ID assigned by fetch module
   } icache_req_t;
 
   typedef struct packed {
@@ -673,6 +674,7 @@ package ceres_param;
     logic                ready;
     logic                miss;
     logic [BLK_SIZE-1:0] blk;
+    logic [3:0]          id;  // Response ID matching the request
   } icache_res_t;
 
   typedef struct packed {
@@ -696,6 +698,7 @@ package ceres_param;
     logic            rw;
     rw_size_e        rw_size;
     logic [31:0]     data;
+    logic [3:0]      id;  // Request ID assigned by memory module
   } dcache_req_t;
 
   typedef struct packed {
@@ -703,6 +706,7 @@ package ceres_param;
     logic        miss;
     logic        ready;
     logic [31:0] data;
+    logic [3:0]  id;  // Response ID matching the request
   } dcache_res_t;
 
   // ---------------------------------------------------------------------------
@@ -712,6 +716,7 @@ package ceres_param;
     logic                valid;
     logic                ready;
     logic [BLK_SIZE-1:0] blk;
+    logic [3:0]          id;  // Response ID matching the request
   } ilowX_res_t;
 
   typedef struct packed {
@@ -719,12 +724,14 @@ package ceres_param;
     logic            ready;
     logic [XLEN-1:0] addr;
     logic            uncached;
+    logic [3:0]      id;  // Request ID from icache
   } ilowX_req_t;
 
   typedef struct packed {
     logic                valid;
     logic                ready;
     logic [BLK_SIZE-1:0] data;
+    logic [3:0]          id;  // Response ID matching the request
   } dlowX_res_t;
 
   typedef struct packed {
@@ -735,6 +742,7 @@ package ceres_param;
     logic                rw;
     logic [BLK_SIZE-1:0] data;
     logic                uncached;
+    logic [3:0]          id;  // Request ID from dcache
   } dlowX_req_t;
 
   typedef struct packed {
@@ -769,6 +777,7 @@ package ceres_param;
     logic            ready;
     logic [XLEN-1:0] addr;
     logic            uncached;
+    logic [3:0]      id;  // Request ID from fetch module
   } abuff_req_t;
 
   typedef struct packed {
@@ -783,6 +792,7 @@ package ceres_param;
     logic                valid;
     logic                ready;
     logic [BLK_SIZE-1:0] blk;
+    logic [3:0]          id;  // Response ID matching the request
   } blowX_res_t;
 
   typedef struct packed {
@@ -790,6 +800,7 @@ package ceres_param;
     logic            ready;
     logic [XLEN-1:0] addr;
     logic            uncached;
+    logic [3:0]      id;  // Request ID for align buffer requests
   } blowX_req_t;
 
 

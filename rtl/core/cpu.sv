@@ -633,15 +633,18 @@ module cpu
   );
 
   // L2 cache instance between arbiter and memory
-  l2_cache #(
-      .CACHE_SIZE(16384),  // 16KB L2 cache
+  // Multi-bank configuration for non-blocking operation and higher bandwidth
+  l2_cache_multibank #(
+      .CACHE_SIZE(16384),  // Total 16KB L2 cache (8KB per bank)
       .BLK_SIZE  (BLK_SIZE),
       .XLEN      (XLEN),
-      .NUM_WAY   (8)        // 8-way associative
+      .NUM_WAY   (8),       // 8-way per bank
+      .NUM_BANKS (2)        // 2 banks for parallel access
   ) i_l2_cache (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
-      .flush_i   (1'b0),         // L2 cache flush control (currently disabled)
+      .flush_i   (1'b0),         // L2 is unified cache - no fence.i flush needed
+                                  // D-cache already flushes dirty lines to L2 during fence.i
       .l1_req_i  (l2_req),       // From arbiter
       .l1_res_o  (l2_res),       // To arbiter
       .mem_res_i (mem_bus_res_i), // From memory
