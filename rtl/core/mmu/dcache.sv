@@ -388,10 +388,11 @@ module dcache
   always_comb begin
     // Priority: fence.i writeback > normal writeback > cache miss
     // Writeback is combinational like old dcache - no FSM
+    // No need to gate with lowX_res_i.ready - handshake handles it
     if (fi_writeback_req) begin
       // fence.i writeback has highest priority
       lowX_req_o.valid = 1'b1;
-      lowX_req_o.ready = 1'b1;
+      lowX_req_o.ready = 1'b1;  // DCache is ready to receive response
       lowX_req_o.uncached = 1'b0;
       lowX_req_o.addr = fi_evict_addr;
       lowX_req_o.rw = 1'b1;  // Write operation
@@ -401,11 +402,12 @@ module dcache
     end else if (lowx_req_valid_q) begin
       // Hold previously latched writeback request
       lowX_req_o = lowx_req_q;
+      lowX_req_o.valid = lowx_req_q.valid;
     end else begin
       // Normal cache miss handling (includes writeback)
       // Like old dcache: writeback and fill happen together
-      lowX_req_o.valid = cache_miss && lowX_res_i.ready;
-      lowX_req_o.ready = 1'b1;
+      lowX_req_o.valid = cache_miss;
+      lowX_req_o.ready = 1'b1;  // DCache is ready to receive response
       lowX_req_o.uncached = write_back ? 1'b0 : cache_req_q.uncached;
       lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : (cache_req_q.uncached ? cache_req_q.addr : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}});
       lowX_req_o.rw = write_back ? 1'b1 : (cache_req_q.uncached ? cache_req_q.rw : 1'b0);
@@ -427,11 +429,18 @@ module dcache
   end
 
   // Lookup acknowledgment logic
+  // Set when request accepted (valid && ready), clear when response arrives
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      lookup_ack <= '0;
+      lookup_ack <= 1'b0;
     end else begin
-      lookup_ack <= lowX_res_i.valid ? !lowX_req_o.ready : (!lookup_ack ? lowX_req_o.valid && lowX_res_i.ready : lookup_ack);
+      if (lowX_res_i.valid) begin
+        // Response arrived, ready for new request
+        lookup_ack <= 1'b0;
+      end else if (lowX_req_o.valid && lowX_res_i.ready) begin
+        // Request accepted by L2
+        lookup_ack <= 1'b1;
+      end
     end
   end
 
@@ -443,17 +452,19 @@ module dcache
       lowx_req_valid_q <= 1'b0;
     end else begin
       if (lowx_req_valid_q) begin
-        // Waiting for low-level response to clear saved request
+        // Waiting for request to be accepted and response to arrive
         if (lowX_res_i.valid) begin
+          // Response arrived, clear saved request
           lowx_req_q <= '0;
           lowx_req_valid_q <= 1'b0;
-        end else begin
-          lowx_req_q <= lowx_req_q;
+        end else if (lowX_res_i.ready) begin
+          // Request accepted, but still waiting for response
+          // Keep valid but L2 has it now
           lowx_req_valid_q <= 1'b1;
         end
       end else begin
-        // Capture a new writeback request when it would be issued
-        if (write_back && cache_miss && lowX_res_i.ready) begin
+        // Capture a new writeback request when eviction needed
+        if (write_back && cache_miss) begin
           lowx_req_valid_q    <= 1'b1;
           lowx_req_q.valid    <= 1'b1;
           lowx_req_q.ready    <= 1'b1;

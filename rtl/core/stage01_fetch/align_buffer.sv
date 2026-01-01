@@ -382,6 +382,8 @@ module align_buffer
     //   - unalign=1: Parcels span TWO cache lines → may need two requests
     //   - uncached: Non-cacheable access (MMIO), bypass buffer entirely
     // ========================================================================
+    // Send request when needed - L2 will accept when ready
+    // No need to gate with lowX_res_i.ready - handshake protocol handles it
     lowX_req_o.valid = 1'b0;
     lowX_req_o.uncached = buff_req_i.uncached;
     lowX_req_o.id = buff_req_i.id;  // Pass through ID from fetch module
@@ -416,7 +418,7 @@ module align_buffer
       lowX_req_o.valid = 1'b0;
     end
 
-    lowX_req_o.ready = rst_ni && !flush_i;
+    lowX_req_o.ready = rst_ni && !flush_i;  // Align buffer is ready to receive response
 
     // ========================================================================
     // Address Calculation for Lower Level Request

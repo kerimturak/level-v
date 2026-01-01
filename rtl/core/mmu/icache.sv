@@ -229,8 +229,10 @@ module icache
 
   // I-Cache response logic
   always_comb begin
+    // Send request when cache miss - L2 will accept when ready
+    // No need to gate with lowX_res_i.ready - that's L2's job
     lowX_req_o.valid    = !lookup_ack && cache_miss;
-    lowX_req_o.ready    = !flush;
+    lowX_req_o.ready    = !flush;  // ICache is ready to receive response
     lowX_req_o.addr     = cache_req_q.addr;
     lowX_req_o.uncached = cache_req_q.uncached;
     lowX_req_o.id       = cache_req_q.id;  // Pass through ID from fetch module
@@ -242,11 +244,18 @@ module icache
   end
 
   // Lookup acknowledgment logic
+  // Set when request accepted (valid && ready), clear when response arrives
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      lookup_ack <= '0;
+      lookup_ack <= 1'b0;
     end else begin
-      lookup_ack <= lowX_res_i.valid ? !lowX_req_o.ready : (!lookup_ack ? lowX_req_o.valid && lowX_res_i.ready : lookup_ack);
+      if (lowX_res_i.valid) begin
+        // Response arrived, ready for new request
+        lookup_ack <= 1'b0;
+      end else if (lowX_req_o.valid && lowX_res_i.ready) begin
+        // Request accepted by L2
+        lookup_ack <= 1'b1;
+      end
     end
   end
 

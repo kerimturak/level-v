@@ -32,22 +32,22 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 module l2_cache_multibank
   import ceres_param::*;
 #(
-    parameter CACHE_SIZE = 16384,                  // Total 16KB L2 cache
-    parameter BLK_SIZE   = ceres_param::BLK_SIZE,
-    parameter XLEN       = ceres_param::XLEN,
-    parameter NUM_WAY    = 8,                      // 8-way per bank
-    parameter NUM_BANKS  = 2,                      // 2 banks
-    parameter NUM_L1_PORTS = 2                     // 2 L1 ports (icache + dcache)
+    parameter CACHE_SIZE   = 16384,                  // Total 16KB L2 cache
+    parameter BLK_SIZE     = ceres_param::BLK_SIZE,
+    parameter XLEN         = ceres_param::XLEN,
+    parameter NUM_WAY      = 8,                      // 8-way per bank
+    parameter NUM_BANKS    = 2,                      // 2 banks
+    parameter NUM_L1_PORTS = 2                       // 2 L1 ports (icache + dcache)
 ) (
-    input  logic      clk_i,
-    input  logic      rst_ni,
-    input  logic      flush_i,
+    input  logic                         clk_i,
+    input  logic                         rst_ni,
+    input  logic                         flush_i,
     // Multiple L1 request ports (from icache and dcache)
     input  lowX_req_t [NUM_L1_PORTS-1:0] l1_req_i,
     output lowX_res_t [NUM_L1_PORTS-1:0] l1_res_o,
     // Single memory interface
-    input  lowX_res_t mem_res_i,
-    output lowX_req_t mem_req_o
+    input  lowX_res_t                    mem_res_i,
+    output lowX_req_t                    mem_req_o
 );
 
   // ============================================================================
@@ -70,8 +70,8 @@ module l2_cache_multibank
   lowX_res_t [NUM_BANKS-1:0][NUM_PORTS_PER_BANK-1:0] bank_res;
 
   // Memory interface from each bank
-  lowX_req_t [NUM_BANKS-1:0] bank_mem_req;
-  lowX_res_t [NUM_BANKS-1:0] bank_mem_res;
+  lowX_req_t [NUM_BANKS-1:0]                         bank_mem_req;
+  lowX_res_t [NUM_BANKS-1:0]                         bank_mem_res;
 
   // ============================================================================
   // Bank Selection and Request Routing
@@ -90,8 +90,7 @@ module l2_cache_multibank
     // Simple routing: L1 port N goes to bank port N
     // Bank selection is based on address bit
     for (int l1_port = 0; l1_port < NUM_L1_PORTS; l1_port++) begin
-      automatic int target_bank = l1_req_i[l1_port].valid ?
-                                  int'(l1_req_i[l1_port].addr[BANK_SEL_BIT]) : 0;
+      automatic int target_bank = l1_req_i[l1_port].valid ? int'(l1_req_i[l1_port].addr[BANK_SEL_BIT]) : 0;
       if (target_bank < NUM_BANKS && l1_port < NUM_PORTS_PER_BANK) begin
         bank_req[target_bank][l1_port] = l1_req_i[l1_port];
       end
@@ -103,7 +102,7 @@ module l2_cache_multibank
   // ============================================================================
   // Round-robin arbiter for responses from banks
   logic [$clog2(NUM_BANKS):0] resp_bank_ptr;  // Extra bit to handle NUM_BANKS=2
-  logic [NUM_BANKS-1:0] bank_has_response;
+  logic [      NUM_BANKS-1:0] bank_has_response;
 
   always_comb begin
     for (int i = 0; i < NUM_BANKS; i++) begin
@@ -113,7 +112,7 @@ module l2_cache_multibank
 
   // Priority encoder starting from resp_bank_ptr
   logic [NUM_BANKS-1:0] grant;
-  logic any_grant;
+  logic                 any_grant;
 
   /* verilator lint_off WIDTHEXPAND */
   always_comb begin
@@ -125,7 +124,7 @@ module l2_cache_multibank
       automatic int idx = int'((resp_bank_ptr + i) % NUM_BANKS);
       if (bank_has_response[idx] && !any_grant) begin
         grant[idx] = 1'b1;
-        any_grant = 1'b1;
+        any_grant  = 1'b1;
       end
     end
   end
@@ -139,7 +138,7 @@ module l2_cache_multibank
       // Move to next bank after current grant
       for (int i = 0; i < NUM_BANKS; i++) begin
         if (grant[i]) begin
-          resp_bank_ptr <= ($clog2(NUM_BANKS)+1)'((i + 1) % NUM_BANKS);
+          resp_bank_ptr <= ($clog2(NUM_BANKS) + 1)'((i + 1) % NUM_BANKS);
         end
       end
     end
@@ -148,11 +147,21 @@ module l2_cache_multibank
   // Mux responses back to L1 ports
   // Simple routing: bank port N goes back to L1 port N
   // Responses from both banks for the same L1 port need arbitration
+  // Ready signals come FROM banks - L1 can send new request only if bank is ready
   always_comb begin
-    // Initialize L1 responses - ready=1 means L2 can accept requests
+    // Initialize L1 responses
     for (int l1_port = 0; l1_port < NUM_L1_PORTS; l1_port++) begin
-      l1_res_o[l1_port] = '0;
-      l1_res_o[l1_port].ready = 1'b1;  // L2 is always ready to accept requests (has internal buffering)
+      l1_res_o[l1_port].valid = 1'b0;
+      l1_res_o[l1_port].blk   = '0;
+      l1_res_o[l1_port].id    = '0;
+      // Ready signal: L1 can send request only if BOTH banks are ready
+      // (since we don't know which bank the request will go to until we see the address)
+      // Conservative approach: both banks must be ready
+      if (l1_port < NUM_PORTS_PER_BANK) begin
+        l1_res_o[l1_port].ready = bank_res[0][l1_port].ready && bank_res[1][l1_port].ready;
+      end else begin
+        l1_res_o[l1_port].ready = 1'b0;
+      end
     end
 
     // Collect responses from all banks
@@ -161,11 +170,16 @@ module l2_cache_multibank
       if (l1_port < NUM_PORTS_PER_BANK) begin
         // Check bank 0 first
         if (bank_res[0][l1_port].valid) begin
-          l1_res_o[l1_port] = bank_res[0][l1_port];
-        end
-        // Then bank 1 (if bank 0 doesn't have response)
+          l1_res_o[l1_port].valid = bank_res[0][l1_port].valid;
+          l1_res_o[l1_port].blk   = bank_res[0][l1_port].blk;
+          l1_res_o[l1_port].id    = bank_res[0][l1_port].id;
+          // Keep ready as computed above
+        end  // Then bank 1 (if bank 0 doesn't have response)
         else if (bank_res[1][l1_port].valid) begin
-          l1_res_o[l1_port] = bank_res[1][l1_port];
+          l1_res_o[l1_port].valid = bank_res[1][l1_port].valid;
+          l1_res_o[l1_port].blk   = bank_res[1][l1_port].blk;
+          l1_res_o[l1_port].id    = bank_res[1][l1_port].id;
+          // Keep ready as computed above
         end
       end
     end
@@ -176,7 +190,7 @@ module l2_cache_multibank
   // ============================================================================
   // Round-robin arbiter for memory requests from banks
   logic [$clog2(NUM_BANKS):0] mem_req_bank_ptr;  // Extra bit to handle NUM_BANKS=2
-  logic [NUM_BANKS-1:0] bank_has_mem_req;
+  logic [      NUM_BANKS-1:0] bank_has_mem_req;
 
   always_comb begin
     for (int i = 0; i < NUM_BANKS; i++) begin
@@ -184,19 +198,19 @@ module l2_cache_multibank
     end
   end
 
-  logic [NUM_BANKS-1:0] mem_grant;
+  logic [NUM_BANKS-1:0] mem_grant_q, mem_grant_d;
   logic any_mem_grant;
 
   /* verilator lint_off WIDTHEXPAND */
   always_comb begin
-    mem_grant = '0;
+    mem_grant_d   = '0;
     any_mem_grant = 1'b0;
 
     // Try from current pointer to end
     for (int i = 0; i < NUM_BANKS; i++) begin
       automatic int idx = int'((mem_req_bank_ptr + i) % NUM_BANKS);
-      if (bank_has_mem_req[idx] && !any_mem_grant && mem_res_i.ready) begin
-        mem_grant[idx] = 1'b1;
+      if (bank_has_mem_req[idx] && !any_mem_grant) begin
+        mem_grant_d[idx] = 1'b1;
         any_mem_grant = 1'b1;
       end
     end
@@ -207,12 +221,16 @@ module l2_cache_multibank
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       mem_req_bank_ptr <= '0;
+      mem_grant_q      <= '0;
     end else if (any_mem_grant) begin
+      mem_grant_q <= mem_grant_d;
       for (int i = 0; i < NUM_BANKS; i++) begin
-        if (mem_grant[i]) begin
-          mem_req_bank_ptr <= ($clog2(NUM_BANKS)+1)'((i + 1) % NUM_BANKS);
+        if (mem_grant_d[i]) begin
+          mem_req_bank_ptr <= ($clog2(NUM_BANKS) + 1)'((i + 1) % NUM_BANKS);
         end
       end
+    end else begin
+      mem_grant_q <= '0;
     end
   end
 
@@ -220,17 +238,20 @@ module l2_cache_multibank
   always_comb begin
     mem_req_o = '0;
     for (int i = 0; i < NUM_BANKS; i++) begin
-      if (mem_grant[i]) begin
+      if (mem_grant_q[i]) begin
         mem_req_o = bank_mem_req[i];
       end
     end
   end
 
   // Route memory response to requesting bank based on ID or tracked state
-  // For now, broadcast to all banks - each bank checks ID
+  // Broadcast response to all banks - each bank checks ID
+  // The ready signal tells each bank if memory can accept their request
   always_comb begin
     for (int i = 0; i < NUM_BANKS; i++) begin
       bank_mem_res[i] = mem_res_i;
+      // Only the granted bank sees ready=1, and only if memory is actually ready
+      bank_mem_res[i].ready = mem_grant_q[i] && mem_res_i.ready;
     end
   end
 
@@ -246,13 +267,13 @@ module l2_cache_multibank
           .NUM_WAY   (NUM_WAY),
           .NUM_PORTS (NUM_PORTS_PER_BANK)
       ) i_l2_bank (
-          .clk_i     (clk_i),
-          .rst_ni    (rst_ni),
-          .flush_i   (flush_i),
-          .req_i     (bank_req[b]),
-          .res_o     (bank_res[b]),
-          .mem_res_i (bank_mem_res[b]),
-          .mem_req_o (bank_mem_req[b])
+          .clk_i    (clk_i),
+          .rst_ni   (rst_ni),
+          .flush_i  (flush_i),
+          .req_i    (bank_req[b]),
+          .res_o    (bank_res[b]),
+          .mem_res_i(bank_mem_res[b]),
+          .mem_req_o(bank_mem_req[b])
       );
     end
   endgenerate

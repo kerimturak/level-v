@@ -60,6 +60,7 @@ module l2_bank_multiport
   logic         [QUEUE_PTR_WIDTH:0] queue_count;
   logic                             queue_full;
   logic                             queue_empty;
+  logic                             req_pending;  // Request register has valid request
 
   assign queue_full  = (queue_count == QUEUE_DEPTH);
   assign queue_empty = (queue_count == 0);
@@ -73,7 +74,10 @@ module l2_bank_multiport
 
   always_comb begin
     for (int i = 0; i < NUM_PORTS; i++) begin
-      req_valid[i] = req_i[i].valid && req_i[i].ready;
+      // IMPORTANT: Only check valid, NOT req_i[i].ready!
+      // req_i.ready is L1's response buffer status (not relevant for request acceptance)
+      // L2's readiness is indicated via res_o[i].ready output
+      req_valid[i] = req_i[i].valid;
     end
   end
 
@@ -90,22 +94,26 @@ module l2_bank_multiport
   end
 
   // Can accept up to 2 requests per cycle if queue has space
+  // Queue acts as a buffer - we don't need to wait for cache core readiness
   logic [      NUM_PORTS-1:0] can_enqueue;
   logic [$clog2(NUM_PORTS):0] enqueue_count;
+
+  // Cache ready comes from cache core's l1_res_o.ready signal (declare early for use below)
+  logic                       cache_req_ready;
 
   always_comb begin
     can_enqueue   = '0;
     enqueue_count = 0;
 
+    // Accept new requests if queue has space (cache readiness not required - queue buffers)
     // Try to enqueue up to NUM_PORTS requests
     for (int i = 0; i < NUM_PORTS; i++) begin
-      if (req_valid[i] && (queue_count + enqueue_count < QUEUE_DEPTH)) begin
+      if (req_valid[i] && !queue_full && (queue_count + enqueue_count < QUEUE_DEPTH)) begin
         can_enqueue[i] = 1'b1;
         enqueue_count  = enqueue_count + 1;
       end
     end
   end
-  logic cache_req_ready;
 
   // Queue management
   always_ff @(posedge clk_i) begin
@@ -129,8 +137,9 @@ module l2_bank_multiport
         end
       end
 
-      // Dequeue to cache (when cache accepts)
-      deq = !queue_empty && cache_req_ready;
+      // Dequeue from queue when we load a new request into the request register
+      // This happens when: no pending request AND queue not empty
+      deq = !req_pending && !queue_empty;
 
       // Update pointers
       if (enq_cnt > 0) begin
@@ -156,13 +165,58 @@ module l2_bank_multiport
   // Cache Core Interface
   // ============================================================================
   lowX_req_t                         cache_req;
+  lowX_req_t                         cache_req_reg;  // Registered request to prevent resubmission
   lowX_res_t                         cache_res;
   logic      [$clog2(NUM_PORTS)-1:0] active_port_id;
+  logic      [$clog2(NUM_PORTS)-1:0] active_port_id_reg;
+  logic                              req_sent;  // Request was sent, waiting for response
 
-  // Dequeue from request queue to cache
-  assign cache_req = queue_empty ? '0 : req_queue[queue_head].req;
-  assign active_port_id = queue_empty ? '0 : req_queue[queue_head].port_id;
-  assign cache_req_ready = 1'b1;  // Cache can always accept (it has internal buffering)
+  // Cache request handshake:
+  // - When queue not empty and no pending request, load new request and send
+  // - When response arrives (cache_res.valid), allow next request
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni || flush_i) begin
+      cache_req_reg <= '0;
+      active_port_id_reg <= '0;
+      req_pending <= 1'b0;
+      req_sent <= 1'b0;
+    end else begin
+      // Clear req_sent when response arrives for our request
+      // (Response routing happens in combinational block below)
+      if (cache_res.valid) begin
+        req_sent <= 1'b0;
+      end
+
+      // Load new request when previous one completed
+      if (!req_pending && !queue_empty) begin
+        // No pending request and queue has data - load new request
+        cache_req_reg <= req_queue[queue_head].req;
+        cache_req_reg.valid <= 1'b1;
+        active_port_id_reg <= req_queue[queue_head].port_id;
+        req_pending <= 1'b1;
+      end else if (req_pending && !req_sent && cache_res.ready) begin
+        // Request is pending and cache is ready - mark as sent
+        req_sent <= 1'b1;
+      end else if (req_pending && req_sent && cache_res.valid) begin
+        // Response received - clear pending for next request
+        req_pending <= 1'b0;
+      end
+    end
+  end
+
+  // Output to cache: only send valid when pending and not yet sent
+  always_comb begin
+    if (req_pending && !req_sent) begin
+      cache_req = cache_req_reg;
+      active_port_id = active_port_id_reg;
+    end else begin
+      cache_req = '0;
+      active_port_id = '0;
+    end
+  end
+
+  // Cache ready comes from cache core's l1_res_o.ready signal
+  assign cache_req_ready = cache_res.ready;
 
   // ============================================================================
   // Single-Ported Cache Core
@@ -186,33 +240,32 @@ module l2_bank_multiport
   // Response Routing
   // ============================================================================
   // Route response back to the port that made the request (tracked by ID)
+  // Also propagate ready signal to indicate which ports can accept new requests
 
   always_comb begin
-    // Clear all responses
+    // Initialize all port responses with proper ready signals
     for (int i = 0; i < NUM_PORTS; i++) begin
-      res_o[i] = '0;
+      res_o[i].valid = 1'b0;
+      res_o[i].blk   = '0;
+      res_o[i].id    = '0;
+      // Ready signal: can this port accept new requests?
+      // Queue acts as a buffer - if queue has space, we can accept
+      // The cache core's busy state doesn't prevent queue entry
+      res_o[i].ready = !queue_full;
     end
 
     // Route cache response to appropriate port based on request ID tracking
-    // For now, we use a simple approach: track which port each ID belongs to
-    // In a full implementation, we'd have a response buffer with port mapping
-
+    // Simple routing: use MSB of ID to determine port
+    // IDs 0x8-0xF go to port 0 (icache), 0x0-0x7 go to port 1 (dcache)
     if (cache_res.valid) begin
-      // Simple routing: use MSB of ID to determine port
-      // IDs 0x8-0xF go to port 0 (icache), 0x0-0x7 go to port 1 (dcache)
       automatic int target_port = cache_res.id[3] ? 0 : 1;
       if (target_port < NUM_PORTS) begin
-        res_o[target_port] = cache_res;
+        res_o[target_port].valid = cache_res.valid;
+        res_o[target_port].blk   = cache_res.blk;
+        res_o[target_port].id    = cache_res.id;
+        // Keep ready signal as computed above
       end
     end
   end
-
-  // ============================================================================
-  // Port Ready Signals
-  // ============================================================================
-  // Indicate to upstream which ports can accept new requests
-  // Port is ready if queue has space for at least one more entry
-
-  // This is handled by can_enqueue signal computed above
 
 endmodule
