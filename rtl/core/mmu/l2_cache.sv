@@ -383,7 +383,7 @@ module l2_cache
     fill_tag_sel = fill_from_mshr ? mshr[mshr_resp_idx].tag : cache_req_q.addr[XLEN-1:IDX_WIDTH+BOFFSET];
 
     cache_wr_en = (fill_from_mshr && !cache_req_q.uncached) || (cache_miss && mem_res_i.valid && mem_res_id_match && !cache_req_q.uncached) || flush;
-    
+
     // During flush, use flush_index to iterate through all sets
     // Otherwise use fill_idx_sel for cache line fill or rd_idx for read
     cache_idx = flush ? flush_index : (cache_wr_en ? fill_idx_sel : rd_idx);
