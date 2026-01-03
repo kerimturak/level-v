@@ -39,7 +39,7 @@ module memory
   logic                   ex_valid_q;
   logic        [XLEN-1:0] ex_addr_q;
   logic                   ex_rw_q;
-  logic        [     1:0] ex_rw_size_q;
+  rw_size_e               ex_rw_size_q;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
@@ -107,17 +107,17 @@ module memory
   // Allocates unique 4-bit IDs to dcache requests to track them through the
   // memory hierarchy. IDs with MSB=0 indicate dcache requests.
   id_allocator #(
-      .NUM_IDS  (8),         // 8 IDs for dcache (half of 16 total)
-      .ID_WIDTH (4),         // 4-bit ID
-      .ID_PREFIX(4'b0000)    // MSB=0 for dcache
+      .NUM_IDS  (8),       // 8 IDs for dcache (half of 16 total)
+      .ID_WIDTH (4),       // 4-bit ID
+      .ID_PREFIX(4'b0000)  // MSB=0 for dcache
   ) i_dcache_id_allocator (
-      .clk_i        (clk_i),
-      .rst_ni       (rst_ni),
-      .alloc_i      (alloc_dcache_id),
-      .id_o         (dcache_req_id),
-      .available_o  (dcache_id_available),
-      .dealloc_i    (dealloc_dcache_id),
-      .dealloc_id_i (dcache_res.id)
+      .clk_i       (clk_i),
+      .rst_ni      (rst_ni),
+      .alloc_i     (alloc_dcache_id),
+      .id_o        (dcache_req_id),
+      .available_o (dcache_id_available),
+      .dealloc_i   (dealloc_dcache_id),
+      .dealloc_id_i(dcache_res.id)
   );
 
   dcache #(

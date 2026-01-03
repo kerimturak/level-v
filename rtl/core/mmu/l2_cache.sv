@@ -110,6 +110,7 @@ module l2_cache
   logic                      mshr_merge_fire;
   logic                      mshr_free_fire;
   logic                      fill_from_mshr;
+  logic                      is_full_line_write;  // D-cache writeback: full cache line, no fetch needed
 
   // ============================================================================
   // MSHR (Miss Status Holding Registers) for Non-Blocking Cache
@@ -393,10 +394,14 @@ module l2_cache
 
   // L2 cache data masking and control signals
   always_comb begin
-    mask_data   = cache_hit ? cache_select_data : mem_res_i.blk;
+    mask_data = cache_hit ? cache_select_data : mem_res_i.blk;
     data_wr_pre = mask_data;
 
     // L2 handles full cache line writes from L1
+    // D-cache writeback: rw=1 and rw_size=FULL_LINE (full cache line, 128-bit)
+    // For full cache line writes, data is complete - no merge with existing needed
+    is_full_line_write = cache_req_q.rw && (cache_req_q.rw_size == FULL_LINE);
+
     if (cache_req_q.rw) begin
       data_wr_pre = cache_req_q.data;
     end
@@ -418,7 +423,9 @@ module l2_cache
   // Compute write_back
   always_comb begin
     write_back = 1'b0;
-    if (cache_miss) begin
+    if (cache_miss && !is_full_line_write) begin
+      // Only trigger writeback for READ misses, not for full cache line writes
+      // Full line writes already have all data, no need to evict first
       write_back = |(dirty_read_vec & evict_way & cache_valid_vec);
     end
     if (lowx_req_valid_q) write_back = 1'b1;
@@ -426,8 +433,16 @@ module l2_cache
 
   // Block data/tag array writes during writeback
   always_comb begin
-    data_array_wr_en = ((cache_hit && cache_req_q.rw) || (cache_miss && mem_res_i.valid && mem_res_id_match && !cache_req_q.uncached)) && !write_back;
-    tag_array_wr_en  = ((cache_hit && cache_req_q.rw) || (cache_miss && mem_res_i.valid && mem_res_id_match && !cache_req_q.uncached)) && !write_back;
+    // Enable data/tag array writes for:
+    // 1. Write HIT (update existing cache line)
+    // 2. Read MISS with memory response (fill from memory)
+    // 3. Full cache line write (D-cache writeback) - no memory fetch needed
+    data_array_wr_en = ((cache_hit && cache_req_q.rw) ||
+                        (cache_miss && is_full_line_write && cache_req_q.valid) ||
+                        (cache_miss && mem_res_i.valid && mem_res_id_match && !cache_req_q.uncached)) && !write_back;
+    tag_array_wr_en  = ((cache_hit && cache_req_q.rw) ||
+                        (cache_miss && is_full_line_write && cache_req_q.valid) ||
+                        (cache_miss && mem_res_i.valid && mem_res_id_match && !cache_req_q.uncached)) && !write_back;
   end
 
   // Dirty control signals
@@ -435,11 +450,15 @@ module l2_cache
     dirty_wdirty_temp = (flush) ? '0 : (write_back ? '0 : (fill_from_mshr ? '0 : (cache_req_q.rw ? '1 : '0)));
     dirty_wr_val = dirty_wdirty_temp;
 
-    dirty_rw_en_temp = ((cache_req_q.rw && (cache_hit || (cache_miss && mem_res_i.valid && mem_res_id_match))) ||
+    // Enable dirty bit write for:
+    // 1. Write HIT
+    // 2. Read MISS with memory response
+    // 3. Full cache line write MISS (D-cache writeback)
+    dirty_rw_en_temp = ((cache_req_q.rw && (cache_hit || (cache_miss && is_full_line_write) || (cache_miss && mem_res_i.valid && mem_res_id_match))) ||
                       (write_back && mem_res_i.valid && mem_res_id_match) || (flush));
-    dirty_wr_en  = dirty_rw_en_temp;
+    dirty_wr_en = dirty_rw_en_temp;
 
-    dirty_wr_idx    = dirty_idx_temp;
+    dirty_wr_idx = dirty_idx_temp;
 
     for (int i = 0; i < NUM_WAY; i++) begin
       dirty_way_temp[i] = (flush && !write_back) ? '1 : (cache_wr_way[i] && dirty_rw_en_temp);
@@ -506,8 +525,9 @@ module l2_cache
       // Only send memory request if:
       // - Cache miss AND
       // - NOT already in MSHR (no request merging case) AND
+      // - NOT a full cache line write (D-cache writeback has all data)
       // - Memory is ready
-      mem_req_o.valid = cache_miss && !mshr_hit && mshr_can_accept && cache_req_q.valid;
+      mem_req_o.valid = cache_miss && !mshr_hit && mshr_can_accept && cache_req_q.valid && !is_full_line_write;
       mem_req_o.ready = 1'b1;  // L2 always ready to receive memory response
       mem_req_o.uncached = write_back ? 1'b0 : cache_req_q.uncached;
       mem_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : (cache_req_q.uncached ? cache_req_q.addr : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}});
@@ -523,7 +543,11 @@ module l2_cache
       l1_res_o.blk   = resp_blk_q;
       l1_res_o.id    = resp_ids_q[resp_pick_idx];
     end else begin
-      l1_res_o.valid = !write_back && cache_req_q.valid && (cache_hit || (cache_miss && mem_res_i.valid && mem_res_id_match));
+      // Response valid for:
+      // 1. Read HIT
+      // 2. Read MISS with memory response
+      // 3. Full cache line write (D-cache writeback) - immediate response, no memory needed
+      l1_res_o.valid = !write_back && cache_req_q.valid && (cache_hit || (cache_miss && is_full_line_write) || (cache_miss && mem_res_i.valid && mem_res_id_match));
       l1_res_o.blk = (cache_miss && mem_res_i.valid && mem_res_id_match) ? mem_res_i.blk : cache_select_data;
       l1_res_o.id = mem_res_id_match ? mem_res_i.id : cache_req_id_q;  // Return the matched request ID
     end
@@ -535,7 +559,11 @@ module l2_cache
     //   - Writeback is in progress
     //   - Flush is in progress
     //   - Response fanout is draining MSHR entries
-    l1_res_o.ready = !flush && !write_back && !resp_active_q && (!cache_req_q.valid || cache_hit || (cache_miss && mem_res_i.valid && mem_res_id_match)) && mshr_can_accept;
+    // Full cache line writes complete immediately, so they don't block ready
+    l1_res_o.ready = !flush && !write_back && !resp_active_q &&
+                     (!cache_req_q.valid || cache_hit ||
+                      (cache_miss && is_full_line_write) ||
+                      (cache_miss && mem_res_i.valid && mem_res_id_match)) && mshr_can_accept;
   end
 
   // Memory request handshake helper

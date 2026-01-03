@@ -294,10 +294,11 @@ module dcache
     data_wr_pre = mask_data;
 
     case (cache_req_q.rw_size)
-      WORD:    data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
-      HALF:    data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
-      BYTE:    data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
-      NO_SIZE: data_wr_pre = '0;
+      WORD:      data_wr_pre[cache_req_q.addr[BOFFSET-1:2]*32+:32] = cache_req_q.data;
+      HALF:      data_wr_pre[cache_req_q.addr[BOFFSET-1:1]*16+:16] = cache_req_q.data[15:0];
+      BYTE:      data_wr_pre[cache_req_q.addr[BOFFSET-1:0]*8+:8] = cache_req_q.data[7:0];
+      FULL_LINE: data_wr_pre = BLK_SIZE'(cache_req_q.data);  // Full cache line write (not used in D$)
+      default:   data_wr_pre = '0;  // NO_SIZE
     endcase
 
     word_idx = cache_req_q.addr[(WOFFSET+2)-1:2];
@@ -396,7 +397,7 @@ module dcache
       lowX_req_o.uncached = 1'b0;
       lowX_req_o.addr = fi_evict_addr;
       lowX_req_o.rw = 1'b1;  // Write operation
-      lowX_req_o.rw_size = WORD;  // Full cache line
+      lowX_req_o.rw_size = FULL_LINE;  // Full cache line writeback
       lowX_req_o.data = fi_evict_data;
       lowX_req_o.id = cache_req_q.id;  // Use ID from current request for fence.i writeback
     end else if (lowx_req_valid_q) begin
@@ -411,7 +412,7 @@ module dcache
       lowX_req_o.uncached = write_back ? 1'b0 : cache_req_q.uncached;
       lowX_req_o.addr = write_back ? {evict_tag, rd_idx, {BOFFSET{1'b0}}} : (cache_req_q.uncached ? cache_req_q.addr : {cache_req_q.addr[31:BOFFSET], {BOFFSET{1'b0}}});
       lowX_req_o.rw = write_back ? 1'b1 : (cache_req_q.uncached ? cache_req_q.rw : 1'b0);
-      lowX_req_o.rw_size = write_back ? WORD : cache_req_q.rw_size;
+      lowX_req_o.rw_size = write_back ? FULL_LINE : cache_req_q.rw_size;
       lowX_req_o.data = write_back ? evict_data : (cache_req_q.uncached ? BLK_SIZE'(cache_req_q.data) : '0);
       lowX_req_o.id = cache_req_q.id;  // Pass through ID from memory module
     end
@@ -471,7 +472,7 @@ module dcache
           lowx_req_q.addr     <= {evict_tag, rd_idx, {BOFFSET{1'b0}}};
           // dcache uses full-line writeback fields (dlowX_req_t)
           lowx_req_q.rw       <= 1'b1;
-          lowx_req_q.rw_size  <= WORD;
+          lowx_req_q.rw_size  <= FULL_LINE;  // Full cache line writeback
           lowx_req_q.data     <= evict_data;
           lowx_req_q.uncached <= 1'b0;
         end else begin

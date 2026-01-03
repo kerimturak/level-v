@@ -158,9 +158,6 @@ add wave -position insertpoint -radix hexadecimal  -group "WRAPPER" -group "SOC"
 add wave -position insertpoint -radix hexadecimal  -group "WRAPPER" -group "SOC"  -group "MEMORY4" -group "UART"  -group "UART_RX" sim:$UART_RX/*
 
 ################## ARBITER ##################
-add wave -position insertpoint -radix hexadecimal -in       -group "WRAPPER" -group "SOC"  -group "ARBITER" -group in       sim:$ARBITER/*
-add wave -position insertpoint -radix hexadecimal -out      -group "WRAPPER" -group "SOC"  -group "ARBITER" -group out      sim:$ARBITER/*
-add wave -position insertpoint -radix hexadecimal -internal -group "WRAPPER" -group "SOC"  -group "ARBITER" -group internal sim:$ARBITER/*
 
 ################## HAZARD ##################
 add wave -position insertpoint -radix hexadecimal -in       -group "WRAPPER" -group "SOC"  -group "HAZARD" -group in       sim:$HAZARD/*
@@ -204,9 +201,9 @@ add wave -noupdate -group "QUICK_DEBUG" -group "Register File" -radix hexadecima
 
 add wave -noupdate -group "QUICK_DEBUG" -group "Inputs" -color Gold $CPU/clk_i
 add wave -noupdate -group "QUICK_DEBUG" -group "Inputs" -color Orange $CPU/rst_ni
-add wave -noupdate -group "QUICK_DEBUG" -group "Inputs" -radix hexadecimal $CPU/iomem_res_i
+add wave -noupdate -group "QUICK_DEBUG" -group "Inputs" -radix hexadecimal $CPU/mem_bus_res_i
 
-add wave -noupdate -group "QUICK_DEBUG" -group "Outputs" -radix hexadecimal $CPU/iomem_req_o
+add wave -noupdate -group "QUICK_DEBUG" -group "Outputs" -radix hexadecimal $CPU/mem_bus_req_o
 
 add wave -noupdate -group "QUICK_DEBUG" -group "Pipeline Registers" -radix hexadecimal $CPU/pipe1
 add wave -noupdate -group "QUICK_DEBUG" -group "Pipeline Registers" -radix hexadecimal $CPU/pipe2
@@ -257,5 +254,14 @@ add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "WB_IN
 add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "WB_CLINT" sim:$WB_CLINT/*
 add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "WB_PBUS" sim:$WB_PBUS/*
 
-run 10000ns
+
+
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "SOC" -group "L2" sim:/tb_wrapper/ceres_wrapper/i_soc/i_l2_cache/*
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "SOC" -group "L2" -group "BANK0" {sim:/tb_wrapper/ceres_wrapper/i_soc/i_l2_cache/gen_banks[0]/i_l2_bank/*}
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "SOC" -group "L2" -group "BANK0" -group "CACHE" {sim:/tb_wrapper/ceres_wrapper/i_soc/i_l2_cache/gen_banks[0]/i_l2_bank/i_cache_core/*}
+
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "SOC" -group "L2" -group "BANK1" {sim:/tb_wrapper/ceres_wrapper/i_soc/i_l2_cache/gen_banks[1]/i_l2_bank/*}
+add wave -position insertpoint -radix hexadecimal -group "WRAPPER" -group "SOC" -group "L2" -group "BANK1" -group "CACHE" {sim:/tb_wrapper/ceres_wrapper/i_soc/i_l2_cache/gen_banks[1]/i_l2_bank/i_cache_core/*}
+
+
 wave zoom full

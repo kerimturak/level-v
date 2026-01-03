@@ -264,17 +264,17 @@ end
       automatic logic [31:0] wdata = write_data_i;
 
       case (rw_size_i)
-        2'b01:
+        BYTE:
           $fwrite(trace_fd,
             "core   0: 3 0x%08h (0x%08h) mem 0x%08h 0x%02h\n",
             pc_i, fe_tracer_i.inst, alu_result_i, wdata[7:0]);
 
-        2'b10:
+        HALF:
           $fwrite(trace_fd,
             "core   0: 3 0x%08h (0x%08h) mem 0x%08h 0x%04h\n",
             pc_i, fe_tracer_i.inst, alu_result_i, wdata[15:0]);
 
-        2'b11:
+        WORD:
           $fwrite(trace_fd,
             "core   0: 3 0x%08h (0x%08h) mem 0x%08h 0x%08h\n",
             pc_i, fe_tracer_i.inst, alu_result_i, wdata[31:0]);

@@ -29,7 +29,7 @@ module writeback
 `ifdef COMMIT_TRACER
     input  fe_tracer_info_t            fe_tracer_i,
     input  logic                       wr_en_i,
-    input  logic            [     1:0] rw_size_i,
+    input  rw_size_e                   rw_size_i,
     input  logic            [XLEN-1:0] write_data_i,
     input  logic            [XLEN-1:0] csr_wr_data_i,
     input  logic                       csr_write_valid_i,
@@ -41,7 +41,7 @@ module writeback
     input  instr_type_e                instr_type_i,
     input  logic            [XLEN-1:0] tcontrol_i,
     input  logic            [XLEN-1:0] pc_i,
-    input  logic                       flushed_i,  // Flushed instruction flag
+    input  logic                       flushed_i,          // Flushed instruction flag
 `endif
     input  logic                       clk_i,
     input  logic                       rst_ni,
