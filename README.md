@@ -3,6 +3,8 @@
   <img src="https://img.shields.io/badge/HDL-SystemVerilog-purple?style=for-the-badge" alt="HDL">
   <img src="https://img.shields.io/badge/Pipeline-5--Stage-green?style=for-the-badge" alt="Pipeline">
   <img src="https://img.shields.io/badge/License-GPLv3-red?style=for-the-badge" alt="License">
+  <br/>
+  <a href="https://kerimturak.github.io/level-v/"><img src="https://img.shields.io/badge/📖_Documentation-Online-brightgreen?style=for-the-badge" alt="Documentation"></a>
 </p>
 
 # CERES RISC-V
@@ -70,6 +72,20 @@ Designed for clarity, extensibility, and real-world deployment, suitable for lea
 │  └──────┘ └──────┘ └─────┘ └─────┘ └──────┘ └──────┘ └─────────┘ │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 📖 Documentation
+
+**📚 Full documentation is available at: [https://kerimturak.github.io/level-v/](https://kerimturak.github.io/level-v/)**
+
+Includes:
+- 🚀 Getting Started Guide & Tutorials
+- 🏗️ Architecture & Pipeline Details  
+- 📦 Core Module Documentation (Fetch, Decode, Execute, Memory, Writeback)
+- 🔌 Peripheral Documentation (UART, SPI, I2C, GPIO, Timer, etc.)
+- 🧪 Test Framework & Verification Guide
+- 🔧 Build System & Tools Reference
 
 ---
 

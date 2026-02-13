@@ -1,5 +1,9 @@
 # CERES RISC-V Dokümantasyon
 
+!!! info "GitHub Repository"
+    **Kaynak Kod**: [github.com/kerimturak/level-v](https://github.com/kerimturak/level-v)  
+    **Dokümantasyon**: [kerimturak.github.io/level-v](https://kerimturak.github.io/level-v/)
+
 <div class="grid cards" markdown>
 
 -   :material-rocket-launch:{ .lg .middle } __Hızlı Başlangıç__
