@@ -208,7 +208,7 @@ python3 scripts/cache_config_interactive.py 8 2 16
 
 ## Implementation Notes
 
-The dcache module ([rtl/core/mmu/dcache.sv:34-38](../rtl/core/mmu/dcache.sv#L34-L38)) computes:
+The dcache module (`rtl/core/mmu/dcache.sv:34-38`) computes:
 
 ```systemverilog
 localparam NUM_SET = (CACHE_SIZE / BLK_SIZE) / NUM_WAY;
@@ -223,6 +223,6 @@ localparam TAG_SIZE = XLEN - IDX_WIDTH - BOFFSET;
 
 ## See Also
 
-- Full configuration database: [cache_configurations.log](cache_configurations.log)
-- Interactive tool: [../scripts/cache_config_interactive.py](../scripts/cache_config_interactive.py)
-- Calculator: [../scripts/cache_config_calculator.py](../scripts/cache_config_calculator.py)
+- Full configuration database: `cache_configurations.log` (in project root)
+- Interactive tool: `scripts/cache_config_interactive.py`
+- Calculator: `scripts/cache_config_calculator.py`

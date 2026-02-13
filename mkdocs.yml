@@ -130,18 +130,32 @@ nav:
     - WDT: periph/wdt.md
     - VGA: periph/vga.md
   - Support:
-    - Include: include/overview.md
+    - Include:
+      - Overview: include/overview.md
+      - Defines: include/ceres_defines.md
+      - Exception Priority: include/exception_priority.md
+      - Fetch Log: include/fetch_log.md
+      - Writeback Log: include/writeback_log.md
     - Package: pkg/overview.md
     - RAM: ram/overview.md
     - Tracer: tracer/overview.md
     - Utilities: util/overview.md
-    - Wrapper: wrapper/overview.md
+    - Wrapper:
+      - Overview: wrapper/overview.md
+      - CERES SoC: wrapper/ceres_soc.md
+      - CERES Wrapper: wrapper/ceres_wrapper.md
+      - RAM Programmer: wrapper/ram_programmer.md
+      - WB CLINT Slave: wrapper/wb_clint_slave.md
+      - WB PBUS Slave: wrapper/wb_pbus_slave.md
+      - WB RAM Slave: wrapper/wb_ram_slave.md
+      - Wrapper RAM: wrapper/wrapper_ram.md
   - Build System:
     - Script Overview: script/overview.md
     - Makefiles: script/makefiles.md
     - Python Tools: script/python.md
     - Shell Scripts: script/shell.md
     - Configuration: script/config.md
+    - Tool Ecosystem: script/tool-ecosystem-design.md
   - Test & Simulation:
     - Simulation: sim/overview.md
     - Environments: env/overview.md
@@ -153,6 +167,25 @@ nav:
     - CoreMark: coremark-build.md
     - UART Test Guide: custom-uart-test-guide.md
     - Extended Tests: extended-test-suites.md
+  - Development:
+    - Maintenance:
+      - TODO: TODO.md
+      - Troubleshooting: TROUBLESHOOTING.md
+      - Fix Plan: FIX_PLAN.md
+      - Fixes Applied: FIXES_APPLIED.md
+      - Combinational Loop Fix: COMBINATIONAL_LOOP_FIX.md
+    - Testing & Validation:
+      - Test Manager: TEST_MANAGER_README.md
+      - Test Manager Summary: TEST_MANAGER_SUMMARY.md
+      - Quick Start: QUICKSTART_TESTMANAGER.md
+      - Validation System: VALIDATION_SYSTEM.md
+    - CoreMark:
+      - Quick Start: COREMARK_QUICK_START.md
+      - Comparison: COREMARK_COMPARISON.md
+      - Final Comparison: COREMARK_COMPARISON_FINAL.md
+    - Configuration:
+      - Cache Config: CACHE_CONFIG_README.md
+      - Makefile Separation: MAKEFILE_SEPARATION.md
   - Gelecek Planları:
     - AI Enhancement: ai-enhancement-plans.md
     - SoC Roadmap: soc-roadmap.md

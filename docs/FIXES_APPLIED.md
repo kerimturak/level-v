@@ -12,7 +12,7 @@ All 9 critical issues identified in [FIX_PLAN.md](FIX_PLAN.md) have been success
 **Problem:** Logs were going to `build/log/verilator/TEST` instead of `results/logs/verilator/TEST`
 
 **Fix Applied:**
-- Updated [Makefile.verilator](../Makefile.verilator): Changed `LOG_DIR` from `$(BUILD_DIR)/log` to `$(RESULTS_DIR)/logs/verilator/$(TEST_NAME)`
+- Updated `Makefile.verilator`: Changed `LOG_DIR` from `$(BUILD_DIR)/log` to `$(RESULTS_DIR)/logs/verilator/$(TEST_NAME)`
 - Now follows proper hierarchy: `results/logs/SIMULATOR/TEST_NAME/`
 
 **Files Modified:**
@@ -24,11 +24,11 @@ All 9 critical issues identified in [FIX_PLAN.md](FIX_PLAN.md) have been success
 **Problem:** `test-run` command only ran RTL simulation without Spike validation
 
 **Fix Applied:**
-- Completely rewrote [script/python/test_manager.py](../script/python/test_manager.py) with 2-phase execution:
+- Completely rewrote `script/python/test_manager.py` with 2-phase execution:
   1. **Phase 1: RTL Simulation** - Runs Verilator, reports COMPLETED/CRASHED
   2. **Phase 2: Validation** - Automatically runs Spike + comparison if enabled
 - Added `should_validate()` method that checks per-suite validation settings
-- Integrated [script/python/validation_runner.py](../script/python/validation_runner.py) for orchestration
+- Integrated `script/python/validation_runner.py` for orchestration
 
 **Files Modified:**
 - `script/python/test_manager.py` (complete rewrite, 730+ lines)
@@ -87,7 +87,7 @@ Final Decision → "TEST PASSED" or "TEST FAILED"
 **Problem:** Duration always showed `0.0 saniye`
 
 **Fix Applied:**
-- Fixed timing calculation in [script/python/makefile/verilator_runner.py](../script/python/makefile/verilator_runner.py)
+- Fixed timing calculation in `script/python/makefile/verilator_runner.py`
 - Proper `datetime` usage:
 ```python
 start_time = datetime.now()
@@ -121,7 +121,7 @@ print(f"Süre: {elapsed:.1f} saniye")  # .1f formatting
 **Problem:** Full Verilator output was printed to console, making it hard to see summaries
 
 **Fix Applied:**
-- Added **Quiet Mode** to [script/python/makefile/verilator_runner.py](../script/python/makefile/verilator_runner.py)
+- Added **Quiet Mode** to `script/python/makefile/verilator_runner.py`
 - All output still goes to `verilator_run.log`
 - Console shows:
   - Header and configuration
@@ -155,7 +155,7 @@ for line in process.stdout:
 
 **Fix Applied:**
 - Added `mkdir -p "$(LOG_DIR)"` before creating diff.log
-- Proper path construction in [Makefile.spike](../Makefile.spike):
+- Proper path construction in `Makefile.spike`:
 ```makefile
 compare:
     @mkdir -p "$(LOG_DIR)"; \
@@ -172,7 +172,7 @@ compare:
 **Problem:** Debug logs didn't show which Python scripts ran with what parameters
 
 **Fix Applied:**
-- Enhanced debug logging in [script/python/test_manager.py](../script/python/test_manager.py)
+- Enhanced debug logging in `script/python/test_manager.py`
 - Now logs full command with arguments for both RTL and validation:
 ```python
 # RTL Simulation
@@ -223,8 +223,8 @@ with logger.step("spike_validation", "python_script") as step:
 **Problem:** HTML reports weren't being created automatically after validation
 
 **Fix Applied:**
-- Integrated HTML report generation into [script/python/test_manager.py](../script/python/test_manager.py)
-- After successful validation, automatically calls [script/python/makefile/html_diff_generator.py](../script/python/makefile/html_diff_generator.py)
+- Integrated HTML report generation into `script/python/test_manager.py`
+- After successful validation, automatically calls `script/python/makefile/html_diff_generator.py`
 - Report saved to: `results/logs/verilator/TEST_NAME/test_report.html`
 
 **Implementation:**
@@ -255,7 +255,7 @@ if validation.passed:
 ## 📝 Additional Improvements
 
 ### Validation Configuration Per Suite
-**File:** [script/config/test_registry.json](../script/config/test_registry.json)
+**File:** `script/config/test_registry.json`
 
 Added `validation` flags to all test suites:
 
