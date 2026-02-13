@@ -45,7 +45,7 @@ module konata_logger;
       $finish;
     end
 
-    $fwrite(fd, "KONATA\t0004\n");
+    $fwrite(fd, "Kanata\t0004\n");
     $display("✅ [konata_logger] Started: %s", log_path);
   end
 

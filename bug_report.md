@@ -1,1 +1,0 @@
-dacache boyutu icachten büyük olursa flush cycleı bitmeden çalışmaya başlıyor cpu
