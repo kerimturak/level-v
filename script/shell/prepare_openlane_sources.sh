@@ -65,7 +65,7 @@ sv2v_convert() {
     local sv2v_def_args=()
     local sv2v_tmp_out="${SV2V_OUT}.sv2v_tmp.v"
     local d
-    for d in SYNTHESIS MINIMAL_SOC; do
+    for d in SYNTHESIS MINIMAL_SOC CERES_OPENLANE; do
         sv2v_def_args+=("-D" "${d}")
     done
 
@@ -91,6 +91,20 @@ sv2v_convert() {
         -w "${SRC_DIR}" \
         "${SV2V_IMAGE}" \
         sv2v -I "${SRC_DIR}" "${sv2v_def_args[@]}" --top ceres_wrapper --write "${sv2v_tmp_out}" "${sv_files[@]}"; then
+        # -----------------------------------------------------------
+        # Post-process: sv2v generates struct-type parameters with
+        # default value 0.  Yosys evaluates module bodies with these
+        # defaults *before* parameter override, and OpenLane's
+        # check_out_of_bound treats the resulting "Range select out
+        # of bounds" warnings as fatal errors.
+        # Fix: replace zero defaults with the actual package values.
+        # -----------------------------------------------------------
+        echo "[openlane:prep] sv2v post-process: fixing struct-type parameter defaults"
+        sed -i \
+            -e 's/\(parameter.*_t_ceres_param_XLEN\s*=\s*\)0;/\132;/g' \
+            -e 's/\(parameter.*_t_ceres_param_BLK_SIZE\s*=\s*\)0;/\1128;/g' \
+            "${sv2v_tmp_out}"
+
         mv -f "${sv2v_tmp_out}" "${SV2V_OUT}"
     else
         rm -f "${sv2v_tmp_out}" "${SV2V_OUT}"

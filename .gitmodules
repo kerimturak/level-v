@@ -19,3 +19,18 @@
 [submodule "subrepo/riscv-dv"]
 	path = subrepo/riscv-dv
 	url = https://github.com/chipsalliance/riscv-dv.git
+[submodule "subrepo/asic-tools/OpenLane"]
+	path = subrepo/asic-tools/OpenLane
+	url = https://github.com/The-OpenROAD-Project/OpenLane.git
+[submodule "subrepo/asic-tools/OpenROAD"]
+	path = subrepo/asic-tools/OpenROAD
+	url = https://github.com/The-OpenROAD-Project/OpenROAD.git
+[submodule "subrepo/asic-tools/OpenROAD-flow-scripts"]
+	path = subrepo/asic-tools/OpenROAD-flow-scripts
+	url = https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git
+[submodule "subrepo/asic-tools/caravel"]
+	path = subrepo/asic-tools/caravel
+	url = https://github.com/efabless/caravel.git
+[submodule "subrepo/asic-tools/caravel_user_project"]
+	path = subrepo/asic-tools/caravel_user_project
+	url = https://github.com/efabless/caravel_user_project.git

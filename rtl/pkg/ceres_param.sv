@@ -35,7 +35,11 @@ package ceres_param;
   // ============================================================================
   localparam int CPU_CLK = 25_000_000;
   localparam int XLEN = 32;
+`ifdef CERES_OPENLANE
+  localparam int WRAPPER_RAM_SIZE_KB = 4;
+`else
   localparam int WRAPPER_RAM_SIZE_KB = 32;
+`endif
   localparam logic [31:0] RESET_VECTOR = 32'h8000_0000;
 
   // ============================================================================
@@ -43,7 +47,16 @@ package ceres_param;
   // ============================================================================
   localparam int BLK_SIZE = 128;  // Cache block size (bits)
 
-`ifdef MINIMAL_SOC
+`ifdef CERES_OPENLANE
+  // ── CERES_OPENLANE: En küçük sentez konfigürasyonu (pilot compile) ──
+  localparam int IC_WAY = 2;
+  localparam int IC_CAPACITY = 1 * 1024 * 8;  // 1KB (bits)
+  localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
+
+  localparam int DC_WAY = 2;
+  localparam int DC_CAPACITY = 1 * 1024 * 8;  // 1KB (bits)
+  localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
+`elsif MINIMAL_SOC
   // ── MINIMAL_SOC: Küçük cache (CoreMark için yeterli ~4KB) ──
   // Instruction Cache: 2-way, 2KB
   localparam int IC_WAY = 2;
@@ -74,7 +87,15 @@ package ceres_param;
   // ============================================================================
   // 3. BRANCH PREDICTOR PARAMETERS
   // ============================================================================
-`ifdef MINIMAL_SOC
+`ifdef CERES_OPENLANE
+  // ── CERES_OPENLANE: En küçük BP konfigürasyonu ──
+  localparam int PHT_SIZE = 32;
+  localparam int BTB_SIZE = 16;
+  localparam int GHR_SIZE = 6;
+  localparam int IBTC_SIZE = 4;
+  localparam int RAS_SIZE = 4;
+  localparam int LOOP_SIZE = 2;
+`elsif MINIMAL_SOC
   // ── MINIMAL_SOC: Küçük BP (hızlı compile, yeterli doğruluk) ──
   localparam int PHT_SIZE = 64;  // Pattern History Table entries
   localparam int BTB_SIZE = 32;  // Branch Target Buffer entries
@@ -118,8 +139,13 @@ package ceres_param;
   localparam int PROGRAM_SEQUENCE_LEN = 9;
   localparam logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = "CERESTEST";
   localparam int UART_DATA_WIDTH = 8;
+`ifdef CERES_OPENLANE
+  localparam int UART_TX_FIFO_DEPTH = 32;
+  localparam int UART_RX_FIFO_DEPTH = 8;
+`else
   localparam int UART_TX_FIFO_DEPTH = 256;
   localparam int UART_RX_FIFO_DEPTH = 32;
+`endif
   localparam int GPIO_WIDTH = 32;
   localparam int NUM_EXT_IRQ = 16;
 
@@ -902,10 +928,8 @@ package ceres_param;
     input exc_priority_t exc_pri;
     input exc_priority_t min_pri;
     begin
-      if (exc_pri <= min_pri)
-        check_exc_priority = (exc_pri != PRIORITY_DISABLED);
-      else
-        check_exc_priority = 1'b0;
+      if (exc_pri <= min_pri) check_exc_priority = (exc_pri != PRIORITY_DISABLED);
+      else check_exc_priority = 1'b0;
     end
   endfunction
 
@@ -1075,7 +1099,7 @@ package ceres_param;
   // ---------------------------------------------------------------------------
   // 11.6 CSR Name Decoder
   // ---------------------------------------------------------------------------
-`ifndef SYNTHESIS
+`ifndef CERES_OPENLANE
   function string csr_name;
     input logic [11:0] idx;
     case (idx)

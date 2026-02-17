@@ -60,15 +60,25 @@ module wrapper_ram
   localparam int LINE_ADDR_BITS = $clog2(WORDS_PER_LINE);
 
   // ==========================================================================
-  // Memory Array - Single Wide BRAM
+  // Memory Array - Single Wide BRAM (fallback)
   // ==========================================================================
-  (* ram_style = "block" *)logic [  CACHE_LINE_WIDTH-1:0] ram          [LINE_DEPTH-1:0];
+`ifndef CERES_OPENLANE
+  (* ram_style = "block" *) logic [CACHE_LINE_WIDTH-1:0] ram [LINE_DEPTH-1:0];
+`endif
 
   // ==========================================================================
   // Internal Signals
   // ==========================================================================
   logic [$clog2(LINE_DEPTH)-1:0] line_addr;
   logic [  CACHE_LINE_WIDTH-1:0] rdata_q;
+
+`ifdef CERES_OPENLANE
+  logic [CACHE_LINE_WIDTH-1:0] sram_rdata_line;
+  logic [                31:0] sram_bank_rdata [0:WORDS_PER_LINE-1];
+  logic [                 3:0] sram_bank_wmask [0:WORDS_PER_LINE-1];
+  logic [                31:0] sram_bank_wdata [0:WORDS_PER_LINE-1];
+  logic                        sram_bank_we    [0:WORDS_PER_LINE-1];
+`endif
 
   // Programming interface
   logic [                  31:0] prog_addr;
@@ -85,6 +95,7 @@ module wrapper_ram
   // ==========================================================================
   // Memory Initialization
   // ==========================================================================
+`ifndef CERES_OPENLANE
   localparam int INIT_FILE_LEN = 256;
   reg     [8*INIT_FILE_LEN-1:0] init_file = {INIT_FILE_LEN{8'h00}};
   integer                       fd = 0;
@@ -117,11 +128,16 @@ module wrapper_ram
     end
 `else
     // During synthesis, initialize RAM to zero (no external mem file dependency)
+`ifndef CERES_OPENLANE
+    $readmemh("/home/kerim/level-v/coremark_128.mem", ram);
+`else
     for (int i = 0; i < LINE_DEPTH; i++) begin
       ram[i] = '0;
     end
 `endif
+`endif
   end
+`endif
 
   // ==========================================================================
   // Address Calculation
@@ -153,8 +169,59 @@ module wrapper_ram
   end
 
   // ==========================================================================
-  // RAM Read/Write Logic - Byte-Enable Template
+  // RAM Read/Write Logic
   // ==========================================================================
+`ifdef CERES_OPENLANE
+  if ((WORDS_PER_LINE == 4) && (LINE_DEPTH <= 256)) begin : g_sram_main_mem
+    logic [7:0] sram_wr_addr;
+    logic [7:0] sram_rd_addr;
+
+    assign sram_wr_addr = wr_addr[7:0];
+    assign sram_rd_addr = line_addr[7:0];
+
+    always_comb begin
+      for (int w = 0; w < WORDS_PER_LINE; w++) begin
+        sram_bank_wdata[w] = wr_data[w*32+:32];
+        sram_bank_wmask[w] = wr_strb[w*4+:4];
+        sram_bank_we[w] = |wr_strb[w*4+:4];
+        sram_rdata_line[w*32+:32] = sram_bank_rdata[w];
+      end
+    end
+
+    for (genvar w = 0; w < WORDS_PER_LINE; w++) begin : g_word_bank
+      sky130_sram_1kbyte_1rw1r_32x256_8 i_main_sram_bank (
+          .clk0  (clk_i),
+          .csb0  (~sram_bank_we[w]),
+          .web0  (1'b0),
+          .wmask0(sram_bank_wmask[w]),
+          .addr0 (sram_wr_addr),
+          .din0  (sram_bank_wdata[w]),
+          .dout0 (),
+          .clk1  (clk_i),
+          .csb1  (~rd_en_i),
+          .addr1 (sram_rd_addr),
+          .dout1 (sram_bank_rdata[w])
+      );
+    end
+
+    assign rdata_o = sram_rdata_line;
+  end else begin : g_sram_fallback_regmem
+    (* ram_style = "block" *) logic [CACHE_LINE_WIDTH-1:0] ram [LINE_DEPTH-1:0];
+
+    genvar i;
+    for (i = 0; i < BYTES_PER_LINE; i++) begin : byte_write
+      always_ff @(posedge clk_i) begin
+        if (wr_strb[i]) ram[wr_addr][i*8+:8] <= wr_data[i*8+:8];
+      end
+    end
+
+    always_ff @(posedge clk_i) begin
+      if (rd_en_i) rdata_q <= ram[line_addr];
+    end
+
+    assign rdata_o = rdata_q;
+  end
+`else
   genvar i;
   generate
     for (i = 0; i < BYTES_PER_LINE; i++) begin : byte_write
@@ -170,6 +237,7 @@ module wrapper_ram
   end
 
   assign rdata_o = rdata_q;
+`endif
 
   // ==========================================================================
   // Programming Module Instance

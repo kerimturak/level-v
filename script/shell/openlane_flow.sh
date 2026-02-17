@@ -10,6 +10,8 @@ OPENLANE_IMAGE="${OPENLANE_IMAGE:-efabless/openlane:2023.09.07}"
 PDK_ROOT="${PDK_ROOT:-${HOME}/.volare}"
 PDK="${PDK:-sky130A}"
 TAG="${TAG:-run_$(date +%Y%m%d_%H%M%S)}"
+DOCKER_CPUS="${DOCKER_CPUS:-}"
+DOCKER_CPU_SHARES="${DOCKER_CPU_SHARES:-}"
 OPENLANE_MODE="${OPENLANE_MODE:-auto}"   # auto|docker|local
 OPENLANE_LOCAL_ROOT="${OPENLANE_LOCAL_ROOT:-${ROOT_DIR}/subrepo/asic-tools/OpenLane}"
 
@@ -61,10 +63,14 @@ has_local_openlane() {
 run_openlane_docker() {
     echo "[openlane:run] Mode: docker"
     mkdir -p "${RUNS_DIR}"
+    local docker_extra_args=()
+    [[ -n "${DOCKER_CPUS}" ]] && docker_extra_args+=(--cpus "${DOCKER_CPUS}")
+    [[ -n "${DOCKER_CPU_SHARES}" ]] && docker_extra_args+=(--cpu-shares "${DOCKER_CPU_SHARES}")
     docker run --rm \
         -u "$(id -u):$(id -g)" \
         -e PDK_ROOT="${PDK_ROOT}" \
         -e PDK="${PDK}" \
+        "${docker_extra_args[@]}" \
         -v "${ROOT_DIR}:${ROOT_DIR}" \
         -v "${PDK_ROOT}:${PDK_ROOT}" \
         -w "${ROOT_DIR}" \
