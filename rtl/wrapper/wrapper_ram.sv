@@ -116,8 +116,10 @@ module wrapper_ram
       ram = '{default: '0};
     end
 `else
-    // During synthesis, directly load 128-bit cache line format
-    $readmemh("/home/kerim/level-v/coremark_128.mem", ram);
+    // During synthesis, initialize RAM to zero (no external mem file dependency)
+    for (int i = 0; i < LINE_DEPTH; i++) begin
+      ram[i] = '0;
+    end
 `endif
   end
 

@@ -154,6 +154,7 @@ nav:
     - Makefiles: script/makefiles.md
     - Python Tools: script/python.md
     - Shell Scripts: script/shell.md
+    - OpenLane ASIC Flow: script/openlane.md
     - Configuration: script/config.md
     - Tool Ecosystem: script/tool-ecosystem-design.md
   - Test & Simulation:

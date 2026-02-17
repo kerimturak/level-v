@@ -898,8 +898,15 @@ package ceres_param;
   // ---------------------------------------------------------------------------
   // 11.1 Exception Priority Check
   // ---------------------------------------------------------------------------
-  function automatic logic check_exc_priority(input exc_priority_t exc_pri, input exc_priority_t min_pri);
-    return (exc_pri <= min_pri) && (exc_pri != PRIORITY_DISABLED);
+  function automatic logic check_exc_priority;
+    input exc_priority_t exc_pri;
+    input exc_priority_t min_pri;
+    begin
+      if (exc_pri <= min_pri)
+        check_exc_priority = (exc_pri != PRIORITY_DISABLED);
+      else
+        check_exc_priority = 1'b0;
+    end
   endfunction
 
   // ---------------------------------------------------------------------------
@@ -1007,30 +1014,31 @@ package ceres_param;
       end
       default:         resolved_instr_type = instr_invalid;
     endcase
-    return resolved_instr_type;
   endfunction
 
   // ---------------------------------------------------------------------------
   // 11.3 Branch Type Detector
   // ---------------------------------------------------------------------------
-  function pc_sel_e is_branch(instr_type_e instr);
+  function pc_sel_e is_branch;
+    input instr_type_e instr;
     case (instr)
-      b_beq:   return BEQ;
-      b_bne:   return BNE;
-      b_blt:   return BLT;
-      b_bge:   return BGE;
-      b_bltu:  return BLTU;
-      b_bgeu:  return BGEU;
-      i_jalr:  return JALR;
-      u_jal:   return JAL;
-      default: return NO_BJ;
+      b_beq:   is_branch = BEQ;
+      b_bne:   is_branch = BNE;
+      b_blt:   is_branch = BLT;
+      b_bge:   is_branch = BGE;
+      b_bltu:  is_branch = BLTU;
+      b_bgeu:  is_branch = BGEU;
+      i_jalr:  is_branch = JALR;
+      u_jal:   is_branch = JAL;
+      default: is_branch = NO_BJ;
     endcase
   endfunction
 
   // ---------------------------------------------------------------------------
   // 11.4 Trap Cause Decoder
   // ---------------------------------------------------------------------------
-  function automatic logic [XLEN-1:0] trap_cause_decode(input exc_type_e exc);
+  function automatic logic [XLEN-1:0] trap_cause_decode;
+    input exc_type_e exc;
     case (exc)
       NO_EXCEPTION:        trap_cause_decode = '1;
       INSTR_ACCESS_FAULT:  trap_cause_decode = 1;
@@ -1049,7 +1057,8 @@ package ceres_param;
   // ---------------------------------------------------------------------------
   // 11.5 CSR Support Checker
   // ---------------------------------------------------------------------------
-  function automatic logic is_supported_csr(input logic [11:0] csr_idx);
+  function automatic logic is_supported_csr;
+    input logic [11:0] csr_idx;
     unique case (csr_idx)
       12'hF11, 12'hF12, 12'hF13, 12'hF14, 12'hF15,
       12'h300, 12'h301, 12'h304, 12'h305, 12'h306, 12'h310,
@@ -1066,7 +1075,9 @@ package ceres_param;
   // ---------------------------------------------------------------------------
   // 11.6 CSR Name Decoder
   // ---------------------------------------------------------------------------
-  function string csr_name(input logic [11:0] idx);
+`ifndef SYNTHESIS
+  function string csr_name;
+    input logic [11:0] idx;
     case (idx)
       12'hF11: csr_name = "mvendorid";
       12'hF12: csr_name = "marchid";
@@ -1100,11 +1111,14 @@ package ceres_param;
       default: csr_name = $sformatf("csr_%03h", idx);
     endcase
   endfunction
+`endif
 
   // ---------------------------------------------------------------------------
   // 11.7 CSR Write Mask (WARL)
   // ---------------------------------------------------------------------------
-  function automatic logic [XLEN-1:0] csr_wmask(input logic [11:0] idx, input logic [XLEN-1:0] wdata);
+  function automatic logic [XLEN-1:0] csr_wmask;
+    input logic [11:0] idx;
+    input logic [XLEN-1:0] wdata;
     case (idx)
       12'h306: csr_wmask = '0;
       12'h106: csr_wmask = '0;

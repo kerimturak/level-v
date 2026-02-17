@@ -23,3 +23,9 @@ site/
 !env/coremark/spike-pk/**
 !env/coremark/minimal/
 !env/coremark/minimal/**
+
+# OpenLane generated artifacts
+asic/openlane/designs/ceres_wrapper/src/
+asic/openlane/designs/ceres_wrapper/runs/
+asic/openlane/designs/ceres_wrapper/sources_manifest.txt
+asic/openlane/designs/ceres_wrapper/src/ceres_wrapper_sv2v.v

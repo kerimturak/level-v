@@ -48,6 +48,40 @@ Troubleshooting
 	- `ceres.log` — tracer pipeline log
 	- `summary.json` — short machine-readable run summary (added by `run_verilator.sh`)
 
+ASIC / OpenLane (SKY130)
+
+```bash
+make asic_subrepos
+make asic_setup
+make asic_prep
+make asic_run
+make asic_report
+```
+
+`make asic_subrepos`, `subrepo/asic-tools/` altında OpenLane/OpenROAD/caravel repolarını shallow clone eder veya günceller.
+
+Varsayılanlar:
+
+- `OPENLANE_IMAGE=efabless/openlane:2023.09.07`
+- `PDK_ROOT=$HOME/.volare`
+- `PDK=sky130A`
+
+Docker kurulumu (Ubuntu 22.04):
+
+```bash
+chmod +x script/shell/install_docker_ubuntu.sh
+sudo bash script/shell/install_docker_ubuntu.sh
+newgrp docker
+docker run --rm hello-world
+```
+
+Docker modunda OpenLane çalıştırma:
+
+```bash
+OPENLANE_MODE=docker make asic_setup
+OPENLANE_MODE=docker make asic_run
+```
+
 If you'd like, I can add a short GitHub Actions workflow to run `make verilator_static` and basic Python checks on PRs.
 
 Running tests

@@ -1,0 +1,2 @@
+set_units -time ns
+create_clock [get_ports clk_i] -name core_clk -period 20.0

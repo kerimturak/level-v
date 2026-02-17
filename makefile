@@ -35,6 +35,7 @@ include script/makefiles/test/riscv_formal.mk
 
 # Synthesis Tools
 include script/makefiles/synth/yosys.mk
+include script/makefiles/synth/openlane.mk
 
 # Utility Tools
 include script/makefiles/tools/clean.mk
