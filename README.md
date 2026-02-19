@@ -42,42 +42,7 @@ Designed for clarity, extensibility, and real-world deployment, suitable for lea
 
 ## Architecture Overview
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          CERES RISC-V Core                          │
-│                                                                      │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌──────────┐ │
-│  │  FETCH   │→│ DECODE   │→│ EXECUTE  │→│ MEMORY   │→│ WRITEBACK │ │
-│  │          │  │          │  │          │  │          │  │          │ │
-│  │• PC Mgmt │  │• Decoder │  │• ALU     │  │• Load/   │  │• Reg WB  │ │
-│  │• I-Cache │  │• RegFile │  │• MUL/DIV │  │  Store   │  │• Commit  │ │
-│  │• Align   │  │• Imm Gen │  │• CSR     │  │• D-Cache │  │  Trace   │ │
-│  │  Buffer  │  │• Control │  │• Branch  │  │          │  │          │ │
-│  │• RV32C   │  │  Unit    │  │  Resolve │  │          │  │          │ │
-│  │  Decomp  │  │          │  │          │  │          │  │          │ │
-│  └─────────┘  └─────────┘  └─────────┘  └─────────┘  └──────────┘ │
-│       ↑                                                     │       │
-│       └─────────────── Hazard Unit / Forwarding ────────────┘       │
-│                                                                      │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │                   Branch Prediction Unit                       │  │
-│  │  GShare (512 PHT) + Bimodal + BTB (256) + IBTC (32) + RAS    │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-├──────────────────────────────────────────────────────────────────────┤
-│                   Memory Hierarchy                                   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────────────┐ │
-│  │ I-Cache  │  │ D-Cache  │  │ L2 Cache │  │ Memory Arbiter      │ │
-│  │ 8KB/4-way│  │ 8KB/4-way│  │          │  │ (I$ / D$ priority)  │ │
-│  └──────────┘  └──────────┘  └──────────┘  └─────────────────────┘ │
-├──────────────────────────────────────────────────────────────────────┤
-│                   Wishbone B4 Bus                                    │
-├──────────────────────────────────────────────────────────────────────┤
-│  ┌──────┐ ┌──────┐ ┌─────┐ ┌─────┐ ┌──────┐ ┌──────┐ ┌─────────┐ │
-│  │ UART │ │ GPIO │ │ SPI │ │ I2C │ │Timer │ │ PLIC │ │DMA/WDT/ │ │
-│  │      │ │      │ │     │ │     │ │      │ │      │ │PWM/VGA  │ │
-│  └──────┘ └──────┘ └─────┘ └─────┘ └──────┘ └──────┘ └─────────┘ │
-└──────────────────────────────────────────────────────────────────────┘
-```
+![alt text](docs/mcu_diagram.png)
 
 ---
 
@@ -906,7 +871,7 @@ CoreMark Complete!
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Follow the coding conventions:
    - Module naming: `lowercase_with_underscores`
-   - Signal prefixes: `i_` (input), `o_` (output), `_n` (active-low)
+   - Signal postfixes: `_i` (input), `_o` (output), `_n` (active-low)
    - Always import `ceres_param::*` for parameters
    - One module per file, filename matches module name
 4. Run `make lint` before committing
