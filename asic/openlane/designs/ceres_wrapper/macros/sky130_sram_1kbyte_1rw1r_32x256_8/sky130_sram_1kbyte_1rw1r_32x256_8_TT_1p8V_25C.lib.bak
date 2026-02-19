@@ -30,7 +30,7 @@ library (sky130_sram_1kbyte_1rw1r_32x256_8_TT_1p8V_25C_lib){
     default_input_pin_cap    : 1.0 ;
     default_inout_pin_cap    : 1.0 ;
     default_output_pin_cap   : 0.0 ;
-    default_max_transition   : 1.5 ;
+    default_max_transition   : 0.5 ;
     default_fanout_load      : 1.0 ;
     default_max_fanout   : 4.0 ;
     default_connection_class : universal ;
@@ -185,7 +185,7 @@ cell (sky130_sram_1kbyte_1rw1r_32x256_8){
         bus_type  : addr; 
         direction  : input; 
         capacitance : 0.006889999999999999;  
-        max_transition       : 1.5;
+        max_transition       : 0.04;
         pin(addr0[7:0]){
         timing(){ 
             timing_type : setup_rising; 
@@ -222,7 +222,7 @@ cell (sky130_sram_1kbyte_1rw1r_32x256_8){
         bus_type  : wmask; 
         direction  : input; 
         capacitance : 0.006889999999999999;  
-        max_transition       : 1.5;
+        max_transition       : 0.04;
         pin(wmask0[3:0]){
         timing(){ 
             timing_type : setup_rising; 
@@ -424,7 +424,7 @@ cell (sky130_sram_1kbyte_1rw1r_32x256_8){
         bus_type  : addr; 
         direction  : input; 
         capacitance : 0.006889999999999999;  
-        max_transition       : 1.5;
+        max_transition       : 0.04;
         pin(addr1[7:0]){
         timing(){ 
             timing_type : setup_rising; 

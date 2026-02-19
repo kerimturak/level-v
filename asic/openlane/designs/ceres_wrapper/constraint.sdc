@@ -1,7 +1,7 @@
 # ==============================================================
 # CERES RISC-V SoC — SDC Constraint File (SKY130 / OpenLane)
 # ==============================================================
-# Target: sky130_fd_sc_hd  |  Clock: 40 MHz (25 ns period)
+# Target: sky130_fd_sc_hd  |  Clock: 33.3 MHz (30 ns period)
 # This file is used as BASE_SDC_FILE, PNR_SDC_FILE, and
 # SIGNOFF_SDC_FILE in config.tcl.
 # ==============================================================
@@ -11,7 +11,7 @@ set_units -time ns
 # ==============================================================
 # 1. CLOCK DEFINITION
 # ==============================================================
-set CLK_PERIOD 25.0
+set CLK_PERIOD 30.0
 set CLK_PORT   clk_i
 
 create_clock [get_ports $CLK_PORT] \

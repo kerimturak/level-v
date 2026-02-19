@@ -18,7 +18,7 @@ set ::env(SYNTH_DEFINES) "SYNTHESIS MINIMAL_SOC CERES_OPENLANE"
 
 set ::env(CLOCK_PORT) clk_i
 set ::env(CLOCK_NET) clk_i
-set ::env(CLOCK_PERIOD) 25.0
+set ::env(CLOCK_PERIOD) 30.0
 
 set ::env(BASE_SDC_FILE) $::env(DESIGN_DIR)/constraint.sdc
 set ::env(PNR_SDC_FILE) $::env(DESIGN_DIR)/constraint.sdc
@@ -42,15 +42,26 @@ if { [file exists $sram_lef] && [file exists $sram_gds] && [file exists $sram_li
 	set ::env(FP_PDN_MACRO_HOOKS) ".*i_main_sram_bank.* VPWR VGND vccd1 vssd1,.*i_sram.* VPWR VGND vccd1 vssd1"
 }
 
-set ::env(FP_SIZING) relative
-set ::env(FP_CORE_UTIL) 28
-set ::env(FP_ASPECT_RATIO) 1.0
-set ::env(PL_TARGET_DENSITY) 0.35
+set ::env(FP_SIZING) absolute
+set ::env(DIE_AREA) "0 0 5500 5500"
+set ::env(PL_TARGET_DENSITY) 0.30
+
+# Manual macro placement (SRAM'ları elle yerleştir)
+set ::env(MACRO_PLACEMENT_CFG) $::env(DESIGN_DIR)/macro_placement.cfg
+set ::env(PL_MACRO_HALO) "30 30"
+set ::env(PL_MACRO_CHANNEL) "40 40"
+
+# Routing congestion ayarları
+set ::env(GRT_ALLOW_CONGESTION) 1
+set ::env(GRT_OVERFLOW_ITERS) 50
+set ::env(GRT_ADJUSTMENT) 0.2
+set ::env(GRT_ANT_ITERS) 10
+set ::env(PL_ROUTABILITY_DRIVEN) 1
 
 set ::env(SYNTH_STRATEGY) "AREA 1"
 set ::env(MAX_FANOUT_CONSTRAINT) 12
 set ::env(SYNTH_NO_FLAT) 1
-set ::env(SYNTH_BUFFERING) 0
+set ::env(SYNTH_BUFFERING) 1
 set ::env(SYNTH_PARAMETERS) [list RAM_SIZE_KB=4 TIMER_EN=0]
 set ::env(RUN_LINTER) 0
 
@@ -64,4 +75,5 @@ set ::env(RUN_DRT) 1
 set ::env(RUN_LVS) 1
 set ::env(RUN_MAGIC_DRC) 1
 set ::env(RUN_MAGIC) 1
+set ::env(RUN_IRDROP_REPORT) 0
 set ::env(FP_PDN_AUTO_ADJUST) 1

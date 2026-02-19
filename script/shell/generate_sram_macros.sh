@@ -93,6 +93,23 @@ for f in "${required_files[@]}"; do
     cp -f "${SRC_DIR}/${f}" "${OUT_DIR}/${f}"
 done
 
+# ── Liberty max_transition fix ──────────────────────────────────
+# OpenSRAM jeneratörü, timing tablosunun index_1 üst sınırını (0.04 ns)
+# max_transition olarak atıyor. Bu 40 ps değeri gerçek bir fiziksel sınır
+# değil, sadece karakterizasyon aralığının üst sınırı.
+# SKY130 standart hücreleri 1.5 ns kullanır; SRAM pinleri de bunu destekler.
+# Düzeltilmezse OpenLane Step 16'da RSZ-0090 hatası verir.
+# Bkz: macros/<MACRO_NAME>/README.md
+LIB_FILE="${OUT_DIR}/${MACRO_NAME}_TT_1p8V_25C.lib"
+if [[ -f "${LIB_FILE}" ]]; then
+    if grep -q 'max_transition.*: 0.04;' "${LIB_FILE}"; then
+        echo "[sram] Fixing Liberty max_transition (0.04 → 1.5 ns)..."
+        sed -i 's/max_transition\(\s*\): 0.04;/max_transition\1: 1.5;/g' "${LIB_FILE}"
+        sed -i 's/default_max_transition\(\s*\): 0.5 ;/default_max_transition\1: 1.5 ;/g' "${LIB_FILE}"
+        echo "[sram] Liberty max_transition fixed for OpenLane compatibility."
+    fi
+fi
+
 echo "[sram] Macro generated/materialized: ${MACRO_NAME}"
 echo "[sram] Output directory: ${OUT_DIR}"
 ls -lh "${OUT_DIR}" | sed 's/^/[sram] /'
