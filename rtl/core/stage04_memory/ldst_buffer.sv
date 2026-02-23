@@ -46,6 +46,11 @@ module ldst_buffer
     input logic uncached_i
 );
 
+  localparam int unsigned PTR_W = (DEPTH > 1) ? $clog2(DEPTH) : 1;
+  localparam int unsigned CNT_W = $clog2(DEPTH + 1);
+  localparam logic [PTR_W-1:0] DEPTH_LAST_PTR = PTR_W'(DEPTH - 1);
+  localparam logic [CNT_W-1:0] DEPTH_CNT      = CNT_W'(DEPTH);
+
   logic                  req_valid_q;
   logic [XLEN-1:0]       req_addr_q;
   logic                  req_rw_q;
@@ -57,10 +62,12 @@ module ldst_buffer
   logic                  req_data_changed;
   logic                  req_waiting_q;
 
-  logic                  pending_store_valid_q;
-  logic [XLEN-1:0]       pending_store_addr_q;
-  rw_size_e              pending_store_size_q;
-  logic [31:0]           pending_store_data_q;
+  logic [XLEN-1:0]       store_fifo_addr_q [DEPTH];
+  rw_size_e              store_fifo_size_q [DEPTH];
+  logic [31:0]           store_fifo_data_q [DEPTH];
+  logic [PTR_W-1:0]      store_fifo_head_q;
+  logic [PTR_W-1:0]      store_fifo_tail_q;
+  logic [CNT_W-1:0]      store_fifo_count_q;
 
   logic                  txn_active_q;
 
@@ -82,17 +89,51 @@ module ldst_buffer
   logic [31:0]           issue_data;
   logic                  issue_from_pending;
 
-  logic                  pending_store_match_i;
+  logic                  store_fifo_match_tail_i;
+  logic [PTR_W-1:0]      store_fifo_tail_prev;
+  logic                  store_fifo_empty;
+  logic                  store_fifo_full;
+  logic                  enqueue_store;
+  logic                  dequeue_store;
+
+  logic [PTR_W-1:0]      store_fifo_head_n;
+  logic [PTR_W-1:0]      store_fifo_tail_n;
 
   assign req_data_changed = req_i.rw && (req_i.data != req_data_q);
   assign req_meta_changed = (req_i.addr != req_addr_q) || (req_i.rw != req_rw_q) || (req_i.rw_size != req_rw_size_q) ||
                             (req_i.valid && !req_valid_q);
-  assign req_fire       = req_i.valid && !txn_active_q && !pending_store_valid_q && (req_meta_changed || req_waiting_q);
+  assign store_fifo_empty = (store_fifo_count_q == '0);
+  assign store_fifo_full  = (store_fifo_count_q == DEPTH_CNT);
 
-  assign pending_store_match_i = req_i.valid && req_i.rw && pending_store_valid_q &&
-                                 (req_i.addr == pending_store_addr_q) && (req_i.rw_size == pending_store_size_q);
+  always_comb begin
+    if (store_fifo_head_q == DEPTH_LAST_PTR) begin
+      store_fifo_head_n = '0;
+    end else begin
+      store_fifo_head_n = store_fifo_head_q + 1'b1;
+    end
 
-  assign issue_from_pending = !txn_active_q && pending_store_valid_q;
+    if (store_fifo_tail_q == DEPTH_LAST_PTR) begin
+      store_fifo_tail_n = '0;
+    end else begin
+      store_fifo_tail_n = store_fifo_tail_q + 1'b1;
+    end
+
+    if (store_fifo_tail_q == '0) begin
+      store_fifo_tail_prev = DEPTH_LAST_PTR;
+    end else begin
+      store_fifo_tail_prev = store_fifo_tail_q - 1'b1;
+    end
+  end
+
+  assign req_fire = req_i.valid && !txn_active_q && store_fifo_empty && (req_meta_changed || req_waiting_q);
+
+  assign store_fifo_match_tail_i = req_i.valid && req_i.rw && !store_fifo_empty &&
+                                   (req_i.addr == store_fifo_addr_q[store_fifo_tail_prev]) &&
+                                   (req_i.rw_size == store_fifo_size_q[store_fifo_tail_prev]);
+
+  assign issue_from_pending = !txn_active_q && !store_fifo_empty;
+  assign enqueue_store = txn_active_q && req_i.valid && req_meta_changed && req_i.rw && !store_fifo_full;
+  assign dequeue_store = issue_from_pending;
 
   always_comb begin
     issue_valid    = 1'b0;
@@ -104,9 +145,9 @@ module ldst_buffer
     if (issue_from_pending) begin
       issue_valid    = 1'b1;
       issue_is_store = 1'b1;
-      issue_addr     = pending_store_addr_q;
-      issue_size     = pending_store_size_q;
-      issue_data     = pending_store_data_q;
+      issue_addr     = store_fifo_addr_q[store_fifo_head_q];
+      issue_size     = store_fifo_size_q[store_fifo_head_q];
+      issue_data     = store_fifo_data_q[store_fifo_head_q];
     end else if (req_fire) begin
       issue_valid    = 1'b1;
       issue_is_store = req_i.rw;
@@ -125,10 +166,15 @@ module ldst_buffer
       req_data_q         <= '0;
       req_waiting_q      <= 1'b0;
 
-      pending_store_valid_q <= 1'b0;
-      pending_store_addr_q  <= '0;
-      pending_store_size_q  <= NO_SIZE;
-      pending_store_data_q  <= '0;
+      store_fifo_head_q  <= '0;
+      store_fifo_tail_q  <= '0;
+      store_fifo_count_q <= '0;
+
+      for (int unsigned i = 0; i < DEPTH; i++) begin
+        store_fifo_addr_q[i] <= '0;
+        store_fifo_size_q[i] <= NO_SIZE;
+        store_fifo_data_q[i] <= '0;
+      end
 
       txn_active_q      <= 1'b0;
       active_addr_q     <= '0;
@@ -144,23 +190,25 @@ module ldst_buffer
 
       if (issue_valid || !req_i.valid) begin
         req_waiting_q <= 1'b0;
-      end else if (req_i.valid && (txn_active_q || pending_store_valid_q)) begin
+      end else if (req_i.valid && (txn_active_q || !store_fifo_empty)) begin
         req_waiting_q <= 1'b1;
       end
 
-      if (txn_active_q && req_i.valid && req_meta_changed && req_i.rw && !pending_store_valid_q) begin
-        pending_store_valid_q <= 1'b1;
-        pending_store_addr_q  <= req_i.addr;
-        pending_store_size_q  <= req_i.rw_size;
-        pending_store_data_q  <= store_data_sel;
+      if (enqueue_store) begin
+        store_fifo_addr_q[store_fifo_tail_q] <= req_i.addr;
+        store_fifo_size_q[store_fifo_tail_q] <= req_i.rw_size;
+        store_fifo_data_q[store_fifo_tail_q] <= store_data_sel;
+        store_fifo_tail_q                     <= store_fifo_tail_n;
+        store_fifo_count_q                    <= store_fifo_count_q + 1'b1;
       end
 
-      if (pending_store_match_i && req_data_changed) begin
-        pending_store_data_q <= store_data_sel;
+      if (store_fifo_match_tail_i && req_data_changed) begin
+        store_fifo_data_q[store_fifo_tail_prev] <= store_data_sel;
       end
 
-      if (issue_from_pending) begin
-        pending_store_valid_q <= 1'b0;
+      if (dequeue_store) begin
+        store_fifo_head_q  <= store_fifo_head_n;
+        store_fifo_count_q <= store_fifo_count_q - 1'b1;
       end
 
       if (dcache_res_i.valid) begin
@@ -209,7 +257,7 @@ module ldst_buffer
     endcase
 
     ld_data_valid_o = dcache_res_i.valid && active_is_load_q;
-    stall_o = issue_valid || pending_store_valid_q || (txn_active_q && !dcache_res_i.valid);
+    stall_o = issue_valid || !store_fifo_empty || (txn_active_q && !dcache_res_i.valid);
   end
 
 endmodule
