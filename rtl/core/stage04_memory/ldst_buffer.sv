@@ -170,6 +170,7 @@ module ldst_buffer
   logic                  req_fire;
   logic                  req_data_changed;
   logic                  req_waiting_q;
+  logic                  drain_mode_q;
 
   logic [XLEN-1:0]       store_fifo_addr_q [DEPTH];
   rw_size_e              store_fifo_size_q [DEPTH];
@@ -269,7 +270,7 @@ module ldst_buffer
     end
   end
 
-  assign req_fire = req_i.valid && !txn_active_q && store_fifo_empty && (req_meta_changed || req_waiting_q);
+  assign req_fire = req_i.valid && !drain_mode_q && !txn_active_q && store_fifo_empty && (req_meta_changed || req_waiting_q);
 
   assign store_fifo_match_tail_i = req_i.valid && req_i.rw && !store_fifo_empty &&
                                    (req_i.addr == store_fifo_addr_q[store_fifo_tail_prev]) &&
@@ -312,7 +313,7 @@ module ldst_buffer
   assign load_blocked_by_store = load_req_i && !store_fifo_empty && !load_forwarded_now;
 
   assign issue_from_pending = !txn_active_q && !store_fifo_empty && !load_forwarded_now;
-  assign enqueue_store = txn_active_q && req_i.valid && req_meta_changed && req_i.rw;
+  assign enqueue_store = !drain_mode_q && txn_active_q && req_i.valid && req_meta_changed && req_i.rw;
   assign merge_tail_i  = enqueue_store && tail_word_match_i && f_mask_encodable(tail_merge_mask);
   assign enqueue_new_i = enqueue_store && !merge_tail_i && !store_fifo_full;
   assign dequeue_store = issue_from_pending;
@@ -350,13 +351,14 @@ module ldst_buffer
   end
 
   always_ff @(posedge clk_i) begin
-    if (!rst_ni || flush_i) begin
+    if (!rst_ni) begin
       req_valid_q        <= 1'b0;
       req_addr_q         <= '0;
       req_rw_q           <= 1'b0;
       req_rw_size_q      <= NO_SIZE;
       req_data_q         <= '0;
       req_waiting_q      <= 1'b0;
+      drain_mode_q       <= 1'b0;
 
       store_fifo_head_q  <= '0;
       store_fifo_tail_q  <= '0;
@@ -375,13 +377,21 @@ module ldst_buffer
       active_ld_sign_q  <= 1'b0;
       active_is_load_q  <= 1'b0;
     end else begin
+      if (drain_mode_q && !txn_active_q && store_fifo_empty) begin
+        drain_mode_q <= 1'b0;
+      end else if (!drain_mode_q && flush_i && (txn_active_q || !store_fifo_empty)) begin
+        drain_mode_q <= 1'b1;
+      end
+
       req_valid_q   <= req_i.valid;
       req_addr_q    <= req_i.addr;
       req_rw_q      <= req_i.rw;
       req_rw_size_q <= req_i.rw_size;
       req_data_q    <= req_i.data;
 
-      if (issue_valid || load_forwarded_now || !req_i.valid) begin
+      if (drain_mode_q) begin
+        req_waiting_q <= 1'b0;
+      end else if (issue_valid || load_forwarded_now || !req_i.valid) begin
         req_waiting_q <= 1'b0;
       end else if (req_i.valid && (txn_active_q || !store_fifo_empty)) begin
         req_waiting_q <= 1'b1;
@@ -467,7 +477,10 @@ module ldst_buffer
     end
 
     ld_data_valid_o = (dcache_res_i.valid && active_is_load_q) || load_forwarded_now;
-    stall_o = issue_valid || load_blocked_by_store || (txn_active_q && !dcache_res_i.valid);
+    stall_o = (drain_mode_q && (txn_active_q || !store_fifo_empty)) ||
+              issue_valid ||
+              load_blocked_by_store ||
+              (txn_active_q && !dcache_res_i.valid);
   end
 
 endmodule
