@@ -29,9 +29,9 @@ module ldst_buffer
     input logic flush_i, // fence.i or pipeline flush
 
     // --- Pipeline side (from EX stage) ---
-    input  data_req_t req_i,   // incoming load/store request
-    input  data_req_t me_req_i, // MEM-stage mirrored request (stable store payload source)
-    output logic      stall_o, // back-pressure to pipeline
+    input  data_req_t req_i,     // incoming load/store request
+    input  data_req_t me_req_i,  // MEM-stage mirrored request (stable store payload source)
+    output logic      stall_o,   // back-pressure to pipeline
 
     // --- D-cache side ---
     output dcache_req_t dcache_req_o,        // to D-cache
@@ -49,32 +49,28 @@ module ldst_buffer
   localparam int unsigned PTR_W = (DEPTH > 1) ? $clog2(DEPTH) : 1;
   localparam int unsigned CNT_W = $clog2(DEPTH + 1);
   localparam logic [PTR_W-1:0] DEPTH_LAST_PTR = PTR_W'(DEPTH - 1);
-  localparam logic [CNT_W-1:0] DEPTH_CNT      = CNT_W'(DEPTH);
+  localparam logic [CNT_W-1:0] DEPTH_CNT = CNT_W'(DEPTH);
 
   function automatic logic [3:0] f_store_mask(input logic [1:0] addr_lsb, input rw_size_e size);
     logic [3:0] mask;
     begin
       mask = 4'b0000;
       unique case (size)
-        BYTE: mask = (4'b0001 << addr_lsb);
-        HALF: mask = addr_lsb[1] ? 4'b1100 : 4'b0011;
-        WORD: mask = 4'b1111;
+        BYTE:    mask = (4'b0001 << addr_lsb);
+        HALF:    mask = addr_lsb[1] ? 4'b1100 : 4'b0011;
+        WORD:    mask = 4'b1111;
         default: mask = 4'b0000;
       endcase
       return mask;
     end
   endfunction
 
-  function automatic logic [31:0] f_store_word_data(
-      input logic [31:0] data,
-      input logic [1:0]  addr_lsb,
-      input rw_size_e    size
-  );
+  function automatic logic [31:0] f_store_word_data(input logic [31:0] data, input logic [1:0] addr_lsb, input rw_size_e size);
     logic [31:0] word_data;
     begin
       word_data = 32'h0;
       unique case (size)
-        BYTE: word_data[(addr_lsb*8)+:8] = data[7:0];
+        BYTE:    word_data[(addr_lsb*8)+:8] = data[7:0];
         HALF: begin
           if (addr_lsb[1]) begin
             word_data[31:16] = data[15:0];
@@ -82,18 +78,14 @@ module ldst_buffer
             word_data[15:0] = data[15:0];
           end
         end
-        WORD: word_data = data;
+        WORD:    word_data = data;
         default: word_data = 32'h0;
       endcase
       return word_data;
     end
   endfunction
 
-  function automatic logic [31:0] f_merge_word_data(
-      input logic [31:0] base_data,
-      input logic [31:0] new_data,
-      input logic [3:0]  new_mask
-  );
+  function automatic logic [31:0] f_merge_word_data(input logic [31:0] base_data, input logic [31:0] new_data, input logic [3:0] new_mask);
     logic [31:0] merged;
     begin
       merged = base_data;
@@ -109,10 +101,8 @@ module ldst_buffer
   function automatic logic f_mask_encodable(input logic [3:0] mask);
     begin
       unique case (mask)
-        4'b0001, 4'b0010, 4'b0100, 4'b1000,
-        4'b0011, 4'b1100,
-        4'b1111: f_mask_encodable = 1'b1;
-        default: f_mask_encodable = 1'b0;
+        4'b0001, 4'b0010, 4'b0100, 4'b1000, 4'b0011, 4'b1100, 4'b1111: f_mask_encodable = 1'b1;
+        default:                                                       f_mask_encodable = 1'b0;
       endcase
     end
   endfunction
@@ -121,9 +111,9 @@ module ldst_buffer
     begin
       unique case (mask)
         4'b0001, 4'b0010, 4'b0100, 4'b1000: f_mask_to_size = BYTE;
-        4'b0011, 4'b1100: f_mask_to_size = HALF;
-        4'b1111: f_mask_to_size = WORD;
-        default: f_mask_to_size = NO_SIZE;
+        4'b0011, 4'b1100:                   f_mask_to_size = HALF;
+        4'b1111:                            f_mask_to_size = WORD;
+        default:                            f_mask_to_size = NO_SIZE;
       endcase
     end
   endfunction
@@ -160,91 +150,90 @@ module ldst_buffer
     end
   endfunction
 
-  logic                  req_valid_q;
-  logic [XLEN-1:0]       req_addr_q;
-  logic                  req_rw_q;
-  rw_size_e              req_rw_size_q;
-  logic [31:0]           req_data_q;
+  logic                 req_valid_q;
+  logic     [ XLEN-1:0] req_addr_q;
+  logic                 req_rw_q;
+  rw_size_e             req_rw_size_q;
+  logic     [     31:0] req_data_q;
 
-  logic                  req_meta_changed;
-  logic                  req_fire;
-  logic                  req_data_changed;
-  logic                  req_waiting_q;
-  logic                  drain_mode_q;
+  logic                 req_meta_changed;
+  logic                 req_fire;
+  logic                 req_data_changed;
+  logic                 req_waiting_q;
+  logic                 drain_mode_q;
 
-  logic [XLEN-1:0]       store_fifo_addr_q [DEPTH];
-  rw_size_e              store_fifo_size_q [DEPTH];
-  logic [31:0]           store_fifo_data_q [DEPTH];
-  logic [3:0]            store_fifo_mask_q [DEPTH];
-  logic [PTR_W-1:0]      store_fifo_head_q;
-  logic [PTR_W-1:0]      store_fifo_tail_q;
-  logic [CNT_W-1:0]      store_fifo_count_q;
+  logic     [ XLEN-1:0] store_fifo_addr_q       [DEPTH];
+  rw_size_e             store_fifo_size_q       [DEPTH];
+  logic     [     31:0] store_fifo_data_q       [DEPTH];
+  logic     [      3:0] store_fifo_mask_q       [DEPTH];
+  logic     [PTR_W-1:0] store_fifo_head_q;
+  logic     [PTR_W-1:0] store_fifo_tail_q;
+  logic     [CNT_W-1:0] store_fifo_count_q;
 
-  logic                  txn_active_q;
+  logic                 txn_active_q;
 
-  logic [XLEN-1:0]       active_addr_q;
-  rw_size_e              active_rw_size_q;
-  logic                  active_ld_sign_q;
-  logic                  active_is_load_q;
+  logic     [ XLEN-1:0] active_addr_q;
+  rw_size_e             active_rw_size_q;
+  logic                 active_ld_sign_q;
+  logic                 active_is_load_q;
 
-  logic [31:0]           raw_ld_word;
-  logic [7:0]            selected_byte;
-  logic [15:0]           selected_halfword;
-  logic [31:0]           store_data_sel;
-  logic [1:0]            load_addr_lsb;
+  logic     [     31:0] raw_ld_word;
+  logic     [      7:0] selected_byte;
+  logic     [     15:0] selected_halfword;
+  logic     [     31:0] store_data_sel;
+  logic     [      1:0] load_addr_lsb;
 
-  logic                  issue_valid;
-  logic                  issue_is_store;
-  logic [XLEN-1:0]       issue_addr;
-  rw_size_e              issue_size;
-  logic [31:0]           issue_data;
-  logic                  issue_from_pending;
+  logic                 issue_valid;
+  logic                 issue_is_store;
+  logic     [ XLEN-1:0] issue_addr;
+  rw_size_e             issue_size;
+  logic     [     31:0] issue_data;
+  logic                 issue_from_pending;
 
-  logic                  store_fifo_match_tail_i;
-  logic [PTR_W-1:0]      store_fifo_tail_prev;
-  logic                  store_fifo_empty;
-  logic                  store_fifo_full;
-  logic                  enqueue_store;
-  logic                  dequeue_store;
-  logic                  merge_tail_i;
-  logic                  enqueue_new_i;
-  logic                  tail_word_match_i;
+  logic                 store_fifo_match_tail_i;
+  logic     [PTR_W-1:0] store_fifo_tail_prev;
+  logic                 store_fifo_empty;
+  logic                 store_fifo_full;
+  logic                 enqueue_store;
+  logic                 dequeue_store;
+  logic                 merge_tail_i;
+  logic                 enqueue_new_i;
+  logic                 tail_word_match_i;
 
-  logic [PTR_W-1:0]      store_fifo_head_n;
-  logic [PTR_W-1:0]      store_fifo_tail_n;
-  logic [3:0]            req_store_mask;
-  logic [31:0]           req_store_word_data;
-  logic [XLEN-1:0]       req_store_word_addr;
-  logic [3:0]            tail_merge_mask;
-  logic [31:0]           tail_merge_data;
-  logic                  issue_mask_valid;
-  logic [3:0]            issue_mask;
-  logic [1:0]            issue_addr_lsb;
-  logic [XLEN-1:0]       issue_store_addr;
-  rw_size_e              issue_store_size;
-  logic [31:0]           issue_store_data;
+  logic     [PTR_W-1:0] store_fifo_head_n;
+  logic     [PTR_W-1:0] store_fifo_tail_n;
+  logic     [      3:0] req_store_mask;
+  logic     [     31:0] req_store_word_data;
+  logic     [ XLEN-1:0] req_store_word_addr;
+  logic     [      3:0] tail_merge_mask;
+  logic     [     31:0] tail_merge_data;
+  logic                 issue_mask_valid;
+  logic     [      3:0] issue_mask;
+  logic     [      1:0] issue_addr_lsb;
+  logic     [ XLEN-1:0] issue_store_addr;
+  rw_size_e             issue_store_size;
+  logic     [     31:0] issue_store_data;
 
-  logic                  load_req_i;
-  logic [3:0]            load_req_mask_i;
-  logic [XLEN-1:0]       load_req_word_addr_i;
-  logic [31:0]           fwd_word_data;
-  logic [3:0]            fwd_collected_mask;
-  logic [3:0]            fwd_remaining_mask;
-  logic                  fwd_hit;
-  logic [PTR_W-1:0]      fwd_scan_ptr;
-  logic [31:0]           ld_word_mux;
-  logic [1:0]            ld_addr_lsb_mux;
-  rw_size_e              ld_size_mux;
-  logic                  ld_sign_mux;
-  logic                  load_blocked_by_store;
-  logic                  load_forwarded_now;
-  logic                  store_blocked_by_full;
+  logic                 load_req_i;
+  logic     [      3:0] load_req_mask_i;
+  logic     [ XLEN-1:0] load_req_word_addr_i;
+  logic     [     31:0] fwd_word_data;
+  logic     [      3:0] fwd_collected_mask;
+  logic     [      3:0] fwd_remaining_mask;
+  logic                 fwd_hit;
+  logic     [PTR_W-1:0] fwd_scan_ptr;
+  logic     [     31:0] ld_word_mux;
+  logic     [      1:0] ld_addr_lsb_mux;
+  rw_size_e             ld_size_mux;
+  logic                 ld_sign_mux;
+  logic                 load_blocked_by_store;
+  logic                 load_forwarded_now;
+  logic                 store_blocked_by_full;
 
   assign req_data_changed = req_i.rw && (req_i.data != req_data_q);
-  assign req_meta_changed = (req_i.addr != req_addr_q) || (req_i.rw != req_rw_q) || (req_i.rw_size != req_rw_size_q) ||
-                            (req_i.valid && !req_valid_q);
+  assign req_meta_changed = (req_i.addr != req_addr_q) || (req_i.rw != req_rw_q) || (req_i.rw_size != req_rw_size_q) || (req_i.valid && !req_valid_q);
   assign store_fifo_empty = (store_fifo_count_q == '0);
-  assign store_fifo_full  = (store_fifo_count_q == DEPTH_CNT);
+  assign store_fifo_full = (store_fifo_count_q == DEPTH_CNT);
   assign req_store_mask = f_store_mask(req_i.addr[1:0], req_i.rw_size);
   assign req_store_word_data = f_store_word_data(store_data_sel, req_i.addr[1:0], req_i.rw_size);
   assign req_store_word_addr = {req_i.addr[XLEN-1:2], 2'b00};
@@ -278,16 +267,15 @@ module ldst_buffer
                                    (req_i.addr == store_fifo_addr_q[store_fifo_tail_prev]) &&
                                    (req_i.rw_size == store_fifo_size_q[store_fifo_tail_prev]);
 
-  assign tail_word_match_i = req_i.valid && req_i.rw && !store_fifo_empty &&
-                             (req_store_word_addr == {store_fifo_addr_q[store_fifo_tail_prev][XLEN-1:2], 2'b00});
+  assign tail_word_match_i = req_i.valid && req_i.rw && !store_fifo_empty && (req_store_word_addr == {store_fifo_addr_q[store_fifo_tail_prev][XLEN-1:2], 2'b00});
   assign tail_merge_mask = store_fifo_mask_q[store_fifo_tail_prev] | req_store_mask;
   assign tail_merge_data = f_merge_word_data(store_fifo_data_q[store_fifo_tail_prev], req_store_word_data, req_store_mask);
 
   always_comb begin
-    fwd_word_data       = '0;
-    fwd_collected_mask  = 4'b0000;
-    fwd_remaining_mask  = load_req_mask_i;
-    fwd_scan_ptr        = store_fifo_tail_prev;
+    fwd_word_data      = '0;
+    fwd_collected_mask = 4'b0000;
+    fwd_remaining_mask = load_req_mask_i;
+    fwd_scan_ptr       = store_fifo_tail_prev;
 
     for (int unsigned k = 0; k < DEPTH; k++) begin
       if ((k < store_fifo_count_q) && (fwd_remaining_mask != 4'b0000)) begin
@@ -295,7 +283,7 @@ module ldst_buffer
           for (int unsigned b = 0; b < 4; b++) begin
             if (store_fifo_mask_q[fwd_scan_ptr][b] && fwd_remaining_mask[b]) begin
               fwd_word_data[(b*8)+:8] = store_fifo_data_q[fwd_scan_ptr][(b*8)+:8];
-              fwd_remaining_mask[b]    = 1'b0;
+              fwd_remaining_mask[b]   = 1'b0;
             end
           end
           fwd_collected_mask = fwd_collected_mask | store_fifo_mask_q[fwd_scan_ptr];
@@ -377,11 +365,11 @@ module ldst_buffer
         store_fifo_mask_q[i] <= '0;
       end
 
-      txn_active_q      <= 1'b0;
-      active_addr_q     <= '0;
-      active_rw_size_q  <= NO_SIZE;
-      active_ld_sign_q  <= 1'b0;
-      active_is_load_q  <= 1'b0;
+      txn_active_q     <= 1'b0;
+      active_addr_q    <= '0;
+      active_rw_size_q <= NO_SIZE;
+      active_ld_sign_q <= 1'b0;
+      active_is_load_q <= 1'b0;
     end else begin
       if (drain_mode_q && !txn_active_q && store_fifo_empty) begin
         drain_mode_q <= 1'b0;
@@ -408,8 +396,8 @@ module ldst_buffer
         store_fifo_size_q[store_fifo_tail_q] <= req_i.rw_size;
         store_fifo_data_q[store_fifo_tail_q] <= req_store_word_data;
         store_fifo_mask_q[store_fifo_tail_q] <= req_store_mask;
-        store_fifo_tail_q                     <= store_fifo_tail_n;
-        store_fifo_count_q                    <= store_fifo_count_q + 1'b1;
+        store_fifo_tail_q                    <= store_fifo_tail_n;
+        store_fifo_count_q                   <= store_fifo_count_q + 1'b1;
       end
 
       if (merge_tail_i) begin
@@ -434,11 +422,11 @@ module ldst_buffer
       end
 
       if (issue_valid) begin
-        txn_active_q      <= 1'b1;
-        active_addr_q     <= issue_addr;
-        active_rw_size_q  <= issue_size;
-        active_ld_sign_q  <= req_i.ld_op_sign;
-        active_is_load_q  <= !issue_is_store;
+        txn_active_q     <= 1'b1;
+        active_addr_q    <= issue_addr;
+        active_rw_size_q <= issue_size;
+        active_ld_sign_q <= req_i.ld_op_sign;
+        active_is_load_q <= !issue_is_store;
       end
     end
   end
@@ -462,10 +450,10 @@ module ldst_buffer
   assign dcache_txn_active_o = txn_active_q;
 
   always_comb begin
-    ld_word_mux     = load_forwarded_now ? fwd_word_data : dcache_res_i.data;
-    ld_addr_lsb_mux = load_forwarded_now ? req_i.addr[1:0] : active_addr_q[1:0];
-    ld_size_mux     = load_forwarded_now ? req_i.rw_size : active_rw_size_q;
-    ld_sign_mux     = load_forwarded_now ? req_i.ld_op_sign : active_ld_sign_q;
+    ld_word_mux       = load_forwarded_now ? fwd_word_data : dcache_res_i.data;
+    ld_addr_lsb_mux   = load_forwarded_now ? req_i.addr[1:0] : active_addr_q[1:0];
+    ld_size_mux       = load_forwarded_now ? req_i.rw_size : active_rw_size_q;
+    ld_sign_mux       = load_forwarded_now ? req_i.ld_op_sign : active_ld_sign_q;
 
     raw_ld_word       = ld_word_mux;
     load_addr_lsb     = ld_addr_lsb_mux;
@@ -483,25 +471,18 @@ module ldst_buffer
     end
 
     ld_data_valid_o = (dcache_res_i.valid && active_is_load_q) || load_forwarded_now;
-    stall_o = (drain_mode_q && (txn_active_q || !store_fifo_empty)) ||
-              issue_valid ||
-              load_blocked_by_store ||
-          store_blocked_by_full ||
-              (txn_active_q && !dcache_res_i.valid);
+    stall_o = (drain_mode_q && (txn_active_q || !store_fifo_empty)) || issue_valid || load_blocked_by_store || store_blocked_by_full || (txn_active_q && !dcache_res_i.valid);
   end
 
-  `ifndef SYNTHESIS
-    assert property (@(posedge clk_i) disable iff (!rst_ni)
-      store_fifo_count_q <= DEPTH_CNT)
-    else $error("ldst_buffer fifo count overflow");
+`ifndef SYNTHESIS
+  assert property (@(posedge clk_i) disable iff (!rst_ni) store_fifo_count_q <= DEPTH_CNT)
+  else $error("ldst_buffer fifo count overflow");
 
-    assert property (@(posedge clk_i) disable iff (!rst_ni)
-      dequeue_store |-> !store_fifo_empty)
-    else $error("ldst_buffer dequeue on empty fifo");
+  assert property (@(posedge clk_i) disable iff (!rst_ni) dequeue_store |-> !store_fifo_empty)
+  else $error("ldst_buffer dequeue on empty fifo");
 
-    assert property (@(posedge clk_i) disable iff (!rst_ni)
-      (enqueue_store && !merge_tail_i && store_fifo_full) |-> store_blocked_by_full)
-    else $error("ldst_buffer full-store backpressure missing");
-  `endif
+  assert property (@(posedge clk_i) disable iff (!rst_ni) (enqueue_store && !merge_tail_i && store_fifo_full) |-> store_blocked_by_full)
+  else $error("ldst_buffer full-store backpressure missing");
+`endif
 
 endmodule

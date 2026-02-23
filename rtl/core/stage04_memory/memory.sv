@@ -53,9 +53,9 @@ module memory
       .flush_i(fe_flush_cache_i),
 
       // Pipeline side
-      .req_i  (ex_data_req_i),
+      .req_i   (ex_data_req_i),
       .me_req_i(me_data_req_i),
-      .stall_o(dmiss_stall_o),
+      .stall_o (dmiss_stall_o),
 
       // D-cache side
       .dcache_req_o       (dcache_req),
