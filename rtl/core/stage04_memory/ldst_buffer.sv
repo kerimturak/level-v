@@ -234,6 +234,8 @@ module ldst_buffer
   logic [1:0]            ld_addr_lsb_mux;
   rw_size_e              ld_size_mux;
   logic                  ld_sign_mux;
+  logic                  load_blocked_by_store;
+  logic                  load_forwarded_now;
 
   assign req_data_changed = req_i.rw && (req_i.data != req_data_q);
   assign req_meta_changed = (req_i.addr != req_addr_q) || (req_i.rw != req_rw_q) || (req_i.rw_size != req_rw_size_q) ||
@@ -306,7 +308,10 @@ module ldst_buffer
   assign fwd_hit = load_req_i && !txn_active_q && !store_fifo_empty &&
                    ((fwd_collected_mask & load_req_mask_i) == load_req_mask_i);
 
-  assign issue_from_pending = !txn_active_q && !store_fifo_empty && !fwd_hit;
+  assign load_forwarded_now    = fwd_hit;
+  assign load_blocked_by_store = load_req_i && !store_fifo_empty && !load_forwarded_now;
+
+  assign issue_from_pending = !txn_active_q && !store_fifo_empty && !load_forwarded_now;
   assign enqueue_store = txn_active_q && req_i.valid && req_meta_changed && req_i.rw;
   assign merge_tail_i  = enqueue_store && tail_word_match_i && f_mask_encodable(tail_merge_mask);
   assign enqueue_new_i = enqueue_store && !merge_tail_i && !store_fifo_full;
@@ -376,7 +381,7 @@ module ldst_buffer
       req_rw_size_q <= req_i.rw_size;
       req_data_q    <= req_i.data;
 
-      if (issue_valid || fwd_hit || !req_i.valid) begin
+      if (issue_valid || load_forwarded_now || !req_i.valid) begin
         req_waiting_q <= 1'b0;
       end else if (req_i.valid && (txn_active_q || !store_fifo_empty)) begin
         req_waiting_q <= 1'b1;
@@ -441,10 +446,10 @@ module ldst_buffer
   assign dcache_txn_active_o = txn_active_q;
 
   always_comb begin
-    ld_word_mux     = fwd_hit ? fwd_word_data : dcache_res_i.data;
-    ld_addr_lsb_mux = fwd_hit ? req_i.addr[1:0] : active_addr_q[1:0];
-    ld_size_mux     = fwd_hit ? req_i.rw_size : active_rw_size_q;
-    ld_sign_mux     = fwd_hit ? req_i.ld_op_sign : active_ld_sign_q;
+    ld_word_mux     = load_forwarded_now ? fwd_word_data : dcache_res_i.data;
+    ld_addr_lsb_mux = load_forwarded_now ? req_i.addr[1:0] : active_addr_q[1:0];
+    ld_size_mux     = load_forwarded_now ? req_i.rw_size : active_rw_size_q;
+    ld_sign_mux     = load_forwarded_now ? req_i.ld_op_sign : active_ld_sign_q;
 
     raw_ld_word       = ld_word_mux;
     load_addr_lsb     = ld_addr_lsb_mux;
@@ -461,8 +466,8 @@ module ldst_buffer
       ld_data_o = '0;
     end
 
-    ld_data_valid_o = (dcache_res_i.valid && active_is_load_q) || fwd_hit;
-    stall_o = issue_valid || (!store_fifo_empty && !fwd_hit) || (txn_active_q && !dcache_res_i.valid);
+    ld_data_valid_o = (dcache_res_i.valid && active_is_load_q) || load_forwarded_now;
+    stall_o = issue_valid || load_blocked_by_store || (txn_active_q && !dcache_res_i.valid);
   end
 
 endmodule
