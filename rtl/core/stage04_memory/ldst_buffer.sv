@@ -223,6 +223,18 @@ module ldst_buffer
   rw_size_e              issue_store_size;
   logic [31:0]           issue_store_data;
 
+  logic                  load_req_i;
+  logic [3:0]            load_req_mask_i;
+  logic [XLEN-1:0]       load_req_word_addr_i;
+  logic [31:0]           fwd_word_data;
+  logic [3:0]            fwd_collected_mask;
+  logic                  fwd_hit;
+  logic [PTR_W-1:0]      fwd_scan_ptr;
+  logic [31:0]           ld_word_mux;
+  logic [1:0]            ld_addr_lsb_mux;
+  rw_size_e              ld_size_mux;
+  logic                  ld_sign_mux;
+
   assign req_data_changed = req_i.rw && (req_i.data != req_data_q);
   assign req_meta_changed = (req_i.addr != req_addr_q) || (req_i.rw != req_rw_q) || (req_i.rw_size != req_rw_size_q) ||
                             (req_i.valid && !req_valid_q);
@@ -231,6 +243,9 @@ module ldst_buffer
   assign req_store_mask = f_store_mask(req_i.addr[1:0], req_i.rw_size);
   assign req_store_word_data = f_store_word_data(store_data_sel, req_i.addr[1:0], req_i.rw_size);
   assign req_store_word_addr = {req_i.addr[XLEN-1:2], 2'b00};
+  assign load_req_i = req_i.valid && !req_i.rw;
+  assign load_req_mask_i = f_store_mask(req_i.addr[1:0], req_i.rw_size);
+  assign load_req_word_addr_i = {req_i.addr[XLEN-1:2], 2'b00};
 
   always_comb begin
     if (store_fifo_head_q == DEPTH_LAST_PTR) begin
@@ -263,7 +278,35 @@ module ldst_buffer
   assign tail_merge_mask = store_fifo_mask_q[store_fifo_tail_prev] | req_store_mask;
   assign tail_merge_data = f_merge_word_data(store_fifo_data_q[store_fifo_tail_prev], req_store_word_data, req_store_mask);
 
-  assign issue_from_pending = !txn_active_q && !store_fifo_empty;
+  always_comb begin
+    fwd_word_data       = '0;
+    fwd_collected_mask  = 4'b0000;
+    fwd_scan_ptr        = store_fifo_tail_prev;
+
+    for (int unsigned k = 0; k < DEPTH; k++) begin
+      if (k < store_fifo_count_q) begin
+        if ({store_fifo_addr_q[fwd_scan_ptr][XLEN-1:2], 2'b00} == load_req_word_addr_i) begin
+          for (int unsigned b = 0; b < 4; b++) begin
+            if (store_fifo_mask_q[fwd_scan_ptr][b] && !fwd_collected_mask[b]) begin
+              fwd_word_data[(b*8)+:8] = store_fifo_data_q[fwd_scan_ptr][(b*8)+:8];
+            end
+          end
+          fwd_collected_mask = fwd_collected_mask | store_fifo_mask_q[fwd_scan_ptr];
+        end
+
+        if (fwd_scan_ptr == '0) begin
+          fwd_scan_ptr = DEPTH_LAST_PTR;
+        end else begin
+          fwd_scan_ptr = fwd_scan_ptr - 1'b1;
+        end
+      end
+    end
+  end
+
+  assign fwd_hit = load_req_i && !txn_active_q && !store_fifo_empty &&
+                   ((fwd_collected_mask & load_req_mask_i) == load_req_mask_i);
+
+  assign issue_from_pending = !txn_active_q && !store_fifo_empty && !fwd_hit;
   assign enqueue_store = txn_active_q && req_i.valid && req_meta_changed && req_i.rw;
   assign merge_tail_i  = enqueue_store && tail_word_match_i && f_mask_encodable(tail_merge_mask);
   assign enqueue_new_i = enqueue_store && !merge_tail_i && !store_fifo_full;
@@ -333,7 +376,7 @@ module ldst_buffer
       req_rw_size_q <= req_i.rw_size;
       req_data_q    <= req_i.data;
 
-      if (issue_valid || !req_i.valid) begin
+      if (issue_valid || fwd_hit || !req_i.valid) begin
         req_waiting_q <= 1'b0;
       end else if (req_i.valid && (txn_active_q || !store_fifo_empty)) begin
         req_waiting_q <= 1'b1;
@@ -398,20 +441,28 @@ module ldst_buffer
   assign dcache_txn_active_o = txn_active_q;
 
   always_comb begin
-    raw_ld_word       = dcache_res_i.data;
-    load_addr_lsb     = active_addr_q[1:0];
+    ld_word_mux     = fwd_hit ? fwd_word_data : dcache_res_i.data;
+    ld_addr_lsb_mux = fwd_hit ? req_i.addr[1:0] : active_addr_q[1:0];
+    ld_size_mux     = fwd_hit ? req_i.rw_size : active_rw_size_q;
+    ld_sign_mux     = fwd_hit ? req_i.ld_op_sign : active_ld_sign_q;
+
+    raw_ld_word       = ld_word_mux;
+    load_addr_lsb     = ld_addr_lsb_mux;
     selected_byte     = raw_ld_word[(load_addr_lsb*8)+:8];
     selected_halfword = raw_ld_word[(load_addr_lsb[1]*16)+:16];
 
-    unique case (active_rw_size_q)
-      BYTE:    ld_data_o = active_ld_sign_q ? {{24{selected_byte[7]}}, selected_byte} : {24'b0, selected_byte};
-      HALF:    ld_data_o = active_ld_sign_q ? {{16{selected_halfword[15]}}, selected_halfword} : {16'b0, selected_halfword};
-      WORD:    ld_data_o = raw_ld_word;
-      default: ld_data_o = '0;
-    endcase
+    if (ld_size_mux == BYTE) begin
+      ld_data_o = ld_sign_mux ? {{24{selected_byte[7]}}, selected_byte} : {24'b0, selected_byte};
+    end else if (ld_size_mux == HALF) begin
+      ld_data_o = ld_sign_mux ? {{16{selected_halfword[15]}}, selected_halfword} : {16'b0, selected_halfword};
+    end else if (ld_size_mux == WORD) begin
+      ld_data_o = raw_ld_word;
+    end else begin
+      ld_data_o = '0;
+    end
 
-    ld_data_valid_o = dcache_res_i.valid && active_is_load_q;
-    stall_o = issue_valid || !store_fifo_empty || (txn_active_q && !dcache_res_i.valid);
+    ld_data_valid_o = (dcache_res_i.valid && active_is_load_q) || fwd_hit;
+    stall_o = issue_valid || (!store_fifo_empty && !fwd_hit) || (txn_active_q && !dcache_res_i.valid);
   end
 
 endmodule
