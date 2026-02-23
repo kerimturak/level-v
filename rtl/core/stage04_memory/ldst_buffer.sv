@@ -51,6 +51,115 @@ module ldst_buffer
   localparam logic [PTR_W-1:0] DEPTH_LAST_PTR = PTR_W'(DEPTH - 1);
   localparam logic [CNT_W-1:0] DEPTH_CNT      = CNT_W'(DEPTH);
 
+  function automatic logic [3:0] f_store_mask(input logic [1:0] addr_lsb, input rw_size_e size);
+    logic [3:0] mask;
+    begin
+      mask = 4'b0000;
+      unique case (size)
+        BYTE: mask = (4'b0001 << addr_lsb);
+        HALF: mask = addr_lsb[1] ? 4'b1100 : 4'b0011;
+        WORD: mask = 4'b1111;
+        default: mask = 4'b0000;
+      endcase
+      return mask;
+    end
+  endfunction
+
+  function automatic logic [31:0] f_store_word_data(
+      input logic [31:0] data,
+      input logic [1:0]  addr_lsb,
+      input rw_size_e    size
+  );
+    logic [31:0] word_data;
+    begin
+      word_data = 32'h0;
+      unique case (size)
+        BYTE: word_data[(addr_lsb*8)+:8] = data[7:0];
+        HALF: begin
+          if (addr_lsb[1]) begin
+            word_data[31:16] = data[15:0];
+          end else begin
+            word_data[15:0] = data[15:0];
+          end
+        end
+        WORD: word_data = data;
+        default: word_data = 32'h0;
+      endcase
+      return word_data;
+    end
+  endfunction
+
+  function automatic logic [31:0] f_merge_word_data(
+      input logic [31:0] base_data,
+      input logic [31:0] new_data,
+      input logic [3:0]  new_mask
+  );
+    logic [31:0] merged;
+    begin
+      merged = base_data;
+      for (int b = 0; b < 4; b++) begin
+        if (new_mask[b]) begin
+          merged[(b*8)+:8] = new_data[(b*8)+:8];
+        end
+      end
+      return merged;
+    end
+  endfunction
+
+  function automatic logic f_mask_encodable(input logic [3:0] mask);
+    begin
+      unique case (mask)
+        4'b0001, 4'b0010, 4'b0100, 4'b1000,
+        4'b0011, 4'b1100,
+        4'b1111: f_mask_encodable = 1'b1;
+        default: f_mask_encodable = 1'b0;
+      endcase
+    end
+  endfunction
+
+  function automatic rw_size_e f_mask_to_size(input logic [3:0] mask);
+    begin
+      unique case (mask)
+        4'b0001, 4'b0010, 4'b0100, 4'b1000: f_mask_to_size = BYTE;
+        4'b0011, 4'b1100: f_mask_to_size = HALF;
+        4'b1111: f_mask_to_size = WORD;
+        default: f_mask_to_size = NO_SIZE;
+      endcase
+    end
+  endfunction
+
+  function automatic logic [1:0] f_mask_to_lsb(input logic [3:0] mask);
+    begin
+      unique case (mask)
+        4'b0001: f_mask_to_lsb = 2'd0;
+        4'b0010: f_mask_to_lsb = 2'd1;
+        4'b0100: f_mask_to_lsb = 2'd2;
+        4'b1000: f_mask_to_lsb = 2'd3;
+        4'b0011: f_mask_to_lsb = 2'd0;
+        4'b1100: f_mask_to_lsb = 2'd2;
+        default: f_mask_to_lsb = 2'd0;
+      endcase
+    end
+  endfunction
+
+  function automatic logic [31:0] f_issue_data(input logic [31:0] word_data, input logic [3:0] mask);
+    logic [31:0] data;
+    begin
+      data = 32'h0;
+      unique case (mask)
+        4'b0001: data[7:0] = word_data[7:0];
+        4'b0010: data[7:0] = word_data[15:8];
+        4'b0100: data[7:0] = word_data[23:16];
+        4'b1000: data[7:0] = word_data[31:24];
+        4'b0011: data[15:0] = word_data[15:0];
+        4'b1100: data[15:0] = word_data[31:16];
+        4'b1111: data = word_data;
+        default: data = word_data;
+      endcase
+      return data;
+    end
+  endfunction
+
   logic                  req_valid_q;
   logic [XLEN-1:0]       req_addr_q;
   logic                  req_rw_q;
@@ -65,6 +174,7 @@ module ldst_buffer
   logic [XLEN-1:0]       store_fifo_addr_q [DEPTH];
   rw_size_e              store_fifo_size_q [DEPTH];
   logic [31:0]           store_fifo_data_q [DEPTH];
+  logic [3:0]            store_fifo_mask_q [DEPTH];
   logic [PTR_W-1:0]      store_fifo_head_q;
   logic [PTR_W-1:0]      store_fifo_tail_q;
   logic [CNT_W-1:0]      store_fifo_count_q;
@@ -95,15 +205,32 @@ module ldst_buffer
   logic                  store_fifo_full;
   logic                  enqueue_store;
   logic                  dequeue_store;
+  logic                  merge_tail_i;
+  logic                  enqueue_new_i;
+  logic                  tail_word_match_i;
 
   logic [PTR_W-1:0]      store_fifo_head_n;
   logic [PTR_W-1:0]      store_fifo_tail_n;
+  logic [3:0]            req_store_mask;
+  logic [31:0]           req_store_word_data;
+  logic [XLEN-1:0]       req_store_word_addr;
+  logic [3:0]            tail_merge_mask;
+  logic [31:0]           tail_merge_data;
+  logic                  issue_mask_valid;
+  logic [3:0]            issue_mask;
+  logic [1:0]            issue_addr_lsb;
+  logic [XLEN-1:0]       issue_store_addr;
+  rw_size_e              issue_store_size;
+  logic [31:0]           issue_store_data;
 
   assign req_data_changed = req_i.rw && (req_i.data != req_data_q);
   assign req_meta_changed = (req_i.addr != req_addr_q) || (req_i.rw != req_rw_q) || (req_i.rw_size != req_rw_size_q) ||
                             (req_i.valid && !req_valid_q);
   assign store_fifo_empty = (store_fifo_count_q == '0);
   assign store_fifo_full  = (store_fifo_count_q == DEPTH_CNT);
+  assign req_store_mask = f_store_mask(req_i.addr[1:0], req_i.rw_size);
+  assign req_store_word_data = f_store_word_data(store_data_sel, req_i.addr[1:0], req_i.rw_size);
+  assign req_store_word_addr = {req_i.addr[XLEN-1:2], 2'b00};
 
   always_comb begin
     if (store_fifo_head_q == DEPTH_LAST_PTR) begin
@@ -131,9 +258,23 @@ module ldst_buffer
                                    (req_i.addr == store_fifo_addr_q[store_fifo_tail_prev]) &&
                                    (req_i.rw_size == store_fifo_size_q[store_fifo_tail_prev]);
 
+  assign tail_word_match_i = req_i.valid && req_i.rw && !store_fifo_empty &&
+                             (req_store_word_addr == {store_fifo_addr_q[store_fifo_tail_prev][XLEN-1:2], 2'b00});
+  assign tail_merge_mask = store_fifo_mask_q[store_fifo_tail_prev] | req_store_mask;
+  assign tail_merge_data = f_merge_word_data(store_fifo_data_q[store_fifo_tail_prev], req_store_word_data, req_store_mask);
+
   assign issue_from_pending = !txn_active_q && !store_fifo_empty;
-  assign enqueue_store = txn_active_q && req_i.valid && req_meta_changed && req_i.rw && !store_fifo_full;
+  assign enqueue_store = txn_active_q && req_i.valid && req_meta_changed && req_i.rw;
+  assign merge_tail_i  = enqueue_store && tail_word_match_i && f_mask_encodable(tail_merge_mask);
+  assign enqueue_new_i = enqueue_store && !merge_tail_i && !store_fifo_full;
   assign dequeue_store = issue_from_pending;
+
+  assign issue_mask = store_fifo_mask_q[store_fifo_head_q];
+  assign issue_mask_valid = f_mask_encodable(issue_mask);
+  assign issue_addr_lsb = f_mask_to_lsb(issue_mask);
+  assign issue_store_addr = {store_fifo_addr_q[store_fifo_head_q][XLEN-1:2], 2'b00} + {{(XLEN-2){1'b0}}, issue_addr_lsb};
+  assign issue_store_size = f_mask_to_size(issue_mask);
+  assign issue_store_data = f_issue_data(store_fifo_data_q[store_fifo_head_q], issue_mask);
 
   always_comb begin
     issue_valid    = 1'b0;
@@ -145,9 +286,12 @@ module ldst_buffer
     if (issue_from_pending) begin
       issue_valid    = 1'b1;
       issue_is_store = 1'b1;
-      issue_addr     = store_fifo_addr_q[store_fifo_head_q];
-      issue_size     = store_fifo_size_q[store_fifo_head_q];
-      issue_data     = store_fifo_data_q[store_fifo_head_q];
+      issue_addr     = issue_store_addr;
+      issue_size     = issue_store_size;
+      issue_data     = issue_store_data;
+      if (!issue_mask_valid) begin
+        issue_valid = 1'b0;
+      end
     end else if (req_fire) begin
       issue_valid    = 1'b1;
       issue_is_store = req_i.rw;
@@ -174,6 +318,7 @@ module ldst_buffer
         store_fifo_addr_q[i] <= '0;
         store_fifo_size_q[i] <= NO_SIZE;
         store_fifo_data_q[i] <= '0;
+        store_fifo_mask_q[i] <= '0;
       end
 
       txn_active_q      <= 1'b0;
@@ -194,16 +339,25 @@ module ldst_buffer
         req_waiting_q <= 1'b1;
       end
 
-      if (enqueue_store) begin
-        store_fifo_addr_q[store_fifo_tail_q] <= req_i.addr;
+      if (enqueue_new_i) begin
+        store_fifo_addr_q[store_fifo_tail_q] <= req_store_word_addr;
         store_fifo_size_q[store_fifo_tail_q] <= req_i.rw_size;
-        store_fifo_data_q[store_fifo_tail_q] <= store_data_sel;
+        store_fifo_data_q[store_fifo_tail_q] <= req_store_word_data;
+        store_fifo_mask_q[store_fifo_tail_q] <= req_store_mask;
         store_fifo_tail_q                     <= store_fifo_tail_n;
         store_fifo_count_q                    <= store_fifo_count_q + 1'b1;
       end
 
-      if (store_fifo_match_tail_i && req_data_changed) begin
-        store_fifo_data_q[store_fifo_tail_prev] <= store_data_sel;
+      if (merge_tail_i) begin
+        store_fifo_data_q[store_fifo_tail_prev] <= tail_merge_data;
+        store_fifo_mask_q[store_fifo_tail_prev] <= tail_merge_mask;
+        store_fifo_addr_q[store_fifo_tail_prev] <= req_store_word_addr;
+        store_fifo_size_q[store_fifo_tail_prev] <= f_mask_to_size(tail_merge_mask);
+      end else if (store_fifo_match_tail_i && req_data_changed) begin
+        store_fifo_data_q[store_fifo_tail_prev] <= req_store_word_data;
+        store_fifo_mask_q[store_fifo_tail_prev] <= req_store_mask;
+        store_fifo_addr_q[store_fifo_tail_prev] <= req_store_word_addr;
+        store_fifo_size_q[store_fifo_tail_prev] <= req_i.rw_size;
       end
 
       if (dequeue_store) begin
