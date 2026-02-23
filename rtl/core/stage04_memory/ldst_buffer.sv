@@ -432,7 +432,7 @@ module ldst_buffer
   end
 
   always_comb begin
-    if (req_i.rw && me_req_i.valid && (me_req_i.addr == req_i.addr) && (me_req_i.rw_size == req_i.rw_size)) begin
+    if (req_i.rw && me_req_i.valid && me_req_i.rw && (me_req_i.addr == req_i.addr) && (me_req_i.rw_size == req_i.rw_size)) begin
       store_data_sel = me_req_i.data;
     end else begin
       store_data_sel = req_i.data;
