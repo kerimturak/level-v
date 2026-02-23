@@ -237,6 +237,7 @@ module ldst_buffer
   logic                  ld_sign_mux;
   logic                  load_blocked_by_store;
   logic                  load_forwarded_now;
+  logic                  store_blocked_by_full;
 
   assign req_data_changed = req_i.rw && (req_i.data != req_data_q);
   assign req_meta_changed = (req_i.addr != req_addr_q) || (req_i.rw != req_rw_q) || (req_i.rw_size != req_rw_size_q) ||
@@ -311,6 +312,8 @@ module ldst_buffer
 
   assign load_forwarded_now    = fwd_hit;
   assign load_blocked_by_store = load_req_i && !store_fifo_empty && !load_forwarded_now;
+  assign store_blocked_by_full = !drain_mode_q && txn_active_q && req_i.valid && req_i.rw && req_meta_changed &&
+                                 !merge_tail_i && store_fifo_full;
 
   assign issue_from_pending = !txn_active_q && !store_fifo_empty && !load_forwarded_now;
   assign enqueue_store = !drain_mode_q && txn_active_q && req_i.valid && req_meta_changed && req_i.rw;
@@ -480,7 +483,22 @@ module ldst_buffer
     stall_o = (drain_mode_q && (txn_active_q || !store_fifo_empty)) ||
               issue_valid ||
               load_blocked_by_store ||
+          store_blocked_by_full ||
               (txn_active_q && !dcache_res_i.valid);
   end
+
+  `ifndef SYNTHESIS
+    assert property (@(posedge clk_i) disable iff (!rst_ni)
+      store_fifo_count_q <= DEPTH_CNT)
+    else $error("ldst_buffer fifo count overflow");
+
+    assert property (@(posedge clk_i) disable iff (!rst_ni)
+      dequeue_store |-> !store_fifo_empty)
+    else $error("ldst_buffer dequeue on empty fifo");
+
+    assert property (@(posedge clk_i) disable iff (!rst_ni)
+      (enqueue_store && !merge_tail_i && store_fifo_full) |-> store_blocked_by_full)
+    else $error("ldst_buffer full-store backpressure missing");
+  `endif
 
 endmodule
