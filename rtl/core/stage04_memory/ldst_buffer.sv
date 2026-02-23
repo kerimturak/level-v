@@ -229,6 +229,7 @@ module ldst_buffer
   logic [XLEN-1:0]       load_req_word_addr_i;
   logic [31:0]           fwd_word_data;
   logic [3:0]            fwd_collected_mask;
+  logic [3:0]            fwd_remaining_mask;
   logic                  fwd_hit;
   logic [PTR_W-1:0]      fwd_scan_ptr;
   logic [31:0]           ld_word_mux;
@@ -285,14 +286,16 @@ module ldst_buffer
   always_comb begin
     fwd_word_data       = '0;
     fwd_collected_mask  = 4'b0000;
+    fwd_remaining_mask  = load_req_mask_i;
     fwd_scan_ptr        = store_fifo_tail_prev;
 
     for (int unsigned k = 0; k < DEPTH; k++) begin
-      if (k < store_fifo_count_q) begin
+      if ((k < store_fifo_count_q) && (fwd_remaining_mask != 4'b0000)) begin
         if ({store_fifo_addr_q[fwd_scan_ptr][XLEN-1:2], 2'b00} == load_req_word_addr_i) begin
           for (int unsigned b = 0; b < 4; b++) begin
-            if (store_fifo_mask_q[fwd_scan_ptr][b] && !fwd_collected_mask[b]) begin
+            if (store_fifo_mask_q[fwd_scan_ptr][b] && fwd_remaining_mask[b]) begin
               fwd_word_data[(b*8)+:8] = store_fifo_data_q[fwd_scan_ptr][(b*8)+:8];
+              fwd_remaining_mask[b]    = 1'b0;
             end
           end
           fwd_collected_mask = fwd_collected_mask | store_fifo_mask_q[fwd_scan_ptr];
