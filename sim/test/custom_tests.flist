@@ -18,3 +18,4 @@ csr_test
 cache_test
 clint_test
 exception_test
+ldst_perf_test
