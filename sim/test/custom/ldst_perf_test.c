@@ -83,6 +83,52 @@ static bench_res_t bench_store_burst_then_load(void) {
     return r;
 }
 
+static bench_res_t bench_queue_pressure_dep_chain(void) {
+    bench_res_t r;
+    uint32_t sum = 0;
+    uint32_t start = get_cycle();
+
+    for (uint32_t i = 0; i < N_ITERS; i++) {
+        uint32_t idx0 = i & MASK;
+        uint32_t idx1 = (idx0 + 1u) & MASK;
+        uint32_t idx2 = (idx0 + 2u) & MASK;
+        uint32_t idx3 = (idx0 + 3u) & MASK;
+
+        arr_a[idx0] = i ^ 0x01010101u;
+        arr_a[idx1] = i ^ 0x02020202u;
+        arr_a[idx2] = i ^ 0x03030303u;
+        arr_a[idx3] = i ^ 0x04040404u;
+
+        sum += arr_a[idx3];
+    }
+
+    r.cycles = get_cycle() - start;
+    r.sum = sum;
+    return r;
+}
+
+static bench_res_t bench_byte_half_mix_word_reload(void) {
+    bench_res_t r;
+    uint32_t sum = 0;
+    volatile uint8_t *arr8 = (volatile uint8_t *)arr_b;
+    uint32_t start = get_cycle();
+
+    for (uint32_t i = 0; i < N_ITERS; i++) {
+        uint32_t idx = i & MASK;
+        uint32_t off = idx * 4u;
+
+        arr8[off + 0u] = (uint8_t)(i);
+        arr8[off + 1u] = (uint8_t)(i >> 1);
+        *((volatile uint16_t *)(arr8 + off + 2u)) = (uint16_t)(i * 3u);
+
+        sum += arr_b[idx];
+    }
+
+    r.cycles = get_cycle() - start;
+    r.sum = sum;
+    return r;
+}
+
 int main(void) {
     uart_init();
     TEST_HEADER("LD/ST Perf Test");
@@ -92,6 +138,8 @@ int main(void) {
     bench_res_t dep = bench_dep_store_load_same();
     bench_res_t ind = bench_indep_store_load_diff();
     bench_res_t bur = bench_store_burst_then_load();
+    bench_res_t qdp = bench_queue_pressure_dep_chain();
+    bench_res_t bmx = bench_byte_half_mix_word_reload();
 
     uart_puts("LDST_PERF_BEGIN\n");
 
@@ -111,6 +159,18 @@ int main(void) {
     uart_putdec(bur.cycles);
     uart_puts(" burst_sum=");
     uart_puthex(bur.sum);
+    uart_puts("\n");
+
+    uart_puts("qdep_cycles=");
+    uart_putdec(qdp.cycles);
+    uart_puts(" qdep_sum=");
+    uart_puthex(qdp.sum);
+    uart_puts("\n");
+
+    uart_puts("mix_cycles=");
+    uart_putdec(bmx.cycles);
+    uart_puts(" mix_sum=");
+    uart_puthex(bmx.sum);
     uart_puts("\n");
 
     uart_puts("LDST_PERF_END\n");

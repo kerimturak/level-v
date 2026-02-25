@@ -20,6 +20,7 @@
 // LOG_BP        : Branch predictor statistics (gshare_bp.sv)
 // LOG_BP_VERBOSE: Detailed per-branch logging (gshare_bp.sv)
 // LOG_CACHE     : Cache request/response table logging (cache_logger.sv)
+// LOG_LDST      : LD/ST buffer event logging (merge/forward/block/bypass)
 
 // ============================================================================
 // MINIMAL SOC - Fast Simulation Mode

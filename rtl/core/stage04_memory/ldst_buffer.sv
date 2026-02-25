@@ -237,6 +237,7 @@ module ldst_buffer
   logic     [      3:0] active_issue_mask_i;
   logic     [     31:0] active_issue_word_data_i;
   logic     [ XLEN-1:0] active_issue_word_addr_i;
+  logic                 fwd_active_overlap_i;
 
   assign req_data_changed = req_i.rw && (req_i.data != req_data_q);
   assign req_meta_changed = (req_i.addr != req_addr_q) || (req_i.rw != req_rw_q) || (req_i.rw_size != req_rw_size_q) || (req_i.valid && !req_valid_q);
@@ -341,6 +342,8 @@ module ldst_buffer
   assign active_issue_mask_i = f_store_mask(issue_addr[1:0], issue_size);
   assign active_issue_word_data_i = f_store_word_data(issue_data, issue_addr[1:0], issue_size);
   assign active_issue_word_addr_i = {issue_addr[XLEN-1:2], 2'b00};
+  assign fwd_active_overlap_i = txn_active_q && !active_is_load_q && (active_store_word_addr_q == load_req_word_addr_i) &&
+                                ((active_store_mask_q & load_req_mask_i) != 4'b0000);
 
   always_comb begin
     issue_valid    = 1'b0;
@@ -554,6 +557,41 @@ module ldst_buffer
       end
     end
   end
+
+`ifndef SYNTHESIS
+`ifdef LOG_LDST
+  localparam int unsigned LDST_LOG_MAX_EVENTS = 1024;
+  logic [31:0] dbg_evt_cnt_q;
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      dbg_evt_cnt_q <= '0;
+    end else if (dbg_evt_cnt_q < LDST_LOG_MAX_EVENTS) begin
+      if (merge_tail_i) begin
+        dbg_evt_cnt_q <= dbg_evt_cnt_q + 1'b1;
+        $display("[LDST_EVT] cyc=%0d MERGE addr=0x%08h old_mask=0x%1h new_mask=0x%1h merged=0x%1h", dbg_cycle_cnt_q, req_store_word_addr, store_fifo_mask_q[store_fifo_tail_prev], req_store_mask,
+                 tail_merge_mask);
+      end
+
+      if (load_forwarded_now) begin
+        dbg_evt_cnt_q <= dbg_evt_cnt_q + 1'b1;
+        $display("[LDST_EVT] cyc=%0d FWD addr=0x%08h mask=0x%1h active_src=%0d fifo_src=%0d data=0x%08h", dbg_cycle_cnt_q, req_i.addr, load_req_mask_i, fwd_active_overlap_i, (|fwd_collected_mask),
+                 fwd_word_data);
+      end
+
+      if (load_blocked_by_store) begin
+        dbg_evt_cnt_q <= dbg_evt_cnt_q + 1'b1;
+        $display("[LDST_EVT] cyc=%0d LD_BLOCK addr=0x%08h req_mask=0x%1h collected=0x%1h", dbg_cycle_cnt_q, req_i.addr, load_req_mask_i, fwd_collected_mask);
+      end
+
+      if (load_can_bypass_store) begin
+        dbg_evt_cnt_q <= dbg_evt_cnt_q + 1'b1;
+        $display("[LDST_EVT] cyc=%0d LD_BYPASS addr=0x%08h req_mask=0x%1h", dbg_cycle_cnt_q, req_i.addr, load_req_mask_i);
+      end
+    end
+  end
+`endif
+`endif
 
   assert property (@(posedge clk_i) disable iff (!rst_ni) store_fifo_count_q <= DEPTH_CNT)
   else $error("ldst_buffer fifo count overflow");
