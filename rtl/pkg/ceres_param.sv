@@ -411,6 +411,11 @@ package ceres_param;
     HALF,
     WORD
   } rw_size_e;
+
+  // Store Buffer
+  localparam int SB_DEPTH = 4;
+  localparam int SB_PTR_W = $clog2(SB_DEPTH);
+
   // ---------------------------------------------------------------------------
   // 9.3 Stall Reasons
   // ---------------------------------------------------------------------------

@@ -126,7 +126,6 @@ module cpu
   logic                  trap_active;
   logic       [XLEN-1:0] trap_tval;
   logic                  pipe_downstream_stall;
-  logic pipe2_drained_q;
 
   // ============================================================================
   // FETCH
@@ -458,8 +457,8 @@ module cpu
       `endif
     end else if (pipe_downstream_stall && !trap_active) begin
       // ME-stage stall (DMISS / ALU / FENCEI): freeze pipe3
-    end else if (pipe2_drained_q) begin
-      // pipe2 already drained: insert bubble (covers stall and transition-out cycle)
+    end else if (pipe2_frozen) begin
+      // pipe2 is stalled but no downstream stall: drain pipe3→pipe4 with bubble
       `ifdef COMMIT_TRACER
       pipe3 <= '{instr_type:instr_invalid, rw_size: NO_SIZE, default: '0};
       `else
@@ -668,17 +667,11 @@ module cpu
   // does not hide an active DMISS.
   assign pipe_downstream_stall = me_dmiss_stall || ex_alu_stall || me_fencei_stall;
 
-  // Track whether pipe2's content has already been drained into pipe3 while
-  // the upstream (FE/DE/EX boundary) is stalled.  Prevents the same
-  // instruction from re-entering ME when pipe2 is frozen.
-  always_ff @(posedge clk_i) begin
-    if (!rst_ni)
-      pipe2_drained_q <= 1'b0;
-    else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}))
-      pipe2_drained_q <= 1'b0;
-    else if (!pipe_downstream_stall && !pipe2_drained_q)
-      pipe2_drained_q <= 1'b1;
-  end
+  // pipe2 is frozen during any heavy stall — pipe3 must not re-accept
+  // stale pipe2 output.  Instead, insert bubbles so pipe3/pipe4 drain
+  // their current contents to WB.  This is simpler than the old
+  // pipe2_drained_q approach and avoids the transition-out bubble.
+  wire pipe2_frozen = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
 
   always_comb begin
     stall_cause = NO_STALL;
