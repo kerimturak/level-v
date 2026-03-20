@@ -105,7 +105,8 @@ module axi_gpio_bridge #(
   assign is_write = we_i;
 
   // Convert word address to byte address
-  wire [C_S_AXI_ADDR_WIDTH-1:0] byte_addr = {adr_i, 2'b00};
+  logic [C_S_AXI_ADDR_WIDTH-1:0] byte_addr;
+  assign byte_addr = {adr_i, 2'b00};
 
   // ===========================================================================
   // State Machine Logic

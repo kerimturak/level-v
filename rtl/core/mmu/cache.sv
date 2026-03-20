@@ -402,7 +402,8 @@ module cache
       else flush_i_prev <= flush_i;
     end
 
-    wire fi_start = flush_i && !flush_i_prev && (fi_state_q == FI_IDLE);
+    logic fi_start;
+    assign fi_start = flush_i && !flush_i_prev && (fi_state_q == FI_IDLE);
 
     // One-hot encoding of current way
     always_comb begin

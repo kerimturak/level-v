@@ -381,9 +381,12 @@ module ceres_wrapper
   assign ram_wb_sel   = wb_slave_m[SLV_RAM].sel;
 
   // Detect burst mode from CTI
-  wire ram_is_burst = (wb_slave_m[SLV_RAM].cti == WB_CTI_INCR) || (wb_slave_m[SLV_RAM].cti == WB_CTI_EOB);
-  wire ram_is_burst_start = ram_wb_req && !ram_wb_we && (wb_slave_m[SLV_RAM].cti == WB_CTI_INCR) && !ram_burst_active;
-  wire ram_is_burst_end = ram_burst_active && (wb_slave_m[SLV_RAM].cti == WB_CTI_EOB);
+  logic ram_is_burst;
+  logic ram_is_burst_start;
+  logic ram_is_burst_end;
+  assign ram_is_burst = (wb_slave_m[SLV_RAM].cti == WB_CTI_INCR) || (wb_slave_m[SLV_RAM].cti == WB_CTI_EOB);
+  assign ram_is_burst_start = ram_wb_req && !ram_wb_we && (wb_slave_m[SLV_RAM].cti == WB_CTI_INCR) && !ram_burst_active;
+  assign ram_is_burst_end = ram_burst_active && (wb_slave_m[SLV_RAM].cti == WB_CTI_EOB);
 
   // Convert byte address to RAM word address (divide by 4)
   // RAM module internally aligns to cache line boundary

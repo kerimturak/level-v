@@ -53,7 +53,8 @@ module store_buffer
   // -------------------------------------------------------------------
   // Drain port: present oldest entry
   // -------------------------------------------------------------------
-  wire [PTR_W-1:0] head_idx = head_ptr[PTR_W-1:0];
+  logic [PTR_W-1:0] head_idx;
+  assign head_idx = head_ptr[PTR_W-1:0];
 
   assign drain_valid_o    = !empty_o;
   assign drain_addr_o     = buf_addr[head_idx];
@@ -64,7 +65,8 @@ module store_buffer
   // -------------------------------------------------------------------
   // FIFO write / drain
   // -------------------------------------------------------------------
-  wire [PTR_W-1:0] tail_idx = tail_ptr[PTR_W-1:0];
+  logic [PTR_W-1:0] tail_idx;
+  assign tail_idx = tail_ptr[PTR_W-1:0];
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin

@@ -98,12 +98,16 @@ module l2_cache_top_v2
   logic d_resolve_stall;
   logic dual_miss_same_set;
 
-  wire [L2_INDEX_BITS-1:0] i_req_set = i_req_q.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
-  wire [L2_TAG_BITS-1:0]   i_req_tag = i_req_q.addr[XLEN-1:L2_INDEX_BITS+L2_OFFSET_BITS];
-
-  wire [L2_INDEX_BITS-1:0] d_req_set = d_req_q.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
-  wire [L2_TAG_BITS-1:0]   d_req_tag = d_req_q.addr[XLEN-1:L2_INDEX_BITS+L2_OFFSET_BITS];
-  wire                     d_req_wr  = d_req_q.is_write;
+  logic [L2_INDEX_BITS-1:0] i_req_set;
+  logic [L2_TAG_BITS-1:0]   i_req_tag;
+  logic [L2_INDEX_BITS-1:0] d_req_set;
+  logic [L2_TAG_BITS-1:0]   d_req_tag;
+  logic                     d_req_wr;
+  assign i_req_set = i_req_q.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
+  assign i_req_tag = i_req_q.addr[XLEN-1:L2_INDEX_BITS+L2_OFFSET_BITS];
+  assign d_req_set = d_req_q.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
+  assign d_req_tag = d_req_q.addr[XLEN-1:L2_INDEX_BITS+L2_OFFSET_BITS];
+  assign d_req_wr  = d_req_q.is_write;
 
   // =========================================================================
   // Flush logic
@@ -131,8 +135,10 @@ module l2_cache_top_v2
   // =========================================================================
   // Per-pipe SRAM addressing & bank decode
   // =========================================================================
-  wire [L2_INDEX_BITS-1:0] i_next_set = icache_req_i.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
-  wire [L2_INDEX_BITS-1:0] d_next_set = dcache_req_i.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
+  logic [L2_INDEX_BITS-1:0] i_next_set;
+  logic [L2_INDEX_BITS-1:0] d_next_set;
+  assign i_next_set = icache_req_i.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
+  assign d_next_set = dcache_req_i.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
 
   logic [L2_INDEX_BITS-1:0] i_sram_idx, d_sram_idx;
 
@@ -263,8 +269,10 @@ module l2_cache_top_v2
     end
   end
 
-  wire [L2_LRU_W-1:0] i_plru_rdata = plru_reg[i_req_set];
-  wire [L2_LRU_W-1:0] d_plru_rdata = plru_reg[d_req_set];
+  logic [L2_LRU_W-1:0] i_plru_rdata;
+  logic [L2_LRU_W-1:0] d_plru_rdata;
+  assign i_plru_rdata = plru_reg[i_req_set];
+  assign d_plru_rdata = plru_reg[d_req_set];
 
   // =========================================================================
   // Dirty array — register-based (dual read, merged update)
@@ -298,8 +306,10 @@ module l2_cache_top_v2
     end
   end
 
-  wire [L2_NUM_WAY-1:0] i_dirty_read = dirty_reg[i_req_set];
-  wire [L2_NUM_WAY-1:0] d_dirty_read = dirty_reg[d_req_set];
+  logic [L2_NUM_WAY-1:0] i_dirty_read;
+  logic [L2_NUM_WAY-1:0] d_dirty_read;
+  assign i_dirty_read = dirty_reg[i_req_set];
+  assign d_dirty_read = dirty_reg[d_req_set];
 
   // =========================================================================
   // Per-pipe hit/miss detection
@@ -736,8 +746,10 @@ module l2_cache_top_v2
   // =========================================================================
   // Bypass mux — both pipes can bypass
   // =========================================================================
-  wire i_bypass_active = (i_pipe_state == PIPE_BYPASS);
-  wire d_bypass_active = (d_pipe_state == PIPE_BYPASS);
+  logic i_bypass_active;
+  logic d_bypass_active;
+  assign i_bypass_active = (i_pipe_state == PIPE_BYPASS);
+  assign d_bypass_active = (d_pipe_state == PIPE_BYPASS);
 
   always_comb begin
     if (i_bypass_active) begin
@@ -869,7 +881,8 @@ module l2_cache_top_v2
   // =========================================================================
   // I-pipe FSM
   // =========================================================================
-  wire i_pipe_accept = (i_pipe_state == PIPE_IDLE) && !flush_active && icache_req_i.valid;
+  logic i_pipe_accept;
+  assign i_pipe_accept = (i_pipe_state == PIPE_IDLE) && !flush_active && icache_req_i.valid;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
@@ -933,7 +946,8 @@ module l2_cache_top_v2
   // =========================================================================
   // D-pipe FSM
   // =========================================================================
-  wire d_pipe_accept = (d_pipe_state == PIPE_IDLE) && !flush_active && dcache_req_i.valid;
+  logic d_pipe_accept;
+  assign d_pipe_accept = (d_pipe_state == PIPE_IDLE) && !flush_active && dcache_req_i.valid;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
@@ -1056,10 +1070,13 @@ module l2_cache_top_v2
   // =========================================================================
   logic [31:0] cnt_hit, cnt_miss, cnt_wb, cnt_stall;
 
-  wire ev_hit  = (i_pipe_state == PIPE_HIT_RESPOND) || (d_pipe_state == PIPE_HIT_RESPOND);
-  wire ev_miss = ((i_pipe_state == PIPE_RESOLVE) && !i_hit_any && !i_resolve_stall) ||
-                 ((d_pipe_state == PIPE_RESOLVE) && !d_hit_any && !d_resolve_stall);
-  wire ev_wb   = wb_done;
+  logic ev_hit;
+  logic ev_miss;
+  logic ev_wb;
+  assign ev_hit  = (i_pipe_state == PIPE_HIT_RESPOND) || (d_pipe_state == PIPE_HIT_RESPOND);
+  assign ev_miss = ((i_pipe_state == PIPE_RESOLVE) && !i_hit_any && !i_resolve_stall) ||
+                   ((d_pipe_state == PIPE_RESOLVE) && !d_hit_any && !d_resolve_stall);
+  assign ev_wb   = wb_done;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin

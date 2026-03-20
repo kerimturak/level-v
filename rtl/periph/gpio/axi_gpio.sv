@@ -169,8 +169,10 @@ module axi_gpio #(
   // ===========================================================================
   // Interrupt Detection
   // ===========================================================================
-  wire gpio_changed = |(gpio_sync_qq ^ gpio_prev_q);
-  wire gpio2_changed = |(gpio2_sync_qq ^ gpio2_prev_q);
+  logic gpio_changed;
+  logic gpio2_changed;
+  assign gpio_changed  = |(gpio_sync_qq ^ gpio_prev_q);
+  assign gpio2_changed = |(gpio2_sync_qq ^ gpio2_prev_q);
 
   always_ff @(posedge s_axi_aclk or negedge s_axi_aresetn) begin
     if (!s_axi_aresetn) begin

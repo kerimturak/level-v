@@ -126,6 +126,7 @@ module cpu
   logic                  trap_active;
   logic       [XLEN-1:0] trap_tval;
   logic                  pipe_downstream_stall;
+  logic                  pipe2_frozen;
 
   // ============================================================================
   // FETCH
@@ -667,12 +668,6 @@ module cpu
   // does not hide an active DMISS.
   assign pipe_downstream_stall = me_dmiss_stall || ex_alu_stall || me_fencei_stall;
 
-  // pipe2 is frozen during any heavy stall — pipe3 must not re-accept
-  // stale pipe2 output.  Instead, insert bubbles so pipe3/pipe4 drain
-  // their current contents to WB.  This is simpler than the old
-  // pipe2_drained_q approach and avoids the transition-out bubble.
-  wire pipe2_frozen = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
-
   always_comb begin
     stall_cause = NO_STALL;
     if (me_fencei_stall) begin
@@ -749,6 +744,10 @@ module cpu
   end
 
   end
+
+  // pipe2 is frozen during any heavy stall — pipe3 must not re-accept
+  // stale pipe2 output.  Declared early; assigned after stall_cause for vlog.
+  assign pipe2_frozen = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
 
   // Pipeline visualizer (KONATA format)
   // Enable with: +define+KONATA_TRACER

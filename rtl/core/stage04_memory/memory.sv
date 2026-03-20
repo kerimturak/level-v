@@ -58,17 +58,27 @@ module memory
                        (ex_data_req_i.rw_size != ex_rw_size_q) ||
                        (ex_data_req_i.valid && !ex_valid_q);
 
-  wire new_req = ex_data_req_i.valid && req_changed && pipe2_advanced_q;
+  logic new_req;
+  assign new_req = ex_data_req_i.valid && req_changed && pipe2_advanced_q;
+
+  // Store buffer status (forward declare for vlog before store_pending ff)
+  logic sb_full;
+  logic sb_empty;
 
   // -------------------------------------------------------------------
   // Store / load classification
   // -------------------------------------------------------------------
-  wire is_store = ex_data_req_i.valid && ex_data_req_i.rw;
-  wire is_load  = ex_data_req_i.valid && !ex_data_req_i.rw;
+  logic is_store;
+  logic is_load;
+  assign is_store = ex_data_req_i.valid && ex_data_req_i.rw;
+  assign is_load  = ex_data_req_i.valid && !ex_data_req_i.rw;
 
-  wire store_fire = is_store && new_req;
-  wire cached_store_fire   = store_fire && !uncached;
-  wire uncached_store_fire = store_fire && uncached;
+  logic store_fire;
+  logic cached_store_fire;
+  logic uncached_store_fire;
+  assign store_fire           = is_store && new_req;
+  assign cached_store_fire    = store_fire && !uncached;
+  assign uncached_store_fire  = store_fire && uncached;
 
   // Sustain stall when store buffer is full until room becomes available.
   // pipe2 is frozen during the stall so ex_data_req_i stays valid.
@@ -82,8 +92,9 @@ module memory
       store_pending <= 1'b0;
   end
 
-  wire store_buffer_write = (cached_store_fire && !sb_full) ||
-                            (store_pending && !sb_full);
+  logic store_buffer_write;
+  assign store_buffer_write = (cached_store_fire && !sb_full) ||
+                              (store_pending && !sb_full);
 
   // -------------------------------------------------------------------
   // Store buffer instance
@@ -94,7 +105,6 @@ module memory
   logic [XLEN-1:0] sb_drain_addr, sb_drain_data;
   rw_size_e        sb_drain_size;
   logic            sb_drain_ack;
-  logic            sb_full, sb_empty;
 
   store_buffer i_store_buffer (
       .clk_i          (clk_i),
@@ -126,29 +136,34 @@ module memory
   logic drain_active;
   logic uc_store_active;
   logic load_pending;
+  logic uc_drain_pending;
 
-  wire dcache_busy = load_active || drain_active || uc_store_active;
+  logic dcache_busy;
+  assign dcache_busy = load_active || drain_active || uc_store_active;
 
   // A load that couldn't be forwarded or fired (conflict / dcache busy)
   // stays pending until it resolves via forwarding or dcache read.
-  wire load_fwd_resolve = load_pending && is_load && sb_fwd_hit && !sb_fwd_conflict;
+  logic load_fwd_resolve;
+  assign load_fwd_resolve = load_pending && is_load && sb_fwd_hit && !sb_fwd_conflict;
 
-  wire load_req_fire = ((is_load && new_req) || load_pending) &&
-                       !sb_fwd_hit && !sb_fwd_conflict &&
-                       !dcache_busy && !uc_drain_pending;
+  logic load_req_fire;
+  assign load_req_fire = ((is_load && new_req) || load_pending) &&
+                         !sb_fwd_hit && !sb_fwd_conflict &&
+                         !dcache_busy && !uc_drain_pending;
 
   // Drain fires when dcache is idle and buffer has entries.
   // Allowed during load_pending — draining resolves conflicts.
-  wire drain_fire = sb_drain_valid && !dcache_busy && !load_req_fire
-                    && !uncached_store_fire;
+  logic drain_fire;
+  assign drain_fire = sb_drain_valid && !dcache_busy && !load_req_fire
+                      && !uncached_store_fire;
 
   // Uncached store handling: drain buffer first, then send directly
-  logic uc_drain_pending;
   logic [XLEN-1:0] uc_addr_q, uc_data_q;
   rw_size_e        uc_size_q;
 
-  wire uc_store_fire = (uncached_store_fire && sb_empty && !dcache_busy) ||
-                       (uc_drain_pending && sb_empty && !dcache_busy);
+  logic uc_store_fire;
+  assign uc_store_fire = (uncached_store_fire && sb_empty && !dcache_busy) ||
+                         (uc_drain_pending && sb_empty && !dcache_busy);
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
@@ -259,15 +274,18 @@ module memory
     end
   end
 
-  wire dcache_flush = (fe_flush_cache_i && sb_empty) ||
-                      (fencei_pending && sb_empty);
+  logic dcache_flush;
+  assign dcache_flush = (fe_flush_cache_i && sb_empty) ||
+                        (fencei_pending && sb_empty);
 
   // Load blocked on first cycle (conflict / dcache busy) — combinational
-  wire first_cycle_load_blocked = is_load && new_req && !sb_fwd_hit &&
-                                  (sb_fwd_conflict || dcache_busy || uc_drain_pending);
+  logic first_cycle_load_blocked;
+  assign first_cycle_load_blocked = is_load && new_req && !sb_fwd_hit &&
+                                    (sb_fwd_conflict || dcache_busy || uc_drain_pending);
 
   // Pending load stalls unless resolved by forwarding this cycle
-  wire load_stall_pending = load_pending && !load_fwd_resolve;
+  logic load_stall_pending;
+  assign load_stall_pending = load_pending && !load_fwd_resolve;
 
   always_comb begin
     dmiss_stall_o = load_req_fire

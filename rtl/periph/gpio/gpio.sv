@@ -108,7 +108,8 @@ module gpio
   end
 
   // Synchronized input value
-  wire  [GPIO_WIDTH-1:0] gpio_in = gpio_sync2_q;
+  logic [GPIO_WIDTH-1:0] gpio_in;
+  assign gpio_in = gpio_sync2_q;
 
   // ============================================================================
   // Edge Detection
