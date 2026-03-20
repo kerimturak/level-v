@@ -35,6 +35,18 @@ module memory
   logic                   ex_rw_q;
   logic        [     1:0] ex_rw_size_q;
 
+  // pipe2 advanced on the previous cycle — only then is a new request valid.
+  // Without this guard, forwarding-path changes during ME/WB drain (Phase 1a)
+  // cause ex_data_req_i to shift while pipe2 is frozen, producing spurious
+  // mem_req_fire pulses.
+  logic pipe2_advanced_q;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni)
+      pipe2_advanced_q <= 1'b0;
+    else
+      pipe2_advanced_q <= !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
+  end
+
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
       ex_valid_q   <= 1'b0;
@@ -58,7 +70,7 @@ module memory
   // which depends on dmiss_stall which depends on mem_req_fire.
   logic req_changed;
   assign req_changed  = (ex_data_req_i.addr != ex_addr_q) || (ex_data_req_i.rw != ex_rw_q) || (ex_data_req_i.rw_size != ex_rw_size_q) || (ex_data_req_i.valid && !ex_valid_q);
-  assign mem_req_fire = ex_data_req_i.valid && req_changed && !mem_txn_active;
+  assign mem_req_fire = ex_data_req_i.valid && req_changed && !mem_txn_active && pipe2_advanced_q;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin

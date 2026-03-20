@@ -10,11 +10,6 @@ TB_LEVEL      := tb_wrapper
 TOP_LEVEL     ?= $(RTL_LEVEL)
 
 # -----------------------------------------
-# Logger Source (for Verilator)
-# -----------------------------------------
-LOGGER_SRC    ?= $(RTL_DIR)/tracer/konata_logger.sv
-
-# -----------------------------------------
 # RTL Source Files
 # -----------------------------------------
 SV_SOURCES := \
@@ -30,6 +25,7 @@ SV_SOURCES := \
   $(wildcard $(RTL_DIR)/core/stage03_execute/mul_div/wallace32x32/*.sv) \
   $(wildcard $(RTL_DIR)/core/stage04_memory/*.sv) \
   $(wildcard $(RTL_DIR)/core/stage05_writeback/*.sv) \
+  $(wildcard $(RTL_DIR)/core/mmu/l2/*.sv) \
   $(wildcard $(RTL_DIR)/core/mmu/*.sv) \
   $(wildcard $(RTL_DIR)/util/*.sv) \
   $(wildcard $(RTL_DIR)/periph/gpio/*.sv) \
@@ -42,6 +38,7 @@ SV_SOURCES := \
   $(wildcard $(RTL_DIR)/periph/i2c/*.sv) \
   $(wildcard $(RTL_DIR)/periph/spi/*.sv) \
   $(wildcard $(RTL_DIR)/periph/uart/*.sv) \
+  $(wildcard $(RTL_DIR)/tracer/*.sv) \
   $(wildcard $(RTL_DIR)/ram/*.sv) \
   $(wildcard $(RTL_DIR)/wrapper/*.sv) \
   $(wildcard $(RTL_DIR)/wrapper/*.v)

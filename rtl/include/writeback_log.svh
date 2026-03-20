@@ -153,7 +153,7 @@ always @(posedge clk_i) begin
   // Not: Reset sırasında dosyayı yeniden açmıyoruz - sadece initial'da açıldı
   // IMPORTANT: Skip commit if instruction was flushed or invalid
   if (rst_ni && !flushed_i && instr_type_i != instr_invalid &&
-      !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active_i)) begin
+      !(downstream_stall_i && !trap_active_i)) begin
 
     // Automatic variable for CSR WARL behavior:
     // - mstatus (0x300): MPP always 11 for M-mode only

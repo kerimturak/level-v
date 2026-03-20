@@ -111,6 +111,23 @@ endif
 # Default: Always enable COMMIT_TRACER for trace info in pipeline
 MODELSIM_DEFINES += +define+COMMIT_TRACER
 
+# Shared feature defines (same as verilator.mk)
+ifeq ($(FAST_SIM),1)
+  MODELSIM_DEFINES += +define+SIM_FAST
+endif
+ifeq ($(SIM_FAST),1)
+  MODELSIM_DEFINES += +define+SIM_FAST
+endif
+ifeq ($(MINIMAL_SOC),1)
+  MODELSIM_DEFINES += +define+MINIMAL_SOC
+endif
+ifeq ($(USE_L2_CACHE),1)
+  MODELSIM_DEFINES += +define+USE_L2_CACHE
+endif
+ifeq ($(SIM_UART_MONITOR),1)
+  MODELSIM_DEFINES += +define+SIM_UART_MONITOR
+endif
+
 # -----------------------------------------
 # Compilation Options
 # -----------------------------------------

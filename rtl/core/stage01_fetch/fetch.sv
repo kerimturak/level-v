@@ -75,10 +75,8 @@ module fetch
   // If dcache is larger than icache, dcache flush takes longer.
   // This counter ensures fetch stage stalls until the maximum flush completes.
   // ============================================================================
-  localparam int IC_NUM_SET = (IC_CAPACITY / BLK_SIZE) / IC_WAY;
-  localparam int DC_NUM_SET = (DC_CAPACITY / BLK_SIZE) / DC_WAY;
-  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ? IC_NUM_SET : DC_NUM_SET;
-  localparam int FLUSH_CNT_WIDTH = $clog2(MAX_FLUSH_CYCLES + 1);
+  // MAX_FLUSH_CYCLES and FLUSH_CNT_WIDTH are defined in ceres_param.sv
+  // and include L2 when USE_L2_CACHE is enabled.
 
   logic [FLUSH_CNT_WIDTH-1:0] flush_counter;
   logic                       flush_in_progress;

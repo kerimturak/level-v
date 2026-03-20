@@ -127,6 +127,11 @@ ifeq ($(MINIMAL_SOC),1)
   SV_DEFINES += +define+MINIMAL_SOC
 endif
 
+# USE_L2_CACHE -> Enable Yarok14-based L2 non-blocking cache
+ifeq ($(USE_L2_CACHE),1)
+  SV_DEFINES += +define+USE_L2_CACHE
+endif
+
 # COVERAGE -> SIM_COVERAGE
 ifeq ($(COVERAGE),1)
   COVERAGE_FLAGS := --coverage --coverage-line --coverage-toggle
@@ -472,7 +477,7 @@ lint-loops-view: lint-loops
 verilate: dirs
 	@printf "$(GREEN)[VERILATING RTL SOURCES — $(MODE) mode, $(VERILATOR_THREADS) threads]$(RESET)\n"
 	$(VERILATOR) \
-		$(SV_SOURCES) $(LOGGER_SRC) \
+		$(SV_SOURCES) \
 		$(VERILATOR_COMMON_FLAGS) \
 		$(VERILATOR_BUILD_FLAGS) \
 		$(VERILATOR_DEFINE)
@@ -485,7 +490,7 @@ verilate-fast: dirs
 	else \
 		printf "$(GREEN)[VERILATING RTL SOURCES — FAST MODE]$(RESET)\n"; \
 		$(VERILATOR) \
-			$(SV_SOURCES) $(LOGGER_SRC) \
+			$(SV_SOURCES) \
 			$(VERILATOR_COMMON_FLAGS) \
 			$(VERILATOR_BUILD_FLAGS) \
 			$(NO_WARNING) \
@@ -497,7 +502,7 @@ verilate-fast: dirs
 rebuild-cpp: dirs
 	@printf "$(GREEN)[REBUILDING C++ ONLY]$(RESET)\n"
 	$(VERILATOR) \
-		$(SV_SOURCES) $(LOGGER_SRC) \
+		$(SV_SOURCES) \
 		$(VERILATOR_COMMON_FLAGS) \
 		$(VERILATOR_BUILD_FLAGS) \
 		$(NO_WARNING) \

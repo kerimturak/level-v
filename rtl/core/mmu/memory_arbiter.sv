@@ -49,15 +49,18 @@ module memory_arbiter (
 
     // Memory request: seçimi latched veriden yapıyoruz.
     if (round == DCACHE) begin
-      iomem_req_o.addr  = dcache_req_reg.addr;
-      iomem_req_o.valid = dcache_req_reg.valid;
+      iomem_req_o.addr     = dcache_req_reg.addr;
+      iomem_req_o.valid    = dcache_req_reg.valid;
+      iomem_req_o.uncached = dcache_req_reg.uncached;
     end else begin  // ICACHE veya IDLE durumunda icache isteklerine öncelik veriyoruz.
-      iomem_req_o.addr  = icache_req_reg.addr;
-      iomem_req_o.valid = icache_req_reg.valid;
+      iomem_req_o.addr     = icache_req_reg.addr;
+      iomem_req_o.valid    = icache_req_reg.valid;
+      iomem_req_o.uncached = icache_req_reg.uncached;
     end
 
-    iomem_req_o.data = dcache_req_reg.data;  // dcache verisini kullanıyoruz.
-    iomem_req_o.rw   = '0;
+    iomem_req_o.ready = 1'b1;
+    iomem_req_o.data  = dcache_req_reg.data;  // dcache verisini kullanıyoruz.
+    iomem_req_o.rw    = '0;
     if (round == DCACHE && dcache_req_reg.valid && dcache_req_reg.rw) begin
       if (dcache_req_reg.uncached) begin
         // Uncached write: use rw_size to determine byte enables

@@ -80,6 +80,97 @@ package ceres_param;
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
 `endif
 
+  // L2 Cache (Yarok14-based non-blocking)
+`ifdef CERES_OPENLANE
+  localparam int L2_CACHE_SIZE_KB = 4;
+  localparam int L2_NUM_WAY       = 2;
+  localparam int L2_MSHR_DEPTH    = 2;
+  localparam int L2_NUM_BANKS     = 1;
+`elsif MINIMAL_SOC
+  localparam int L2_CACHE_SIZE_KB = 8;
+  localparam int L2_NUM_WAY       = 4;
+  localparam int L2_MSHR_DEPTH    = 4;
+  localparam int L2_NUM_BANKS     = 2;
+`else
+  localparam int L2_CACHE_SIZE_KB = 16;
+  localparam int L2_NUM_WAY       = 4;
+  localparam int L2_MSHR_DEPTH    = 4;
+  localparam int L2_NUM_BANKS     = 2;
+`endif
+  localparam int L2_LINE_SIZE_B   = BLK_SIZE / 8;  // 16 bytes, matches L1 block
+  localparam int L2_ADDR_WIDTH    = XLEN;
+  localparam int L2_DATA_WIDTH    = XLEN;           // 32-bit words within line
+  localparam int L2_ECC_BITS      = 8;              // SECDED for 32-bit word
+
+  // L2 derived parameters
+  localparam int L2_NUM_SETS       = (L2_CACHE_SIZE_KB * 1024) / (L2_NUM_WAY * L2_LINE_SIZE_B);
+  localparam int L2_INDEX_BITS     = $clog2(L2_NUM_SETS);
+  localparam int L2_OFFSET_BITS    = $clog2(L2_LINE_SIZE_B);
+  localparam int L2_TAG_BITS       = L2_ADDR_WIDTH - L2_INDEX_BITS - L2_OFFSET_BITS;
+  localparam int L2_WAY_W          = $clog2(L2_NUM_WAY);
+  localparam int L2_WORDS_PER_LINE = L2_LINE_SIZE_B / (L2_DATA_WIDTH / 8);
+  localparam int L2_LRU_W          = L2_NUM_WAY - 1;
+  localparam int L2_MSHR_PTR_W     = $clog2(L2_MSHR_DEPTH);
+  localparam int L2_BANK_SETS      = L2_NUM_SETS / L2_NUM_BANKS;
+
+  // Flush cycle calculation (centralized for fetch reset stall)
+  localparam int IC_NUM_SET = IC_CAPACITY / BLK_SIZE / IC_WAY;
+  localparam int DC_NUM_SET = DC_CAPACITY / BLK_SIZE / DC_WAY;
+
+`ifdef USE_L2_CACHE
+  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET)
+      ? (IC_NUM_SET > L2_NUM_SETS ? IC_NUM_SET : L2_NUM_SETS)
+      : (DC_NUM_SET > L2_NUM_SETS ? DC_NUM_SET : L2_NUM_SETS);
+`else
+  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ? IC_NUM_SET : DC_NUM_SET;
+`endif
+  localparam int FLUSH_CNT_WIDTH = $clog2(MAX_FLUSH_CYCLES + 1);
+
+  // L2 MESI coherency states
+  typedef enum logic [1:0] {
+    MESI_INVALID   = 2'b00,
+    MESI_SHARED    = 2'b01,
+    MESI_EXCLUSIVE = 2'b10,
+    MESI_MODIFIED  = 2'b11
+  } mesi_state_t;
+
+  // L2 MSHR entry states
+  typedef enum logic [2:0] {
+    MSHR_IDLE        = 3'b000,
+    MSHR_PENDING     = 3'b001,
+    MSHR_FILL_ACTIVE = 3'b010,
+    MSHR_WB_PENDING  = 3'b011,
+    MSHR_COMPLETE    = 3'b100
+  } mshr_state_t;
+
+  // L2 flush FSM states
+  typedef enum logic [2:0] {
+    FLUSH_IDLE      = 3'b000,
+    FLUSH_SCAN      = 3'b001,
+    FLUSH_WRITEBACK = 3'b010,
+    FLUSH_WAIT_ACK  = 3'b011,
+    FLUSH_DONE      = 3'b100
+  } flush_state_t;
+
+  // L2 MSHR entry structure
+  typedef struct packed {
+    logic                       valid;
+    mshr_state_t                state;
+    logic [L2_ADDR_WIDTH-1:0]   addr;
+    logic                       is_write;
+    logic [BLK_SIZE-1:0]        wdata;
+    logic [BLK_SIZE/8-1:0]      wstrb;
+    logic                       from_dport;
+  } l2_mshr_entry_t;
+
+  // L2 tag entry structure
+  typedef struct packed {
+    logic [L2_TAG_BITS-1:0] tag;
+    logic                   valid;
+    logic                   dirty;
+    mesi_state_t            mesi;
+  } l2_tag_entry_t;
+
   // Align Buffer (Fetch unit)
   localparam int ABUFF_SIZE = 512;
   localparam int ABUFF_WAY = 1;
@@ -822,6 +913,7 @@ package ceres_param;
     logic [15:0]          rw;
     logic [XLEN-1:0]      addr;
     logic [BLK_SIZE -1:0] data;
+    logic                 uncached;
   } iomem_req_t;
 
   typedef struct packed {

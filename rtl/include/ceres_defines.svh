@@ -47,6 +47,7 @@
 // Cache implementation selection
 //`define USE_UNIFIED_CACHE // Unified cache module (cache.sv with icache/dcache)
 //`define USE_STANDALONE_DCACHE // Standalone dcache module (dcache.sv - writeback only)
+//`define USE_L2_CACHE // Yarok14-based L2 non-blocking cache (MSHR, ECC, MESI) — use USE_L2_CACHE=1 in Makefile
 
 // Multiplier implementation (sadece biri aktif olmalı)
 // Priority: PIPELINED_MUL > WALLACE_SINGLE > DSP_MUL > Sequential

@@ -125,6 +125,8 @@ module cpu
   logic       [1:0]      priority_flush;
   logic                  trap_active;
   logic       [XLEN-1:0] trap_tval;
+  logic                  pipe_downstream_stall;
+  logic pipe2_drained_q;
 
   // ============================================================================
   // FETCH
@@ -454,7 +456,16 @@ module cpu
       `else
       pipe3 <= '0;
       `endif
-    end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active)) begin
+    end else if (pipe_downstream_stall && !trap_active) begin
+      // ME-stage stall (DMISS / ALU / FENCEI): freeze pipe3
+    end else if (pipe2_drained_q) begin
+      // pipe2 already drained: insert bubble (covers stall and transition-out cycle)
+      `ifdef COMMIT_TRACER
+      pipe3 <= '{instr_type:instr_invalid, rw_size: NO_SIZE, default: '0};
+      `else
+      pipe3 <= '0;
+      `endif
+    end else begin
       pipe3 <= '{
         `ifdef COMMIT_TRACER
           fe_tracer    : pipe2.fe_tracer,
@@ -464,7 +475,6 @@ module cpu
           instr_type   : pipe2.instr_type,
           csr_wr_data  : ex_csr_wr_data,
           csr_write_valid : ex_csr_write_valid,
-          // Mark as flushed if this cycle has flush condition or already flushed
           flushed      : (priority_flush == 3) ? 1'b1 : pipe2.flushed,
         `endif
           pc_incr      : pipe2.pc_incr,
@@ -533,7 +543,9 @@ module cpu
       `else
       pipe4 <= '0;
       `endif
-    end else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL} && !trap_active)) begin
+    end else if (pipe_downstream_stall && !trap_active) begin
+      // ME-stage stall (DMISS / ALU / FENCEI): freeze pipe4
+    end else begin
       pipe4 <= '{
         `ifdef COMMIT_TRACER
           fe_tracer   : pipe3.fe_tracer,
@@ -548,7 +560,7 @@ module cpu
           csr_write_valid : pipe3.csr_write_valid,
           dcache_valid : pipe3.dcache_valid,
           pc          : pipe3.pc,
-          flushed     : pipe3.flushed,  // Propagate flushed flag to writeback
+          flushed     : pipe3.flushed,
         `endif
           pc_incr     : pipe3.pc_incr,
           rf_rw_en    : pipe3.rf_rw_en,
@@ -586,6 +598,7 @@ module cpu
       .alu_result_i    (pipe4.alu_result),
       .read_data_i     (pipe4.read_data),
       .stall_i         (stall_cause),
+      .downstream_stall_i(pipe_downstream_stall),
       .rf_rw_en_i      (pipe4.rf_rw_en),
       .rf_rw_en_o      (wb_rf_rw),
       .wb_data_o       (wb_data)
@@ -617,6 +630,19 @@ module cpu
       .fwd_b_de_o   (de_fwd_b)
   );
 
+`ifdef USE_L2_CACHE
+  l2_cache_top_v2 i_l2_cache (
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .flush_i      (1'b0),
+      .icache_req_i (lx_ireq),
+      .icache_res_o (fe_lx_ires),
+      .dcache_req_i (lx_dreq),
+      .dcache_res_o (lx_dres),
+      .mem_req_o    (iomem_req_o),
+      .mem_res_i    (iomem_res_i)
+  );
+`else
   memory_arbiter i_memory_arbiter (
       .clk_i       (clk_i),
       .rst_ni      (rst_ni),
@@ -627,6 +653,7 @@ module cpu
       .iomem_res_i (iomem_res_i),
       .iomem_req_o (iomem_req_o)
   );
+`endif
 
   // ============================================================================
   //  PIPELINE CONTROL & EXCEPTION MANAGEMENT
@@ -636,10 +663,26 @@ module cpu
   // - Hangi aşamada exception oluştuğunu maskeler (excp_mask).
   // - Exception önceliğine göre flush kararı verir (priority_flush).
   // ============================================================================
+  // Downstream stall: freezes ME/WB stages (DMISS, ALU, FENCEI — but NOT IMISS).
+  // Checked directly from raw stall sources so IMISS masking in stall_cause
+  // does not hide an active DMISS.
+  assign pipe_downstream_stall = me_dmiss_stall || ex_alu_stall || me_fencei_stall;
+
+  // Track whether pipe2's content has already been drained into pipe3 while
+  // the upstream (FE/DE/EX boundary) is stalled.  Prevents the same
+  // instruction from re-entering ME when pipe2 is frozen.
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni)
+      pipe2_drained_q <= 1'b0;
+    else if (!(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}))
+      pipe2_drained_q <= 1'b0;
+    else if (!pipe_downstream_stall && !pipe2_drained_q)
+      pipe2_drained_q <= 1'b1;
+  end
+
   always_comb begin
     stall_cause = NO_STALL;
     if (me_fencei_stall) begin
-      // Fence.i: dcache dirty writeback in progress, stall everything
       stall_cause = FENCEI_STALL;
     end else if (fe_imiss_stall) begin
       stall_cause = IMISS_STALL;
