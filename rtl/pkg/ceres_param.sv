@@ -60,7 +60,7 @@ package ceres_param;
   // ── MINIMAL_SOC: Küçük cache (CoreMark için yeterli ~4KB) ──
   // Instruction Cache: 2-way, 2KB
   localparam int IC_WAY = 2;
-  localparam int IC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits)
+  localparam int IC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits): KB * 1024 B/KB * 8 bit/B
   localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
 
   // Data Cache: 2-way, 2KB
@@ -71,12 +71,12 @@ package ceres_param;
   // ── FULL SOC: Büyük cache ──
   // Instruction Cache
   localparam int IC_WAY = 4;
-  localparam int IC_CAPACITY = 8 * 1024 * 8;
+  localparam int IC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
   localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
 
   // Data Cache
   localparam int DC_WAY = 4;
-  localparam int DC_CAPACITY = 8 * 1024 * 8;  // Minimum: 512 bits = 64 bytes = 4 cache lines (2 sets, 2-way)
+  localparam int DC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
 `endif
 

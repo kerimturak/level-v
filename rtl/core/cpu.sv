@@ -631,7 +631,7 @@ module cpu
   );
 
 `ifdef USE_L2_CACHE
-  l2_cache_top_v2 i_l2_cache (
+  nbmbmp_l2_cache i_l2_cache (
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
       .flush_i      (1'b0),
