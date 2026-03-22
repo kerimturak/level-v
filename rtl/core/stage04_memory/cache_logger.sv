@@ -1,18 +1,18 @@
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 // ============================================================================
-// Cache Request/Response Logger - Tablo formatında debug çıktısı
+// Cache Request/Response Logger — table-formatted debug output
 // ============================================================================
-// Bu modül unified cache'e giren istekleri ve dönen cevapları
-// okunabilir bir tablo formatında loglar.
+// This module logs requests into the unified cache and returning responses
+// in a readable table format.
 //
-// Kullanım:
-//   make run LOG_CACHE=1  veya  make verilate LOG_CACHE=1
+// Usage:
+//   make run LOG_CACHE=1  or  make verilate LOG_CACHE=1
 // ============================================================================
 
 module cache_logger
-  import ceres_param::*;
+  import level_param::*;
 (
     input logic        clk_i,
     input logic        rst_ni,
@@ -20,15 +20,15 @@ module cache_logger
     input dcache_res_t cache_res_i
 );
 
-  // Başlık yazdırma flag'i
+  // Header-printed flag
   logic header_printed;
 
-  // Her saat döngüsünde cache aktivitesini kontrol et
+  // Check cache activity each clock cycle
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       header_printed <= 1'b0;
     end else begin
-      // İlk işlemde başlık yazdır
+      // Print header on first activity
       if (!header_printed && (cache_req_i.valid || cache_res_i.valid)) begin
         $display(
             "\n╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗");
@@ -103,11 +103,11 @@ module cache_logger
       end
 
       // Separator every 10 transactions for readability
-      // (optional - bu kısmı istemezsen kaldırabiliriz)
+      // (optional — remove this block if undesired)
     end
   end
 
-  // Simulation sonunda footer yazdır
+  // Print footer at end of simulation
   final begin
     if (header_printed) begin
       $display(

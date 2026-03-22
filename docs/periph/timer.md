@@ -1,33 +1,33 @@
-# General Purpose Timer (GPTimer) - Teknik Dokümantasyon
+# General Purpose Timer (GPTimer) — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [Register Map](#register-map)
-4. [Timer Modları](#timer-modları)
-5. [PWM Çıkışı](#pwm-çıkışı)
-6. [Interrupt Sistemi](#interrupt-sistemi)
+4. [Timer Modes](#timer-modes)
+5. [PWM Output](#pwm-output)
+6. [Interrupt System](#interrupt-system)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`gptimer` modülü, **4 bağımsız 32-bit timer** sağlar. Her timer kendi prescaler, compare/capture kanalları ve PWM output desteğine sahiptir.
+The `gptimer` module provides **four independent 32-bit timers**. Each timer has its own prescaler, compare/capture channels, and PWM output support.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/periph/timer/gptimer.sv
 ```
 
-### Özellikler
+### Features
 
-- 4 bağımsız 32-bit timer
-- Her timer için 16-bit prescaler
-- 2 compare/capture kanal per timer
+- Four independent 32-bit timers
+- 16-bit prescaler per timer
+- Two compare/capture channels per timer
 - Up/Down counting modes
 - One-pulse mode
 - PWM output per channel
@@ -35,13 +35,13 @@ rtl/periph/timer/gptimer.sv
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 module gptimer
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int TIMER_COUNT = 4
 ) (
@@ -82,9 +82,9 @@ Timer 3: 0x60 - 0x7C
 
 ## Register Map
 
-### Per-Timer Registers (Her Timer İçin)
+### Per-Timer Registers (per timer)
 
-| Offset | Register | Açıklama |
+| Offset | Register | Description |
 |--------|----------|----------|
 | 0x00 | CTRL | Control register |
 | 0x04 | CNT | Counter value |
@@ -134,7 +134,7 @@ Timer 3: 0x60 - 0x7C
 
 ---
 
-## Timer Modları
+## Timer Modes
 
 ### Up Counting Mode
 
@@ -238,7 +238,7 @@ Timer 3: 0x60 - 0x7C
 
 ---
 
-## PWM Çıkışı
+## PWM Output
 
 ### PWM Timing
 
@@ -293,7 +293,7 @@ Timer 3: 0x60 - 0x7C
 
 ---
 
-## Interrupt Sistemi
+## Interrupt System
 
 ### Interrupt Sources
 
@@ -342,7 +342,7 @@ write SR, 0x00000000
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### C Header
 
@@ -455,7 +455,7 @@ void capture_irq_handler(void) {
 
 ---
 
-## Prescaler ve Timing Hesabı
+## Prescaler and Timing Calculations
 
 ### Frequency Formulas
 
@@ -491,11 +491,11 @@ System clock = 50 MHz
 
 ---
 
-## Özet
+## Summary
 
-`gptimer` modülü:
+The `gptimer` module provides:
 
-1. **4 Timer**: Bağımsız çalışan timerlar
+1. **4 Timers**: Independently operating timers
 2. **Flexible Counting**: Up/down/center-aligned
 3. **PWM Support**: Hardware PWM output
 4. **One-Pulse**: Single-shot pulse generation

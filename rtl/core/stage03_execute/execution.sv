@@ -7,9 +7,9 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module execution
-  import ceres_param::*;
+  import level_param::*;
 (
 `ifdef COMMIT_TRACER
     output logic        [XLEN-1:0] csr_wr_data_o,
@@ -33,7 +33,7 @@ module execution
     input  logic                   trap_active_i,
     input  logic                   de_trap_active_i,
     input  logic        [XLEN-1:0] trap_cause_i,
-    input  logic        [XLEN-1:0] trap_tval_i,             // faulting instruction / adres
+    input  logic        [XLEN-1:0] trap_tval_i,             // faulting instruction / address
     input  logic        [XLEN-1:0] trap_mepc_i,
     // Hardware interrupt inputs
     input  logic                   timer_irq_i,             // CLINT timer interrupt
@@ -119,7 +119,7 @@ module execution
     operant_b = alu_in2_sel_i ? imm_i : write_data_o;
     signed_imm = imm_i;
     /*
-    Eğer exception desteği yoksa burası
+    If exception support were disabled, this would be:
     pc_target_o = pc_sel_i == JALR ? (data_a + imm_i) & ~1 : pc_i + signed_imm;
     */
     pc_target_o = instr_type_i == mret ? mepc : pc_sel_i == JALR ? (data_a + imm_i) & ~1 : pc_i + signed_imm;
@@ -234,7 +234,7 @@ module execution
 `ifdef COMMIT_TRACER
   always_comb begin
     if (instr_type_i == mret) begin
-      // cs_reg_file içindeki pack_mstatus sonucu loglanmalı
+      // Log pack_mstatus result from cs_reg_file
       csr_wr_data_o        = 0;
       csr_wr_data_o[3]     = csr_rdata[3];
       csr_wr_data_o[7]     = csr_rdata[7];

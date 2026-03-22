@@ -3,9 +3,9 @@
  * Tests instruction and data cache behavior
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
-// Memory regions - Use definitions from ceres_test.h
+// Memory regions - Use definitions from level_test.h
 // Test buffer (smaller to fit in RAM)
 #define TEST_BUF_SIZE 512  // 2KB total
 volatile uint32_t test_buffer[TEST_BUF_SIZE] __attribute__((aligned(64)));

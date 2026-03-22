@@ -1,57 +1,57 @@
-# DMA Controller - Teknik Dokümantasyon
+# DMA Controller — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [Register Map](#register-map)
-4. [Channel Konfigürasyonu](#channel-konfigürasyonu)
-5. [Transfer Modları](#transfer-modları)
+4. [Channel Configuration](#channel-configuration)
+5. [Transfer Modes](#transfer-modes)
 6. [State Machine](#state-machine)
-7. [Interrupt Sistemi](#interrupt-sistemi)
+7. [Interrupt System](#interrupt-system)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`dma` modülü, **4 bağımsız DMA kanalı** ile memory-to-memory, peripheral-to-memory ve memory-to-peripheral transferlerini yönetir.
+The `dma` module manages memory-to-memory, peripheral-to-memory, and memory-to-peripheral transfers across **four independent DMA channels**.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/periph/dma/dma.sv
 ```
 
-### Özellikler
+### Features
 
-- 4 bağımsız DMA kanalı
-- Memory-to-memory transferleri
-- Peripheral-to-memory / Memory-to-peripheral
-- Konfigüre edilebilir burst boyutları (1, 4, 8, 16 word)
-- Circular buffer modu
-- Half-transfer ve transfer-complete interrupt'ları
-- Kanal öncelik seviyeleri
-- Source/destination increment modları
-- Word, half-word ve byte transferleri
+- Four independent DMA channels
+- Memory-to-memory transfers
+- Peripheral-to-memory / memory-to-peripheral
+- Configurable burst lengths (1, 4, 8, 16 words)
+- Circular buffer mode
+- Half-transfer and transfer-complete interrupts
+- Channel priority levels
+- Source/destination increment modes
+- Word, half-word, and byte transfers
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Parametreler
+### Parameters
 
 ```systemverilog
 module dma
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_CHANNELS = 4,
     parameter int MAX_BURST    = 16
 )
 ```
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 (
@@ -88,8 +88,8 @@ module dma
 
 ### Per-Channel Registers (0x20 bytes per channel)
 
-| Offset | Register | Açıklama |
-|--------|----------|----------|
+| Offset | Register | Description |
+|--------|----------|-------------|
 | 0x00 | CCR | Channel Control Register |
 | 0x04 | CNDTR | Channel Number of Data to Transfer |
 | 0x08 | CPAR | Channel Peripheral Address |
@@ -98,7 +98,7 @@ module dma
 
 ### Global Registers
 
-| Offset | Register | Açıklama |
+| Offset | Register | Description |
 |--------|----------|----------|
 | 0x80 | ISR | Interrupt Status Register |
 | 0x84 | IFCR | Interrupt Flag Clear Register |
@@ -108,7 +108,7 @@ module dma
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ Bit   │ İsim    │ Açıklama                                                 │
+│ Bit   │ Name    │ Description                                              │
 ├───────┼─────────┼────────────────────────────────────────────────────────────┤
 │ [0]   │ EN      │ Channel enable                                           │
 │ [1]   │ TCIE    │ Transfer complete interrupt enable                       │
@@ -128,7 +128,7 @@ module dma
 
 ### ISR (Interrupt Status) Register
 
-Her kanal için 4 bit:
+Four bits per channel:
 - `[0]` GIF - Global interrupt flag
 - `[1]` TCIF - Transfer complete interrupt flag
 - `[2]` HTIF - Half transfer interrupt flag
@@ -136,9 +136,9 @@ Her kanal için 4 bit:
 
 ---
 
-## Channel Konfigürasyonu
+## Channel Configuration
 
-### Öncelik Sistemi
+### Priority System
 
 ```systemverilog
 // Priority encoding: 11=very high, 10=high, 01=medium, 00=low
@@ -148,12 +148,12 @@ assign ch_pl[i] = ccr[i][13:12];
 ### Arbitration
 
 ```systemverilog
-// En yüksek öncelikli aktif kanalı bul
+// Find the highest-priority active channel
 always_comb begin
     active_ch = '0;
     active_ch_valid = 1'b0;
     
-    for (int p = 3; p >= 0; p--) begin  // Öncelik 3'ten 0'a
+    for (int p = 3; p >= 0; p--) begin  // Priority from 3 down to 0
         for (int i = 0; i < NUM_CHANNELS; i++) begin
             if (ch_request[i] && ch_pl[i] == p[1:0] && !active_ch_valid) begin
                 active_ch = i;
@@ -166,7 +166,7 @@ end
 
 ---
 
-## Transfer Modları
+## Transfer Modes
 
 ### Memory-to-Memory
 
@@ -190,7 +190,7 @@ Memory (CMAR)  ──►  DMA Engine  ──►  Peripheral (CPAR)
 ### Circular Mode
 
 ```systemverilog
-// Transfer complete'de reload
+// Reload on transfer complete
 if (ctcnt[i] == 1) begin
     if (ch_circ[i]) begin
         ctcnt[i]     <= cndtr[i];     // Count reload
@@ -257,7 +257,7 @@ typedef enum logic [2:0] {
 
 ---
 
-## Interrupt Sistemi
+## Interrupt System
 
 ### Interrupt Flags
 
@@ -297,7 +297,7 @@ end
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### C Header
 
@@ -351,13 +351,13 @@ void dma_memcpy(uint32_t *dst, uint32_t *src, uint32_t count) {
 
 ---
 
-## Özet
+## Summary
 
-`dma` modülü:
+The `dma` module provides:
 
-1. **4 Kanal**: Bağımsız DMA kanalları
-2. **3 Transfer Modu**: M2M, P2M, M2P
-3. **Öncelik**: 4-level priority arbitration
+1. **4 Channels**: Independent DMA channels
+2. **3 Transfer Modes**: M2M, P2M, M2P
+3. **Priority**: Four-level priority arbitration
 4. **Circular**: Continuous buffer mode
 5. **Interrupts**: TC, HT, TE flags
 6. **Burst**: 1/4/8/16 word burst

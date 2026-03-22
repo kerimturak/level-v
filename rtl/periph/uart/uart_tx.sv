@@ -8,10 +8,10 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
 module uart_tx
-  import ceres_param::*;
+  import level_param::*;
 #(
-    parameter DATA_WIDTH = ceres_param::UART_DATA_WIDTH,
-    parameter FIFO_DEPTH = ceres_param::UART_TX_FIFO_DEPTH
+    parameter DATA_WIDTH = level_param::UART_DATA_WIDTH,
+    parameter FIFO_DEPTH = level_param::UART_TX_FIFO_DEPTH
 ) (
     input  logic        clk_i,
     input  logic        rst_ni,
@@ -105,7 +105,7 @@ module uart_tx
   string  uart_log_path;
 
   initial begin
-    // Runtime'da +uart_log_path=<path> ile path geçilebilir
+    // Path can be passed at runtime with +uart_log_path=<path>
     if (!$value$plusargs("uart_log_path=%s", uart_log_path)) begin
       uart_log_path = "uart_output.log";  // Default: current directory
     end
@@ -119,7 +119,7 @@ module uart_tx
 
   always_ff @(posedge clk_i) begin
     if (rst_ni && tx_we_i && !full_o && uart_fd != 0) begin
-      // Her karakter geldiğinde dosyaya yaz (flush ile)
+      // Write each character to the file (with flush)
       $fwrite(uart_fd, "%c", din_i);
       $fflush(uart_fd);
     end

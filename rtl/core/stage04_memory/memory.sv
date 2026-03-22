@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 module memory
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic                  clk_i,
     input  logic                  rst_ni,

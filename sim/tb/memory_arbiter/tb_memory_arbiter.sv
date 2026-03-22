@@ -2,14 +2,14 @@
 
 // Self-checking testbench for memory_arbiter
 module tb_memory_arbiter;
-  import ceres_param::*;
+  import level_param::*;
 
   // Clock / reset
   logic clk = 0;
   always #5 clk = ~clk;
   logic       rst_ni = 0;
 
-  // Interface signals (types from ceres_param)
+  // Interface signals (types from level_param)
   ilowX_req_t icache_req_i;
   dlowX_req_t dcache_req_i;
   ilowX_res_t icache_res_o;

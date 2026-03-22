@@ -1,5 +1,5 @@
 /* ============================================================
- * Ceres-V Board Support for Embench-IoT
+ * Level-V Board Support for Embench-IoT
  * ============================================================
  * This file is included by board.c
  */
@@ -61,7 +61,7 @@ void initialise_board(void) {
     __asm__ volatile ("csrw mcycle, zero");
     __asm__ volatile ("csrw minstret, zero");
     
-    uart_puts("\r\n[Ceres-V] Embench Benchmark\r\n");
+    uart_puts("\r\n[Level-V] Embench Benchmark\r\n");
 }
 
 void start_trigger(void) {

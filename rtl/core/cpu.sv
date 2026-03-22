@@ -7,9 +7,9 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module cpu
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic       clk_i,
     input  logic       rst_ni,
@@ -135,8 +135,8 @@ module cpu
   // ============================================================================
   // FETCH Exception List
   // ----------------------------------------------------------------------------
-  // INSTR_ACCESS_FAULT - pma grand yoksa
-  // ILLEGAL_INSTRUCTION - desteklenen instruction değilse
+  // INSTR_ACCESS_FAULT - if PMA does not grant access
+  // ILLEGAL_INSTRUCTION - if the instruction is not supported
   // EBREAK - 
   // ECALL - 
   // ============================================================================
@@ -180,12 +180,12 @@ module cpu
   // ============================================================================
   // FETCH → DECODE Pipeline Register (pipe1)
   // ----------------------------------------------------------------------------
-  // Bu always_ff bloğu, fetch aşamasından gelen bilgileri decode aşamasına taşır.
-  // - Her clock kenarında pipe1 güncellenir.
-  // - Reset veya flush durumunda pipe1 temizlenir (nop benzeri).
-  // - de_enable sinyali aktifse yeni fetch verileri yüklenir.
-  // - Tracer açıkken, trace bilgisi (fe_tracer) de taşınır.
-  // - ex_exc_type varsa decode ve fetch flush edilmeli, exception öncesi yanlış çekilmiştir
+  // This always_ff block moves information from fetch to decode.
+  // - pipe1 updates on each clock edge.
+  // - On reset or flush, pipe1 is cleared (nop-like).
+  // - When de_enable is asserted, new fetch data is loaded.
+  // - When the tracer is enabled, trace info (fe_tracer) is carried as well.
+  // - If ex_exc_type is set, decode and fetch must flush; the wrong path was fetched before the exception
   // ============================================================================
   //  Decode Exception List
   //  - ILLEGAL_INSTRUCTION
@@ -204,17 +204,17 @@ module cpu
   end
 
   // ============================================================================
-  //  DECODE kontrol mantığı
+  //  DECODE control logic
   // ----------------------------------------------------------------------------
-  // Bu always_comb bloğu, decode aşamasının kontrol sinyallerini hesaplar.
-  // - fe_active_exc_type : exc misprediction sonucu üretildi ise geçersizdir
-  // - fencei_flush : fence.i komutu tespit edildiğinde I-cache flush sinyali
-  // - de_enable      : decode enable durumu (stall yoksa ve flush gerekmezse)
-  // - de_flush_en    : flush sinyali aktifse pipe1 sıfırlanır
-  // - de_info        : sonraki aşamalara (fetch-execute feedback) bilgi taşır
-  // Eğer speculative tahmin (branch prediction) başarısızsa,
-  // bu instruction exception oluşturmaz (NO_EXCEPTION).
-  // Ancak speculative hit ise, fetch’ten gelen exception korunur.
+  // This always_comb block computes decode-stage control signals.
+  // - fe_active_exc_type: fetch exception applies only on speculative hit; cleared on mispredict
+  // - fencei_flush: I-cache flush when a fence.i is detected
+  // - de_enable: decode enable (no stall and no flush required)
+  // - de_flush_en: when flush is active, pipe1 is reset
+  // - de_info: carries information to later stages (fetch–execute feedback)
+  // If speculative prediction (branch prediction) fails,
+  // this instruction does not raise an exception (NO_EXCEPTION).
+  // On a speculative hit, the exception from fetch is preserved.
   // ============================================================================
   always_comb begin
     fe_active_exc_type  = ex_spec_hit ? fe_exc_type : NO_EXCEPTION;
@@ -255,17 +255,16 @@ module cpu
   // ============================================================================
   // DECODE → EXECUTE Pipeline Register (pipe2)
   // ----------------------------------------------------------------------------
-  // Bu blok, decode aşamasında çözümlenen instruction’ı execute aşamasına taşır.
-  // - Reset veya flush durumunda pipe2 sıfırlanır.
-  // - Eğer fetch flush (örneğin fence.i) veya pipeline stall varsa güncellenmez.
-  // - Aksi durumda, decode aşamasında üretilen kontrol sinyalleri ve operandlar
-  //   execute aşamasına aktarılır.
-  // Exception bilgisi:
-  // Eğer speculative branch tahmini hatalıysa bu instruction flushlanacak,
-  // bu yüzden exception'ı sıfırla. Aksi durumda decode exception'ı taşı.
-  // - ex_exc_type varsa decode ve fetch flush edilmeli, exception öncesi yanlış çekilmiştir
-  // - fencei_flush durumunda pipe1'i (decode) flush ediyoruz ama pipe2'deki fence.i instruction'ı
-  //   execute/memory/writeback'e ilerlemeli, kendisini flush etmemeli
+  // This block moves the instruction decoded in decode into execute.
+  // - pipe2 is cleared on reset or flush.
+  // - It does not update if there is a fetch flush (e.g. fence.i) or a pipeline stall.
+  // - Otherwise, control signals and operands from decode are passed to execute.
+  // Exception handling:
+  // If speculative branch prediction is wrong this instruction will be flushed,
+  // so clear the exception. Otherwise carry the decode exception.
+  // - If ex_exc_type is set, decode and fetch must flush; wrong path was fetched before the exception
+  // - On fencei_flush we flush pipe1 (decode) but the fence.i in pipe2 must
+  //   proceed to execute/memory/writeback and must not flush itself
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni || ex_flush_en || priority_flush == 3 || priority_flush == 2) begin
@@ -307,12 +306,12 @@ module cpu
   end
 
   // ============================================================================
-  // EXECUTE kontrol mantığı
+  // EXECUTE control logic
   // ----------------------------------------------------------------------------
-  // Bu kısım, execute aşamasındaki exception ve CSR davranışlarını belirler.
-  // - ex_flush_en: execute flush sinyalinin ne zaman etkin olacağını belirler
-  // - ex_exc_type: ALU ve bellek erişimlerinden kaynaklanan hataları tespit eder
-  // - ex_rd_csr / ex_wr_csr: CSR erişimlerinin stall ile çakışmasını önler
+  // This section defines execute-stage exception and CSR behavior.
+  // - ex_flush_en: when the execute flush signal is effective
+  // - ex_exc_type: detects faults from ALU and memory accesses
+  // - ex_rd_csr / ex_wr_csr: avoid CSR access colliding with stall
   // ============================================================================
   //  Execute Exception List
   //  - ALU- INSTR_MISALIGNED
@@ -366,11 +365,11 @@ module cpu
       .alu_in1_sel_i(pipe2.alu_in1_sel),
       .alu_in2_sel_i(pipe2.alu_in2_sel),
       .instr_type_i (pipe2.instr_type),
-      .trap_active_i(trap_active), // muxlanarak exc çıkan aşamanın pcsi atanmalı
-      .de_trap_active_i(de_trap_active), // muxlanarak exc çıkan aşamanın pcsi atanmalı
-      .trap_tval_i  (trap_tval), // muxlanarak exc çıkan aşamanın pcsi atanmalı
+      .trap_active_i(trap_active), // mux: PC of the stage where the exception occurred must be selected
+      .de_trap_active_i(de_trap_active), // mux: PC of the stage where the exception occurred must be selected
+      .trap_tval_i  (trap_tval), // mux: PC of the stage where the exception occurred must be selected
       .trap_cause_i (ex_trap_cause ),
-      .trap_mepc_i  (ex_trap_mepc  ),  // muxlanarak exc çıkan aşamanın pcsi atanmalı
+      .trap_mepc_i  (ex_trap_mepc  ),  // mux: PC of the stage where the exception occurred must be selected
       // Hardware interrupt inputs
       .timer_irq_i  (timer_irq_i),
       .sw_irq_i     (sw_irq_i),
@@ -401,10 +400,9 @@ module cpu
   // ============================================================================
   // BRANCH PREDICTION VERIFICATION & PIPELINE FEEDBACK
   // ----------------------------------------------------------------------------
-  // Bu blok, execute aşamasında branch prediction’ın (speculative execution)
-  // doğru olup olmadığını kontrol eder ve fetch aşamasına geri bildirim sağlar.
-  // Ayrıca ex_info yapısını doldurarak sonraki aşamalarda exception / spec
-  // takibi yapılmasına olanak tanır.
+  // This block checks whether branch prediction (speculative execution) in execute
+  // was correct and provides feedback to fetch.
+  // It also fills ex_info so later stages can track exception / spec state.
   // ============================================================================
 
   always_comb begin
@@ -439,10 +437,10 @@ module cpu
   // ============================================================================
   // CSR (Control and Status Register) Validation
   // ----------------------------------------------------------------------------
-  // Bu blok, execute aşamasında erişilmek istenen CSR adresinin (csr_idx)
-  // işlemci tarafından desteklenip desteklenmediğini kontrol eder.
-  // Eğer geçerli bir CSR adresiyse ex_valid_csr = 1 olur.
-  // Bu bilgi, writeback aşamasında CSR yazma izni için kullanılır.
+  // This block checks whether the CSR index (csr_idx) requested in execute
+  // is supported by the core.
+  // If it is a valid CSR address, ex_valid_csr = 1.
+  // Writeback uses this to permit CSR writes.
   // ============================================================================
   always_comb begin // supported csrs
     ex_valid_csr = is_supported_csr(pipe2.csr_idx); 
@@ -531,10 +529,10 @@ module cpu
   // ============================================================================
   // EXECUTE → MEMORY Pipeline Register (pipe3)
   // ----------------------------------------------------------------------------
-  // Bu register, execute aşamasında hesaplanan sonuçları memory aşamasına taşır.
-  // - ALU sonucu, memory adresi veya CSR erişimleri burada saklanır.
-  // - Eğer reset varsa veya pipeline stall değilse yeni değerler yüklenir.
-  // - Tracer açıksa, CSR erişim bilgileri de kaydedilir.
+  // This register moves results computed in execute into the memory stage.
+  // - ALU result, memory address, or CSR access state is held here.
+  // - When not in reset and not frozen by downstream stall, new values load from pipe3.
+  // - When the tracer is enabled, CSR access info is recorded as well.
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
@@ -658,10 +656,10 @@ module cpu
   // ============================================================================
   //  PIPELINE CONTROL & EXCEPTION MANAGEMENT
   // ----------------------------------------------------------------------------
-  // Bu always_comb bloğu, işlemcinin o cycle’daki pipeline kontrol durumunu belirler.
-  // - Hangi aşamanın stall (durma) sebebi olduğunu hesaplar.
-  // - Hangi aşamada exception oluştuğunu maskeler (excp_mask).
-  // - Exception önceliğine göre flush kararı verir (priority_flush).
+  // This always_comb block sets the pipeline control state for the current cycle.
+  // - Computes which stage is the cause of stall.
+  // - Masks which stage raised an exception (excp_mask).
+  // - Chooses flush by exception priority (priority_flush).
   // ============================================================================
   // Downstream stall: freezes ME/WB stages (DMISS, ALU, FENCEI — but NOT IMISS).
   // Checked directly from raw stall sources so IMISS masking in stall_cause
@@ -699,15 +697,15 @@ module cpu
       end
       LOAD_MISALIGNED,
       STORE_MISALIGNED: begin
-        // ÖNEMLİ: mtval = faulting address olmalı
+        // IMPORTANT: mtval must be the faulting address
         // ex_fault_addr = rs1 + imm (ALU effective address)
-        trap_tval = ex_alu_result; //because mempry stage address is this pipe2.pc;  // <- BUNU kendi adres sinyalinle değiştir
+        trap_tval = ex_alu_result; // memory stage would use pipe2.pc; replace with your address signal if needed
       end
       default: begin
         trap_tval = '0;
       end
     endcase
-  // DE stage: decode’de illegal, fetch’ten taşınan misaligned_fetch vs.
+  // DE stage: illegal at decode, misaligned fetch propagated from fetch, etc.
   end else if (de_active_exc_type != NO_EXCEPTION) begin
     unique case (de_active_exc_type)
       ILLEGAL_INSTRUCTION: begin
@@ -723,12 +721,11 @@ module cpu
       end
     endcase
 
-  // FE tarafında aktif kalmış exception (sen decode’a taşıyorum diyorsun,
-  // ama yine de FE kaynaklı bir tip tutuyorsan, son sıraya koyuyoruz)
+  // Exception still active from FE (if you move it to decode but keep an FE-originated type, handle it last)
   end else if (fe_active_exc_type != NO_EXCEPTION) begin
     unique case (fe_active_exc_type)
       INSTR_MISALIGNED: begin
-        // İstersen burada fe_pc yerine decode’taki pipe1.pc kullan
+        // Optionally use pipe1.pc from decode here instead of fe_pc
         trap_tval = fe_pc;
       end
       ILLEGAL_INSTRUCTION: begin

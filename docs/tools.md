@@ -1,136 +1,121 @@
-# CERES RISC-V — Development Tools Guide
+# Level RISC-V — Development Tools Guide
 
-Bu döküman, CERES RISC-V projesinde kullanılan açık kaynak geliştirme araçlarını, kurulumlarını ve kullanım örneklerini açıklar.
-
----
-
-## 📊 Araç Özeti
-
-| Araç | Kategori | Güçlülük | Lisans | Açıklama |
-|------|----------|:--------:|--------|----------|
-| **Verilator** | Simülasyon | ⭐⭐⭐⭐⭐ | LGPL | En hızlı açık kaynak RTL simülatörü |
-| **Spike** | RISC-V ISS | ⭐⭐⭐⭐⭐ | BSD | Resmi RISC-V referans simülatörü |
-| **Slang (pyslang)** | Linting | ⭐⭐⭐⭐⭐ | MIT | En kapsamlı SV parser/linter |
-| **Yosys** | Sentez | ⭐⭐⭐⭐⭐ | ISC | RTL sentez framework |
-| **svlint** | Linting | ⭐⭐⭐⭐ | MIT | Hızlı SV stil linter |
-| **GTKWave** | Waveform | ⭐⭐⭐⭐ | GPL | Olgun VCD/FST viewer |
-| **Surfer** | Waveform | ⭐⭐⭐⭐ | MIT | Modern, GPU-hızlandırmalı viewer |
-| **Icarus Verilog** | Simülasyon | ⭐⭐⭐ | GPL | Basit Verilog simülatörü |
-
-> **Güçlülük Skalası:** ⭐ Temel → ⭐⭐⭐⭐⭐ Profesyonel
+This document describes the open-source development tools used in the Level RISC-V project, how to install them, and usage examples.
 
 ---
 
-## 🚀 Simülasyon Araçları
+## 📊 Tool Summary
 
-### Verilator (Önerilen)
+| Tool | Category | Rating | License | Description |
+|------|----------|:--------:|--------|-------------|
+| **Verilator** | Simulation | ⭐⭐⭐⭐⭐ | LGPL | Fastest open-source RTL simulator |
+| **Spike** | RISC-V ISS | ⭐⭐⭐⭐⭐ | BSD | Official RISC-V reference simulator |
+| **Slang (pyslang)** | Linting | ⭐⭐⭐⭐⭐ | MIT | Most comprehensive SV parser/linter |
+| **Yosys** | Synthesis | ⭐⭐⭐⭐⭐ | ISC | RTL synthesis framework |
+| **svlint** | Linting | ⭐⭐⭐⭐ | MIT | Fast SV style linter |
+| **GTKWave** | Waveform | ⭐⭐⭐⭐ | GPL | Mature VCD/FST viewer |
+| **Surfer** | Waveform | ⭐⭐⭐⭐ | MIT | Modern, GPU-accelerated viewer |
+> **Rating scale:** ⭐ Basic → ⭐⭐⭐⭐⭐ Professional
 
-**Versiyon:** 5.026  
-**Güçlülük:** ⭐⭐⭐⭐⭐  
+---
+
+## 🚀 Simulation Tools
+
+### Verilator (Recommended)
+
+**Version:** 5.026  
+**Rating:** ⭐⭐⭐⭐⭐  
 **Website:** https://verilator.org
 
-Verilator, SystemVerilog/Verilog RTL'i C++/SystemC'ye derleyen en hızlı açık kaynak simülatördür.
+Verilator is the fastest open-source simulator that compiles SystemVerilog/Verilog RTL to C++/SystemC.
 
-#### Özellikler
-- ✅ SystemVerilog 2017 desteği
-- ✅ Çok iş parçacıklı simülasyon
-- ✅ Lint ve statik analiz
-- ✅ Coverage analizi
-- ✅ FST/VCD waveform çıktısı
-- ✅ C++ testbench entegrasyonu
+#### Features
+- ✅ SystemVerilog 2017 support
+- ✅ Multi-threaded simulation
+- ✅ Lint and static analysis
+- ✅ Coverage analysis
+- ✅ FST/VCD waveform output
+- ✅ C++ testbench integration
 
-#### Kurulum
+#### Installation
 ```bash
 # Ubuntu 24.04
 sudo apt install verilator
 
-# Kaynak koddan (önerilen, daha güncel)
+# From source (recommended, more up to date)
 git clone https://github.com/verilator/verilator
 cd verilator && git checkout v5.026
 autoconf && ./configure --prefix=/opt/verilator
 make -j$(nproc) && sudo make install
 ```
 
-#### Kullanım
+#### Usage
 ```bash
-make verilate                    # Model derle
+make verilate                    # Build model
 make run_verilator TEST_NAME=rv32ui-p-add
-make verilator_static            # Lint kontrolü
+make lint                        # Verilator lint (--lint-only -Wall)
 ```
 
 ---
 
 ### Spike (RISC-V ISS)
 
-**Güçlülük:** ⭐⭐⭐⭐⭐  
+**Rating:** ⭐⭐⭐⭐⭐  
 **Website:** https://github.com/riscv-software-src/riscv-isa-sim
 
-Resmi RISC-V Instruction Set Simulator. Golden model olarak kullanılır.
+Official RISC-V Instruction Set Simulator. Used as a golden model.
 
-#### Özellikler
-- ✅ Tüm RISC-V ISA uzantıları
-- ✅ Commit trace log çıktısı
+#### Features
+- ✅ All RISC-V ISA extensions
+- ✅ Commit trace log output
 - ✅ Interactive debugging
-- ✅ Memory model desteği
+- ✅ Memory model support
 
-#### Kullanım
+#### Usage
 ```bash
-make spike TEST_NAME=rv32ui-p-add   # Spike ile çalıştır
-make compare_logs                    # RTL vs Spike karşılaştır
+make spike TEST_NAME=rv32ui-p-add   # Run with Spike
+make compare_logs                    # Compare RTL vs Spike
 ```
 
 ---
 
 ### Icarus Verilog
 
-**Güçlülük:** ⭐⭐⭐  
-**Website:** http://iverilog.icarus.com
-
-Basit Verilog simülatörü. **Not:** CERES RTL'i Icarus ile uyumlu değildir (advanced SV özellikleri kullanıyor).
-
-#### Sınırlamalar
-- ❌ `inside` operatörü desteklenmiyor
-- ❌ `automatic` değişkenler sınırlı
-- ❌ Struct parametreleri desteklenmiyor
-
-#### Kurulum
-```bash
-sudo apt install iverilog gtkwave
-```
+The project has **no Makefile target** for Icarus: Level RTL uses advanced SystemVerilog and does not practically build with Icarus. You may install and try it separately; the official flow is Verilator / ModelSim.
 
 ---
 
-## 🔍 Linting Araçları
+## 🔍 Linting Tools
 
 ### Slang (pyslang)
 
-**Versiyon:** 9.1.0  
-**Güçlülük:** ⭐⭐⭐⭐⭐  
+**Version:** 9.1.0  
+**Rating:** ⭐⭐⭐⭐⭐  
 **Website:** https://sv-lang.com
 
-En kapsamlı SystemVerilog parser ve linter. IEEE 1800-2023 tam uyumlu.
+The most comprehensive SystemVerilog parser and linter. Full IEEE 1800-2023 alignment.
 
-#### Özellikler
-- ✅ Tam SV 2023 desteği
-- ✅ Semantik analiz
+#### Features
+- ✅ Full SV 2023 support
+- ✅ Semantic analysis
 - ✅ Type checking
-- ✅ 200+ lint kuralı
+- ✅ 200+ lint rules
 - ✅ Python bindings (pyslang)
 
-#### Kurulum
+#### Installation
 ```bash
 pip install pyslang
-# veya
+# or
 make lint_install
 ```
 
-#### Kullanım
+#### Usage
 ```bash
-make slang_lint      # Lint çalıştır
-make slang_check     # Detaylı analiz
+make slang_lint      # Run lint
+make slang_check     # Detailed analysis
 ```
 
-#### Örnek Çıktı
+#### Sample Output
 ```
 rtl/core/cpu.sv:182:78: error: no implicit conversion from 'int' to 'spec_type_e'
 rtl/core/cpu.sv:309:16: warning: 'case' marked 'unique' has 'default' label
@@ -140,31 +125,31 @@ rtl/core/cpu.sv:309:16: warning: 'case' marked 'unique' has 'default' label
 
 ### svlint
 
-**Versiyon:** 0.9.5  
-**Güçlülük:** ⭐⭐⭐⭐  
+**Version:** 0.9.5  
+**Rating:** ⭐⭐⭐⭐  
 **Website:** https://github.com/dalance/svlint
 
-Hızlı SystemVerilog stil ve naming linter. Rust tabanlı.
+Fast SystemVerilog style and naming linter. Rust-based.
 
-#### Özellikler
-- ✅ Hızlı çalışma
-- ✅ TOML konfigürasyon
-- ✅ Özelleştirilebilir kurallar
-- ✅ CI/CD uyumlu
+#### Features
+- ✅ Fast execution
+- ✅ TOML configuration
+- ✅ Customizable rules
+- ✅ CI/CD friendly
 
-#### Kurulum
+#### Installation
 ```bash
 make lint_install
-# veya
+# or
 cargo install svlint
 ```
 
-#### Kullanım
+#### Usage
 ```bash
-make svlint          # Lint çalıştır
+make svlint          # Run lint
 ```
 
-#### Konfigürasyon (.svlint.toml)
+#### Configuration (.svlint.toml)
 ```toml
 [option]
 exclude_paths = ["subrepo/", "build/"]
@@ -179,13 +164,13 @@ case_default = true
 
 ### Verilator Lint
 
-**Güçlülük:** ⭐⭐⭐⭐  
+**Rating:** ⭐⭐⭐⭐  
 
-Verilator'ın dahili lint özelliği.
+Built-in Verilator lint.
 
-#### Kullanım
+#### Usage
 ```bash
-make verilator_static    # Statik analiz
+make lint                # Static analysis (--lint-only -Wall)
 ```
 
 ---
@@ -194,83 +179,83 @@ make verilator_static    # Statik analiz
 
 ### GTKWave
 
-**Güçlülük:** ⭐⭐⭐⭐  
+**Rating:** ⭐⭐⭐⭐  
 **Website:** http://gtkwave.sourceforge.net
 
-Olgun ve yaygın kullanılan waveform viewer.
+Mature, widely used waveform viewer.
 
-#### Özellikler
-- ✅ VCD, FST, LXT2 desteği
+#### Features
+- ✅ VCD, FST, LXT2 support
 - ✅ TCL scripting
 - ✅ Signal search
 - ✅ Analog waveform
 
-#### Kurulum
+#### Installation
 ```bash
 sudo apt install gtkwave
 ```
 
-#### Kullanım
+#### Usage
 ```bash
-make gtkwave                    # Son waveform'u aç
-make run_verilator TRACE=1      # Trace ile simülasyon
+make gtkwave                    # Open latest waveform
+make run_verilator TRACE=1      # Simulation with trace
 ```
 
 ---
 
 ### Surfer
 
-**Güçlülük:** ⭐⭐⭐⭐  
+**Rating:** ⭐⭐⭐⭐  
 **Website:** https://surfer-project.org
 
-Modern, GPU-hızlandırmalı waveform viewer. Rust tabanlı.
+Modern, GPU-accelerated waveform viewer. Rust-based.
 
-#### Özellikler
-- ✅ GPU hızlandırma
+#### Features
+- ✅ GPU acceleration
 - ✅ Modern UI
-- ✅ Hızlı büyük dosya yükleme
-- ✅ VCD, FST, GHW desteği
+- ✅ Fast large-file loading
+- ✅ VCD, FST, GHW support
 
-#### Kurulum
+#### Installation
 ```bash
 make surfer_install
-# veya
+# or
 cargo install --git https://gitlab.com/surfer-project/surfer surfer
 ```
 
-#### Kullanım
+#### Usage
 ```bash
-make surfer                     # Waveform aç
-make surfer_file WAVE_FILE=path # Belirli dosya aç
-make wave_compare               # GTKWave vs Surfer karşılaştır
+make surfer                     # Open waveform
+make surfer_file WAVE_FILE=path # Open specific file
+make wave_compare               # GTKWave vs Surfer comparison
 ```
 
 ---
 
-## 🔨 Sentez Araçları
+## 🔨 Synthesis Tools
 
 ### Yosys
 
-**Güçlülük:** ⭐⭐⭐⭐⭐  
+**Rating:** ⭐⭐⭐⭐⭐  
 **Website:** https://yosyshq.net/yosys
 
-Açık kaynak RTL sentez framework.
+Open-source RTL synthesis framework.
 
-#### Özellikler
+#### Features
 - ✅ Verilog/SystemVerilog parsing
-- ✅ Çeşitli optimizasyon geçişleri
-- ✅ FPGA ve ASIC hedefleri
-- ✅ Formal verification desteği
+- ✅ Various optimization passes
+- ✅ FPGA and ASIC targets
+- ✅ Formal verification support
 
-#### Kurulum
+#### Installation
 ```bash
 sudo apt install yosys
 ```
 
-#### Kullanım
+#### Usage
 ```bash
-make yosys_check                # Sentez kontrolü
-make yosys_synth                # Tam sentez
+make yosys_check                # Synthesis check
+make yosys_synth                # Full synthesis
 ```
 
 ---
@@ -279,77 +264,77 @@ make yosys_synth                # Tam sentez
 
 ### riscv-tests
 
-Resmi RISC-V ISA test suite.
+Official RISC-V ISA test suite.
 
 ```bash
-make isa                        # Tüm ISA testlerini çalıştır
-make t T=rv32ui-p-add           # Tek test
+make isa                        # Run all ISA tests
+make t T=rv32ui-p-add           # Single test
 ```
 
 ### riscv-arch-test
 
-RISC-V mimari uyumluluk testleri.
+RISC-V architecture compliance tests.
 
 ```bash
-make arch                       # Tüm arch testlerini çalıştır
+make arch                       # Run all arch tests
 ```
 
 ### CoreMark
 
-Gömülü sistem benchmark.
+Embedded system benchmark.
 
 ```bash
-make cm                         # CoreMark çalıştır
+make run_coremark               # CoreMark (Verilator)
 ```
 
 ---
 
-## 📋 Hızlı Başvuru Tablosu
+## 📋 Quick Reference
 
-| Komut | Açıklama |
-|-------|----------|
-| `make verilate` | Verilator modeli derle |
-| `make run_verilator TEST_NAME=...` | Simülasyon çalıştır |
-| `make svlint` | svlint çalıştır |
-| `make slang_lint` | Slang lint çalıştır |
-| `make lint_all` | Tüm linterları çalıştır |
-| `make lint_install` | Lint araçlarını kur |
-| `make gtkwave` | GTKWave aç |
-| `make surfer` | Surfer aç |
-| `make yosys_check` | Yosys sentez kontrolü |
-| `make isa` | ISA testlerini çalıştır |
-| `make html` | Test dashboard oluştur |
+| Command | Description |
+|---------|-------------|
+| `make verilate` | Build Verilator model |
+| `make run_verilator TEST_NAME=...` | Run simulation |
+| `make svlint` | Run svlint |
+| `make slang_lint` | Run Slang lint |
+| `make lint_all` | Run all linters |
+| `make lint_install` | Install lint tools |
+| `make gtkwave` | Open GTKWave |
+| `make surfer` | Open Surfer |
+| `make yosys_check` | Yosys synthesis check |
+| `make isa` | Run ISA tests |
+| `make html` | Generate test dashboard |
 
 ---
 
-## 🔧 Sorun Giderme
+## 🔧 Troubleshooting
 
-### Verilator Hataları
+### Verilator Errors
 
-**BLKLOOPINIT hatası:**
+**BLKLOOPINIT error:**
 ```bash
-# verilator.mk'de --Wno-BLKLOOPINIT eklendi
+# --Wno-BLKLOOPINIT added in verilator.mk
 ```
 
-**VL_SYSTEM_IN hatası:**
+**VL_SYSTEM_IN error:**
 ```bash
-# Verilator 5.026'ya yükseltin
+# Upgrade to Verilator 5.026
 ```
 
-### svlint Konfigürasyon Hatası
+### svlint Configuration Error
 ```bash
-# .svlint.toml dosyasını kontrol edin
-# Geçersiz kural isimleri olabilir
+# Check the .svlint.toml file
+# Rule names may be invalid
 ```
 
-### pyslang Import Hatası
+### pyslang Import Error
 ```bash
 pip install --upgrade pyslang
 ```
 
 ---
 
-## 📚 Ek Kaynaklar
+## 📚 Additional Resources
 
 - [Verilator Manual](https://verilator.org/guide/latest/)
 - [Slang Documentation](https://sv-lang.com/)
@@ -359,4 +344,4 @@ pip install --upgrade pyslang
 
 ---
 
-*Son güncelleme: Kasım 2025*
+*Last updated: November 2025*

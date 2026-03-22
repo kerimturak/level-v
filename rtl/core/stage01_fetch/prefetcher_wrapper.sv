@@ -9,27 +9,27 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 ================================================================================
 Parametric Prefetcher Wrapper
 ================================================================================
-PREFETCH_TYPE parametresine göre uygun prefetcher'ı instantiate eder.
+Instantiates the appropriate prefetcher according to PREFETCH_TYPE.
 
-Desteklenen Prefetcher Türleri:
-  0 - None      : Prefetching devre dışı
-  1 - NextLine  : Basit next-line prefetcher
+Supported prefetcher types:
+  0 - None      : Prefetching disabled
+  1 - NextLine  : Simple next-line prefetcher
   2 - Stride    : PC-indexed stride prefetcher (TODO)
   3 - Stream    : Multi-stream prefetcher (TODO)
-  4 - Hybrid    : Stride + Stream kombinasyonu (TODO)
+  4 - Hybrid    : Stride + stream combination (TODO)
 
-Kullanım:
-  ceres_param::PREFETCH_TYPE parametresi ile kontrol edilir.
+Usage:
+  Controlled via level_param::PREFETCH_TYPE.
 ================================================================================
 */
 `timescale 1ns / 1ps
 
 module prefetcher_wrapper
-  import ceres_param::*;
+  import level_param::*;
 #(
-    parameter int XLEN          = ceres_param::XLEN,
-    parameter int BLK_SIZE      = ceres_param::BLK_SIZE,
-    parameter int PREFETCH_TYPE = ceres_param::PREFETCH_TYPE
+    parameter int XLEN          = level_param::XLEN,
+    parameter int BLK_SIZE      = level_param::BLK_SIZE,
+    parameter int PREFETCH_TYPE = level_param::PREFETCH_TYPE
 ) (
     input  logic            clk_i,
     input  logic            rst_ni,
@@ -84,8 +84,8 @@ module prefetcher_wrapper
       // TODO: Implement stride_prefetcher
       // stride_prefetcher #(
       //     .XLEN       (XLEN),
-      //     .TABLE_SIZE (ceres_param::STRIDE_TABLE_SIZE),
-      //     .STRIDE_BITS(ceres_param::STRIDE_BITS),
+      //     .TABLE_SIZE (level_param::STRIDE_TABLE_SIZE),
+      //     .STRIDE_BITS(level_param::STRIDE_BITS),
       //     .BLK_SIZE   (BLK_SIZE)
       // ) u_stride_prefetcher (
       //     .clk_i              (clk_i),
@@ -124,8 +124,8 @@ module prefetcher_wrapper
       // TODO: Implement stream_prefetcher
       // stream_prefetcher #(
       //     .XLEN           (XLEN),
-      //     .NUM_STREAMS    (ceres_param::NUM_STREAMS),
-      //     .PREFETCH_DEGREE(ceres_param::PREFETCH_DEGREE),
+      //     .NUM_STREAMS    (level_param::NUM_STREAMS),
+      //     .PREFETCH_DEGREE(level_param::PREFETCH_DEGREE),
       //     .BLK_SIZE       (BLK_SIZE)
       // ) u_stream_prefetcher (
       //     .clk_i          (clk_i),

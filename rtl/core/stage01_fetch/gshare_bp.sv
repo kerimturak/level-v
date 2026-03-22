@@ -9,32 +9,32 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 `timescale 1ns / 1ps
 
 module gshare_bp
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic                     clk_i,
     input  logic                     rst_ni,
-    input  logic                     spec_hit_i,     // Speculation doğru mu? (1=doğru, 0=misprediction)
-    input  logic                     stall_i,        // Pipeline stall sinyali
-    input  inst_t                    inst_i,         // Fetch edilen instruction
-    input  logic          [XLEN-1:0] pc_target_i,    // EX aşamasından gelen gerçek branch hedefi
-    input  logic          [XLEN-1:0] pc_i,           // Mevcut program counter
-    input  logic          [XLEN-1:0] pc_incr_i,      // PC + 4 (sequential adres)
-    input  logic                     fetch_valid_i,  // Fetch geçerli mi?
-    output predict_info_t            spec_o,         // Prediction çıktısı (pc, taken)
+    input  logic                     spec_hit_i,     // Is speculation correct? (1=correct, 0=misprediction)
+    input  logic                     stall_i,        // Pipeline stall signal
+    input  inst_t                    inst_i,         // Fetched instruction
+    input  logic          [XLEN-1:0] pc_target_i,    // Actual branch target from EX stage
+    input  logic          [XLEN-1:0] pc_i,           // Current program counter
+    input  logic          [XLEN-1:0] pc_incr_i,      // PC + 4 (sequential address)
+    input  logic                     fetch_valid_i,  // Is fetch valid?
+    output predict_info_t            spec_o,         // Prediction output (pc, taken)
     input  pipe_info_t               de_info_i,
     input  pipe_info_t               ex_info_i
 );
 
   // ============================================================================
-  // GSHARE YAPISAL BİLEŞENLERİ
+  // GSHARE STRUCTURAL COMPONENTS
   // ============================================================================
 
-  // Global History Register: Son N branch'in sonuçlarını tutar
+  // Global History Register: Holds outcomes of last N branches
   logic [              GHR_SIZE-1:0] ghr;
   logic [              GHR_SIZE-1:0] ghr_spec;  // Speculative GHR (for prediction)
   logic [              GHR_SIZE-1:0] ghr_recover;  // Recovery GHR (from EX stage)
 
-  // Pattern History Table: 2-bit saturating counter'lar
+  // Pattern History Table: 2-bit saturating counters
   logic [                       1:0] pht                                           [ PHT_SIZE];
 
   // Bimodal Predictor Table (for tournament)
@@ -49,9 +49,9 @@ module gshare_bp
   logic [ XLEN-1:$clog2(BTB_SIZE)+2] btb_tag                                       [ BTB_SIZE];
   logic [                  XLEN-1:0] btb_target                                    [ BTB_SIZE];
 
-  // Indirect Branch Target Cache (JALR için)
-  // PC ile indekslenen basit bir hedef adresi tablosu
-  // IBTC_SIZE ceres_param paketinden alınır
+  // Indirect Branch Target Cache (for JALR)
+  // Simple target-address table indexed by PC
+  // IBTC_SIZE comes from level_param package
   logic                              ibtc_valid                                    [IBTC_SIZE];
   logic [XLEN-1:$clog2(IBTC_SIZE)+2] ibtc_tag                                      [IBTC_SIZE];
   logic [                  XLEN-1:0] ibtc_target                                   [IBTC_SIZE];
@@ -65,24 +65,24 @@ module gshare_bp
   logic [XLEN-1:$clog2(LOOP_SIZE)+2] loop_tag                                      [LOOP_SIZE];
 
   // ============================================================================
-  // İÇ SİNYALLER
+  // INTERNAL SIGNALS
   // ============================================================================
 
-  // Immediate değer (B/J type için)
+  // Immediate value (for B/J types)
   logic [                  XLEN-1:0] imm;
 
-  // Instruction type decode sinyalleri
+  // Instruction type decode signals
   logic                              j_type;  // JAL (unconditional jump)
   logic                              jr_type;  // JALR (indirect jump)
   logic                              b_type;  // Conditional branch
 
-  // RAS sinyalleri
+  // RAS signals
   logic                              req_valid;
   logic [                  XLEN-1:0] return_addr;
   ras_t                              restore;
   ras_t                              popped;
 
-  // Index hesaplama
+  // Index calculation
   logic [      $clog2(PHT_SIZE)-1:0] pht_rd_idx;
   logic [      $clog2(PHT_SIZE)-1:0] pht_wr_idx;
   logic [      $clog2(PHT_SIZE)-1:0] bimodal_rd_idx;
@@ -92,11 +92,11 @@ module gshare_bp
   logic [     $clog2(IBTC_SIZE)-1:0] ibtc_rd_idx;
   logic [     $clog2(IBTC_SIZE)-1:0] ibtc_wr_idx;
 
-  // BTB lookup sonuçları
+  // BTB lookup results
   logic                              btb_hit;
   logic [                  XLEN-1:0] btb_predicted_target;
 
-  // IBTC lookup sonuçları
+  // IBTC lookup results
   logic                              ibtc_hit;
   logic [                  XLEN-1:0] ibtc_predicted_target;
 
@@ -111,10 +111,10 @@ module gshare_bp
   logic                              loop_pred_exit;  // predict loop exit
   logic [                       7:0] loop_current_count;
 
-  // Misprediction sinyali
+  // Misprediction signal
   logic                              spec_miss;
 
-  // EX stage'den gelen branch bilgisi
+  // Branch information from EX stage
   logic                              ex_is_branch;
   logic                              ex_was_taken;
 
@@ -153,7 +153,7 @@ module gshare_bp
   end
 
   // ============================================================================
-  // INDEX HESAPLAMA
+  // INDEX CALCULATION
   // ============================================================================
   // GSHARE uses PC XOR GHR for better pattern correlation
   // Bimodal uses PC only for simple local prediction
@@ -210,17 +210,17 @@ module gshare_bp
   always_comb begin
     spec_miss       = !spec_hit_i && (ex_info_i.bjtype != NO_BJ);
 
-    // RAS restore kontrolü
+    // RAS restore check
     restore.data    = de_info_i.pc;
     restore.valid   = !stall_i && !spec_hit_i && (de_info_i.spec.spectype == RAS);
 
     // RAS request
     req_valid       = !spec_miss && !stall_i && fetch_valid_i && (j_type || jr_type);
 
-    // Prediction öncelik sırası:
+    // Prediction priority order:
     // 1. RAS (return prediction)
     // 2. JAL (unconditional direct jump)
-    // 3. JALR (unconditional indirect jump) - IBTC kullan
+    // 3. JALR (unconditional indirect jump) - use IBTC
     // 4. Loop predictor (for backward branches in loops)
     // 5. Tournament (GSHARE vs Bimodal) + BTB
     // 6. Static BTFN (backward taken, forward not-taken)
@@ -298,9 +298,9 @@ module gshare_bp
   always_comb begin
     ex_is_branch = (ex_info_i.bjtype != NO_BJ) && (ex_info_i.spec.spectype == BRANCH);
 
-    // Branch gerçekten alındı mı?
-    // spec_hit && taken -> doğru tahmin, taken
-    // !spec_hit && !taken -> yanlış tahmin ama aslında taken (branch taken, biz not-taken dedik)
+    // Was the branch actually taken?
+    // spec_hit && taken -> correct prediction, taken
+    // !spec_hit && !taken -> wrong prediction but actually taken (we predicted not-taken)
     ex_was_taken = ex_is_branch && ((spec_hit_i && ex_info_i.spec.taken) || (!spec_hit_i && !ex_info_i.spec.taken));
   end
 
@@ -308,7 +308,7 @@ module gshare_bp
   // RETURN ADDRESS STACK (RAS)
   // ============================================================================
   ras #(
-      .RAS_SIZE(ceres_param::RAS_SIZE)
+      .RAS_SIZE(level_param::RAS_SIZE)
   ) i_ras (
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
@@ -341,7 +341,7 @@ module gshare_bp
   end
 
   // ============================================================================
-  // PHT, BTB, IBTC, LOOP ve GHR UPDATE
+  // PHT, BTB, IBTC, LOOP, AND GHR UPDATE
   // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
@@ -369,7 +369,7 @@ module gshare_bp
         loop_tag[i]   <= '0;
       end
     end else if (!stall_i) begin
-      // Branch çözüldüğünde güncelle
+      // Update when branch resolves
       if (ex_is_branch) begin
         // PHT Update: 2-bit saturating counter
         if (ex_was_taken) begin
@@ -402,7 +402,7 @@ module gshare_bp
         btb_tag[btb_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(BTB_SIZE)+2];
         btb_target[btb_wr_idx] <= pc_target_i;
 
-        // GHR Update: Shift left, yeni sonucu ekle (committed)
+        // GHR Update: Shift left, append new outcome (committed)
         ghr <= {ghr[GHR_SIZE-2:0], ex_was_taken};
 
         // Loop Predictor Update (for backward branches)
@@ -429,8 +429,7 @@ module gshare_bp
         end
       end
 
-      // IBTC Update: JALR instruction'ları için hedef adresi cache'le
-      // RAS tarafından handle edilmeyenler (non-return JALR'lar)
+      // IBTC Update: Cache target address for JALR (non-return JALRs not handled by RAS)
       if (ex_info_i.bjtype == JALR && ex_info_i.spec.spectype != RAS) begin
         ibtc_valid[ibtc_wr_idx]  <= 1'b1;
         ibtc_tag[ibtc_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(IBTC_SIZE)+2];
@@ -444,8 +443,8 @@ module gshare_bp
   // Enable with: +define+LOG_BP
   // ============================================================================
 `ifdef LOG_BP
-  // İstatistik sayaçları (reset'ten bağımsız - kümülatif)
-  // ressette verilator sorun çıkarıyor
+  // Statistic counters (independent of reset — cumulative)
+  // Reset causes Verilator issues
   logic [63:0] total_branches = '0;
   logic [63:0] correct_predictions = '0;
   logic [63:0] mispredictions = '0;
@@ -453,19 +452,19 @@ module gshare_bp
   logic [63:0] ras_correct = '0;
   logic [63:0] btb_hits = '0;
   logic [63:0] btb_misses = '0;
-  // JAL/JALR için ek sayaçlar
+  // Extra counters for JAL/JALR
   logic [63:0] jal_count = '0;
   logic [63:0] jal_correct = '0;
   logic [63:0] jalr_count = '0;
   logic [63:0] jalr_correct = '0;
-  // IBTC sayaçları
+  // IBTC counters
   logic [63:0] ibtc_predictions = '0;
   logic [63:0] ibtc_correct = '0;
 
-  // İstatistik güncelleme (reset'ten bağımsız)
+  // Statistic updates (independent of reset)
   always_ff @(posedge clk_i) begin
     if (rst_ni && !stall_i) begin
-      // Tüm control transfer istatistikleri
+      // All control-transfer statistics
       if (ex_info_i.bjtype != NO_BJ) begin
         total_branches <= total_branches + 1;
         if (spec_hit_i) begin
@@ -475,19 +474,19 @@ module gshare_bp
         end
       end
 
-      // JAL istatistikleri
+      // JAL statistics
       if (ex_info_i.bjtype == JAL) begin
         jal_count <= jal_count + 1;
         if (spec_hit_i) jal_correct <= jal_correct + 1;
       end
 
-      // JALR istatistikleri
+      // JALR statistics
       if (ex_info_i.bjtype == JALR) begin
         jalr_count <= jalr_count + 1;
         if (spec_hit_i) jalr_correct <= jalr_correct + 1;
       end
 
-      // RAS istatistikleri
+      // RAS statistics
       if (ex_info_i.spec.spectype == RAS) begin
         ras_predictions <= ras_predictions + 1;
         if (spec_hit_i) begin
@@ -495,13 +494,13 @@ module gshare_bp
         end
       end
 
-      // IBTC istatistikleri (JALR, RAS değil, JUMP spectype ile)
+      // IBTC statistics (JALR, not RAS, JUMP spectype)
       if (ex_info_i.bjtype == JALR && ex_info_i.spec.spectype == JUMP) begin
         ibtc_predictions <= ibtc_predictions + 1;
         if (spec_hit_i) ibtc_correct <= ibtc_correct + 1;
       end
 
-      // Conditional Branch istatistikleri (BEQ, BNE, BLT, BGE, BLTU, BGEU)
+      // Conditional branch statistics (BEQ, BNE, BLT, BGE, BLTU, BGEU)
       if (ex_info_i.bjtype inside {BEQ, BNE, BLT, BGE, BLTU, BGEU}) begin
         if (spec_hit_i) begin
           btb_hits <= btb_hits + 1;
@@ -512,19 +511,19 @@ module gshare_bp
     end
   end
 
-  // Log dosyasına yazma - VERILATOR_LOG_DIR environment variable kullanır
+  // Write to log file — uses VERILATOR_LOG_DIR environment variable
   integer bp_log_file;
   string  log_dir;
   string  bp_log_path;
 
   initial begin
-    // Environment variable'dan log dizinini al
+    // Get log directory from environment variable
     if (!$value$plusargs("BP_LOG_DIR=%s", log_dir)) begin
-      // Plusarg yoksa environment variable'ı dene
+      // If no plusarg, try environment variable
       if ($test$plusargs("VERILATOR_LOG_DIR")) begin
         void'($value$plusargs("VERILATOR_LOG_DIR=%s", log_dir));
       end else begin
-        log_dir = ".";  // Varsayılan: çalışma dizini
+        log_dir = ".";  // Default: current working directory
       end
     end
 
@@ -540,7 +539,7 @@ module gshare_bp
     end
   end
 
-  // Her N cycle'da log yaz (BP_LOG_INTERVAL ceres_param'dan gelir)
+  // Write log every N cycles (BP_LOG_INTERVAL from level_param)
   logic [31:0] log_counter;
 
   always_ff @(posedge clk_i) begin
@@ -559,7 +558,7 @@ module gshare_bp
     end
   end
 
-  // Simülasyon sonunda özet yazdır
+  // Print summary at end of simulation
   final begin
     automatic real    total_accuracy = total_branches > 0 ? (real'(correct_predictions) * 100.0 / real'(total_branches)) : 0.0;
     automatic real    mispred_rate = total_branches > 0 ? (real'(mispredictions) * 100.0 / real'(total_branches)) : 0.0;
@@ -642,7 +641,7 @@ module gshare_bp
     $display("");
   end
 
-  // Real-time misprediction log (opsiyonel, çok verbose)
+  // Real-time misprediction log (optional, very verbose)
   // Enable with: +define+LOG_BP_VERBOSE
 `ifdef LOG_BP_VERBOSE
   always_ff @(posedge clk_i) begin

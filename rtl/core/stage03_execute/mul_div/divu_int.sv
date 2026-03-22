@@ -1,7 +1,7 @@
 // This file includes code snippets inspired by https://projectf.io/posts/division-in-verilog/
-// Modified for the ceres project.
+// Modified for the Level project.
 //
-// ceres RISC-V Processor
+// Level RISC-V Processor
 // Copyright (c) 2024 Kerim TURAK
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 // and associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -12,7 +12,7 @@
 // substantial portions of the Software.
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 module divu_int #(
     parameter WIDTH = 32
@@ -33,13 +33,13 @@ module divu_int #(
     output logic [WIDTH-1:0] reminder_o   // result: remainder
 );
 
-  // Dahili registerlar
+  // Internal registers
   logic [          WIDTH-1:0] divisor_q;
   logic [          WIDTH-1:0] quotient_q;
-  logic [            WIDTH:0] remainder_q;  // 1 bit geniş
+  logic [            WIDTH:0] remainder_q;  // one extra bit
   logic [$clog2(WIDTH+1)-1:0] count_q;
 
-  // Next-state sinyalleri
+  // Next-state signals
   logic [          WIDTH-1:0] quotient_next;
   logic [            WIDTH:0] remainder_next;
 
@@ -47,13 +47,13 @@ module divu_int #(
   // Restoring division step (unsigned)
   // ------------------------------------------------------------
   always_comb begin
-    // Varsayılan: önce remainder:quotient sol kaydır
-    // {remainder_q, quotient_q} << 1 benzeri
+    // Default: shift {remainder, quotient} left first
+    // Similar to {remainder_q, quotient_q} << 1
     remainder_next = {remainder_q[WIDTH-1:0], quotient_q[WIDTH-1]};
     quotient_next  = {quotient_q[WIDTH-2:0], 1'b0};
 
-    // Eğer remainder_next >= divisor_q ise:
-    // remainder'dan divisor'u çıkar ve quotient'in LSB'sini 1 yap
+    // If remainder_next >= divisor_q:
+    // subtract divisor from remainder and set quotient LSB to 1
     if (remainder_next >= {1'b0, divisor_q}) begin
       remainder_next   = remainder_next - {1'b0, divisor_q};
       quotient_next[0] = 1'b1;
@@ -77,25 +77,25 @@ module divu_int #(
       remainder_q <= '0;
       count_q     <= '0;
     end else begin
-      // Varsayılanlar
-      done_o <= 1'b0;  // sadece tamamlandığı cycle 1 olacak
-      dbz_o  <= 1'b0;  // sadece start'ta set edilir
+      // Defaults
+      done_o <= 1'b0;  // pulsed high only on completion cycle
+      dbz_o  <= 1'b0;  // set only on start
 
       if (start_i) begin
-        // Yeni bölme isteği
+        // New divide request
         valid_o <= 1'b0;
 
         if (divisor_i == '0) begin
-          // Divide by zero: RISC-V wrapper'da halledeceksin ama burada flag'i set edelim
+          // Divide by zero: handled in RISC-V wrapper; set flag here
           busy_o     <= 1'b0;
           done_o     <= 1'b1;
           valid_o    <= 1'b1;
           dbz_o      <= 1'b1;
 
-          quotient_o <= '0;  // core seviyesinde kullanmayacaksın zaten
-          reminder_o <= dividend_i;  // RISC-V için wrapper’da override ediyorsun
+          quotient_o <= '0;  // not used at core level
+          reminder_o <= dividend_i;  // overridden in wrapper for RISC-V
         end else begin
-          // Normal bölme başlat
+          // Start normal division
           busy_o      <= 1'b1;
           done_o      <= 1'b0;
           valid_o     <= 1'b0;
@@ -107,29 +107,29 @@ module divu_int #(
           count_q     <= WIDTH[$clog2(WIDTH+1)-1:0];
         end
       end else if (busy_o) begin
-        // Her cycle bir division step
+        // One division step per cycle
         remainder_q <= remainder_next;
         quotient_q  <= quotient_next;
 
         if (count_q == 1) begin
-          // Son adım sonrası
+          // After final step
           busy_o     <= 1'b0;
           done_o     <= 1'b1;
           valid_o    <= 1'b1;
 
           quotient_o <= quotient_next;
-          // remainder WIDTH+1 bit, asıl remainder WIDTH bitlik (MSB 0)
+          // remainder is WIDTH+1 bits; true remainder is WIDTH bits (MSB 0)
           reminder_o <= remainder_next[WIDTH-1:0];
 
           count_q    <= '0;
         end else begin
-          // Devam ediyoruz
+          // Continue stepping
           count_q <= count_q - 1'b1;
           done_o  <= 1'b0;
           valid_o <= 1'b0;
         end
       end else begin
-        // idle durumu, outputlar sabit kalsın
+        // Idle: hold outputs steady
         done_o <= 1'b0;
       end
     end

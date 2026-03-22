@@ -27,7 +27,7 @@ Description:
 `timescale 1ns / 1ps
 
 module i2c_master
-  import ceres_param::*;
+  import level_param::*;
 (
     input logic clk_i,
     input logic rst_ni,

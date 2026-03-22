@@ -7,9 +7,9 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module extend
-  import ceres_param::*;
+  import level_param::*;
 (
     input logic [XLEN-1:7] imm_i,
     input imm_e sel_i,

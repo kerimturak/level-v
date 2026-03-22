@@ -1,35 +1,35 @@
-# Custom UART Test Programs - Ceres-V
+# Custom UART test programs (Level-V)
 
-Bu dizinde kendi UART test programlarınızı yazabilir, derleyebilir ve Ceres-V işlemcinizde çalıştırabilirsiniz.
+In this directory you can author, build, and run your own UART test programs on the Level-V core.
 
-## 📁 Dizin Yapısı
+## Directory layout
 
 ```
 sim/test/custom/
-├── uart_hello_test.c          # Örnek: Basit UART merhaba mesajı
-├── README.md                   # Bu dosya
-└── (diğer test dosyaları)
+├── uart_hello_test.c          # Example: simple UART hello message
+├── README.md                   # This file
+└── (other test sources)
 ```
 
-## 🔧 Hazırlık
+## Prerequisites
 
-### RISC-V Toolchain Kurulumu
+### RISC-V toolchain
 
 ```bash
-# Gerekli araçlar
+# Required tools
 - riscv32-unknown-elf-gcc
 - riscv32-unknown-elf-objcopy
 - riscv32-unknown-elf-objdump
 ```
 
-## 📝 Test Yazma
+## Writing tests
 
-### Minimum Şablon
+### Minimal template
 
 ```c
 #include <stdint.h>
 
-/* UART Register Adresleri */
+/* UART register addresses */
 #define UART_CTRL        (*(volatile uint32_t*)0x20000000)
 #define UART_STATUS      (*(volatile uint32_t*)0x20000004)
 #define UART_WDATA       (*(volatile uint32_t*)0x2000000c)
@@ -60,37 +60,36 @@ int main(void) {
 }
 ```
 
-### Kullanılabilir UART Fonksiyonları
+### UART helper routines
 
-Hazır fonksiyonlar için `uart_hello_test.c` dosyasını referans alın:
+See `uart_hello_test.c` for a fuller example:
 
-- `uart_init()` - UART başlatması
-- `uart_putc(char)` - Tek karakter gönder
-- `uart_puts(const char*)` - String gönder
-- `uart_puthex(uint32_t)` - Hexadecimal sayı gönder
-- `uart_putdec(int32_t)` - Decimal sayı gönder
+- `uart_init()` — initialize UART
+- `uart_putc(char)` — send one character
+- `uart_puts(const char*)` — send a string
+- `uart_puthex(uint32_t)` — print hex
+- `uart_putdec(int32_t)` — print decimal
 
-## 🔨 Derleme ve Çalıştırma
+## Build and run
 
-### Hızlı Başlangıç (Build Scripti ile)
+### Quick path (build script)
 
 ```bash
-# Build script'ini çalıştırılabilir yap
-chmod +x /home/kerim/level-v/script/shell/build_custom_test.sh
+chmod +x /path/to/level-v/script/shell/build_level_custom_c_test.sh
 
-# Test'i derle ve çalıştır
-./script/shell/build_custom_test.sh uart_hello_test
+# Build and run one test
+./script/shell/build_level_custom_c_test.sh uart_hello_test
 
-# Diğer testler için
-./script/shell/build_custom_test.sh my_custom_test
+# Other tests
+./script/shell/build_level_custom_c_test.sh my_custom_test
 ```
 
-### Manuel Derleme
+### Manual build
 
 ```bash
-cd /home/kerim/level-v
+cd /path/to/level-v
 
-# 1. Kaynak kodu derle
+# 1. Compile
 riscv32-unknown-elf-gcc \
     -march=rv32imc -mabi=ilp32 \
     -static -mcmodel=medany \
@@ -100,55 +99,53 @@ riscv32-unknown-elf-gcc \
     -o build/tests/custom/uart_hello_test.elf \
     sim/test/custom/uart_hello_test.c
 
-# 2. Binary dosyalar oluştur
+# 2. Raw binary
 riscv32-unknown-elf-objcopy -O binary \
     build/tests/custom/uart_hello_test.elf \
     build/tests/custom/uart_hello_test.bin
 
-# 3. Memory dosyası oluştur
+# 3. Verilog memory image
 riscv32-unknown-elf-objcopy -O verilog \
     build/tests/custom/uart_hello_test.elf \
     build/tests/custom/uart_hello_test.mem
 ```
 
-### Simülasyonda Çalıştırma
+### Run in simulation
 
 ```bash
-cd /home/kerim/level-v
+cd /path/to/level-v
 
-# Verilator ile çalıştır
+# Verilator (adjust TEST_FILE / target per your makefile)
 make run_verilator TEST_FILE=build/tests/custom/uart_hello_test.mem MAX_CYCLES=100000
 
-# UART çıktısını gözle
+# Watch UART output
 tail -f uart_output.log
 ```
 
-## 📊 Çıktı Kontrolü
+## Checking output
 
-Test programınız UART'a veri yazdığında, çıktı `uart_output.log` dosyasına yazılır:
+When the program writes to UART, output typically lands in `uart_output.log`:
 
 ```bash
-# UART çıktısını görüntüle
 cat uart_output.log
 
-# Simülasyon sırasında gerçek zamanda izle
 make run_verilator TEST_FILE=build/tests/custom/uart_hello_test.mem MAX_CYCLES=100000 && cat uart_output.log
 ```
 
-## 🧪 Test Örnekleri
+## Examples
 
-### Örnek 1: Basit Mesaj
+### Example 1: simple message
 
 ```c
 int main(void) {
     uart_init();
-    uart_puts("Hello from Ceres!\n");
+    uart_puts("Hello from Level!\n");
     while (1);
     return 0;
 }
 ```
 
-### Örnek 2: Döngü Testi
+### Example 2: loop
 
 ```c
 int main(void) {
@@ -163,76 +160,65 @@ int main(void) {
 }
 ```
 
-### Örnek 3: Hafıza Testi
+### Example 3: memory / address print
 
 ```c
 int main(void) {
     uart_init();
-    
+
     uint32_t value = 0x12345678;
     uart_puts("Value at ");
     uart_puthex((uint32_t)&value);
     uart_puts(" = ");
     uart_puthex(value);
     uart_puts("\n");
-    
+
     while (1);
     return 0;
 }
 ```
 
-## 🐛 Sorun Giderme
+## Troubleshooting
 
-### Derleme Hataları
+### Build errors
 
-**Hata**: `riscv32-unknown-elf-gcc: command not found`
-- Çözüm: RISC-V toolchain'i kurun veya PATH'e ekleyin
+**Error**: `riscv32-unknown-elf-gcc: command not found`  
+**Fix**: Install a RISC-V toolchain and ensure it is on `PATH`.
 
-**Hata**: `undefined reference to 'main'`
-- Çözüm: `-nostartfiles` bayrağını kaldırın veya startup kodu ekleyin
+**Error**: `undefined reference to 'main'`  
+**Fix**: Drop `-nostartfiles` or add appropriate startup code.
 
-### Simülasyon Hataları
+### Simulation issues
 
-**Sorun**: UART çıktısı boş
-- Kontrol: `uart_init()` çağrıldığından emin olun
-- Kontrol: Register adresleri doğru olduğundan emin olun
-- Kontrol: Simülasyon süresi yeterli olduğundan emin olun (`MAX_CYCLES`)
+**Problem**: empty UART log  
+**Check**: `uart_init()` is called; register addresses match your SoC map; `MAX_CYCLES` is large enough.
 
-**Sorun**: Sonsuz döngüde takılı kalıyor
-- Test: İlk komut çalışıyor mu? `uart_putc('X')` ile test edin
-- Kontrol: `uart_status` register'ını okuyup durumunu kontrol edin
+**Problem**: appears stuck in a loop  
+**Try**: emit a single `uart_putc('X')` first; read `UART_STATUS` in the waveform/log.
 
-## 📚 Referanslar
+## References
 
-- UART Register Tanımları: `subrepo/coremark/ceresv/core_portme.h`
-- Linking Script: `subrepo/coremark/ceresv/link.ld`
-- UART Implementasyonu: `rtl/periph/uart.sv`
-- Mevcut Test Örnekleri: `subrepo/coremark/ceresv/`
+- UART register layout: `env/coremark/levelv/core_portme.h` (CoreMark port example)
+- Linker script example: `env/coremark/levelv/link.ld`
+- UART RTL: `rtl/periph/uart/uart.sv` (path may vary slightly; see `rtl/periph/uart/`)
 
-## 🔗 Yararlı Komutlar
+## Useful commands
 
 ```bash
-# Test binaries'inin boyutunu göster
 size build/tests/custom/uart_hello_test.elf
-
-# Disassembly'yi görüntüle
 riscv32-unknown-elf-objdump -d build/tests/custom/uart_hello_test.elf | less
-
-# Hex dump göster
 riscv32-unknown-elf-objdump -h build/tests/custom/uart_hello_test.elf
-
-# Symbol tablosunu göster
 riscv32-unknown-elf-nm build/tests/custom/uart_hello_test.elf
 ```
 
-## 💡 İpuçları
+## Tips
 
-1. **Başlamak**: `uart_hello_test.c` dosyasını kopyalayarak yeni test oluşturun
-2. **Debugging**: UART çıktısı ile printf debugging yapabilirsiniz
-3. **Timing**: 50 MHz clock'ta bir cycle = 20 nanosecond
-4. **Stack**: Stack pointer'ı linker script'te tanımlı RAM bölgesi içinde olacak şekilde ayarlayın
+1. **Starting out**: copy `uart_hello_test.c` and modify.
+2. **Debug**: UART prints are your bare-metal “printf”.
+3. **Timing**: at 50 MHz, one cycle is 20 ns.
+4. **Stack**: keep the stack inside RAM defined by your linker script.
 
 ---
 
-**Son Güncelleme**: 2025-12-01
-**Ceres-V Sürümü**: RV32IMC_Zicsr
+**Last updated**: 2025-12-01  
+**Configuration**: RV32IMC_Zicsr

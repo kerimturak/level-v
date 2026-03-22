@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Slang Linter Wrapper for CERES RISC-V
+Slang Linter Wrapper for Level RISC-V
 Uses pyslang to perform SystemVerilog linting
 """
 

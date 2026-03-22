@@ -1,11 +1,11 @@
 ##################################################################################
-#                     CERES RISC-V — Minimal Quick Debug                        #
+#                     Level RISC-V — Minimal Quick Debug                        #
 ##################################################################################
 # Ultra-fast loading, essential signals only
 ##################################################################################
 
 set TB   "sim:/tb_wrapper"
-set SOC  "$TB/ceres_wrapper/i_soc"
+set SOC  "$TB/level_wrapper/i_soc"
 
 configure wave -namecolwidth 280
 configure wave -valuecolwidth 100

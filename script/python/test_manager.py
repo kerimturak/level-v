@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test Manager for CERES RISC-V
+Test Manager for Level RISC-V
 ==============================
 
 Central CLI tool for managing and running tests with integrated debug logging
@@ -652,7 +652,7 @@ def cmd_remove(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="CERES RISC-V Test Manager",
+        description="Level RISC-V Test Manager",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 

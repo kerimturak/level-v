@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 module store_buffer
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int DEPTH = SB_DEPTH
 ) (

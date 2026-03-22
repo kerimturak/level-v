@@ -38,8 +38,8 @@ module tb_icache;
 
   // Parameters (matching design parameters)
   parameter CACHE_SIZE = 1024;
-  parameter BLK_SIZE = ceres_pkg::BLK_SIZE;
-  parameter XLEN = ceres_pkg::XLEN;
+  parameter BLK_SIZE = level_param::BLK_SIZE;
+  parameter XLEN = level_param::XLEN;
   parameter NUM_WAY = 4;
 
   // Local parameters

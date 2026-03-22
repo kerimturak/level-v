@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Ceres RISC-V core now supports **parametric exception priority configuration**. This allows testing different exception priority orders against the Spike simulator to validate compliance with the RISC-V Privileged Specification.
+The Level RISC-V core now supports **parametric exception priority configuration**. This allows testing different exception priority orders against the Spike simulator to validate compliance with the RISC-V Privileged Specification.
 
 ## RISC-V Specification Background
 
@@ -26,7 +26,7 @@ The RISC-V Privileged ISA Specification (Section 3.1.15 - Machine Cause Register
 - **Implementation-defined**: Load/store/AMO misaligned exceptions can have higher OR lower priority than page-fault/access-fault exceptions
 - **Debug Mode** has special priority considerations as per RISC-V Debug Specification
 
-## Current Ceres Implementation
+## Current Level Implementation
 
 The fetch pipeline in `rtl/core/stage01_fetch/fetch.sv` uses parametric exception detection. The default order follows the RISC-V specification:
 
@@ -48,7 +48,7 @@ ECALL
 
 ### Parametric Priority Levels
 
-Eight priority levels are defined in `rtl/pkg/ceres_param.sv`:
+Eight priority levels are defined in `rtl/pkg/level_param.sv`:
 
 ```systemverilog
 typedef enum logic [4:0] {
@@ -63,7 +63,7 @@ typedef enum logic [4:0] {
 } exc_priority_t;
 ```
 
-### Configuration Macros (ceres_param.sv)
+### Configuration Macros (level_param.sv)
 
 Default assignments (spec-compliant):
 
@@ -78,7 +78,7 @@ localparam exc_priority_t EXC_PRIORITY_ECALL = PRIORITY_6;
 
 ### Priority Check Function
 
-Helper function in `ceres_param.sv`:
+Helper function in `level_param.sv`:
 
 ```systemverilog
 function automatic logic check_exc_priority(
@@ -103,7 +103,7 @@ This builds with the RISC-V spec-compliant exception priority order.
 
 ### Example 2: Custom Priority - Disable Debug Breakpoints
 
-Edit `rtl/pkg/ceres_param.sv`:
+Edit `rtl/pkg/level_param.sv`:
 
 ```systemverilog
 localparam exc_priority_t EXC_PRIORITY_DEBUG_BREAKPOINT = PRIORITY_DISABLED;
@@ -119,7 +119,7 @@ make csr TEST_NAME=breakpoint
 
 ### Example 3: Custom Priority - Swap Misaligned and Breakpoint
 
-Edit `rtl/pkg/ceres_param.sv`:
+Edit `rtl/pkg/level_param.sv`:
 
 ```systemverilog
 localparam exc_priority_t EXC_PRIORITY_DEBUG_BREAKPOINT = PRIORITY_2;
@@ -181,17 +181,17 @@ spike -p1 --hart=0 /path/to/rv32mi-p-breakpoint
 
 # Spike always uses RISC-V spec-compliant priority
 # Compare instruction traces:
-diff <(spike output) <(ceres output)
+diff <(spike output) <(RTL output)
 ```
 
 ### Step 3: Test Alternative Priorities
 
-If Ceres doesn't match Spike with default priority, try alternative orders:
+If Level doesn't match Spike with default priority, try alternative orders:
 
 ```bash
 # Test with illegal instruction highest priority
 make clean_obj
-# Edit ceres_param.sv to set PRIORITY_ILLEGAL = PRIORITY_1
+# Edit level_param.sv to set PRIORITY_ILLEGAL = PRIORITY_1
 make verilate
 make csr TEST_NAME=breakpoint
 ```
@@ -222,7 +222,7 @@ Located in `rtl/include/exception_priority.svh`, this file contains alternative 
 
 1. **Verify default configuration**
    ```bash
-   cat rtl/pkg/ceres_param.sv | grep "EXC_PRIORITY"
+   cat rtl/pkg/level_param.sv | grep "EXC_PRIORITY"
    ```
 
 2. **Check exception detection in fetch.sv**
@@ -237,7 +237,7 @@ Located in `rtl/include/exception_priority.svh`, this file contains alternative 
 
 4. **Compare against Spike**
    ```bash
-   diff <(spike -p1 rv32mi-p-breakpoint) <(ceres trace)
+   diff <(spike -p1 rv32mi-p-breakpoint) <(Level trace)
    ```
 
 ### Problem: Exception shows but shouldn't
@@ -259,14 +259,14 @@ Located in `rtl/include/exception_priority.svh`, this file contains alternative 
 
 | File | Purpose |
 |------|---------|
-| `rtl/pkg/ceres_param.sv` | Added priority level enum and configuration macros |
+| `rtl/pkg/level_param.sv` | Added priority level enum and configuration macros |
 | `rtl/core/stage01_fetch/fetch.sv` | Refactored exception detection to use parametric priority |
 | `rtl/include/exception_priority.svh` | Alternative priority configuration templates |
-| `script/exception_priority_test.sh` | Test automation script |
+| `script/shell/run_level_exception_priority_tests.sh` | Exception priority matrix / regression helper |
 
 ## Key Functions
 
-### ceres_param.sv
+### level_param.sv
 
 - `check_exc_priority()` - Checks if exception priority is enabled
 - Exception priority assignment macros
@@ -287,7 +287,7 @@ Located in `rtl/include/exception_priority.svh`, this file contains alternative 
 
 2. **Alternative Priority Order**
    ```bash
-   # Edit ceres_param.sv with custom priorities
+   # Edit level_param.sv with custom priorities
    make clean_obj && make verilate
    make csr TEST_NAME=breakpoint
    # Compare with Spike (may differ)
@@ -349,10 +349,10 @@ end else if (has_instr_misaligned && check_exc_priority(...)) begin
 
 - RISC-V Privileged ISA Specification v1.12 - Section 3.1.15
 - RISC-V Debug Specification v0.13.2
-- Ceres RTL Documentation: `docs/README.md`
+- Level RTL Documentation: `docs/README.md`
 
 ---
 
 **Last Updated**: 2025-11-30  
 **Author**: Kerim TURAK  
-**Project**: level-v (Ceres RISC-V Core)
+**Project**: level-v (Level RISC-V Core)

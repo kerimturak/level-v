@@ -78,7 +78,7 @@ FAULT Register [31:0]:
 `timescale 1ns / 1ps
 
 module pwm
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_CHANNELS = 8,
     parameter int PWM_WIDTH    = 16

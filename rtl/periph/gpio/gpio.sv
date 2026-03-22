@@ -34,7 +34,7 @@ Description:
 `timescale 1ns / 1ps
 
 module gpio
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int GPIO_WIDTH = 32
 ) (

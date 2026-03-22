@@ -1,71 +1,71 @@
-# Konata Logger Modülü - Teknik Dokümantasyon
+# Konata Logger Module — Technical Documentation
 
-## İçindekiler
+## Table of Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Konata Formatı](#konata-formatı)
+1. [General Overview](#general-overview)
+2. [Konata Format](#konata-format)
 3. [Pipeline Stage Tracking](#pipeline-stage-tracking)
-4. [Log Komutları](#log-komutları)
-5. [Stall ve Flush Handling](#stall-ve-flush-handling)
+4. [Log Commands](#log-commands)
+5. [Stall and Flush Handling](#stall-and-flush-handling)
 6. [Metadata Logging](#metadata-logging)
-7. [Kullanım](#kullanım)
+7. [Usage](#usage)
 
 ---
 
-## Genel Bakış
+## General Overview
 
-### Amaç
+### Purpose
 
-`konata_logger` modülü, CERES RISC-V işlemcisinin pipeline davranışını **Konata pipeline visualizer** formatında loglar. Her instruction'ın pipeline stage'lerden geçişini, stall'ları ve flush'ları kaydeder.
+The `konata_logger` module logs the Level RISC-V processor pipeline behavior in **Konata pipeline visualizer** format. It records each instruction’s progress through pipeline stages, stalls, and flushes.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/tracer/konata_logger.sv
 ```
 
-### Aktivasyon
+### Activation
 
 ```bash
-# Makefile ile
+# Via Makefile
 make run T=test KONATA_TRACER=1 LOG_PIPELINE=1
 
 # Verilator define
 +define+KONATA_TRACER
 ```
 
-### Temel Özellikler
+### Key Features
 
-| Özellik | Açıklama |
-|---------|----------|
+| Feature | Description |
+|---------|-------------|
 | **Format** | Konata v0004 |
-| **Stage'ler** | F, D, X, M, Wb |
+| **Stages** | F, D, X, M, Wb |
 | **Metadata** | grp, stall, stall_cycles, mem_latency |
-| **Çıktı** | `results/logs/rtl/ceres.KONATA` |
+| **Output** | `results/logs/rtl/level.KONATA` |
 
 ---
 
-## Konata Formatı
+## Konata Format
 
-### Dosya Başlığı
+### File Header
 
 ```
 KONATA	0004
 ```
 
-### Komut Tipleri
+### Command Types
 
-| Komut | Format | Açıklama |
-|-------|--------|----------|
-| `C=` | `C=\t<cycle>` | İlk cycle (absolute) |
+| Command | Format | Description |
+|---------|--------|-------------|
+| `C=` | `C=\t<cycle>` | First cycle (absolute) |
 | `C` | `C\t1` | Cycle increment |
 | `I` | `I\t<id>\t<id>\t0` | Instruction issue |
-| `S` | `S\t<id>\t0\t<stage>` | Stage başlangıcı |
-| `E` | `E\t<id>\t0\t<stage>` | Stage bitişi |
+| `S` | `S\t<id>\t0\t<stage>` | Stage start |
+| `E` | `E\t<id>\t0\t<stage>` | Stage end |
 | `L` | `L\t<id>\t<lane>\t<text>` | Label (metadata) |
 | `R` | `R\t<id>\t<id>\t<flush>` | Retire (0=commit, 1=flush) |
 
-### Örnek Log
+### Sample Log
 
 ```
 KONATA	0004
@@ -94,26 +94,26 @@ C	1
 
 ## Pipeline Stage Tracking
 
-### Stage Yapısı
+### Stage Structure
 
 ```systemverilog
 typedef struct {
     integer      id;              // Unique instruction ID
     logic [31:0] pc;              // Program counter
     logic [31:0] inst;            // Instruction word
-    logic        valid;           // Stage'de geçerli instruction var mı
-    logic        started_f;       // F stage başladı
-    logic        started_d;       // D stage başladı
-    logic        started_x;       // X stage başladı
-    logic        started_m;       // M stage başladı
-    logic        started_wb;      // Wb stage başladı
+    logic        valid;           // Valid instruction in this stage
+    logic        started_f;       // F stage started
+    logic        started_d;       // D stage started
+    logic        started_x;       // X stage started
+    logic        started_m;       // M stage started
+    logic        started_wb;      // Wb stage started
 
     // Metadata
-    instr_type_e instr_type;      // Instruction tipi
-    integer      stall_cycles;    // Toplam stall cycle sayısı
-    integer      mem_stall_cycles;// Memory stall cycle sayısı
-    stall_e      first_stall;     // İlk stall sebebi
-    logic        retired;         // Retire edildi mi
+    instr_type_e instr_type;      // Instruction type
+    integer      stall_cycles;    // Total stall cycle count
+    integer      mem_stall_cycles;// Memory stall cycle count
+    stall_e      first_stall;     // First stall reason
+    logic        retired;         // Retired
 } pipe_entry_t;
 ```
 
@@ -124,23 +124,23 @@ pipe_entry_t fetch_s, decode_s, execute_s, memory_s, writeback_s;
 pipe_entry_t prev_fetch, prev_decode, prev_execute, prev_memory, prev_writeback;
 ```
 
-### Pipeline Advance Sinyalleri
+### Pipeline Advance Signals
 
 ```systemverilog
-// Front-end (F + D): Sadece NO_STALL iken ilerler
+// Front-end (F + D): advances only when NO_STALL
 logic adv_front;
 assign adv_front = (stall_cause == NO_STALL);
 
-// Back-end (X + M + Wb): IMISS/DMISS/ALU/FENCEI'de durur
+// Back-end (X + M + Wb): stalls on IMISS/DMISS/ALU/FENCE.I
 logic adv_back;
 assign adv_back = !(stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
 ```
 
 ---
 
-## Log Komutları
+## Log Commands
 
-### Helper Fonksiyonları
+### Helper Functions
 
 ```systemverilog
 function void log_stage_start(input integer id, input string stg);
@@ -168,7 +168,7 @@ function void log_retire_flush(input integer id);
 endfunction
 ```
 
-### Instruction Group Sınıflandırması
+### Instruction Group Classification
 
 ```systemverilog
 function string instr_group(input instr_type_e t);
@@ -203,12 +203,12 @@ endfunction
 
 ---
 
-## Stall ve Flush Handling
+## Stall and Flush Handling
 
-### Stall Sayacı
+### Stall Counter
 
 ```systemverilog
-// Flush cycle'ında sayma
+// Do not count on flush cycle
 if (!flush_fe) begin
     // Front (F + D) stall
     if (!adv_front) begin
@@ -233,14 +233,14 @@ end
 
 ```systemverilog
 if (flush_fe) begin
-    // Tüm yaşayan instruction'lar flush edilir
+    // All in-flight instructions are flushed
     if (prev_fetch.valid) log_retire_flush(prev_fetch.id);
     if (prev_decode.valid) log_retire_flush(prev_decode.id);
     if (prev_execute.valid) log_retire_flush(prev_execute.id);
     if (prev_memory.valid) log_retire_flush(prev_memory.id);
     if (prev_writeback.valid) log_retire_flush(prev_writeback.id);
 
-    // Pipeline'ı temizle
+    // Clear pipeline
     fetch_s     <= '{default: 0};
     decode_s    <= '{default: 0};
     execute_s   <= '{default: 0};
@@ -255,7 +255,7 @@ end
 
 ### Retire Metadata
 
-Writeback stage'de her instruction için metadata yazılır:
+At writeback stage, metadata is written for each instruction:
 
 ```systemverilog
 if (prev_writeback.valid && prev_writeback.started_wb && !prev_writeback.retired) begin
@@ -280,7 +280,7 @@ if (prev_writeback.valid && prev_writeback.started_wb && !prev_writeback.retired
 end
 ```
 
-### Örnek Metadata
+### Sample Metadata
 
 ```
 L	42	1	grp=LOAD stall=DMISS stall_cycles=12 mem_latency=10
@@ -290,29 +290,29 @@ L	44	1	grp=BRANCH stall=NONE stall_cycles=0
 
 ---
 
-## Kullanım
+## Usage
 
 ### Makefile
 
 ```bash
-# Pipeline trace aktif
+# Pipeline trace enabled
 make run T=rv32ui-p-add KONATA_TRACER=1
 
-# Log dosyası yolu belirt
+# Specify log file path
 make run T=test KONATA_TRACER=1 +log_path=/path/to/trace.log
 ```
 
-### Log Dosyası
+### Log File
 
-Varsayılan çıktı: `results/logs/rtl/ceres.KONATA`
+Default output: `results/logs/rtl/level.KONATA`
 
-### Konata Viewer'da Açma
+### Opening in Konata Viewer
 
-1. Konata uygulamasını başlat
-2. File → Open → `ceres.KONATA` dosyasını seç
-3. Pipeline görselleştirmesini incele
+1. Start the Konata application
+2. File → Open → select `level.KONATA`
+3. Inspect the pipeline visualization
 
-### Visualizer Görünümü
+### Visualizer View
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -332,14 +332,14 @@ Varsayılan çıktı: `results/logs/rtl/ceres.KONATA`
 
 ---
 
-## Özet
+## Summary
 
-`konata_logger` modülü:
+The `konata_logger` module:
 
-1. **Konata v0004**: Standart pipeline visualizer formatı
-2. **5-Stage Tracking**: F, D, X, M, Wb stage'leri
+1. **Konata v0004**: Standard pipeline visualizer format
+2. **5-Stage Tracking**: F, D, X, M, Wb stages
 3. **Stall Analysis**: stall_cycles, mem_latency
-4. **Flush Detection**: Misprediction ve exception flush'ları
-5. **Metadata Rich**: grp, stall reason, cycle counts
+4. **Flush Detection**: Misprediction and exception flushes
+5. **Rich Metadata**: grp, stall reason, cycle counts
 
-Bu modül, pipeline performans analizi ve debug için kritik bir araçtır.
+This module is a critical tool for pipeline performance analysis and debug.

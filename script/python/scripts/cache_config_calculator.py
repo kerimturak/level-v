@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cache Configuration Calculator for CERES RISC-V
+Cache Configuration Calculator for Level RISC-V
 Calculates valid cache configurations where NUM_SET is a power of 2
 """
 
@@ -116,7 +116,7 @@ def generate_valid_configs(
 
 def main():
     print("="*80)
-    print(" CERES RISC-V Cache Configuration Calculator")
+    print(" Level RISC-V Cache Configuration Calculator")
     print("="*80)
 
     BLK_SIZE = 128  # bits

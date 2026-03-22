@@ -10,7 +10,7 @@ This quick section shows the most common commands to build and run simulations a
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r script/requirements.txt
+pip install -r script/python/requirements.txt
 ```
 
 2. Build Verilated C++ model (from repository root):
@@ -25,14 +25,7 @@ make verilate
 make run_verilator TEST_NAME=rv32ui-p-add MAX_CYCLES=100000
 ```
 
-4. Or call the wrapper directly (useful in CI/debug):
-
-```bash
-VERILATOR_LOG_DIR=results/logs/verilator/rv32ui-p-add \\
-TEST_NAME=rv32ui-p-add MAX_CYCLES=100000 ./script/run_verilator.sh
-```
-
-5. Full pipeline (RTL + Spike + compare):
+4. Full pipeline (RTL + Spike + compare):
 
 ```bash
 make run TEST_NAME=rv32ui-p-add
@@ -41,12 +34,12 @@ make run TEST_NAME=rv32ui-p-add
 Troubleshooting
 
 - If you see `Simulation binary not found`, run `make verilate` first (builds `$(OBJ_DIR)/V$(RTL_LEVEL)`).
-- If Verilator reports missing includes (e.g. `ceres_defines.svh`), ensure `INC_DIR` and include files are present and `make verilate` is invoked from the repo root so include paths resolve.
+- If Verilator reports missing includes (e.g. `level_defines.svh`), ensure `INC_DIR` and include files are present and `make verilate` is invoked from the repo root so include paths resolve.
 - Check logs under `results/logs/verilator/<TEST_NAME>/`:
 	- `verilator_run.log` — console output of the simulation run
 	- `commit_trace.log` — commit trace used by `compare_logs.py`
-	- `ceres.log` — tracer pipeline log
-	- `summary.json` — short machine-readable run summary (added by `run_verilator.sh`)
+	- `level.log` — tracer pipeline log
+	- `summary.json` — short machine-readable run summary (from the Verilator runner)
 
 ASIC / OpenLane (SKY130)
 
@@ -58,24 +51,24 @@ make asic_run
 make asic_report
 ```
 
-`make asic_subrepos`, `subrepo/asic-tools/` altında OpenLane/OpenROAD/caravel repolarını shallow clone eder veya günceller.
+`make asic_subrepos` shallow-clones or updates the OpenLane/OpenROAD/Caravel repos under `subrepo/asic-tools/`.
 
-Varsayılanlar:
+Defaults:
 
 - `OPENLANE_IMAGE=efabless/openlane:2023.09.07`
 - `PDK_ROOT=$HOME/.volare`
 - `PDK=sky130A`
 
-Docker kurulumu (Ubuntu 22.04):
+Docker setup (Ubuntu 22.04):
 
 ```bash
-chmod +x script/shell/install_docker_ubuntu.sh
-sudo bash script/shell/install_docker_ubuntu.sh
+chmod +x script/shell/setup_docker_engine_ubuntu.sh
+sudo bash script/shell/setup_docker_engine_ubuntu.sh
 newgrp docker
 docker run --rm hello-world
 ```
 
-Docker modunda OpenLane çalıştırma:
+Running OpenLane in Docker:
 
 ```bash
 OPENLANE_MODE=docker make asic_setup
@@ -90,6 +83,6 @@ After creating a virtual environment and installing dev requirements run:
 
 ```bash
 source .venv/bin/activate
-pip install -r script/requirements-dev.txt
+pip install -r script/python/requirements-dev.txt
 pytest -q
 ```

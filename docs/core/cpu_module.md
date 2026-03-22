@@ -1,43 +1,43 @@
-# CPU Modülü - Teknik Dokümantasyon
+# CPU Module — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
-3. [Pipeline Mimarisi](#pipeline-mimarisi)
-4. [Pipeline Register Yapıları](#pipeline-register-yapıları)
-5. [Stall ve Flush Mekanizmaları](#stall-ve-flush-mekanizmaları)
-6. [Exception Yönetimi](#exception-yönetimi)
-7. [Branch Prediction Geri Bildirimi](#branch-prediction-geri-bildirimi)
-8. [Bellek Arbiter](#bellek-arbiter)
-9. [Donanım Kesmeleri](#donanım-kesmeleri)
-10. [Zamanlama Diyagramları](#zamanlama-diyagramları)
-11. [Performans Analizi](#performans-analizi)
-12. [Doğrulama ve Test](#doğrulama-ve-test)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
+3. [Pipeline Architecture](#pipeline-architecture)
+4. [Pipeline Register Structures](#pipeline-register-structures)
+5. [Stall and Flush Mechanisms](#stall-and-flush-mechanisms)
+6. [Exception Handling](#exception-handling)
+7. [Branch Prediction Feedback](#branch-prediction-feedback)
+8. [Memory Arbiter](#memory-arbiter)
+9. [Hardware Interrupts](#hardware-interrupts)
+10. [Timing Diagrams](#timing-diagrams)
+11. [Performance Analysis](#performance-analysis)
+12. [Verification and Test](#verification-and-test)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`cpu` modülü, CERES RISC-V işlemcisinin **üst seviye (top-level)** modülüdür. Bu modül, 5-aşamalı pipeline mimarisini bir araya getirir ve tüm alt modüller arasındaki veri akışını koordine eder.
+The `cpu` module is the **top-level** module of the Level RISC-V processor. It integrates the five-stage pipeline architecture and coordinates data flow among all submodules.
 
-### Temel Özellikler
+### Key Features
 
-| Özellik | Değer |
+| Feature | Value |
 |---------|-------|
 | **ISA** | RV32IMC (Base Integer + Multiply + Compressed) |
-| **Pipeline Derinliği** | 5 aşama (Fetch, Decode, Execute, Memory, Writeback) |
-| **Adresleme** | 32-bit |
-| **Bellek Mimarisi** | Von Neumann (Unified Memory) |
-| **Branch Prediction** | GSHARE + BTB + RAS |
-| **Önbellek** | I-Cache + D-Cache (8-way, 8KB) |
-| **İstisna Desteği** | Tam M-mode exception handling |
-| **CSR Desteği** | Machine-mode CSR'ler |
-| **Kesme Desteği** | Timer, Software, External (PLIC) |
+| **Pipeline depth** | 5 stages (Fetch, Decode, Execute, Memory, Writeback) |
+| **Addressing** | 32-bit |
+| **Memory model** | Von Neumann (unified memory) |
+| **Branch prediction** | GSHARE + BTB + RAS |
+| **Caches** | I-Cache + D-Cache (8-way, 8KB) |
+| **Exception support** | Full M-mode exception handling |
+| **CSR support** | Machine-mode CSRs |
+| **Interrupt support** | Timer, software, external (PLIC) |
 
-### Mimari Blok Diyagramı
+### Architectural block diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -70,79 +70,79 @@
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port definitions
 
 ```systemverilog
 module cpu
-  import ceres_param::*;
+  import level_param::*;
 (
-    // Saat ve Reset
-    input  logic       clk_i,        // Sistem saati
-    input  logic       rst_ni,       // Aktif-düşük asenkron reset
+    // Clock and reset
+    input  logic       clk_i,        // System clock
+    input  logic       rst_ni,       // Active-low asynchronous reset
     
-    // Donanım Kesmeleri
+    // Hardware interrupts
     input  logic       timer_irq_i,  // CLINT timer interrupt (MTIP)
     input  logic       sw_irq_i,     // CLINT software interrupt (MSIP)
     input  logic       ext_irq_i,    // PLIC external interrupt (MEIP)
     
-    // Bellek Arayüzü
-    output iomem_req_t iomem_req_o,  // Bellek istek bus'ı
-    input  iomem_res_t iomem_res_i   // Bellek yanıt bus'ı
+    // Memory interface
+    output iomem_req_t iomem_req_o,  // Memory request bus
+    input  iomem_res_t iomem_res_i   // Memory response bus
 );
 ```
 
-### Port Açıklamaları
+### Port descriptions
 
-#### Saat ve Reset
+#### Clock and reset
 
-| Port | Yön | Genişlik | Açıklama |
-|------|-----|----------|----------|
-| `clk_i` | Giriş | 1 bit | Pozitif kenar tetiklemeli sistem saati |
-| `rst_ni` | Giriş | 1 bit | Aktif-düşük asenkron reset (0 = reset aktif) |
+| Port | Direction | Width | Description |
+|------|-----------|-------|-------------|
+| `clk_i` | Input | 1 bit | Positive-edge-triggered system clock |
+| `rst_ni` | Input | 1 bit | Active-low asynchronous reset (0 = reset active) |
 
-#### Donanım Kesmeleri
+#### Hardware interrupts
 
-| Port | Yön | Genişlik | Açıklama |
-|------|-----|----------|----------|
-| `timer_irq_i` | Giriş | 1 bit | CLINT timer kesmesi (MTIP - Machine Timer Interrupt Pending) |
-| `sw_irq_i` | Giriş | 1 bit | CLINT yazılım kesmesi (MSIP - Machine Software Interrupt Pending) |
-| `ext_irq_i` | Giriş | 1 bit | PLIC harici kesme (MEIP - Machine External Interrupt Pending) |
+| Port | Direction | Width | Description |
+|------|-----------|-------|-------------|
+| `timer_irq_i` | Input | 1 bit | CLINT timer interrupt (MTIP — Machine Timer Interrupt Pending) |
+| `sw_irq_i` | Input | 1 bit | CLINT software interrupt (MSIP — Machine Software Interrupt Pending) |
+| `ext_irq_i` | Input | 1 bit | PLIC external interrupt (MEIP — Machine External Interrupt Pending) |
 
-#### Bellek Arayüzü
+#### Memory interface
 
-| Port | Yön | Tip | Açıklama |
-|------|-----|-----|----------|
-| `iomem_req_o` | Çıkış | `iomem_req_t` | Wishbone-uyumlu bellek istek yapısı |
-| `iomem_res_i` | Giriş | `iomem_res_t` | Wishbone-uyumlu bellek yanıt yapısı |
+| Port | Direction | Type | Description |
+|------|-----------|------|-------------|
+| `iomem_req_o` | Output | `iomem_req_t` | Wishbone-compatible memory request struct |
+| `iomem_res_i` | Input | `iomem_res_t` | Wishbone-compatible memory response struct |
 
-### Bellek Arayüz Yapıları
+### Memory interface structures
 
 ```systemverilog
-// Bellek İstek Yapısı (iomem_req_t)
+// Memory request structure (iomem_req_t)
 typedef struct packed {
-    logic [XLEN-1:0]       addr;     // Bellek adresi
-    logic [XLEN-1:0]       wdata;    // Yazılacak veri
-    logic [WB_SEL_WIDTH-1:0] sel;    // Byte seçim sinyalleri
-    logic                  we;       // Yazma enable (1=write, 0=read)
-    logic                  valid;    // İstek geçerlilik
-    logic [2:0]            burst;    // Burst tipi
+    logic [XLEN-1:0]       addr;     // Memory address
+    logic [XLEN-1:0]       wdata;    // Write data
+    logic [WB_SEL_WIDTH-1:0] sel;    // Byte select signals
+    logic                  we;       // Write enable (1=write, 0=read)
+    logic                  valid;    // Request valid
+    logic [2:0]            burst;    // Burst type
 } iomem_req_t;
 
-// Bellek Yanıt Yapısı (iomem_res_t)
+// Memory response structure (iomem_res_t)
 typedef struct packed {
-    logic [XLEN-1:0]       rdata;    // Okunan veri
-    logic                  ready;    // Yanıt hazır
-    logic                  error;    // Hata durumu
+    logic [XLEN-1:0]       rdata;    // Read data
+    logic                  ready;    // Response ready
+    logic                  error;    // Error status
 } iomem_res_t;
 ```
 
 ---
 
-## Pipeline Mimarisi
+## Pipeline Architecture
 
-### 5-Aşamalı Pipeline Genel Yapısı
+### Five-stage pipeline overview
 
 ```
 Cycle:    1     2     3     4     5     6     7     8
@@ -160,7 +160,7 @@ Instr 4                   │ IF  │ DE  │ EX  │ MEM │ WB  │
                           └─────┴─────┴─────┴─────┴─────┘
 ```
 
-### Pipeline Aşamaları
+### Pipeline stages
 
 #### Stage 1: Instruction Fetch (IF)
 
@@ -171,33 +171,33 @@ fetch #(
     .clk_i        (clk_i),
     .rst_ni       (rst_ni),
     .flush_i      (fencei_flush),      // FENCE.I cache flush
-    .flush_pc_i   (flush_pc),          // Flush sonrası PC
-    .stall_i      (stall_cause),       // Stall nedeni
-    .lx_ires_i    (fe_lx_ires),        // I-Cache yanıtı
-    .pc_target_i  (ex_pc_target_last), // Branch hedef adresi
-    .spec_hit_i   (ex_spec_hit),       // Speculation doğru mu?
-    .ex_mtvec_i   (ex_mtvec),          // Trap vektör adresi
-    .trap_active_i(fe_trap_active),    // Trap aktif mi?
-    .misa_c_i     (ex_misa_c),         // C-extension aktif mi?
+    .flush_pc_i   (flush_pc),          // PC after flush
+    .stall_i      (stall_cause),       // Stall cause
+    .lx_ires_i    (fe_lx_ires),        // I-Cache response
+    .pc_target_i  (ex_pc_target_last), // Branch target address
+    .spec_hit_i   (ex_spec_hit),       // Speculation correct?
+    .ex_mtvec_i   (ex_mtvec),          // Trap vector address
+    .trap_active_i(fe_trap_active),    // Trap active?
+    .misa_c_i     (ex_misa_c),         // C extension enabled?
     .tdata1_i     (ex_tdata1),         // Trigger data 1
     .tdata2_i     (ex_tdata2),         // Trigger data 2
     .tcontrol_i   (ex_tcontrol),       // Trigger control
-    .spec_o       (fe_spec),           // Branch prediction bilgisi
-    .lx_ireq_o    (lx_ireq),           // I-Cache isteği
-    .pc_o         (fe_pc),             // Mevcut PC
-    .pc_incr_o    (fe_pc_incr),        // Sonraki PC (PC+2/4)
-    .inst_o       (fe_inst),           // Fetch edilen instruction
+    .spec_o       (fe_spec),           // Branch prediction info
+    .lx_ireq_o    (lx_ireq),           // I-Cache request
+    .pc_o         (fe_pc),             // Current PC
+    .pc_incr_o    (fe_pc_incr),        // Next PC (PC+2/4)
+    .inst_o       (fe_inst),           // Fetched instruction
     .imiss_stall_o(fe_imiss_stall),    // I-Cache miss stall
-    .exc_type_o   (fe_exc_type),       // Exception tipi
-    .instr_type_o (fe_instr_type),     // Instruction tipi
-    .de_info_i    (de_info),           // Decode geri bildirimi
-    .ex_info_i    (ex_info)            // Execute geri bildirimi
+    .exc_type_o   (fe_exc_type),       // Exception type
+    .instr_type_o (fe_instr_type),     // Instruction type
+    .de_info_i    (de_info),           // Decode feedback
+    .ex_info_i    (ex_info)            // Execute feedback
 );
 ```
 
-**Fetch Aşaması Görevleri:**
-- Program Counter (PC) yönetimi
-- Instruction cache erişimi
+**Fetch stage responsibilities:**
+- Program counter (PC) management
+- Instruction cache access
 - Compressed instruction (RV32C) decode
 - Branch prediction (GSHARE, BTB, RAS)
 - Instruction alignment (32-bit boundary)
@@ -224,12 +224,12 @@ decode i_decode (
 );
 ```
 
-**Decode Aşaması Görevleri:**
-- Instruction çözümleme (opcode, funct3, funct7)
-- Register file okuma (rs1, rs2)
-- Immediate değer genişletme
-- Control signal üretimi
-- Hazard detection için bilgi sağlama
+**Decode stage responsibilities:**
+- Instruction decode (opcode, funct3, funct7)
+- Register file read (rs1, rs2)
+- Immediate extension
+- Control signal generation
+- Information for hazard detection
 
 #### Stage 3: Execute (EX)
 
@@ -277,13 +277,13 @@ execution i_execution (
 );
 ```
 
-**Execute Aşaması Görevleri:**
-- ALU işlemleri (aritmetik, mantıksal, karşılaştırma)
-- Branch/Jump koşul hesaplama
-- Multiply/Divide işlemleri
-- CSR okuma/yazma
-- Exception detection ve handling
-- Data forwarding uygulama
+**Execute stage responsibilities:**
+- ALU operations (arithmetic, logical, compare)
+- Branch/jump condition evaluation
+- Multiply/divide operations
+- CSR read/write
+- Exception detection and handling
+- Data forwarding
 
 #### Stage 4: Memory Access (MEM)
 
@@ -303,11 +303,11 @@ memory i_memory (
 );
 ```
 
-**Memory Aşaması Görevleri:**
-- Data cache erişimi
-- Load/Store işlemleri
-- Byte/Halfword/Word hizalama
-- Cache miss yönetimi
+**Memory stage responsibilities:**
+- Data cache access
+- Load/store operations
+- Byte/halfword/word alignment
+- Cache miss handling
 - FENCE.I cache flush
 
 #### Stage 5: Write-Back (WB)
@@ -328,40 +328,40 @@ writeback i_writeback (
 );
 ```
 
-**Write-Back Aşaması Görevleri:**
-- Result source seçimi (ALU, Memory, PC+4)
-- Register file yazma
+**Write-back stage responsibilities:**
+- Result source selection (ALU, memory, PC+4)
+- Register file write
 - Instruction commit
 
 ---
 
-## Pipeline Register Yapıları
+## Pipeline Register Structures
 
 ### pipe1: Fetch → Decode
 
 ```systemverilog
 typedef struct packed {
 `ifdef COMMIT_TRACER
-    fe_tracer_info_t fe_tracer;    // Trace bilgisi
+    fe_tracer_info_t fe_tracer;    // Trace info
 `endif
     logic [XLEN-1:0] pc;           // Program counter
-    logic [XLEN-1:0] pc_incr;      // PC + 2 veya PC + 4
+    logic [XLEN-1:0] pc_incr;      // PC + 2 or PC + 4
     logic [XLEN-1:0] inst;         // 32-bit instruction
-    exc_type_e       exc_type;     // Exception tipi
-    instr_type_e     instr_type;   // Instruction tipi
-    predict_info_t   spec;         // Branch prediction bilgisi
+    exc_type_e       exc_type;     // Exception type
+    instr_type_e     instr_type;   // Instruction type
+    predict_info_t   spec;         // Branch prediction info
 } pipe1_t;
 ```
 
-**Pipeline Register Kontrolü:**
+**Pipeline register control:**
 
 ```systemverilog
 always_ff @(posedge clk_i) begin
     if (!rst_ni || de_flush_en || |priority_flush || fencei_flush) begin
-        // Reset veya flush durumunda NOP yükle
+        // On reset or flush: load NOP
         pipe1 <= '{exc_type: NO_EXCEPTION, instr_type: instr_invalid, default: 0};
     end else if (de_enable) begin
-        // Normal işlem: fetch'ten gelen verileri yükle
+        // Normal operation: load data from fetch
         pipe1 <= '{
             pc       : fe_pc,
             pc_incr  : fe_pc_incr,
@@ -383,29 +383,29 @@ typedef struct packed {
     fe_tracer_info_t fe_tracer;
 `endif
     logic [XLEN-1:0] pc;           // Program counter
-    logic [XLEN-1:0] pc_incr;      // Sonraki PC
-    logic            rf_rw_en;     // Register yazma enable
-    logic            wr_en;        // Memory yazma enable
-    logic [1:0]      rw_size;      // Load/Store boyutu
-    logic [1:0]      result_src;   // Result kaynağı
-    alu_op_e         alu_ctrl;     // ALU işlem tipi
-    pc_sel_e         pc_sel;       // Branch/Jump tipi
-    logic            alu_in1_sel;  // ALU input 1 seçimi
-    logic            alu_in2_sel;  // ALU input 2 seçimi
+    logic [XLEN-1:0] pc_incr;      // Next PC
+    logic            rf_rw_en;     // Register write enable
+    logic            wr_en;        // Memory write enable
+    logic [1:0]      rw_size;      // Load/store size
+    logic [1:0]      result_src;   // Result source
+    alu_op_e         alu_ctrl;     // ALU operation type
+    pc_sel_e         pc_sel;       // Branch/jump type
+    logic            alu_in1_sel;  // ALU input 1 select
+    logic            alu_in2_sel;  // ALU input 2 select
     logic            ld_op_sign;   // Load sign extension
-    logic            rd_csr;       // CSR okuma enable
-    logic            wr_csr;       // CSR yazma enable
-    logic [11:0]     csr_idx;      // CSR adresi
-    logic            csr_or_data;  // CSR op veya immediate
-    logic            dcache_valid; // D-Cache geçerli
-    logic [XLEN-1:0] r1_data;      // Rs1 değeri
-    logic [XLEN-1:0] r2_data;      // Rs2 değeri
-    logic [4:0]      r1_addr;      // Rs1 adresi
-    logic [4:0]      r2_addr;      // Rs2 adresi
-    logic [4:0]      rd_addr;      // Rd adresi
-    logic [XLEN-1:0] imm;          // Immediate değeri
-    instr_type_e     instr_type;   // Instruction tipi
-    predict_info_t   spec;         // Branch prediction bilgisi
+    logic            rd_csr;       // CSR read enable
+    logic            wr_csr;       // CSR write enable
+    logic [11:0]     csr_idx;      // CSR address
+    logic            csr_or_data;  // CSR op or immediate
+    logic            dcache_valid; // D-Cache valid
+    logic [XLEN-1:0] r1_data;      // Rs1 value
+    logic [XLEN-1:0] r2_data;      // Rs2 value
+    logic [4:0]      r1_addr;      // Rs1 address
+    logic [4:0]      r2_addr;      // Rs2 address
+    logic [4:0]      rd_addr;      // Rd address
+    logic [XLEN-1:0] imm;          // Immediate value
+    instr_type_e     instr_type;   // Instruction type
+    predict_info_t   spec;         // Branch prediction info
 } pipe2_t;
 ```
 
@@ -415,24 +415,24 @@ typedef struct packed {
 typedef struct packed {
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
-    logic            rd_en_csr;    // CSR okundu mu
-    logic            wr_en_csr;    // CSR yazıldı mı
-    logic [11:0]     csr_idx;      // CSR adresi
-    instr_type_e     instr_type;   // Instruction tipi
-    logic [XLEN-1:0] csr_wr_data;  // CSR yazma verisi
+    logic            rd_en_csr;    // CSR read occurred
+    logic            wr_en_csr;    // CSR write occurred
+    logic [11:0]     csr_idx;      // CSR address
+    instr_type_e     instr_type;   // Instruction type
+    logic [XLEN-1:0] csr_wr_data;  // CSR write data
 `endif
-    logic [XLEN-1:0] pc_incr;      // Sonraki PC
+    logic [XLEN-1:0] pc_incr;      // Next PC
     logic [XLEN-1:0] pc;           // Program counter
-    logic            rf_rw_en;     // Register yazma enable
-    logic            wr_en;        // Memory yazma enable
-    logic [1:0]      rw_size;      // Load/Store boyutu
-    logic [1:0]      result_src;   // Result kaynağı
+    logic            rf_rw_en;     // Register write enable
+    logic            wr_en;        // Memory write enable
+    logic [1:0]      rw_size;      // Load/store size
+    logic [1:0]      result_src;   // Result source
     logic            ld_op_sign;   // Load sign extension
-    logic [4:0]      rd_addr;      // Rd adresi
-    logic [XLEN-1:0] alu_result;   // ALU sonucu
-    logic [XLEN-1:0] write_data;   // Store verisi
-    logic            dcache_valid; // D-Cache geçerli
-    logic [XLEN-1:0] read_data;    // Load verisi
+    logic [4:0]      rd_addr;      // Rd address
+    logic [XLEN-1:0] alu_result;   // ALU result
+    logic [XLEN-1:0] write_data;   // Store data
+    logic            dcache_valid; // D-Cache valid
+    logic [XLEN-1:0] read_data;    // Load data
 } pipe3_t;
 ```
 
@@ -452,41 +452,41 @@ typedef struct packed {
     logic [XLEN-1:0] csr_wr_data;
     logic            dcache_valid;
 `endif
-    logic [XLEN-1:0] pc_incr;      // Sonraki PC
+    logic [XLEN-1:0] pc_incr;      // Next PC
     logic [XLEN-1:0] pc;           // Program counter
-    logic            rf_rw_en;     // Register yazma enable
-    logic [1:0]      result_src;   // Result kaynağı
-    logic [4:0]      rd_addr;      // Rd adresi
-    logic [XLEN-1:0] alu_result;   // ALU sonucu
-    logic [XLEN-1:0] read_data;    // Load verisi
+    logic            rf_rw_en;     // Register write enable
+    logic [1:0]      result_src;   // Result source
+    logic [4:0]      rd_addr;      // Rd address
+    logic [XLEN-1:0] alu_result;   // ALU result
+    logic [XLEN-1:0] read_data;    // Load data
 } pipe4_t;
 ```
 
 ---
 
-## Stall ve Flush Mekanizmaları
+## Stall and Flush Mechanisms
 
-### Stall Nedenleri
+### Stall causes
 
 ```systemverilog
 typedef enum logic [2:0] {
-    NO_STALL       = 3'b000,  // Stall yok
+    NO_STALL       = 3'b000,  // No stall
     IMISS_STALL    = 3'b001,  // I-Cache miss
     DMISS_STALL    = 3'b010,  // D-Cache miss
     LOAD_RAW_STALL = 3'b011,  // Load-use hazard
-    ALU_STALL      = 3'b100,  // MUL/DIV beklemesi
+    ALU_STALL      = 3'b100,  // MUL/DIV wait
     FENCEI_STALL   = 3'b101   // FENCE.I cache flush
 } stall_e;
 ```
 
-### Stall Öncelik Sıralaması
+### Stall priority ordering
 
 ```systemverilog
 always_comb begin
     stall_cause = NO_STALL;
     
     if (me_fencei_stall) begin
-        // En yüksek öncelik: FENCE.I dirty writeback
+        // Highest priority: FENCE.I dirty writeback
         stall_cause = FENCEI_STALL;
     end else if (fe_imiss_stall) begin
         // I-Cache miss
@@ -498,76 +498,76 @@ always_comb begin
         // Load-use hazard
         stall_cause = LOAD_RAW_STALL;
     end else if (ex_alu_stall) begin
-        // MUL/DIV işlemi devam ediyor
+        // MUL/DIV still in progress
         stall_cause = ALU_STALL;
     end
 end
 ```
 
-### Stall Davranışları
+### Stall behavior
 
-| Stall Tipi | Etkilenen Aşamalar | Açıklama |
-|------------|-------------------|----------|
-| `FENCEI_STALL` | Tüm pipeline | D-Cache dirty line writeback beklemesi |
-| `IMISS_STALL` | Fetch, Decode | I-Cache miss, bellek erişimi bekleniyor |
-| `DMISS_STALL` | Tüm pipeline | D-Cache miss, bellek erişimi bekleniyor |
-| `LOAD_RAW_STALL` | Fetch, Decode | Load-use data hazard |
-| `ALU_STALL` | Tüm pipeline | MUL/DIV işlemi tamamlanmadı |
+| Stall type | Affected stages | Description |
+|------------|-----------------|-------------|
+| `FENCEI_STALL` | Entire pipeline | Waiting for D-Cache dirty line writeback |
+| `IMISS_STALL` | Fetch, decode | I-Cache miss; waiting for memory |
+| `DMISS_STALL` | Entire pipeline | D-Cache miss; waiting for memory |
+| `LOAD_RAW_STALL` | Fetch, decode | Load-use data hazard |
+| `ALU_STALL` | Entire pipeline | MUL/DIV not yet complete |
 
-### Flush Mekanizmaları
+### Flush mechanisms
 
-#### Priority Flush (Exception Tabanlı)
+#### Priority flush (exception-based)
 
 ```systemverilog
-// Exception önceliğine göre flush kararı
+// Flush decision from exception priority
 priority_flush = ex_exc_type != NO_EXCEPTION ? 3:          // EX exception
                  de_active_exc_type != NO_EXCEPTION ? 2 :  // DE exception
-                 0;                                        // Flush yok
+                 0;                                        // No flush
 ```
 
-| priority_flush | Flush Alanı | Açıklama |
-|---------------|-------------|----------|
-| 3 | pipe1, pipe2 | Execute exception (en yüksek öncelik) |
+| priority_flush | Flush scope | Description |
+|---------------|-------------|-------------|
+| 3 | pipe1, pipe2 | Execute exception (highest priority) |
 | 2 | pipe1 | Decode exception |
-| 0 | Yok | Flush gerekmez |
+| 0 | None | No flush needed |
 
-#### FENCE.I Flush
+#### FENCE.I flush
 
 ```systemverilog
-// FENCE.I veya MISA yazması durumunda cache flush
+// Cache flush on FENCE.I or MISA write
 fencei_flush = (pipe2.instr_type == fence_i) || 
                (ex_wr_csr && pipe2.csr_idx == 12'h301);  // misa write
 
-// Flush sonrası dönülecek PC
+// PC to resume after flush
 flush_pc = pipe2.pc_incr;
 ```
 
-#### Branch Misprediction Flush
+#### Branch misprediction flush
 
 ```systemverilog
-// Branch prediction doğruluğu kontrolü
+// Branch prediction correctness
 if (ex_pc_sel) 
     ex_spec_hit = pipe2.spec.taken && (ex_pc_target == pipe2.spec.pc);
 else 
     ex_spec_hit = !pipe2.spec.taken;
 
-// Misprediction durumunda hedef PC
+// Target PC on misprediction
 if (!ex_spec_hit) begin
     if (ex_pc_sel) 
-        ex_pc_target_last = ex_pc_target;  // Branch alındı, hedef adrese git
+        ex_pc_target_last = ex_pc_target;  // Taken: go to target
     else 
-        ex_pc_target_last = pipe2.pc_incr; // Branch alınmadı, sıradaki instr
+        ex_pc_target_last = pipe2.pc_incr; // Not taken: sequential PC
 end
 ```
 
-### Flush ve Stall Etkileşimi
+### Flush and stall interaction
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        STALL/FLUSH İNTERAKSİYONU                            │
+│                        STALL / FLUSH INTERACTION                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Stall Aktif İken Flush:                                                    │
+│  Flush while stall active:                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │ de_flush_en = stall_cause inside {IMISS, DMISS, ALU, FENCEI} ?      │   │
 │  │               1'b0 : de_flush;                                       │   │
@@ -576,82 +576,82 @@ end
 │  │               1'b0 : ex_flush;                                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  Mantık: Stall durumunda flush ertelenir, stall çözüldüğünde flush         │
-│          uygulanır. Bu, bellek erişimi sırasında veri kaybını önler.       │
+│  Logic: While stalled, flush is deferred; when the stall clears, flush     │
+│         applies. This avoids losing data during memory access.              │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Exception Yönetimi
+## Exception Handling
 
-### Exception Tipleri
+### Exception types
 
 ```systemverilog
 typedef enum logic [4:0] {
     NO_EXCEPTION         = 5'd0,
-    INSTR_MISALIGNED     = 5'd1,   // Instruction hizalama hatası
-    INSTR_ACCESS_FAULT   = 5'd2,   // Instruction erişim hatası
-    ILLEGAL_INSTRUCTION  = 5'd3,   // Geçersiz instruction
+    INSTR_MISALIGNED     = 5'd1,   // Instruction alignment fault
+    INSTR_ACCESS_FAULT   = 5'd2,   // Instruction access fault
+    ILLEGAL_INSTRUCTION  = 5'd3,   // Illegal instruction
     BREAKPOINT           = 5'd4,   // EBREAK
-    LOAD_MISALIGNED      = 5'd5,   // Load hizalama hatası
-    LOAD_ACCESS_FAULT    = 5'd6,   // Load erişim hatası
-    STORE_MISALIGNED     = 5'd7,   // Store hizalama hatası
-    STORE_ACCESS_FAULT   = 5'd8,   // Store erişim hatası
+    LOAD_MISALIGNED      = 5'd5,   // Load alignment fault
+    LOAD_ACCESS_FAULT    = 5'd6,   // Load access fault
+    STORE_MISALIGNED     = 5'd7,   // Store alignment fault
+    STORE_ACCESS_FAULT   = 5'd8,   // Store access fault
     ECALL_M              = 5'd11   // Machine mode ECALL
 } exc_type_e;
 ```
 
-### Aşama Bazlı Exception Kaynakları
+### Exception sources by stage
 
-| Aşama | Exception Tipleri | Tespit Yöntemi |
-|-------|------------------|----------------|
-| **Fetch** | INSTR_ACCESS_FAULT, ILLEGAL_INSTRUCTION | PMA grant yok, C-extension decode hatası |
-| **Decode** | ILLEGAL_INSTRUCTION | Tanınmayan opcode, geçersiz CSR |
-| **Execute** | INSTR_MISALIGNED, LOAD_MISALIGNED, STORE_MISALIGNED | Adres hizalama kontrolü |
-| **Memory** | LOAD_ACCESS_FAULT, STORE_ACCESS_FAULT | PMA ihlali |
+| Stage | Exception types | Detection |
+|-------|-----------------|-----------|
+| **Fetch** | INSTR_ACCESS_FAULT, ILLEGAL_INSTRUCTION | No PMA grant, C-extension decode error |
+| **Decode** | ILLEGAL_INSTRUCTION | Unrecognized opcode, invalid CSR |
+| **Execute** | INSTR_MISALIGNED, LOAD_MISALIGNED, STORE_MISALIGNED | Address alignment check |
+| **Memory** | LOAD_ACCESS_FAULT, STORE_ACCESS_FAULT | PMA violation |
 
-### Exception Öncelik Sistemi
+### Exception priority
 
 ```systemverilog
-// Exception mask: hangi aşamada exception var?
+// Exception mask: which stage has an exception?
 excp_mask = {1'b0, 
              ex_exc_type != NO_EXCEPTION,        // [2] Execute
              de_active_exc_type != NO_EXCEPTION, // [1] Decode
              fe_active_exc_type != NO_EXCEPTION  // [0] Fetch
             };
 
-// Trap aktif sinyali
+// Trap active signal
 trap_active = |excp_mask[3:1];
 fe_trap_active = |{excp_mask[3:1], de_active_exc_type != NO_EXCEPTION};
 de_trap_active = de_active_exc_type != NO_EXCEPTION;
 ```
 
-### Trap Cause ve Trap Value Hesaplama
+### Trap cause and trap value
 
 ```systemverilog
-// Trap cause: en yüksek öncelikli exception'ın kodu
+// Trap cause: code of highest-priority exception
 ex_trap_cause = ex_exc_type != NO_EXCEPTION ? trap_cause_decode(ex_exc_type) :
                 de_active_exc_type != NO_EXCEPTION ? trap_cause_decode(de_active_exc_type) :
                 fe_active_exc_type != NO_EXCEPTION ? trap_cause_decode(fe_active_exc_type) : 
                 trap_cause_decode(ex_exc_type);
 
-// Trap mepc: exception oluşan instruction'ın PC'si
+// Trap MEPC: PC of faulting instruction
 ex_trap_mepc = ex_exc_type != NO_EXCEPTION ? pipe2.pc :
                de_active_exc_type != NO_EXCEPTION ? pipe1.pc :
                fe_active_exc_type != NO_EXCEPTION ? fe_pc : 
                pipe2.pc;
 ```
 
-### Trap Value (mtval) Hesaplama
+### Trap value (mtval)
 
 ```systemverilog
 always_comb begin
     // Execute stage exceptions
     if (ex_exc_type != NO_EXCEPTION) begin
         unique case (ex_exc_type)
-            ILLEGAL_INSTRUCTION: trap_tval = '0;  // Spike uyumu: 0
+            ILLEGAL_INSTRUCTION: trap_tval = '0;  // Spike match: 0
             LOAD_MISALIGNED,
             STORE_MISALIGNED:    trap_tval = ex_alu_result;  // Faulting address
             default:             trap_tval = '0;
@@ -676,11 +676,11 @@ always_comb begin
 end
 ```
 
-### Exception Akış Diyagramı
+### Exception flow diagram
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
-│                          EXCEPTION AKIŞ DİYAGRAMI                              │
+│                          EXCEPTION FLOW DIAGRAM                                │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                │
 │     Fetch          Decode         Execute        Memory         Writeback     │
@@ -717,50 +717,50 @@ end
 
 ---
 
-## Branch Prediction Geri Bildirimi
+## Branch Prediction Feedback
 
-### Speculation Hit/Miss Tespiti
+### Speculation hit/miss detection
 
 ```systemverilog
 always_comb begin
-    // Branch alındı mı kontrolü
+    // Check whether branch is taken
     if (ex_pc_sel) begin
-        // Branch/Jump alındı: tahmin doğru mu ve hedef doğru mu?
+        // Branch/jump taken: is prediction and target correct?
         ex_spec_hit = pipe2.spec.taken && (ex_pc_target == pipe2.spec.pc);
     end else begin
-        // Branch alınmadı: not-taken tahmini doğru mu?
+        // Branch not taken: is not-taken prediction correct?
         ex_spec_hit = !pipe2.spec.taken;
     end
 end
 ```
 
-### Misprediction Kurtarma
+### Misprediction recovery
 
 ```systemverilog
 always_comb begin
     if (!ex_spec_hit) begin
-        // Misprediction: doğru hedefi belirle
+        // Misprediction: determine correct target
         if (ex_pc_sel)
-            ex_pc_target_last = ex_pc_target;    // Aslında alınmalıydı
+            ex_pc_target_last = ex_pc_target;    // Should have been taken
         else
-            ex_pc_target_last = pipe2.pc_incr;   // Aslında alınmamalıydı
+            ex_pc_target_last = pipe2.pc_incr;   // Should not have been taken
     end else begin
         ex_pc_target_last = ex_pc_target;
     end
 end
 ```
 
-### Pipeline Feedback Yapıları
+### Pipeline feedback structures
 
 ```systemverilog
-// Decode → Fetch geri bildirimi
+// Decode → Fetch feedback
 typedef struct packed {
-    predict_info_t spec;    // Branch prediction bilgisi
-    logic          bjtype;  // Branch/Jump instruction mı?
+    predict_info_t spec;    // Branch prediction info
+    logic          bjtype;  // Branch/jump instruction?
     logic [XLEN-1:0] pc;    // Instruction PC
 } pipe_info_t;
 
-// Execute → Fetch geri bildirimi
+// Execute → Fetch feedback
 always_comb begin
     ex_info.spec   = pipe2.spec;
     ex_info.bjtype = is_branch(pipe2.instr_type);
@@ -768,7 +768,7 @@ always_comb begin
 end
 ```
 
-### Branch Resolution Zamanlama
+### Branch resolution timing
 
 ```
 Cycle:     1      2      3      4      5      6
@@ -779,38 +779,38 @@ Branch:  │  IF  │  DE  │  EX  │  MEM │
                         │
                         ▼
          ┌──────────────────────┐
-         │ spec_hit hesaplama   │
+         │ spec_hit computation │
          │ Mispred: flush IF/DE │
-         │ Correct: devam et    │
+         │ Correct: continue    │
          └──────────────────────┘
 
-Misprediction Cezası: 2 cycle (IF + DE flush)
+Misprediction penalty: 2 cycles (IF + DE flush)
 ```
 
 ---
 
-## Bellek Arbiter
+## Memory Arbiter
 
-### Memory Arbiter Bağlantıları
+### Memory arbiter connections
 
 ```systemverilog
 memory_arbiter i_memory_arbiter (
     .clk_i       (clk_i),
     .rst_ni      (rst_ni),
-    .icache_req_i(lx_ireq),     // I-Cache isteği
-    .dcache_req_i(lx_dreq),     // D-Cache isteği
-    .icache_res_o(fe_lx_ires),  // I-Cache yanıtı
-    .dcache_res_o(lx_dres),     // D-Cache yanıtı
-    .iomem_res_i (iomem_res_i), // Harici bellek yanıtı
-    .iomem_req_o (iomem_req_o)  // Harici bellek isteği
+    .icache_req_i(lx_ireq),     // I-Cache request
+    .dcache_req_i(lx_dreq),     // D-Cache request
+    .icache_res_o(fe_lx_ires),  // I-Cache response
+    .dcache_res_o(lx_dres),     // D-Cache response
+    .iomem_res_i (iomem_res_i), // External memory response
+    .iomem_req_o (iomem_req_o)  // External memory request
 );
 ```
 
-### Arbitrasyon Mantığı
+### Arbitration logic
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                           BELLEK ARBİTER                                      │
+│                           MEMORY ARBITER                                     │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │   ┌─────────────┐                                    ┌─────────────┐        │
@@ -831,27 +831,27 @@ memory_arbiter i_memory_arbiter (
 │                          │     Bus       │                                   │
 │                          └───────────────┘                                   │
 │                                                                              │
-│   Öncelik: D-Cache > I-Cache (data hazard'ları minimize etmek için)         │
+│   Priority: D-Cache > I-Cache (minimize data hazards)                        │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Donanım Kesmeleri
+## Hardware Interrupts
 
-### Kesme Tipleri
+### Interrupt types
 
-| Kesme | Kaynak | CSR Bit | Açıklama |
-|-------|--------|---------|----------|
-| Timer (MTIP) | CLINT | mip[7] | Zamanlayıcı kesmesi |
-| Software (MSIP) | CLINT | mip[3] | Yazılım kesmesi |
-| External (MEIP) | PLIC | mip[11] | Harici cihaz kesmesi |
+| Interrupt | Source | CSR bit | Description |
+|-----------|--------|---------|-------------|
+| Timer (MTIP) | CLINT | mip[7] | Timer interrupt |
+| Software (MSIP) | CLINT | mip[3] | Software interrupt |
+| External (MEIP) | PLIC | mip[11] | External device interrupt |
 
-### Kesme İşleme Akışı
+### Interrupt handling flow
 
 ```systemverilog
-// Kesmeler execution aşamasına iletilir
+// Interrupts are delivered to the execute stage
 execution i_execution (
     // ...
     .timer_irq_i  (timer_irq_i),   // CLINT timer
@@ -861,24 +861,24 @@ execution i_execution (
 );
 ```
 
-### Kesme Öncelikleri
+### Interrupt priority
 
 ```
-Kesme Öncelik Sırası (yüksekten düşüğe):
-1. External Interrupt (MEIP) - PLIC
-2. Timer Interrupt (MTIP)    - CLINT
-3. Software Interrupt (MSIP) - CLINT
-4. Synchronous Exceptions
+Interrupt priority (high to low):
+1. External interrupt (MEIP) — PLIC
+2. Timer interrupt (MTIP)    — CLINT
+3. Software interrupt (MSIP) — CLINT
+4. Synchronous exceptions
 
-Not: Kesmeler mie (machine interrupt enable) ve 
-     mstatus.MIE bitlerine bağlıdır.
+Note: Interrupts depend on mie (machine interrupt enable) and
+      mstatus.MIE bits.
 ```
 
 ---
 
-## Zamanlama Diyagramları
+## Timing Diagrams
 
-### Normal İşlem Akışı
+### Normal operation flow
 
 ```
 clk_i    ____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____
@@ -937,10 +937,10 @@ pipe2    │ --     │ Br       │ nop      │ nop       │ T1
          └─────────────────────────────────────────────────────
                     ↑ resolve  ↑ flush
 
-Misprediction Cezası: 2 cycle
+Misprediction penalty: 2 cycles
 ```
 
-### Load-Use Hazard Stall
+### Load-use hazard stall
 
 ```
 clk_i    ____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____
@@ -959,10 +959,10 @@ pipe1    │ LW     │ ADD      │ ADD(hold)│ I3       │ I4
 pipe2    │ --     │ LW       │ bubble   │ ADD      │ I3
          └─────────────────────────────────────────────────────
 
-Load-Use Cezası: 1 cycle (forwarding ile minimize edilmiş)
+Load-use penalty: 1 cycle (minimized with forwarding)
 ```
 
-### Exception Handling
+### Exception handling
 
 ```
 clk_i    ____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____
@@ -992,105 +992,105 @@ CSR Updates:
 
 ---
 
-## Performans Analizi
+## Performance Analysis
 
-### IPC (Instructions Per Cycle) Hesabı
+### IPC (instructions per cycle)
 
-| Durum | IPC | Açıklama |
-|-------|-----|----------|
-| İdeal | 1.0 | Stall veya flush yok |
-| Ortalama | 0.7-0.8 | Normal çalışma |
-| Cache Miss | 0.1-0.2 | Bellek erişim gecikmesi |
+| Case | IPC | Description |
+|------|-----|-------------|
+| Ideal | 1.0 | No stall or flush |
+| Typical | 0.7–0.8 | Normal operation |
+| Cache miss | 0.1–0.2 | Memory access latency |
 
-### Stall Cezaları
+### Stall penalties
 
-| Stall Tipi | Tipik Süre | Etkisi |
-|------------|------------|--------|
-| I-Cache Miss | ~10 cycle | IPC düşüşü |
-| D-Cache Miss | ~10 cycle | Pipeline durdurma |
-| Load-Use Hazard | 1 cycle | Minimal etki |
-| MUL/DIV | 1-32 cycle | İşlem bağımlı |
-| Branch Mispred | 2 cycle | Pipeline flush |
+| Stall type | Typical duration | Effect |
+|------------|------------------|--------|
+| I-Cache miss | ~10 cycles | IPC drop |
+| D-Cache miss | ~10 cycles | Pipeline stall |
+| Load-use hazard | 1 cycle | Minimal |
+| MUL/DIV | 1–32 cycles | Operation-dependent |
+| Branch mispred | 2 cycles | Pipeline flush |
 
-### Optimizasyon Stratejileri
+### Optimization strategies
 
-1. **Branch Prediction Doğruluğu**
-   - GSHARE + BTB + RAS kombinasyonu
-   - Hedef: >90% doğruluk
+1. **Branch prediction accuracy**
+   - GSHARE + BTB + RAS combination
+   - Target: >90% accuracy
 
-2. **Cache Hit Rate**
+2. **Cache hit rate**
    - 8-way set associative
-   - 8KB kapasite
-   - Hedef: >95% hit rate
+   - 8 KB capacity
+   - Target: >95% hit rate
 
-3. **Data Forwarding**
+3. **Data forwarding**
    - MEM→EX forwarding
    - WB→EX forwarding
    - WB→DE forwarding
 
-4. **Instruction Fetch Bandwidth**
-   - Compressed instruction desteği
+4. **Instruction fetch bandwidth**
+   - Compressed instruction support
    - Alignment buffer
 
 ---
 
-## Doğrulama ve Test
+## Verification and Test
 
-### Assertion'lar
+### Assertions
 
 ```systemverilog
-// Pipeline tutarlılık kontrolü
+// Pipeline consistency check
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     (stall_cause == NO_STALL) |-> 
     (pipe1 != $past(pipe1) || de_flush_en)
 ) else $error("Pipeline should advance when not stalled");
 
-// Exception öncelik kontrolü
+// Exception priority check
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     (ex_exc_type != NO_EXCEPTION && de_active_exc_type != NO_EXCEPTION) |->
     (priority_flush == 3)
 ) else $error("EX exception should have highest priority");
 
-// Stall/Flush mutual exclusion
+// Stall/flush mutual exclusion
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL}) |->
     (!de_flush_en && !ex_flush_en)
 ) else $error("Flush should be suppressed during cache stalls");
 ```
 
-### Test Senaryoları
+### Test scenarios
 
-1. **Basic Pipeline Flow**
-   - Ardışık NOP'lar
-   - Basit aritmetik işlemler
+1. **Basic pipeline flow**
+   - Back-to-back NOPs
+   - Simple arithmetic
    - Register file R/W
 
-2. **Hazard Tests**
+2. **Hazard tests**
    - RAW hazard (data forwarding)
    - Load-use hazard (stall)
    - WAW hazard (in-order)
 
-3. **Branch Tests**
-   - Koşullu branch (taken/not-taken)
+3. **Branch tests**
+   - Conditional branch (taken/not-taken)
    - JAL/JALR
    - Misprediction recovery
 
-4. **Exception Tests**
+4. **Exception tests**
    - Illegal instruction
    - Misaligned access
    - ECALL/EBREAK
 
-5. **Interrupt Tests**
+5. **Interrupt tests**
    - Timer interrupt
    - External interrupt
    - Interrupt masking
 
-6. **Cache Tests**
+6. **Cache tests**
    - I-Cache miss/hit
    - D-Cache miss/hit
    - FENCE.I
 
-### Konata Pipeline Visualizer
+### Konata pipeline visualizer
 
 ```systemverilog
 `ifdef KONATA_TRACER
@@ -1098,24 +1098,24 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 `endif
 ```
 
-Konata trace formatı pipeline durumunu görselleştirmek için kullanılır:
-- Instruction fetch, decode, execute, memory, writeback aşamaları
-- Stall ve flush olayları
+The Konata trace format visualizes pipeline state:
+- Instruction fetch, decode, execute, memory, writeback stages
+- Stall and flush events
 - Branch resolution
 
 ---
 
-## Özet
+## Summary
 
-`cpu` modülü, CERES RISC-V işlemcisinin merkezi koordinasyon birimidir. Bu modül:
+The `cpu` module is the central coordination unit of the Level RISC-V processor. It:
 
-1. **5-aşamalı pipeline**'ı yönetir (IF, DE, EX, MEM, WB)
-2. **Pipeline register**'ları (pipe1-4) aracılığıyla veri akışını sağlar
-3. **Hazard unit** ile data hazard'ları çözer
-4. **Stall mekanizması** ile cache miss ve diğer gecikmeleri yönetir
-5. **Flush mekanizması** ile branch misprediction ve exception'ları işler
-6. **Exception handling** ile hata durumlarını yakalar ve işler
-7. **Memory arbiter** ile I-Cache ve D-Cache arasında arbitrasyon yapar
-8. **Kesme desteği** ile timer, software ve external interrupt'ları işler
+1. Manages the **five-stage pipeline** (IF, DE, EX, MEM, WB)
+2. Provides data flow through **pipeline registers** (pipe1–4)
+3. Resolves data hazards with the **hazard unit**
+4. Handles cache misses and other delays with **stall logic**
+5. Handles branch mispredictions and exceptions with **flush logic**
+6. **Exception handling** captures and processes fault conditions
+7. **Memory arbiter** arbitrates between I-Cache and D-Cache
+8. **Interrupt support** handles timer, software, and external interrupts
 
-Bu tasarım, basitlik ve performans arasında denge kurarak, eğitim ve gerçek dünya uygulamaları için uygun bir RISC-V işlemci çekirdeği sunar.
+This design balances simplicity and performance and suits both learning and real-world RISC-V core applications.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ceres RISC-V SoC now supports Wishbone B4 pipelined bus interface for peripheral and memory interconnect.
+Level RISC-V SoC now supports Wishbone B4 pipelined bus interface for peripheral and memory interconnect.
 
 ## Bus Topology
 
@@ -45,7 +45,7 @@ Ceres RISC-V SoC now supports Wishbone B4 pipelined bus interface for peripheral
 
 | File | Description |
 |------|-------------|
-| `rtl/pkg/ceres_param.sv` | Wishbone B4 type definitions (wb_master_t, wb_slave_t, etc.) |
+| `rtl/pkg/level_param.sv` | Wishbone B4 type definitions (wb_master_t, wb_slave_t, etc.) |
 | `rtl/core/mmu/wb_master_bridge.sv` | Converts iomem interface to Wishbone B4 master |
 | `rtl/core/mmu/wb_interconnect.sv` | 1-to-N address-based switch/crossbar |
 | `rtl/wrapper/wb_ram_slave.sv` | Wishbone slave wrapper for main RAM |
@@ -143,7 +143,7 @@ The Wishbone B4 pipelined interface uses `stall` for flow control:
 **Planned**: Full Wishbone B4 integration
 
 The Wishbone modules are designed but not yet integrated into the main wrapper.
-To enable Wishbone, the `ceres_wrapper.sv` needs to be updated to instantiate:
+To enable Wishbone, the `level_wrapper.sv` needs to be updated to instantiate:
 1. `wb_master_bridge` between CPU and interconnect
 2. `wb_interconnect` for address decode and routing
 3. Individual slave wrappers for each peripheral

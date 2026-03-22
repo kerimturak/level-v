@@ -11,7 +11,7 @@ Features:
 - Guaranteed valid output
 - Memory-safe operations
 
-Author: Ceres-V Project
+Author: Level-V Project
 License: MIT
 """
 

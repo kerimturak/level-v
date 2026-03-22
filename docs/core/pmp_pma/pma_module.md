@@ -1,36 +1,36 @@
-# Physical Memory Attributes (PMA) Modülü - Teknik Dokümantasyon
+# Physical Memory Attributes (PMA) Module — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
-3. [Bellek Haritası](#bellek-haritası)
-4. [Region Tanımları](#region-tanımları)
-5. [Erişim Kontrolü](#erişim-kontrolü)
-6. [Cache Politikası](#cache-politikası)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
+3. [Memory Map](#memory-map)
+4. [Region Definitions](#region-definitions)
+5. [Access Control](#access-control)
+6. [Cache Policy](#cache-policy)
 7. [MMIO Regulator](#mmio-regulator)
-8. [Peripheral Erişimi](#peripheral-erişimi)
-9. [Doğrulama ve Test](#doğrulama-ve-test)
+8. [Peripheral Access](#peripheral-access)
+9. [Verification and Testing](#verification-and-testing)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`pma` (Physical Memory Attributes) modülü, bellek adres alanının fiziksel özelliklerini tanımlar. Her bellek bölgesi için cache'lenebilirlik, çalıştırılabilirlik ve erişim izinlerini belirler.
+The `pma` (Physical Memory Attributes) module describes the physical properties of the memory address space. For each region it defines cacheability, executability, and access permissions.
 
-### Temel Özellikler
+### Key Features
 
-| Özellik | Değer |
+| Feature | Value |
 |---------|-------|
-| **Region Sayısı** | 20 |
-| **Adres Genişliği** | 32-bit |
-| **Decode Yöntemi** | Paralel match |
-| **Latency** | 0 cycle (combinational) |
-| **Default Politika** | Error on unmapped |
+| **Region count** | 20 |
+| **Address width** | 32-bit |
+| **Decode method** | Parallel match |
+| **Latency** | 0 cycles (combinational) |
+| **Default policy** | Error on unmapped |
 
-### PMA Blok Diyagramı
+### PMA Block Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -64,11 +64,11 @@
 │   ┌─────────────────────────────────────────────────────────────────────────┐   │
 │   │                        OUTPUT ATTRIBUTES                                 │   │
 │   │                                                                          │   │
-│   │    o_cacheable ─────────► Cache'lenebilir mi?                           │   │
-│   │    o_executable ────────► Çalıştırılabilir mi?                          │   │
-│   │    o_mmio ──────────────► Memory-mapped I/O mu?                         │   │
-│   │    o_access_fault ──────► Erişim hatası mı?                             │   │
-│   │    o_region_idx ────────► Eşleşen region indeksi                        │   │
+│   │    o_cacheable ─────────► Cacheable?                                   │   │
+│   │    o_executable ────────► Executable?                                  │   │
+│   │    o_mmio ──────────────► Memory-mapped I/O?                           │   │
+│   │    o_access_fault ──────► Access fault?                                │   │
+│   │    o_region_idx ────────► Matched region index                         │   │
 │   │                                                                          │   │
 │   └─────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                  │
@@ -77,46 +77,46 @@
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 module pma
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_REGIONS = PMA_NUM_REGIONS  // 20
 ) (
     // Address inputs
-    input  logic [XLEN-1:0]           i_addr,        // Kontrol edilecek adres
-    input  logic                      i_req,         // İstek geçerli
+    input  logic [XLEN-1:0]           i_addr,        // Address under check
+    input  logic                      i_req,         // Request valid
     input  logic                      i_we,          // Write enable
 
     // Memory type outputs
-    output logic                      o_cacheable,   // Cache'lenebilir
-    output logic                      o_executable,  // Çalıştırılabilir
+    output logic                      o_cacheable,   // Cacheable
+    output logic                      o_executable,  // Executable
     output logic                      o_mmio,        // Memory-mapped I/O
-    output logic                      o_atomic_ok,   // Atomic destekli
+    output logic                      o_atomic_ok,   // Atomic supported
 
     // Access control outputs
-    output logic                      o_read_ok,     // Okuma izni
-    output logic                      o_write_ok,    // Yazma izni
-    output logic                      o_access_fault,// Erişim hatası
+    output logic                      o_read_ok,     // Read allowed
+    output logic                      o_write_ok,    // Write allowed
+    output logic                      o_access_fault,// Access fault
 
     // Debug outputs
-    output logic [$clog2(NUM_REGIONS)-1:0] o_region_idx  // Eşleşen region
+    output logic [$clog2(NUM_REGIONS)-1:0] o_region_idx  // Matched region
 );
 ```
 
 ---
 
-## Bellek Haritası
+## Memory Map
 
-### Tam Bellek Haritası
+### Full Memory Map
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
-│                          CERES SOC MEMORY MAP                                   │
+│                          LEVEL SOC MEMORY MAP                                   │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
 │  0xFFFF_FFFF ┬─────────────────────────────────────────────────────────────────│
@@ -162,24 +162,24 @@ module pma
 
 ---
 
-## Region Tanımları
+## Region Definitions
 
-### Region Yapısı
+### Region Structure
 
 ```systemverilog
 typedef struct packed {
-    logic [XLEN-1:0] base_addr;    // Başlangıç adresi
-    logic [XLEN-1:0] addr_mask;    // Adres maskesi
-    logic            cacheable;    // Cache'lenebilir
-    logic            executable;   // Çalıştırılabilir
-    logic            readable;     // Okunabilir
-    logic            writable;     // Yazılabilir
-    logic            atomic;       // Atomic destekli
+    logic [XLEN-1:0] base_addr;    // Region base address
+    logic [XLEN-1:0] addr_mask;    // Address mask
+    logic            cacheable;    // Cacheable
+    logic            executable;   // Executable
+    logic            readable;     // Readable
+    logic            writable;     // Writable
+    logic            atomic;       // Atomic supported
     logic            mmio;         // Memory-mapped I/O
 } pma_region_t;
 ```
 
-### Tüm Region Tanımları
+### All Region Definitions
 
 ```systemverilog
 localparam pma_region_t [NUM_REGIONS-1:0] PMA_REGIONS = '{
@@ -355,9 +355,9 @@ localparam pma_region_t [NUM_REGIONS-1:0] PMA_REGIONS = '{
 };
 ```
 
-### Region Özet Tablosu
+### Region Summary Table
 
-| # | Bölge | Base | Size | C | X | R | W | A | MMIO |
+| # | Region | Base | Size | C | X | R | W | A | MMIO |
 |---|-------|------|------|---|---|---|---|---|------|
 | 0 | RAM | 0x8000_0000 | 2GB | ✓ | ✓ | ✓ | ✓ | ✓ | - |
 | 1 | CLINT | 0x3000_0000 | 64KB | - | - | ✓ | ✓ | - | ✓ |
@@ -374,18 +374,18 @@ localparam pma_region_t [NUM_REGIONS-1:0] PMA_REGIONS = '{
 | 18 | VGA Ctrl | 0x200D_0000 | 4KB | - | - | ✓ | ✓ | - | ✓ |
 | 19 | VGA FB | 0x2010_0000 | 256KB | - | - | ✓ | ✓ | - | ✓ |
 
-**Açıklamalar:** C=Cacheable, X=Executable, R=Readable, W=Writable, A=Atomic
+**Legend:** C=Cacheable, X=Executable, R=Readable, W=Writable, A=Atomic
 
 ---
 
-## Erişim Kontrolü
+## Access Control
 
-### Region Eşleştirme
+### Region Matching
 
 ```systemverilog
 logic [NUM_REGIONS-1:0] region_match;
 
-// Paralel region eşleştirme
+// Parallel region matching
 generate
     for (genvar i = 0; i < NUM_REGIONS; i++) begin : g_match
         assign region_match[i] = 
@@ -398,7 +398,7 @@ endgenerate
 ### Priority Encoder
 
 ```systemverilog
-// İlk eşleşen region (düşük indeks öncelikli)
+// First matching region (lowest index wins)
 logic [$clog2(NUM_REGIONS)-1:0] matched_region;
 logic                           region_found;
 
@@ -415,7 +415,7 @@ always_comb begin
 end
 ```
 
-### Erişim İzni Kontrolü
+### Access Permission Check
 
 ```systemverilog
 always_comb begin
@@ -427,16 +427,16 @@ always_comb begin
         o_read_ok     = PMA_REGIONS[matched_region].readable;
         o_write_ok    = PMA_REGIONS[matched_region].writable;
 
-        // Erişim kontrolü
+        // Permission check
         if (i_we && !PMA_REGIONS[matched_region].writable) begin
-            o_access_fault = 1'b1;  // Yazma izni yok
+            o_access_fault = 1'b1;  // Write not allowed
         end else if (!i_we && !PMA_REGIONS[matched_region].readable) begin
-            o_access_fault = 1'b1;  // Okuma izni yok
+            o_access_fault = 1'b1;  // Read not allowed
         end else begin
             o_access_fault = 1'b0;
         end
     end else begin
-        // Eşleşen region yok - unmapped
+        // No matching region — unmapped
         o_cacheable    = 1'b0;
         o_executable   = 1'b0;
         o_mmio         = 1'b0;
@@ -450,23 +450,23 @@ end
 
 ---
 
-## Cache Politikası
+## Cache Policy
 
-### Cacheable Bölgeler
+### Cacheable Regions
 
-Sadece RAM bölgesi cache'lenebilir:
+Only the RAM region is cacheable:
 
 ```systemverilog
-// Region 0: RAM - Cacheable
-// Tüm peripherals: Non-cacheable (MMIO)
+// Region 0: RAM — cacheable
+// All peripherals: non-cacheable (MMIO)
 
-// I-Cache: executable && cacheable kontrolü
-// D-Cache: cacheable kontrolü (MMIO bypass)
+// I-Cache: check executable && cacheable
+// D-Cache: cacheable check (MMIO bypass)
 ```
 
-### Cache Davranışı
+### Cache Behavior
 
-| Bölge | I-Cache | D-Cache | Politika |
+| Region | I-Cache | D-Cache | Policy |
 |-------|---------|---------|----------|
 | RAM | Hit/Miss | Hit/Miss | Write-back, Write-allocate |
 | CLINT | Bypass | Bypass | Direct access |
@@ -474,58 +474,58 @@ Sadece RAM bölgesi cache'lenebilir:
 | GPIO | Bypass | Bypass | Direct access |
 | VGA FB | Bypass | Bypass | Direct access |
 
-### MMIO Erişim Kuralları
+### MMIO Access Rules
 
 ```
-MMIO Bölgeleri için:
-1. Cache bypass - her erişim direkt belleğe
-2. Side-effect var - okuma bile state değiştirebilir
-3. Sıralı erişim - out-of-order yok
-4. Tek erişim - burst yok (genellikle)
+For MMIO regions:
+1. Cache bypass — every access goes straight to the bus
+2. Side effects — reads may change device state
+3. In-order access — no reordering
+4. Single access — typically no burst
 ```
 
 ---
 
 ## MMIO Regulator
 
-### Side-Effect Yönetimi
+### Side-Effect Handling
 
-MMIO erişimlerinde side-effect'ler olabilir:
+MMIO accesses may have side effects:
 
 ```systemverilog
-// MMIO check - cache bypass gerekli mi?
+// MMIO check — need cache bypass?
 assign o_mmio = region_found && PMA_REGIONS[matched_region].mmio;
 
-// Cache kontrolünde kullanım:
+// Use in cache control:
 // if (pma_mmio) begin
-//     // Cache bypass, direkt bus erişimi
+//     // Cache bypass, direct bus access
 // end else begin
-//     // Normal cache erişimi
+//     // Normal cached access
 // end
 ```
 
-### Atomic Erişim
+### Atomic Access
 
-RAM bölgesi atomic işlemleri destekler:
+The RAM region supports atomic operations:
 
 ```systemverilog
-// Atomic destekli bölgeler
+// Regions with atomic support
 // LR/SC, AMO instructions
 
 assign o_atomic_ok = region_found && PMA_REGIONS[matched_region].atomic;
 
-// Atomic desteği olmayan bölgede AMO:
-// → Store/AMO access fault (exception)
+// AMO in a region without atomic support:
+// → store/AMO access fault (exception)
 ```
 
 ---
 
-## Peripheral Erişimi
+## Peripheral Access
 
-### Peripheral Adres Hesaplama
+### Peripheral Address Computation
 
 ```systemverilog
-// Peripheral offset hesaplama
+// Peripheral offset computation
 localparam PERIPH_BASE = 32'h2000_0000;
 localparam PERIPH_SLOT = 12;  // 4KB per peripheral
 
@@ -550,60 +550,60 @@ localparam PERIPH_VGA_C  = 4'hD;  // 0x200D_xxxx
 ### Peripheral Register Offset
 
 ```systemverilog
-// Register offset (peripheral içi)
+// Register offset within peripheral
 function automatic logic [11:0] get_reg_offset(logic [31:0] addr);
     return addr[11:0];
 endfunction
 
-// Örnek: UART0 TX register
-// Adres: 0x2000_0000 + 0x000 = 0x2000_0000
+// Example: UART0 TX register
+// Address: 0x2000_0000 + 0x000 = 0x2000_0000
 // periph_id = 0, reg_offset = 0
 ```
 
 ---
 
-## Doğrulama ve Test
+## Verification and Testing
 
-### Assertion'lar
+### Assertions
 
 ```systemverilog
-// En fazla bir region eşleşmeli
+// At most one region should match
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     region_found |-> $onehot(region_match)
 ) else $warning("Multiple PMA region match");
 
-// RAM bölgesi cacheable olmalı
+// RAM region must be cacheable
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     (region_match[0]) |-> o_cacheable
 ) else $error("RAM should be cacheable");
 
-// MMIO bölgeleri non-cacheable olmalı
+// MMIO regions must be non-cacheable
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     o_mmio |-> !o_cacheable
 ) else $error("MMIO should not be cacheable");
 
-// Executable sadece RAM'de
+// Executable only in RAM
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     o_executable |-> (matched_region == 0)
 ) else $error("Only RAM should be executable");
 ```
 
-### Test Senaryoları
+### Test Scenarios
 
-1. **Region Eşleştirme**
-   - Her region için boundary test
-   - Overlapping region kontrolü
+1. **Region matching**
+   - Boundary test per region
+   - Overlapping-region checks
 
-2. **Erişim İzni**
-   - Read-only bölgeye yazma
-   - Execute-only bölgeden okuma
+2. **Access permissions**
+   - Write to read-only region
+   - Read from execute-only region
 
-3. **Cache Politikası**
-   - Cacheable bölge testi
-   - MMIO bypass testi
+3. **Cache policy**
+   - Cacheable region test
+   - MMIO bypass test
 
-4. **Unmapped Erişim**
-   - Reserved bölgeye erişim
+4. **Unmapped access**
+   - Access to reserved region
    - Fault generation
 
 ### Debug Log
@@ -622,14 +622,14 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 
 ---
 
-## Özet
+## Summary
 
-PMA modülü:
+The PMA module:
 
-1. **20 Region**: RAM + CLINT + 18 peripheral
-2. **Paralel Match**: Tek cycle adres decode
-3. **Cache Control**: Cacheable/MMIO belirleme
-4. **Access Control**: Read/Write/Execute izinleri
-5. **Fault Detection**: Unmapped erişim koruması
+1. **20 regions**: RAM + CLINT + 18 peripherals
+2. **Parallel match**: Single-cycle address decode
+3. **Cache control**: Cacheable vs MMIO classification
+4. **Access control**: Read/write/execute permissions
+5. **Fault detection**: Protection on unmapped access
 
-Bu modül, CERES SoC'da bellek koruma ve cache politikası yönetiminin temelini oluşturur.
+It underpins memory protection and cache policy in the Level SoC.

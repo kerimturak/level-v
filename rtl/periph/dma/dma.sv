@@ -61,7 +61,7 @@ ISR Register (read-only):
 `timescale 1ns / 1ps
 
 module dma
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_CHANNELS = 4,
     parameter int MAX_BURST    = 16

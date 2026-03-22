@@ -1,14 +1,14 @@
-# 🚀 Test Manager - Hızlı Başlangıç Kılavuzu
+# 🚀 Test manager — quick start
 
-## 5 Dakikada Test Manager
+## Test manager in 5 minutes
 
-### 1️⃣ Test Listesini Görüntüle
+### 1️⃣ List tests
 
 ```bash
 make -f Makefile.verilator test-list
 ```
 
-**Çıktı:**
+**Sample output:**
 ```
 Available Test Suites:
 
@@ -18,24 +18,24 @@ Available Test Suites:
   ...
 ```
 
-### 2️⃣ İlk Testini Çalıştır
+### 2️⃣ Run your first test
 
 ```bash
 make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add
 ```
 
-**Ne olur?**
-- Test çalıştırılır ✅
-- Debug raporu otomatik oluşturulur 📝
-- Sonuç ekrana yazılır ✅/✗
+**What happens:**
+- Test runs ✅
+- Debug report is created automatically 📝
+- Result printed ✅/✗
 
-### 3️⃣ Debug Raporunu Görüntüle
+### 3️⃣ View the debug report
 
 ```bash
 make -f Makefile.verilator debug-latest
 ```
 
-**Çıktı:**
+**Sample output:**
 ```
 ================================================================================
 DEBUG REPORT: rv32ui-p-add
@@ -59,190 +59,159 @@ Execution Flow:
 
 ---
 
-## 🎯 Yaygın Kullanım Senaryoları
+## 🎯 Common scenarios
 
-### Scenario 1: Hızlı Doğrulama
+### Scenario 1: Quick validation
 
 ```bash
-# Quick testleri çalıştır
 make -f Makefile.verilator test-run-tags TAGS=quick
-
-# Sonucu kontrol et
 make -f Makefile.verilator debug-summary
 ```
 
-### Scenario 2: Benchmark Çalıştır
+### Scenario 2: Run a benchmark
 
 ```bash
-# CoreMark benchmark
 make -f Makefile.verilator test-run TEST_NAME=coremark
-
-# Sonuçları karşılaştır
 make -f Makefile.verilator debug-latest TEST_NAME=coremark
 ```
 
-### Scenario 3: Tüm ISA Testleri
+### Scenario 3: All ISA basic tests
 
 ```bash
-# ISA basic suite'ini çalıştır
 make -f Makefile.verilator test-run-suite SUITE=isa_basic
-
-# Başarısız testleri göster
 make -f Makefile.verilator debug-errors
 ```
 
-### Scenario 4: Yeni Test Ekle
+### Scenario 4: Add a new test
 
 ```bash
-# 1. Testi ekle
 make -f Makefile.verilator test-add \
     TEST_NAME=my_test \
     SUITE=custom_tests
-
-# 2. Test dosyalarını hazırla (manuel)
-# - my_test.elf
-# - my_test.mem
-
-# 3. Çalıştır
+# Prepare my_test.elf / my_test.mem manually
 make -f Makefile.verilator test-run TEST_NAME=my_test
 ```
 
 ---
 
-## 📊 Debug Raporları
+## 📊 Debug reports
 
-### Son Raporu Görüntüle
+### Latest report
 ```bash
 make -f Makefile.verilator debug-latest
 ```
 
-### Sadece Hataları Göster
+### Errors only
 ```bash
 make -f Makefile.verilator debug-errors TEST_NAME=rv32ui-p-add
 ```
 
-### Özet İstatistikler
+### Summary
 ```bash
 make -f Makefile.verilator debug-summary TEST_NAME=rv32ui-p-add
 ```
 
-### İki Çalıştırmayı Karşılaştır
+### Compare two runs
 ```bash
 make -f Makefile.verilator debug-compare \
     REPORT1=build/debug_reports/run_20251213_143022_test1.json \
     REPORT2=build/debug_reports/run_20251213_150000_test1.json
 ```
 
-### Tüm Raporları Listele
+### List all reports
 ```bash
 make -f Makefile.verilator debug-list
 ```
 
 ---
 
-## 🔧 Parametreler
+## 🔧 Parameters
 
-### Test Çalıştırma Parametreleri
+### Run parameters
 
-| Parametre | Açıklama | Örnek |
-|-----------|----------|-------|
-| `TEST_NAME` | Test adı | `TEST_NAME=rv32ui-p-add` |
-| `SUITE` | Test suite | `SUITE=isa_basic` |
-| `TAGS` | Tag listesi | `TAGS=quick,isa` |
-| `MAX_CYCLES` | Maksimum cycle | `MAX_CYCLES=50000` |
-| `NO_TRACE` | Trace devre dışı | `NO_TRACE=1` |
-| `MODE` | Build modu | `MODE=release` |
-| `DEBUG_ENABLE` | Debug aktif/pasif | `DEBUG_ENABLE=0` |
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `TEST_NAME` | Test name | `TEST_NAME=rv32ui-p-add` |
+| `SUITE` | Suite | `SUITE=isa_basic` |
+| `TAGS` | Tag list | `TAGS=quick,isa` |
+| `MAX_CYCLES` | Max cycles | `MAX_CYCLES=50000` |
+| `NO_TRACE` | Disable trace | `NO_TRACE=1` |
+| `MODE` | Build mode | `MODE=release` |
+| `DEBUG_ENABLE` | Debug on/off | `DEBUG_ENABLE=0` |
 
-### Örnekler
+### Examples
 
 ```bash
-# Maksimum cycle ayarla
 make -f Makefile.verilator test-run \
     TEST_NAME=rv32ui-p-add \
     MAX_CYCLES=10000
 
-# Trace olmadan çalıştır (daha hızlı)
 make -f Makefile.verilator test-run \
     TEST_NAME=rv32ui-p-add \
     NO_TRACE=1
 
-# Release modunda çalıştır
 make -f Makefile.verilator test-run \
     TEST_NAME=rv32ui-p-add \
     MODE=release
 
-# Debug raporlama olmadan
 DEBUG_ENABLE=0 make -f Makefile.verilator test-run \
     TEST_NAME=rv32ui-p-add
 ```
 
 ---
 
-## 📁 Önemli Dosyalar
+## 📁 Important files
 
-### Konfigürasyon
-- `script/config/test_registry.json` - Test veritabanı
-- `script/config/tests/*.json` - Test suite ayarları
+### Configuration
+- `script/config/test_registry.json` — test database
+- `script/config/tests/*.conf` — suite profiles (`TEST_CONFIG`)
 
-### Debug Raporları
-- `build/debug_reports/run_*.json` - Debug raporları
-- `build/debug_reports/latest_*.json` - Son rapor linkleri
+### Debug reports
+- `build/debug_reports/run_*.json` — reports
+- `build/debug_reports/latest_*.json` — symlinks to latest
 
-### Log Dosyaları
-- `build/log/verilator/TEST_NAME/` - Test logları
-- `build/debug_reports/TIMESTAMP_TEST/step*.log` - Adım logları
+### Logs
+- `build/log/verilator/TEST_NAME/` — test logs
+- `build/debug_reports/TIMESTAMP_TEST/step*.log` — step logs
 
 ---
 
-## ⚡ Pro Tips
+## ⚡ Pro tips
 
-### Tip 1: Alias Kullanın
+### Tip 1: Aliases
 
 ```bash
-# .bashrc veya .zshrc'ye ekleyin
+# Add to .bashrc or .zshrc
 alias vtest='make -f Makefile.verilator test-run TEST_NAME='
 alias vlist='make -f Makefile.verilator test-list'
 alias vdebug='make -f Makefile.verilator debug-latest'
 
-# Kullanım
 vtest rv32ui-p-add
 vlist TAGS=quick
 vdebug
 ```
 
-### Tip 2: Tag Kombinasyonları
+### Tip 2: Tag combinations
 
 ```bash
-# Hızlı ve ISA testleri
 make -f Makefile.verilator test-run-tags TAGS=quick,isa
-
-# Benchmark testleri
 make -f Makefile.verilator test-run-tags TAGS=benchmark
-
-# Compliance testleri
 make -f Makefile.verilator test-run-tags TAGS=compliance
 ```
 
-### Tip 3: Debug Raporlarını Analiz Etme
+### Tip 3: Analyze JSON
 
 ```bash
-# JSON raporunu direkt okuma
 cat build/debug_reports/latest_rv32ui-p-add.json | jq '.result'
-
-# En yavaş adımları bulma
 cat build/debug_reports/latest_rv32ui-p-add.json | \
     jq '.execution_flow | sort_by(.duration_ms) | reverse | .[0:3]'
-
-# Hataları çıkarma
 cat build/debug_reports/latest_rv32ui-p-add.json | \
     jq '.result.errors'
 ```
 
-### Tip 4: Batch İşlemler
+### Tip 4: Batch runs
 
 ```bash
-# Tüm ISA testlerini çalıştırıp rapor oluştur
 for tag in isa_basic isa_compressed isa_multiply; do
     make -f Makefile.verilator test-run-suite SUITE=$tag
     make -f Makefile.verilator debug-summary
@@ -251,61 +220,47 @@ done
 
 ---
 
-## 🐛 Hızlı Sorun Giderme
+## 🐛 Quick troubleshooting
 
-### Test Bulunamadı
+### Test not found
 ```bash
-# Önce test listesini kontrol edin
 make -f Makefile.verilator test-list
-
-# Registry'de var mı?
 cat script/config/test_registry.json | jq '.test_suites'
 ```
 
-### Debug Raporu Yok
+### No debug report
 ```bash
-# DEBUG_ENABLE kontrolü
 echo $DEBUG_ENABLE
-
-# Açıkça aktif edin
 DEBUG_ENABLE=1 make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add
 ```
 
-### Python Hatası
+### Python error
 ```bash
-# Python modüllerini kontrol edin
 python3 -c "from script.python.test_manager import *; print('OK')"
-
-# Debug logger
 python3 -c "from script.python.debug_logger import *; print('OK')"
 ```
 
 ---
 
-## 📚 Daha Fazla Bilgi
-
-Detaylı dokümantasyon için:
+## 📚 More detail
 
 ```bash
-# Ana README
 cat docs/TEST_MANAGER_README.md
-
-# Makefile help
 make -f Makefile.verilator help
 ```
 
 ---
 
-## ✅ Checklist: İlk Kullanım
+## ✅ First-time checklist
 
-- [ ] Test listesini görüntüledim
-- [ ] İlk testimi çalıştırdım
-- [ ] Debug raporunu görüntüledim
-- [ ] Test suite çalıştırdım
-- [ ] Tag-based filtering denedim
-- [ ] Yeni test ekledim
-- [ ] Debug raporlarını karşılaştırdım
+- [ ] Listed tests
+- [ ] Ran first test
+- [ ] Viewed debug report
+- [ ] Ran a suite
+- [ ] Tried tag filtering
+- [ ] Added a test
+- [ ] Compared debug reports
 
-**Tüm adımları tamamladınız mı? Tebrikler! 🎉**
+**All done? Nice work! 🎉**
 
-Test Manager'ı artık etkin şekilde kullanabilirsiniz!
+You can use the test manager effectively from here on.

@@ -9,28 +9,28 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 ================================================================================
 Next-Line Prefetcher
 ================================================================================
-Basit ve etkili bir prefetcher implementasyonu.
-Cache miss olduğunda, bir sonraki cache line'ı proaktif olarak prefetch eder.
+Simple, effective prefetcher implementation.
+On cache miss, proactively prefetches the next cache line.
 
-Özellikler:
-  - Minimum alan kullanımı (~50 FF)
-  - Sıralı erişim pattern'leri için optimize
-  - %5-10 cache hit artışı beklenir
-  - Tek cycle latency
+Features:
+  - Minimal area (~50 FF)
+  - Tuned for sequential access patterns
+  - Expect ~5–10% cache hit rate improvement
+  - Single-cycle latency
 
-Kullanım:
-  - I-Cache veya D-Cache ile entegre edilebilir
-  - Miss sinyali ile tetiklenir
-  - Prefetch queue veya doğrudan memory arbiter'a bağlanır
+Usage:
+  - Integrate with I-cache or D-cache
+  - Triggered by miss signal
+  - Connect to prefetch queue or directly to memory arbiter
 ================================================================================
 */
 `timescale 1ns / 1ps
 
 module next_line_prefetcher
-  import ceres_param::*;
+  import level_param::*;
 #(
-    parameter int XLEN     = ceres_param::XLEN,
-    parameter int BLK_SIZE = ceres_param::BLK_SIZE  // Cache line size in bits
+    parameter int XLEN     = level_param::XLEN,
+    parameter int BLK_SIZE = level_param::BLK_SIZE  // Cache line size in bits
 ) (
     input  logic            clk_i,
     input  logic            rst_ni,

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-compare_logs.py — Ceres vs Spike Commit Log Comparator (Enhanced v2.0)
+compare_logs.py — Level vs Spike Commit Log Comparator (Enhanced v2.0)
 ======================================================================
 
 Features:
-  ✅ Run test makefileı farkları göstermek için bunu kullanır
+  ✅ Use this to show differences from test makefile runs
   ✅ Ignores init cycles (PC < 0x80000000 or INST=0x0)
   ✅ Optional CSR-skip mode (--skip-csr)
   ✅ Optional resynchronization (--resync --window N)
@@ -224,7 +224,7 @@ def try_resync(rtl, spike, i, j, window):
 def print_comparison_header(rtl_count, spike_count):
     """Print comparison header with entry counts."""
     print(f"\n{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'CERES vs SPIKE — Commit Log Comparison':^80}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'Level vs SPIKE — Commit Log Comparison':^80}{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}RTL entries    : {rtl_count:,}{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}Spike entries  : {spike_count:,}{Style.RESET_ALL}")
@@ -303,7 +303,7 @@ def generate_visual_diff(rtl, spike, path, diffs):
     """
     with open(path, "w") as out:
         out.write("╔════════════════════════════════════════════════════════════════════════════════════════╗\n")
-        out.write("║                               CERES vs SPIKE VISUAL DIFF                              ║\n")
+        out.write("║                               Level vs SPIKE VISUAL DIFF                              ║\n")
         out.write("╚════════════════════════════════════════════════════════════════════════════════════════╝\n\n")
 
         maxlen = max(len(rtl), len(spike))
@@ -353,7 +353,7 @@ def write_diff_status(output_file, stats, has_errors, test_name=None,
     match_rate = (stats['match'] / total * 100) if total > 0 else 0
     
     with open(output_file, "w") as f:
-        f.write("=== CERES vs SPIKE Comparison Result ===\n")
+        f.write("=== Level vs SPIKE Comparison Result ===\n")
         f.write(f"Timestamp: {timestamp}\n")
         if test_name:
             f.write(f"Test Name: {test_name}\n")
@@ -590,7 +590,7 @@ def main():
     global VERBOSE, QUIET
     
     ap = argparse.ArgumentParser(
-        description="Compare CERES RTL vs Spike commit logs (v2.0)",
+        description="Compare Level RTL vs Spike commit logs (v2.0)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -680,7 +680,7 @@ Exit Codes:
     if not QUIET:
         # Print header
         print(f"\n{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}{'CERES RISC-V — Log Comparison Tool v2.0':^80}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'Level RISC-V — Log Comparison Tool v2.0':^80}{Style.RESET_ALL}")
         print(f"{Fore.CYAN}{'═' * 80}{Style.RESET_ALL}")
         print(f"\n{Fore.YELLOW}Configuration:{Style.RESET_ALL}")
         print(f"  Test name    : {test_name or 'N/A'}")

@@ -1,5 +1,5 @@
 /* ============================================================
- * Ceres-V Linker Script for Dhrystone - 16KB Memory
+ * level-V Linker Script for Dhrystone - 16KB Memory
  * ============================================================
  */
 

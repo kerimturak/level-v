@@ -1,98 +1,29 @@
-# CoreMark Quick Start Guide
+# CoreMark (Level-V / Verilator)
 
-## TL;DR - Hızlı Kullanım
+CoreMark is built with the in-tree **levelv** port (`env/coremark/levelv/`) and run on the RTL simulation.
 
-### 1. Sadece Spike'ta Koştur (En Hızlı Test)
+## Build
+
 ```bash
-make cm_spike COREMARK_ITERATIONS=5
+make coremark
 ```
 
-**Sonuçlar:**
-- Output: `results/logs/spike/coremark/uart_output.log`
-- Commits: `results/logs/spike/coremark/spike_commits.log`
+Artifacts under `build/tests/coremark/` (e.g. `coremark.mem` for simulation).
 
-### 2. Her İki Platformda da Koştur ve Karşılaştır
+## Run
+
 ```bash
-make cm_compare COREMARK_ITERATIONS=10 MAX_CYCLES=50000000
+make run_coremark
 ```
 
-**Sonuçlar:**
-- Ceres-V logs: `results/logs/verilator/coremark/`
-- Spike logs: `results/logs/spike/coremark/`
-- Karşılaştırma: `results/comparison/coremark/comparison_report.txt`
+Optional: `COREMARK_ITERATIONS`, `MAX_CYCLES`, `FAST_SIM=1`, `MINIMAL_SOC=1` — see `make coremark_help`.
 
-### 3. Python Script ile Commit Logları Karşılaştır
+Logs: `results/logs/<SIM>/coremark/` (e.g. `uart_output.log`).
+
+## Clean
+
 ```bash
-python3 your_compare_script.py \
-    results/logs/verilator/coremark/ceres_commits.log \
-    results/logs/spike/coremark/spike_commits.log
+make coremark_clean
 ```
 
-## Dizin Yapısı
-
-```
-results/logs/
-├── verilator/coremark/      # Ceres-V (kendi işlemcin)
-│   ├── uart_output.log      # CoreMark sonuçları
-│   ├── ceres_commits.log    # Instruction trace
-│   └── waveform.fst         # Dalga formu (opsiyonel)
-│
-├── spike/coremark/          # Spike (referans ISS)
-│   ├── uart_output.log      # CoreMark sonuçları
-│   └── spike_commits.log    # Instruction trace
-│
-└── comparison/coremark/     # Karşılaştırma
-    └── comparison_report.txt
-```
-
-## Iterasyon Önerileri
-
-| Iterations | Instructions | Süre (tahmini) | Kullanım |
-|------------|--------------|----------------|----------|
-| 1          | ~10M         | ~1 dakika      | Hızlı test |
-| 5          | ~50M         | ~5 dakika      | Geliştirme |
-| 10         | ~100M        | ~10 dakika     | Hafif benchmark |
-| 100        | ~1B          | ~60 dakika     | Tam benchmark |
-
-## Commit Log Formatı
-
-Her iki platform da aynı formatı kullanıyor:
-
-```
-core   0: 3 0x80000000 (0x2000006f)                    # PC ve instruction
-core   0: 3 0x80000200 (0x00000093) x1  0x00000000     # Register yazma
-core   0: 3 0x8000020c (0x00028067) mem 0x00001018     # Memory erişimi
-```
-
-Format: `core ID : privilege : PC (instruction) [reg updates] [mem accesses]`
-
-## Önemli Notlar
-
-1. **Timing farkı**: Spike gettimeofday() kullandığı için simülasyon zamanını gösterir (çok yavaş görünür ama normal)
-2. **Commit sayısı**: Her iki platformda da instruction count aynı olmalı
-3. **CRC değerleri**: Correct operation için CRC'ler eşleşmeli
-4. **Dosya boyutu**: ~10 iteration için ~1.9M instruction, ~90MB commit log
-
-## Sorun Giderme
-
-### "Spike not found"
-```bash
-# Spike yolunu kontrol et
-ls -la /home/kerim/tools/spike/bin/spike
-```
-
-### "pk not found"
-```bash
-# pk yolunu kontrol et
-ls -la /home/kerim/tools/pk32/riscv32-unknown-elf/bin/pk
-```
-
-### Commit log çok büyük
-```bash
-# Daha az iterasyon kullan
-make cm_spike COREMARK_ITERATIONS=1
-```
-
-## Daha Fazla Bilgi
-
-Detaylı kullanım için: [COREMARK_COMPARISON.md](COREMARK_COMPARISON.md)
+Removes Level build outputs and any leftover `subrepo/coremark/spike-pk` copy from older flows.

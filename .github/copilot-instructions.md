@@ -1,13 +1,13 @@
-# Copilot Instructions for CERES RISC-V Project
+# Copilot Instructions for Level RISC-V Project
 
 ## Project Overview
 
-This is **CERES RISC-V** - a lightweight, modular 32-bit RISC-V processor core implementing the **RV32IMC** instruction set with CSR and FENCE support. The project is designed for learning, experimentation, and FPGA deployment.
+This is **Level RISC-V** - a lightweight, modular 32-bit RISC-V processor core implementing the **RV32IMC** instruction set with CSR and FENCE support. The project is designed for learning, experimentation, and FPGA deployment.
 
 ## Technology Stack
 
 - **Hardware Description Language**: SystemVerilog (IEEE 1800-2017)
-- **Simulation Tools**: Verilator (primary), ModelSim, Icarus Verilog
+- **Simulation Tools**: Verilator (primary), ModelSim
 - **Synthesis**: Yosys
 - **Toolchain**: riscv32-unknown-elf-gcc
 - **Scripting**: Python 3, Bash/Zsh, Make
@@ -34,7 +34,7 @@ rtl/                    # RTL source files
 │   ├── cpu.sv          # Top-level CPU module
 │   └── hazard_unit.sv  # Pipeline hazard handling
 ├── include/            # Header files (.svh)
-│   ├── ceres_defines.svh      # Global defines & feature flags
+│   ├── level_defines.svh      # Global defines & feature flags
 │   ├── exception_priority.svh # Exception handling
 │   ├── fetch_log.svh          # Fetch stage logging
 │   └── writeback_log.svh      # Writeback logging
@@ -50,7 +50,7 @@ rtl/                    # RTL source files
 │   ├── wdt/            # Watchdog timer
 │   └── vga/            # VGA controller
 ├── pkg/                # SystemVerilog packages
-│   └── ceres_param.sv  # Central configuration (1000+ lines)
+│   └── level_param.sv  # Central configuration (1000+ lines)
 ├── ram/                # Memory modules
 ├── tracer/             # Instruction tracer (Konata support)
 ├── util/               # Utility modules
@@ -62,13 +62,7 @@ sim/                    # Simulation files
 └── do/                 # ModelSim DO files
 
 script/                 # Build and test scripts
-├── makefiles/          # Modular makefiles
-│   ├── config/         # Configuration (config.mk, profiles.mk, paths.mk)
-│   ├── sim/            # Simulator configs (verilator.mk, modelsim.mk)
-│   ├── test/           # Test runners (isa, arch, imperas, coremark)
-│   ├── synth/          # Synthesis (yosys.mk)
-│   ├── lint/           # Linting rules
-│   └── tools/          # Utilities (clean, waveform viewers)
+├── makefiles/          # Optional local.mk (config/); rules live in repo root makefile
 ├── python/             # Python utilities
 ├── shell/              # Shell scripts
 └── config/             # JSON test configurations
@@ -105,14 +99,14 @@ build/                  # Build outputs
 - Filename matches module name
 - Headers in `rtl/include/` with `.svh` extension
 - Packages in `rtl/pkg/` with `_pkg.sv` or `_param.sv` suffix
-- Import `ceres_param` package for all parameters
+- Import `level_param` package for all parameters
 
 ### Code Example Template
 
 ```systemverilog
 // Module description
 module module_name
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int PARAM_NAME = 32
 ) (
@@ -168,7 +162,7 @@ endmodule
 - **PMP/PMA**: Physical Memory Protection
 - **Bus**: Wishbone B4 compatible
 
-### Core Parameters (from `ceres_param.sv`)
+### Core Parameters (from `level_param.sv`)
 
 ```systemverilog
 // Core
@@ -230,7 +224,7 @@ GPIO_WIDTH = 32
 | `cs_reg_file` | `rtl/core/stage03_execute/cs_reg_file.sv` | CSR register file |
 | `memory_stage` | `rtl/core/stage04_memory/` | Memory access |
 | `writeback_stage` | `rtl/core/stage05_writeback/` | Register writeback |
-| `ceres_param` | `rtl/pkg/ceres_param.sv` | All parameters & types |
+| `level_param` | `rtl/pkg/level_param.sv` | All parameters & types |
 
 ---
 
@@ -242,13 +236,10 @@ GPIO_WIDTH = 32
 # === BUILD ===
 make verilate           # Build Verilator model
 make compile            # Compile with ModelSim
-make iverilog           # Compile with Icarus Verilog
 
 # === SIMULATION ===
-make simulate           # Run batch simulation (ModelSim)
-make simulate_gui       # Run GUI simulation with waveforms
+make simulate           # ModelSim/Questa (add GUI=1 for GUI)
 make run_verilator      # Run Verilator simulation
-make run_icarus         # Run Icarus simulation
 
 # === TEST SUITES ===
 make isa                # All ISA tests (riscv-tests)
@@ -270,8 +261,8 @@ make run_batch          # Run multiple tests from list
 make list_tests         # List available tests
 
 # === COREMARK ===
-make cm                 # Build and run CoreMark
-make cm_run             # Quick CoreMark run (skip rebuild)
+make run_coremark       # Build (if needed) + run CoreMark on Verilator
+make run_coremark       # CoreMark: build if needed + Verilator sim
 make coremark           # Build CoreMark only
 make coremark_help      # Show CoreMark help
 
@@ -330,7 +321,7 @@ MODE=test         # RISC-V test mode with assertions
 make run T=rv32ui-p-add LOG_COMMIT=1
 
 # Run CoreMark in fast mode with branch stats
-make cm SIM_FAST=1 LOG_BP=1 SIM_UART_MONITOR=1
+make run_coremark FAST_SIM=1 LOG_BP=1 SIM_UART_MONITOR=1
 
 # Run all ISA tests with commit log
 make isa LOG_COMMIT=1
@@ -355,7 +346,7 @@ The makefile auto-detects test type from name:
 
 ---
 
-## Feature Flags (ceres_defines.svh)
+## Feature Flags (level_defines.svh)
 
 ```systemverilog
 // Multiplier implementation (only one active)
@@ -429,15 +420,15 @@ The makefile auto-detects test type from name:
 
 1. Create file in appropriate `rtl/` subdirectory
 2. Follow naming conventions (lowercase, underscores)
-3. Import `ceres_param` package: `import ceres_param::*;`
-4. Add to filelist in `script/makefiles/config/sources.mk`
+3. Import `level_param` package: `import level_param::*;`
+4. Add the new file path to `rtl/flist.f` (one `rtl/...` path per line; `makefile` reads `SV_SOURCES` from there)
 5. Update testbench if needed
 6. Run `make lint` to verify
 
 ### Adding a New Peripheral
 
 1. Create directory under `rtl/periph/`
-2. Define register offsets in `ceres_param.sv`
+2. Define register offsets in `level_param.sv`
 3. Add to peripheral bus decoder
 4. Create software header file
 5. Add test program in `sim/test/`
@@ -479,7 +470,7 @@ make formal_prove        # Proof mode
 2. **Active Development**: Check `docs/AI_ENHANCEMENT_PLANS.md` for planned features
 3. **Testing**: Always run `make quick` or `make lint` before committing
 4. **Formal**: Use `make formal` for formal verification checks
-5. **Package**: Always import `ceres_param` for parameters and types
+5. **Package**: Always import `level_param` for parameters and types
 6. **Reset**: Active-low reset (`i_rst_n`), synchronous design
 
 ---
@@ -488,26 +479,26 @@ make formal_prove        # Proof mode
 
 | File | Purpose |
 |------|---------|
-| `rtl/pkg/ceres_param.sv` | **Central config** - ALL parameters, types, enums, structs |
-| `rtl/include/ceres_defines.svh` | Feature flags, trace controls |
+| `rtl/pkg/level_param.sv` | **Central config** - ALL parameters, types, enums, structs |
+| `rtl/include/level_defines.svh` | Feature flags, trace controls |
 | `rtl/core/cpu.sv` | Top-level CPU module |
 | `rtl/core/hazard_unit.sv` | Pipeline hazard detection |
-| `script/makefiles/config/config.mk` | Build configuration |
-| `script/makefiles/config/profiles.mk` | Build profiles (debug/release/test) |
-| `makefile` | Top-level build entry point |
+| `makefile` | **Unified** build/test rules (paths, toolchain, Verilator, tests, synth) |
+| `rtl/flist.f` | RTL file list → `SV_SOURCES` (one `rtl/...` path per line) |
+| `script/makefiles/config/local.mk` | Optional local overrides (`-include`) |
 | `docs/architecture.md` | Full architecture documentation |
 | `docs/INDEX.md` | Documentation index |
 
 ---
 
-## Enumeration Types (from ceres_param.sv)
+## Enumeration Types (from level_param.sv)
 
 Common enums used throughout RTL - always use these instead of magic numbers:
 
 ```systemverilog
 // ALU operations, branch types, memory operations, CSR operations
 // Exception codes, privilege levels, etc.
-// See rtl/pkg/ceres_param.sv for complete list
+// See rtl/pkg/level_param.sv for complete list
 ```
 
 ---

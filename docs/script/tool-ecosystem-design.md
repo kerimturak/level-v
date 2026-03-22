@@ -1,147 +1,139 @@
 # Tool Ecosystem Design Guide
 
-Bu döküman, CERES projesi için geliştirilen tool ekosisteminin tasarım prensiplerini açıklar. Makefile, Python ve JSON konfigürasyonunun nasıl birlikte çalışması gerektiğini tanımlar.
+This document explains design principles for the Level project tool ecosystem. It defines how Makefiles, Python, and JSON configuration should work together.
 
 ---
 
-## 🎯 Temel Prensipler
+## Core principles
 
-### 1. Separation of Concerns (Endişelerin Ayrılması)
+### 1. Separation of Concerns
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         KULLANICI                               │
+│                         USER                                    │
 │                    make simulate T=test                         │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        MAKEFILE                                 │
-│  • Basit interface (make target)                                │
-│  • Path ve değişken yönetimi                                    │
+│  • Simple interface (make targets)                              │
+│  • Path and variable management                                   │
 │  • Dependency management                                        │
-│  • Kısa, okunabilir komutlar                                    │
+│  • Short, readable commands                                     │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                         PYTHON                                  │
-│  • Karmaşık logic                                               │
-│  • Validasyon ve hata yönetimi                                  │
-│  • JSON parsing ve merging                                      │
-│  • Renkli/formatlanmış çıktı                                    │
-│  • Platform bağımsız işlemler                                   │
+│  • Complex logic                                                │
+│  • Validation and error handling                                │
+│  • JSON parsing and merging                                     │
+│  • Colored / formatted output                                   │
+│  • Platform-independent operations                             │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                          JSON                                   │
-│  • Tüm konfigürasyon değerleri                                  │
-│  • Profil tanımları                                             │
-│  • Versiyon kontrolüne uygun                                    │
-│  • İnsan tarafından okunabilir                                  │
+│  • All configuration values                                     │
+│  • Profile definitions                                          │
+│  • Version-control friendly                                     │
+│  • Human-readable                                               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📁 Dosya Organizasyonu
+## 📁 File Organization
 
 ```
 script/
-├── makefiles/           # Makefile modülleri
-│   ├── config/          # Ortak konfigürasyon
-│   │   ├── config.mk    # Ana ayarlar
-│   │   ├── paths.mk     # Path tanımları
-│   │   └── sources.mk   # Kaynak dosya listeleri
-│   ├── sim/             # Simülatör hedefleri
-│   │   ├── verilator.mk
-│   │   └── modelsim.mk
-│   └── tools/           # Yardımcı hedefler
+├── makefiles/           # Optional local.mk (config/); rules live in root makefile
 │
-├── python/              # Python scriptleri
-│   └── makefile/        # Makefile'dan çağrılan scriptler
-│       ├── modelsim_runner.py   # Simülasyon çalıştırıcı
-│       └── modelsim_config.py   # Konfigürasyon yöneticisi
+├── python/              # Python scripts
+│   └── makefile/        # Scripts invoked from the Makefile
+│       ├── modelsim_runner.py   # Simulation runner
+│       └── modelsim_config.py   # Configuration manager
 │
-└── config/              # JSON konfigürasyonları
-    ├── modelsim.json    # ModelSim ayarları
-    ├── verilator.json   # Verilator ayarları
-    └── tests.json       # Test tanımları
+└── config/              # Configuration
+    ├── modelsim.json    # ModelSim settings
+    ├── verilator.json   # Verilator settings
+    └── tests/           # Test profiles (*.conf) + special JSON (riscv-dv, formal)
 ```
 
 ---
 
-## 🔧 Katman Sorumlulukları
+## 🔧 Layer Responsibilities
 
-### Makefile Katmanı
+### Makefile layer
 
-**Yapması Gerekenler:**
-- Basit target tanımları (`make simulate`, `make lint`)
-- Path değişkenleri tanımlama ve export etme
-- Dependency chain yönetimi
-- Python script'i çağırma
+**Should do:**
+- Simple target definitions (`make simulate`, `make lint`)
+- Define and export path variables
+- Manage dependency chains
+- Invoke Python scripts
 
-**Yapmaması Gerekenler:**
-- Karmaşık shell script blokları
+**Should not do:**
+- Large shell script blocks
 - JSON parsing
-- Conditional logic (basit olanlar hariç)
-- Hata mesajı formatlama
+- Conditional logic (except simple cases)
+- Error message formatting
 
 ```makefile
-# ✅ DOĞRU: Basit ve temiz
+# ✅ GOOD: Simple and clear
 simulate: compile
 	$(PYTHON) $(MODELSIM_RUNNER) \
 		--test $(TEST_NAME) \
 		--config $(CONFIG_FILE) \
 		--log-dir $(LOG_DIR)
 
-# ❌ YANLIŞ: Karmaşık shell bloğu
+# ❌ BAD: Heavy shell block
 simulate: compile
 	@if [ -f $(MEM_FILE) ]; then \
 		echo "Found"; \
 		for dir in $(DIRS); do \
 			if [ -d $$dir ]; then \
-				# 50 satır daha shell kodu...
+				# 50 more lines of shell...
 			fi; \
 		done; \
 	fi
 ```
 
-### Python Katmanı
+### Python layer
 
-**Yapması Gerekenler:**
-- JSON konfigürasyon okuma ve merge etme
-- Validasyon ve schema kontrolü
+**Should do:**
+- Read and merge JSON configuration
+- Validation and schema checks
 - CLI argument parsing
-- Renkli ve formatlanmış çıktı
-- Dosya arama ve path işlemleri
-- Subprocess yönetimi
-- Hata yakalama ve raporlama
+- Colored, formatted output
+- File discovery and path handling
+- Subprocess management
+- Error handling and reporting
 
-**Yapmaması Gerekenler:**
-- Hardcoded path veya değerler
-- Konfigürasyon varsayılanlarını kod içinde tutma
+**Should not do:**
+- Hardcoded paths or values
+- Keep configuration defaults only in code
 
 ```python
-# ✅ DOĞRU: Config'den al
+# ✅ GOOD: From config
 sim_time = config.simulation.sim_time
 
-# ❌ YANLIŞ: Hardcoded
+# ❌ BAD: Hardcoded
 sim_time = "100us"
 ```
 
-### JSON Katmanı
+### JSON layer
 
-**İçermesi Gerekenler:**
-- Tüm varsayılan değerler
-- Profil tanımları (debug, fast, coverage, vb.)
-- Tool-specific ayarlar
-- Açıklayıcı yorumlar (comment field olarak)
+**Should contain:**
+- All default values
+- Profile definitions (debug, fast coverage, etc.)
+- Tool-specific settings
+- Explanatory comments (`_comment` fields)
 
-**İçermemesi Gerekenler:**
-- Path'ler (bunlar Makefile'dan gelir)
-- Çalışma zamanı değerleri
+**Should not contain:**
+- Paths (these come from the Makefile)
+- Runtime-only values
 
 ```json
 {
@@ -166,68 +158,68 @@ sim_time = "100us"
 
 ---
 
-## 🎨 Renkli Console Çıktısı
+## 🎨 Colored Console Output
 
-### Renk Standardı
+### Color convention
 
 ```python
 class Color:
-    # Durum renkleri
-    RED = "\033[0;31m"      # Hatalar
-    GREEN = "\033[0;32m"    # Başarı
-    YELLOW = "\033[1;33m"   # Uyarılar
+    # Status colors
+    RED = "\033[0;31m"      # Errors
+    GREEN = "\033[0;32m"    # Success
+    YELLOW = "\033[1;33m"   # Warnings
     
-    # Bilgi renkleri  
-    CYAN = "\033[0;36m"     # Bilgi mesajları
-    BLUE = "\033[0;34m"     # Başlıklar
-    WHITE = "\033[1;37m"    # Vurgulanan metin
+    # Info colors
+    CYAN = "\033[0;36m"     # Info messages
+    BLUE = "\033[0;34m"     # Headings
+    WHITE = "\033[1;37m"    # Emphasized text
     
-    # Stiller
-    DIM = "\033[2m"         # Soluk (secondary info)
-    BOLD = "\033[1m"        # Kalın
+    # Styles
+    DIM = "\033[2m"         # Dim (secondary info)
+    BOLD = "\033[1m"        # Bold
     RESET = "\033[0m"       # Reset
 ```
 
-### Çıktı Formatları
+### Output formats
 
 ```
 ═══════════════════════════════════════════════════════════
-  CERES RISC-V Simulation                          [HEADER]
+  Level RISC-V Simulation                          [HEADER]
 ═══════════════════════════════════════════════════════════
 
-▶ Section Başlığı                                  [SECTION]
+▶ Section title                                    [SECTION]
   Key:          Value                              [KEY-VAL]
-  Başka Key:    Başka Value
+  Other key:   Other value
 
-[INFO] Bilgi mesajı                                [INFO]
-[WARN] Uyarı mesajı                                [WARN]
-[ERROR] Hata mesajı                                [ERROR]
-
-════════════════════════════════════════════════════════════
-  ✓ Başarılı                                       [SUCCESS]
-════════════════════════════════════════════════════════════
+[INFO] Info message                                [INFO]
+[WARN] Warning message                             [WARN]
+[ERROR] Error message                              [ERROR]
 
 ════════════════════════════════════════════════════════════
-  ✗ Başarısız                                      [FAILURE]
+  ✓ Success                                        [SUCCESS]
+════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════
+  ✗ Failure                                        [FAILURE]
 ════════════════════════════════════════════════════════════
 ```
 
-### Helper Fonksiyonlar
+### Helper functions
 
 ```python
 def header(title: str, char: str = "═") -> None:
-    """Ana başlık banner'ı"""
+    """Main title banner"""
     width = 60
     print(f"\n{Color.CYAN}{char * width}{Color.RESET}")
     print(f"{Color.CYAN}  {title}{Color.RESET}")
     print(f"{Color.CYAN}{char * width}{Color.RESET}")
 
 def subheader(title: str) -> None:
-    """Alt başlık"""
+    """Subheading"""
     print(f"\n{Color.BLUE}▶ {title}{Color.RESET}")
 
 def keyval(key: str, value: str, indent: int = 2) -> None:
-    """Key-value çifti"""
+    """Key-value pair"""
     spaces = " " * indent
     print(f"{spaces}{Color.DIM}{key}:{Color.RESET} {value}")
 
@@ -244,15 +236,15 @@ def success(msg: str) -> None:
     print(f"{Color.GREEN}[OK]{Color.RESET} {msg}")
 ```
 
-### Renk Desteği Kontrolü
+### Detecting color support
 
 ```python
 import sys
 import os
 
 def supports_color() -> bool:
-    """Terminal renk desteğini kontrol et"""
-    # Pipe veya dosyaya yönlendirme varsa renk yok
+    """Return True if the terminal likely supports colors"""
+    # No color when piped or redirected to a file
     if not sys.stdout.isatty():
         return False
     
@@ -260,25 +252,25 @@ def supports_color() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
     
-    # TERM kontrolü
+    # TERM check
     term = os.environ.get("TERM", "")
     if term == "dumb":
         return False
     
     return True
 
-# Script başlangıcında
+# At script startup
 if not supports_color():
     Color.disable()
 ```
 
 ---
 
-## ⚙️ JSON Konfigürasyon Sistemi
+## ⚙️ JSON Configuration System
 
-### Schema Tanımlama
+### Defining schema
 
-Her alan için tip, varsayılan değer ve geçerli seçenekler tanımlanmalı:
+For each field, define type, default, and valid choices:
 
 ```python
 CONFIG_SCHEMA = {
@@ -287,41 +279,41 @@ CONFIG_SCHEMA = {
             "type": "str",
             "default": "100us",
             "pattern": r"^\d+[pnum]?s$",
-            "description": "Simülasyon süresi"
+            "description": "Simulation duration"
         },
         "time_resolution": {
             "type": "str",
             "default": "ns",
             "choices": ["ps", "ns", "us", "ms"],
-            "description": "Zaman çözünürlüğü"
+            "description": "Time resolution"
         }
     }
 }
 ```
 
-### Bilinmeyen Parametreler İçin Uyarı
+### Warnings for unknown parameters
 
 ```python
 def validate_keys(data: dict, schema: dict, path: str = "") -> List[str]:
-    """Bilinmeyen key'ler için uyarı üret"""
+    """Emit warnings for unknown keys"""
     warnings = []
     
     for key in data:
         full_path = f"{path}.{key}" if path else key
         
         if key not in schema:
-            warnings.append(f"Bilinmeyen parametre: '{full_path}'")
+            warnings.append(f"Unknown parameter: '{full_path}'")
         elif isinstance(data[key], dict) and isinstance(schema.get(key), dict):
             warnings.extend(validate_keys(data[key], schema[key], full_path))
     
     return warnings
 ```
 
-### Profil Merge Sistemi
+### Profile merge system
 
 ```python
 def merge_profile(base: dict, profile: dict) -> dict:
-    """Profili base config üzerine merge et"""
+    """Merge profile onto base config"""
     result = copy.deepcopy(base)
     
     for key, value in profile.items():
@@ -341,7 +333,7 @@ class ConfigValue:
     value: Any
     source: str  # "default", "json", "profile", "cli"
     
-# Kullanım
+# Usage
 if cli_args.sim_time:
     config.sim_time = ConfigValue(
         value=cli_args.sim_time,
@@ -351,19 +343,19 @@ if cli_args.sim_time:
 
 ---
 
-## 📋 Makefile → Python Entegrasyonu
+## 📋 Makefile → Python Integration
 
-### Argüman Geçirme Standardı
+### Standard argument passing
 
 ```makefile
-# Path'ler mutlak olmalı
+# Paths should be absolute
 RUNNER_ARGS := \
     --test $(TEST_NAME) \
     --work-dir $(abspath $(WORK_DIR)) \
     --log-dir $(abspath $(LOG_DIR)) \
     --config $(abspath $(CONFIG_FILE))
 
-# Opsiyonel argümanlar
+# Optional arguments
 ifdef PROFILE
     RUNNER_ARGS += --profile $(PROFILE)
 endif
@@ -376,7 +368,7 @@ simulate:
     $(PYTHON) $(RUNNER) $(RUNNER_ARGS)
 ```
 
-### Python Argparse Şablonu
+### Python argparse template
 
 ```python
 def parse_args() -> argparse.Namespace:
@@ -385,21 +377,21 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
-    # Zorunlu argümanlar
+    # Required arguments
     required = parser.add_argument_group("required arguments")
-    required.add_argument("--test", required=True, help="Test adı")
+    required.add_argument("--test", required=True, help="Test name")
     
-    # Opsiyonel argümanlar
-    parser.add_argument("--config", type=Path, help="JSON config dosyası")
-    parser.add_argument("--profile", help="Config profili")
-    parser.add_argument("--no-color", action="store_true", help="Renkleri devre dışı bırak")
+    # Optional arguments
+    parser.add_argument("--config", type=Path, help="JSON config file")
+    parser.add_argument("--profile", help="Config profile")
+    parser.add_argument("--no-color", action="store_true", help="Disable colors")
     
     return parser.parse_args()
 ```
 
 ---
 
-## 🧪 Test ve Validasyon
+## 🧪 Test and Validation
 
 ### Config Validation Target
 
@@ -411,16 +403,16 @@ show_config:
     $(PYTHON) $(CONFIG_MODULE) --show --config $(CONFIG_FILE)
 ```
 
-### Dry-Run Modu
+### Dry-run mode
 
 ```python
 parser.add_argument(
     "--dry-run", "-n",
     action="store_true",
-    help="Komutu çalıştırmadan göster"
+    help="Show what would run without executing"
 )
 
-# Kullanım
+# Usage
 if args.dry_run:
     print(f"Would run: {' '.join(cmd)}")
     return 0
@@ -428,11 +420,11 @@ if args.dry_run:
 
 ---
 
-## 📊 Çıktı ve Loglama
+## 📊 Output and Logging
 
 ### Summary JSON
 
-Her çalışma sonunda summary oluştur:
+Emit a summary after each run:
 
 ```python
 summary = {
@@ -455,55 +447,55 @@ with open(log_dir / "summary.json", "w") as f:
     json.dump(summary, f, indent=2)
 ```
 
-### Çıktı Yönlendirme
+### Teeing output
 
 ```python
-# Hem console hem dosyaya yaz
+# Write to both console and file
 with open(log_file, "w") as f:
     process = subprocess.Popen(cmd, stdout=PIPE, stderr=STDOUT, text=True)
     
     for line in process.stdout:
         print(line, end="")  # Console
-        f.write(line)        # Dosya
+        f.write(line)        # File
 ```
 
 ---
 
-## ✅ Kontrol Listesi
+## ✅ Checklist
 
-Yeni bir tool eklerken kontrol et:
+When adding a new tool, check:
 
 ### Makefile
-- [ ] Target basit ve okunabilir mi?
-- [ ] Path'ler `$(abspath ...)` ile mutlak mı?
-- [ ] Dependency'ler doğru tanımlanmış mı?
-- [ ] Help section güncellendi mi?
+- [ ] Are targets simple and readable?
+- [ ] Are paths absolute via `$(abspath ...)`?
+- [ ] Are dependencies declared correctly?
+- [ ] Is the help section updated?
 
 ### Python
-- [ ] JSON config desteği var mı?
-- [ ] Bilinmeyen parametreler için uyarı var mı?
-- [ ] Renkli çıktı desteği var mı?
-- [ ] `--no-color` seçeneği var mı?
-- [ ] Hata durumları handle ediliyor mu?
-- [ ] Summary JSON oluşturuluyor mu?
-- [ ] Dry-run modu var mı?
+- [ ] Is there JSON config support?
+- [ ] Are unknown parameters warned?
+- [ ] Is colored output supported?
+- [ ] Is there a `--no-color` option?
+- [ ] Are error paths handled?
+- [ ] Is summary JSON written?
+- [ ] Is there a dry-run mode?
 
 ### JSON
-- [ ] Tüm varsayılanlar tanımlı mı?
-- [ ] Profiller mantıklı mı?
-- [ ] Yorum (\_comment) alanları var mı?
-- [ ] Schema dokümantasyonu var mı?
+- [ ] Are all defaults defined?
+- [ ] Do profiles make sense?
+- [ ] Are `_comment` fields present?
+- [ ] Is schema documentation available?
 
-### Genel
-- [ ] `make help` güncellendi mi?
-- [ ] Dokümantasyon yazıldı mı?
-- [ ] Örnek kullanım eklendi mi?
+### General
+- [ ] Is `make help` updated?
+- [ ] Is documentation written?
+- [ ] Are usage examples included?
 
 ---
 
-## 📖 Örnek: Yeni Tool Ekleme
+## 📖 Example: Adding a New Tool
 
-### 1. JSON Config Oluştur
+### 1. Create JSON config
 
 ```json
 // script/config/newtool.json
@@ -523,7 +515,7 @@ Yeni bir tool eklerken kontrol et:
 }
 ```
 
-### 2. Python Runner Yaz
+### 2. Write Python runner
 
 ```python
 #!/usr/bin/env python3
@@ -534,7 +526,7 @@ import argparse
 import json
 import subprocess
 
-# Color ve helper fonksiyonları import et veya tanımla...
+# Import or define Color and helpers...
 
 def main():
     args = parse_args()
@@ -545,7 +537,7 @@ def main():
     config = load_config(args.config, args.profile)
     
     header("New Tool")
-    # ... işlemler
+    # ... work
     
     return 0
 
@@ -553,10 +545,10 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-### 3. Makefile Target Ekle
+### 3. Add Makefile target
 
 ```makefile
-# script/makefiles/tools/newtool.mk
+# New section in root makefile (example)
 
 NEWTOOL_RUNNER := $(SCRIPT_DIR)/python/makefile/newtool_runner.py
 NEWTOOL_CONFIG := $(SCRIPT_DIR)/config/newtool.json
@@ -569,83 +561,81 @@ newtool:
 .PHONY: newtool
 ```
 
-### 4. Ana Makefile'a Dahil Et
+### 4. Add to root `makefile`
 
-```makefile
-include $(MAKEFILE_DIR)/tools/newtool.mk
-```
+Add new targets to the repository root `makefile` next to the appropriate `# ====== ... ======` section.
 
 ---
 
 ## 🔍 Debug Logging
 
-Her Python runner, detaylı debug log oluşturabilir. Bu loglar hata ayıklamayı kolaylaştırır.
+Each Python runner may emit detailed debug logs to simplify troubleshooting.
 
-### Debug Logger Kullanımı
+### Using the debug logger
 
 ```python
 from debug_logger import create_logger, DebugLogger
 
-# Logger oluştur
+# Create logger
 logger = create_logger(
-    tool_name="verilator",      # veya "modelsim"
+    tool_name="verilator",      # or "modelsim"
     log_dir=config.log_dir,
-    debug_enabled=True          # veya CERES_DEBUG=1
+    debug_enabled=True          # or LEVEL_DEBUG=1
 )
 
-# Bölüm başlat
+# Start section
 logger.section("Configuration")
 
-# Parametre logla (kaynak bilgisiyle)
+# Log parameters (with source)
 logger.param("test_name", "rv32ui-p-add", source="cli")
 logger.param("max_cycles", 100000, source="json")
 logger.param("trace_enabled", True, source="default")
 
-# Komut logla
+# Log command
 logger.command(["vsim", "-c", ...], "ModelSim simulation")
 
-# Dosya kontrolü
+# File check
 logger.file_check(Path("/path/to/file.mem"), "Memory file")
 
-# Sonuç kaydet
+# Save result
 logger.result(success=True, exit_code=0, message="Completed")
 logger.save()
 ```
 
-### Debug Modu Aktivasyonu
+### Enabling debug mode
 
 ```bash
-# Ortam değişkeni ile
-CERES_DEBUG=1 make run_verilator TEST_NAME=rv32ui-p-add
+# Via environment variable
+LEVEL_DEBUG=1 make run_verilator TEST_NAME=rv32ui-p-add
 
-# CLI flag ile
+# Via CLI flag
 python verilator_runner.py --test rv32ui-p-add --debug
 
-# Console'a da yazdırmak için
-CERES_DEBUG=1 CERES_DEBUG_ECHO=1 make simulate TEST_NAME=test
+# Also echo to console
+LEVEL_DEBUG=1 LEVEL_DEBUG_ECHO=1 make simulate TEST_NAME=test
 ```
 
-### Debug Log Formatları
+### Debug log formats
 
-Her çalışmada iki format oluşturulur:
+Each run produces two formats:
 
-**1. Text Log (okunabilir)**
+**1. Text log (human-readable)**
 ```
 results/logs/verilator/test/debug_verilator_20251206_180823.log
-results/logs/verilator/test/debug_verilator_latest.log  # Son çalışma
+results/logs/verilator/test/debug_verilator_latest.log  # Latest run
 ```
 
-**2. JSON Log (parselanabilir)**
+**2. JSON log (machine-readable)**
 ```
 results/logs/verilator/test/debug_verilator_20251206_180823.json
 results/logs/verilator/test/debug_verilator_latest.json
 ```
 
-### Debug Log İçeriği
+### Debug log contents
 
 ```
 ================================================================================
-  CERES RISC-V — VERILATOR Debug Log
+  Level RISC-V — VERILATOR Debug Log
 ================================================================================
   Started: 2025-12-06 18:08:23
   CWD:     /home/kerim/level-v
@@ -670,7 +660,7 @@ results/logs/verilator/test/debug_verilator_latest.json
 │ Command                                                                      │
 └──────────────────────────────────────────────────────────────────────────────┘
   ▶ Command: Verilator simulation
-    $ /path/to/Vceres_wrapper 10000 +INIT_FILE=test.mem ...
+    $ /path/to/Vlevel_wrapper 10000 +INIT_FILE=test.mem ...
 
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Results                                                                      │
@@ -684,88 +674,87 @@ results/logs/verilator/test/debug_verilator_latest.json
 ================================================================================
 ```
 
-### Parametre Kaynakları
+### Parameter sources
 
-Debug log'da her parametrenin kaynağı gösterilir:
+The debug log shows where each parameter came from:
 
-| Tag | Açıklama |
-|-----|----------|
-| `[CLI ]` | Komut satırından geldi |
-| `[JSON]` | JSON config'den geldi |
-| `[DEF ]` | Varsayılan değer |
-| `[MERG]` | Merge edilmiş son değer |
-| `[FOUN]` | Otomatik bulunan dosya |
-| `[EXEC]` | Çalışma zamanında belirlendi |
-| `[OVR ]` | Override edildi |
-
----
-
-## 🔗 İlgili Dosyalar
-
-- `script/python/makefile/debug_logger.py` - Debug logger modülü
-- `script/python/makefile/modelsim_runner.py` - ModelSim runner (logger entegreli)
-- `script/python/makefile/verilator_runner.py` - Verilator runner (logger entegreli)
-- `script/python/makefile/test_runner.py` - Test pipeline runner (logger entegreli)
-- `script/python/makefile/modelsim_config.py` - Config yönetimi örneği
-- `script/config/modelsim.json` - JSON config örneği
-- `script/makefiles/sim/modelsim.mk` - Makefile entegrasyon örneği
-- `script/makefiles/test/run_test.mk` - Test runner Makefile entegrasyonu
+| Tag | Description |
+|-----|-------------|
+| `[CLI ]` | From command line |
+| `[JSON]` | From JSON config |
+| `[DEF ]` | Default value |
+| `[MERG]` | Merged final value |
+| `[FOUN]` | Auto-discovered file |
+| `[EXEC]` | Determined at runtime |
+| `[OVR ]` | Overridden |
 
 ---
 
-## 🧪 Test Runner Pipeline
+## 🔗 Related files
 
-### Genel Bakış
+- `script/python/makefile/debug_logger.py` - Debug logger module
+- `script/python/makefile/modelsim_runner.py` - ModelSim runner (with logger)
+- `script/python/makefile/verilator_runner.py` - Verilator runner (with logger)
+- `script/python/makefile/test_runner.py` - Test pipeline runner (with logger)
+- `script/python/makefile/modelsim_config.py` - Example config manager
+- `script/config/modelsim.json` - Example JSON config
+- Root `makefile` — ModelSim / test pipeline targets (`grep "modelsim\\|run_test" makefile`)
 
-`test_runner.py`, test sürecini uçtan uca yöneten Python modülüdür. Makefile'dan `USE_PYTHON=1` ile çağrılabilir:
+---
+
+## 🧪 Test runner pipeline
+
+### Overview
+
+`test_runner.py` is the Python module that orchestrates the test flow end-to-end. It can be invoked from the Makefile with `USE_PYTHON=1`:
 
 ```bash
-# Makefile üzerinden
+# Via Makefile
 make run T=rv32ui-p-add USE_PYTHON=1
 
-# Debug modunda
-CERES_DEBUG=1 make run T=rv32ui-p-add USE_PYTHON=1
+# With debug
+LEVEL_DEBUG=1 make run T=rv32ui-p-add USE_PYTHON=1
 
-# Doğrudan Python ile
+# Direct Python
 python3 script/python/makefile/test_runner.py --test-name rv32ui-p-add --debug
 ```
 
-### Pipeline Aşamaları
+### Pipeline stages
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      TEST PIPELINE                              │
 ├─────────────────────────────────────────────────────────────────┤
 │  1️⃣ TEST PREPARATION                                           │
-│     - Log dizinlerini oluştur                                   │
-│     - Gerekli dosyaları kontrol et (ELF, MEM, ADDR)            │
-│     - Rapor dosyasını başlat                                    │
+│     - Create log directories                                    │
+│     - Check required files (ELF, MEM, ADDR)                     │
+│     - Start report file                                         │
 ├─────────────────────────────────────────────────────────────────┤
 │  2️⃣ RTL SIMULATION                                             │
-│     - Verilator veya ModelSim runner'ı çağır                    │
-│     - Simülasyon çıktılarını topla                              │
-│     - commit_trace.log oluştur                                  │
+│     - Invoke Verilator or ModelSim runner                       │
+│     - Collect simulation outputs                                │
+│     - Produce commit_trace.log                                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  3️⃣ SPIKE GOLDEN REFERENCE (opsiyonel)                        │
-│     - Spike ISS'yi aynı ELF ile çalıştır                       │
-│     - Golden commit log oluştur                                 │
+│  3️⃣ SPIKE GOLDEN REFERENCE (optional)                         │
+│     - Run Spike ISS on the same ELF                             │
+│     - Produce golden commit log                                 │
 ├─────────────────────────────────────────────────────────────────┤
-│  4️⃣ LOG COMPARISON (opsiyonel)                                │
-│     - RTL ve Spike commit loglarını karşılaştır                 │
-│     - Fark varsa detaylı rapor oluştur                         │
+│  4️⃣ LOG COMPARISON (optional)                                 │
+│     - Compare RTL and Spike commit logs                         │
+│     - If different, emit detailed report                          │
 ├─────────────────────────────────────────────────────────────────┤
 │  5️⃣ REPORT GENERATION                                         │
-│     - Test sonucunu raporla                                     │
-│     - Debug log'ları kaydet                                     │
+│     - Report test outcome                                       │
+│     - Save debug logs                                           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Makefile Entegrasyonu
+### Makefile integration
 
-`run_test.mk` içinde Python runner şu şekilde entegre edilmiştir:
+The Python runner is integrated in `run_test.mk` as follows:
 
 ```makefile
-# Python veya geleneksel Makefile runner seçimi
+# Choose Python or legacy Makefile runner
 ifeq ($(USE_PYTHON),1)
 run: run_python
 else
@@ -786,32 +775,32 @@ run_python:
 
 ### Test Type Auto-Detection
 
-`test_runner.py` test tipini otomatik tespit eder:
+`test_runner.py` automatically detects the test type:
 
 | Pattern | Test Type |
 |---------|-----------|
 | `rv32ui-p-*`, `rv32um-p-*` | `isa` |
-| `I-ADD-01`, `M-MUL-01` | `arch` veya `imperas` |
+| `I-ADD-01`, `M-MUL-01` | `arch` or `imperas` |
 | `dhrystone`, `coremark` | `bench` |
 | `aha-mont64`, `crc32` | `embench` |
 
-### Quick Mode
+### Quick mode
 
-Hızlı test için `--quick` veya `--no-spike` kullanılabilir:
+Use `--quick` or `--no-spike` for faster runs:
 
 ```bash
-# Sadece RTL simülasyonu, Spike ve karşılaştırma yok
+# RTL simulation only; no Spike or log compare
 make run T=rv32ui-p-add USE_PYTHON=1 CFG_SPIKE=0
 
-# Python doğrudan quick mode
+# Python quick mode directly
 python3 test_runner.py --test-name rv32ui-p-add --quick
 ```
 
-### Debug Log Örneği
+### Debug log example
 
 ```
 ================================================================================
-  CERES RISC-V — TEST_RUNNER Debug Log
+  Level RISC-V — TEST_RUNNER Debug Log
 ================================================================================
   Started: 2025-12-06 18:20:40
   CWD:     /home/kerim/level-v

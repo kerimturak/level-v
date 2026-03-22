@@ -54,7 +54,7 @@ Description:
 `timescale 1ns / 1ps
 
 module gptimer
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_TIMERS = 4
 ) (

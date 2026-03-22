@@ -7,12 +7,12 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 /* verilator lint_off VARHIDDEN */
 module fetch
-  import ceres_param::*;
+  import level_param::*;
 #(
-    parameter RESET_VECTOR = ceres_param::RESET_VECTOR
+    parameter RESET_VECTOR = level_param::RESET_VECTOR
 ) (
 `ifdef COMMIT_TRACER
     output fe_tracer_info_t            fe_tracer_o,
@@ -75,7 +75,7 @@ module fetch
   // If dcache is larger than icache, dcache flush takes longer.
   // This counter ensures fetch stage stalls until the maximum flush completes.
   // ============================================================================
-  // MAX_FLUSH_CYCLES and FLUSH_CNT_WIDTH are defined in ceres_param.sv
+  // MAX_FLUSH_CYCLES and FLUSH_CNT_WIDTH are defined in level_param.sv
   // and include L2 when USE_L2_CACHE is enabled.
 
   logic [FLUSH_CNT_WIDTH-1:0] flush_counter;
@@ -92,8 +92,8 @@ module fetch
   logic                   trigger1_execute_hit;
 
   // ============================================================================
-  // PC Register: Program Counter yönetimi
-  // Reset'te RESET_VECTOR'e atanır, aksi halde pc_en aktifken güncellenir
+  // PC Register: Program counter management
+  // Assigned to RESET_VECTOR on reset; otherwise updated when pc_en is active
   // PMA attributes are registered together with PC to break combinational loop
   // ============================================================================
   always_ff @(posedge clk_i) begin
@@ -135,26 +135,25 @@ module fetch
   end
 
   // ============================================================================
-  // PC Enable Logic: Stall durumunda PC güncellenmez
+  // PC Enable Logic: PC is not updated while stalled
   // ============================================================================
   always_comb begin
     pc_en = trap_active_i || (stall_i == NO_STALL) || flush_i;
 
     // ============================================================================
-    // Current PC Selection: Exception durumunda writeback PC'si, normal durumda
-    // pipeline PC'si kullanılır
+    // Current PC Selection: On exception use writeback PC; in normal operation
+    // use pipeline PC
     // ============================================================================
     pc_o = pc;
 
     // ============================================================================
-    // PC Increment Calculation: Compressed instruction ise +2, değilse +4
+    // PC Increment Calculation: +2 if compressed instruction, else +4
     // ============================================================================
     pc_incr_o = (buff_res.valid && is_comp) ? (pc_o + 32'd2) : (pc_o + 32'd4);
 
     // ============================================================================
-    // Next PC Logic: Dallanma tahminleri ve exception durumlarına göre
-    // bir sonraki PC değerinin belirlenmesi
-    // Öncelik sırası:
+    // Next PC Logic: Determines next PC from branch predictions and exceptions
+    // Priority order:
     // 1. Misprediction/Exception recovery -> pc_target_i
     // 2. Branch taken -> spec_o.pc
     // 3. Sequential fetch -> pc_incr_o
@@ -164,10 +163,10 @@ module fetch
     end else if (trap_active_i) begin
       pc_next = ex_mtvec_i;
     end else if (!spec_hit_i) begin
-      // Misprediction veya exception recovery durumu
+      // Misprediction or exception recovery
       pc_next = pc_target_i;
     end else if (spec_o.taken) begin
-      // Branch prediction taken durumu
+      // Branch prediction taken
       pc_next = spec_o.pc;
     end else begin
       // Sequential instruction fetch
@@ -175,38 +174,38 @@ module fetch
     end
 
     // ============================================================================
-    // Fetch Valid Logic: Instruction fetch'in geçerli olup olmadığını belirler
-    // Flush durumunda veya exception varsa fetch geçersiz kabul edilir
-    // speculation hit ise normal exp kontrolü yapılır değilse zaten fetch ve decode
-    // exptionları anlamsız olur ve flsuhlanacaklardır. Fakat yaşlı exceptionlar uygulanmalı
+    // Fetch Valid Logic: Whether the instruction fetch is valid
+    // On flush or when an exception is present, fetch is treated as invalid
+    // On speculation hit, normal exception checks apply; otherwise fetch/decode
+    // exceptions are meaningless and will be flushed, but prior exceptions still apply
     // ============================================================================
     if (flush_i) begin
       fetch_valid = 1'b0;
     end else if (spec_hit_i) begin
-      // Speculation hit durumunda hiç exception olmamalı
+      // On speculation hit there must be no exception
       fetch_valid = !trap_active_i;  //!has_any_exc;
     end else begin
-      // Speculation miss durumunda sadece execute exception kontrolü
-      // Exception WB de is trap handler için fetch yapılır
+      // On speculation miss, only execute exception checking
+      // When exception is in WB, fetch runs for the trap handler
       fetch_valid = !trap_active_i  /*!(has_exe_exc || has_mem_exc)*/;
     end
 
     // ============================================================================
-    // Instruction Type Detection: Gelen instruction'ın tipini belirler
+    // Instruction Type Detection: Determines type of incoming instruction
     // ============================================================================
     instr_type_o           = resolved_instr_type(inst_o);
 
     // ============================================================================
-    // Buffer Request Formation: Align buffer'a gönderilecek istek oluşturulur
+    // Buffer Request Formation: Builds request sent to align buffer
     // ============================================================================
-    buff_req               = '{valid    : fetch_valid, ready    : !flush_i && rst_ni,  // Sadece PC güncellenebiliyorsa ready
+    buff_req               = '{valid    : fetch_valid, ready    : !flush_i && rst_ni,  // ready only when PC may update
  addr     : pc_o, uncached : uncached};
 
     // ============================================================================
-    // Instruction Cache Miss Stall: Fetch geçerli ama buffer hazır değilse stall
-    // Klasik ready valid handshake'i kurulamadı. Buffer isteği registerlamıyor
-    // Valid cevabı valid istekle aynı cycle da üretildiği için.
-    // TODO: Belki handshake kurulabilir, olası çoğu comp loop sebebi burası
+    // Instruction Cache Miss Stall: Stall when fetch is valid but buffer is not ready
+    // Classic ready/valid handshake not used; buffer does not register the request
+    // because valid response is produced same cycle as valid request.
+    // TODO: Handshake might be possible; many comb loop causes likely stem from here
     // IMPORTANT: Also stall during reset flush to ensure dcache completes flush
     // before fetch starts requesting from icache. Without this, if dcache is
     // larger than icache, requests arrive at dcache while it's still flushing.
@@ -216,7 +215,7 @@ module fetch
     // ============================================================================
     // Exception Type Detection: Parametric priority-based exception selection
     // Follows RISC-V Privileged Specification Section 3.1.15
-    // Priority can be configured via parameters in ceres_param.sv
+    // Priority can be configured via parameters in level_param.sv
     // 
     // Exception detection with parametric priority:
     // 1. Hardware breakpoint (debug trigger) - highest priority
@@ -260,8 +259,7 @@ module fetch
     end
 
     // ============================================================================
-    // Cache Response to Buffer Response Mapping: Cache cevabını buffer formatına
-    // dönüştürür
+    // Cache Response to Buffer Response Mapping: Maps cache response to buffer format
     // ============================================================================
     buff_lowX_res.valid = icache_res.valid;
     buff_lowX_res.ready = icache_res.ready;
@@ -306,8 +304,8 @@ module fetch
   end
 
   // ============================================================================
-  // Physical Memory Attributes (PMA) Module: Bellek bölgesinin özelliklerini
-  // belirler (cached/uncached, erişim izni vb.)
+  // Physical Memory Attributes (PMA) Module: Memory region attributes
+  // (cached/uncached, access permission, etc.)
   // PMA lookup is done for pc_next (combinational), but result is registered
   // together with PC to break combinational loop while maintaining zero-cycle latency
   // ============================================================================
@@ -319,7 +317,7 @@ module fetch
   );
 
   // ============================================================================
-  // Branch Prediction Unit: Dallanma tahminlerini yapar (GShare algoritması)
+  // Branch Prediction Unit: Branch prediction (GShare algorithm)
   // ============================================================================
   gshare_bp i_gshare_bp (
       .clk_i        (clk_i),
@@ -337,8 +335,7 @@ module fetch
   );
 
   // ============================================================================
-  // Align Buffer: Misaligned instruction'ları hizalar ve compressed
-  // instruction desteği sağlar
+  // Align Buffer: Aligns misaligned instructions; supports compressed instructions
   // ============================================================================
   align_buffer i_align_buffer (
       .clk_i     (clk_i),
@@ -351,8 +348,7 @@ module fetch
   );
 
   // ============================================================================
-  // Instruction Cache: Instruction'ları cache'ler, cache miss durumunda
-  // lower level memory'ye istek gönderir
+  // Instruction Cache: Caches instructions; on miss requests lower-level memory
   // ============================================================================
 
   icache #(
@@ -375,8 +371,8 @@ module fetch
   );
 
   // ============================================================================
-  // RISC-V Compressed Decoder: 16-bit compressed instruction'ları 32-bit
-  // formata çevirir ve illegal instruction tespiti yapar
+  // RISC-V Compressed Decoder: Expands 16-bit compressed instructions to 32-bit
+  // and detects illegal instructions
   // ============================================================================
   compressed_decoder i_compressed_decoder (
       .instr_i        (buff_res.blk),

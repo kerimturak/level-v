@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 integer log_file;
 
-// Log dosyasını aç
+// Open the log file
 initial begin
   log_file = $fopen("fetch_log.txt", "w");
   if (log_file == 0) begin
@@ -17,7 +17,7 @@ initial begin
   end
 end
 
-// Fetch edilen instruction’ları kaydet
+// Log fetched instructions
 always @(posedge clk_i) begin
   if (!rst_ni) begin
     $fclose(log_file);
@@ -33,7 +33,7 @@ always @(posedge clk_i) begin
   end
 end
 
-// Simülasyon bittiğinde dosyayı kapat
+// Close the file when simulation ends
 final begin
   $fclose(log_file);
 end

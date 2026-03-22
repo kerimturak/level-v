@@ -1,12 +1,12 @@
-# CS_REG_FILE (CSR Register File) Modülü - Teknik Döküman
+# CS_REG_FILE (CSR Register File) Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`cs_reg_file.sv` modülü, RISC-V işlemcisinin **Control and Status Register** (CSR) file'ıdır. Machine-mode (M-mode) CSR'larını implement eder, trap handling, interrupt management, performance counters ve debug trigger register'larını içerir.
+`cs_reg_file.sv` is the RISC-V processor **Control and Status Register** (CSR) file. It implements machine-mode (M-mode) CSRs and includes trap handling, interrupt management, performance counters, and debug trigger registers.
 
 ## RISC-V Privileged Levels
 
-Bu implementasyon **M-mode only** (Machine Mode) destekler:
+This implementation supports **M-mode only** (Machine Mode):
 
 | Level | Encoding | Name | Privilege |
 |-------|----------|------|-----------|
@@ -14,21 +14,21 @@ Bu implementasyon **M-mode only** (Machine Mode) destekler:
 | S | 1 (0b01) | Supervisor | Not implemented |
 | U | 0 (0b00) | User | Not implemented |
 
-**Rationale:** Embedded systems ve bare-metal uygulamalar için M-mode yeterlidir.
+**Rationale:** M-mode is sufficient for embedded systems and bare-metal applications.
 
-## Port Tanımları
+## Port Definitions
 
 ### Clock & Control
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `stall_i` | stall_e | Pipeline stall sinyali |
+| Port | Type | Description |
+|------|------|-------------|
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `stall_i` | stall_e | Pipeline stall signal |
 
 ### CSR Read/Write Interface
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `rd_en_i` | logic | CSR read enable |
 | `wr_en_i` | logic | CSR write enable |
@@ -38,7 +38,7 @@ Bu implementasyon **M-mode only** (Machine Mode) destekler:
 
 ### Trap Interface
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `trap_active_i` | logic | Trap active (exception/interrupt) |
 | `de_trap_active_i` | logic | Decode stage trap active |
@@ -49,7 +49,7 @@ Bu implementasyon **M-mode only** (Machine Mode) destekler:
 
 ### Interrupt Inputs (Hardware)
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `timer_irq_i` | logic | CLINT timer interrupt (MTIP) |
 | `sw_irq_i` | logic | CLINT software interrupt (MSIP) |
@@ -57,7 +57,7 @@ Bu implementasyon **M-mode only** (Machine Mode) destekler:
 
 ### Outputs
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `mtvec_o` | [XLEN-1:0] | Trap vector base address |
 | `mepc_o` | [XLEN-1:0] | Exception PC (for MRET) |
@@ -134,7 +134,7 @@ Bu implementasyon **M-mode only** (Machine Mode) destekler:
 | 0x3A0 | pmpcfg0 | PMP configuration | R/W |
 | 0x3B0 | pmpaddr0 | PMP address | R/W |
 
-**Not:** PMP henüz tam implement edilmemiş (stub)
+**Note:** PMP is not fully implemented yet (stub).
 
 ## CSR Details
 
@@ -202,7 +202,7 @@ typedef struct packed {
 } misa_ext_t;
 ```
 
-**Ceres Configuration (RV32IMC):**
+**Level Configuration (RV32IMC):**
 ```
 MXL = 2'b01   (RV32)
 I = 1         (Base integer)
@@ -695,13 +695,13 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
   $stable(mip));
 ```
 
-## İlgili Modüller
+## Related Modules
 
 1. **execution.sv**: CSR read/write interface
 2. **alu.sv**: CSR operation logic (CSRRW/CSRRS/CSRRC)
 3. **trap_controller.sv**: Trap detection and interrupt prioritization
 
-## Referanslar
+## References
 
 1. RISC-V Privileged ISA Specification v1.12 - Chapter 3 (Machine-Level ISA)
 2. RISC-V Debug Specification v0.13.2 - Chapter 5 (Trigger Module)
@@ -709,6 +709,6 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** December 5, 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

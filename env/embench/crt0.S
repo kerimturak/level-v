@@ -1,5 +1,5 @@
 /* ============================================================
- * Ceres-V Startup Code for Embench Benchmarks
+ * level-V Startup Code for Embench Benchmarks
  * ============================================================
  */
 

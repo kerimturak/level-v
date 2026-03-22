@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-CERES RISC-V Validation Runner
+Level RISC-V Validation Runner
 ===============================
 
-RTL simülasyon çıktısını Spike golden reference ile karşılaştırır.
+Compares RTL simulation output against the Spike golden reference.
 
 Workflow:
-1. RTL simülasyonu zaten çalıştırılmış olmalı (commit_trace.log mevcut)
-2. Spike golden model çalıştırılır
-3. RTL ve Spike commit logları karşılaştırılır
-4. Validation sonucu döndürülür
+1. RTL simulation must already have run (commit_trace.log present)
+2. Run the Spike golden model
+3. Compare RTL and Spike commit logs
+4. Return the validation result
 
 Usage:
     python3 validation_runner.py \\
@@ -50,7 +50,7 @@ class Color:
 # ═══════════════════════════════════════════════════════════════════════════
 @dataclass
 class ValidationResult:
-    """Validation sonucu."""
+    """Validation result."""
     test_name: str
     rtl_log_exists: bool
     spike_ran: bool
@@ -352,7 +352,7 @@ class ValidationRunner:
 # ═══════════════════════════════════════════════════════════════════════════
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="CERES RISC-V Validation Runner (Spike + Compare)",
+        description="Level RISC-V Validation Runner (Spike + Compare)",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
@@ -429,7 +429,7 @@ def main():
     root_dir = Path(args.root_dir).resolve() if args.root_dir else Path.cwd()
 
     if not args.quiet:
-        print(f"\n{Color.BOLD}CERES RISC-V Validation Runner{Color.RESET}")
+        print(f"\n{Color.BOLD}Level RISC-V Validation Runner{Color.RESET}")
         print(f"{Color.CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Color.RESET}")
         print(f"  Test:      {args.test_name}")
         print(f"  Build Dir: {build_dir}")

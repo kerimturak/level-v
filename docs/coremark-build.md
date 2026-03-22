@@ -1,8 +1,8 @@
-CoreMark build & configuration for Ceres core
+CoreMark build & configuration for Level core
 
 Overview
 --------
-This document explains how CoreMark is configured and built for the Ceres RISC‑V core in this repository, which files I changed to port CoreMark to the barebones target, and the exact commands used to produce the artifacts (`.elf`, `.bin`, `.mem`, and `.dump`). It also explains how to change UART/timer configuration and how to run the simulator with the generated images.
+This document explains how CoreMark is configured and built for the Level RISC‑V core in this repository, which files I changed to port CoreMark to the barebones target, and the exact commands used to produce the artifacts (`.elf`, `.bin`, `.mem`, and `.dump`). It also explains how to change UART/timer configuration and how to run the simulator with the generated images.
 
 Files changed / important locations
 ----------------------------------
@@ -30,7 +30,7 @@ How CoreMark is configured for this core
    - For cross builds the script uses `-Ttext=0x80000000` and links statically. The ELF entry default is allowed to be the default `_start` provided by the C runtime or by the link script; this simple build uses `-Ttext` and relies on the startup provided by the barebones port.
 
 4. UART and Timer mapping used in the port
-   - UART registers used in `core_portme.c` (matches your `tekno.h` example):
+   - UART registers used in `core_portme.c` (matches a typical platform header example such as `tekno.h`):
      - `UART_CTRL` = 0x20000000
      - `UART_STATUS` = 0x20000004 (tx_full is bit 0)
      - `UART_WDATA` = 0x2000000c
@@ -68,11 +68,11 @@ When running Verilator or ModelSim, pass the INIT_FILE plusarg used by the testb
 Verilator run example:
 
 ```bash
-build/obj_dir/Vceres_wrapper 200000 \
+build/obj_dir/Vlevel_wrapper 200000 \
   +INIT_FILE=$(pwd)/build/tests/coremark/coremark.mem \
   +simulator=verilator +test_name=coremark \
   +fetch_log=results/logs/verilator/coremark/fetch_trace.log \
-  +log_path=results/logs/verilator/coremark/ceres.log \
+  +log_path=results/logs/verilator/coremark/level.log \
   +DUMP_FILE=results/logs/verilator/coremark/waveform.fst
 ```
 

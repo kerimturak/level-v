@@ -1,5 +1,5 @@
 /*
- * L2 Cache — CERES True Dual-Port Non-blocking Write-back Cache
+ * L2 Cache — Level true dual-port Non-blocking Write-back Cache
  *
  * Architecture:
  *   I-cache (ilowX) ──► I-pipe ──┐
@@ -23,10 +23,10 @@
  *   Cycle 2 (RESOLVE):    Hit/miss resolved. Hit → respond. Miss → MSHR + evict/fill.
  */
  `timescale 1ns / 1ps
- `include "ceres_defines.svh"
+ `include "level_defines.svh"
  // non-blocking multi-bank multi-port cache
  module nbmbmp_l2_cache
-   import ceres_param::*;
+   import level_param::*;
  (
      input  logic       clk_i,
      input  logic       rst_ni,

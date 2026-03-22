@@ -1,7 +1,7 @@
 /* ============================================================
- * RISC-V Formal Interface (RVFI) Wrapper for Ceres-V
+ * RISC-V Formal Interface (RVFI) Wrapper for Level-V
  * ============================================================
- * This module wraps the Ceres-V CPU and exports RVFI signals
+ * This module wraps the Level-V CPU and exports RVFI signals
  * for formal verification.
  *
  * CURRENT STATUS: Placeholder implementation
@@ -18,7 +18,7 @@
  * information that can be adapted for RVFI.
  *
  * NOTE: Yosys has limited SystemVerilog support. The current
- * Ceres-V RTL uses advanced SV features that require either:
+ * Level-V RTL uses advanced SV features that require either:
  * - Using commercial formal tools (Jasper, OneSpin)
  * - Simplifying RTL for Yosys compatibility
  * - Using Verilator for simulation-based verification

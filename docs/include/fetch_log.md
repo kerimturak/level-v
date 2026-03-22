@@ -1,28 +1,28 @@
-# Fetch Log - Teknik Dokümantasyon
+# Fetch Log - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Log Formatı](#log-formatı)
-3. [Sinyaller](#sinyaller)
-4. [Kullanım](#kullanım)
-5. [Debug Senaryoları](#debug-senaryoları)
+1. [Overview](#overview)
+2. [Log Format](#log-format)
+3. [Signals](#signals)
+4. [Usage](#usage)
+5. [Debug Scenarios](#debug-scenarios)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`fetch_log.svh` dosyası, **Fetch stage** debug ve trace çıktıları için log formatlarını tanımlar. I-Cache erişimleri, branch prediction sonuçları ve pipeline stall'ları izlenebilir.
+The `fetch_log.svh` file defines log formats for **fetch stage** debug and trace output. I-cache accesses, branch prediction results, and pipeline stalls can be observed.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/include/fetch_log.svh
 ```
 
-### Aktivasyon
+### Activation
 
 ```bash
 # Makefile ile
@@ -34,9 +34,9 @@ make run T=test LOG_FETCH=1
 
 ---
 
-## Log Formatı
+## Log Format
 
-### Temel Log Yapısı
+### Basic Log Structure
 
 ```systemverilog
 `ifdef LOG_FETCH
@@ -55,7 +55,7 @@ make run T=test LOG_FETCH=1
 `endif
 ```
 
-### Örnek Çıktı
+### Sample Output
 
 ```
 [FETCH] PC=80000000 INSTR=00000297 I @ 1000
@@ -67,9 +67,9 @@ make run T=test LOG_FETCH=1
 
 ---
 
-## Sinyaller
+## Signals
 
-### İzlenen Sinyaller
+### Monitored Signals
 
 ```systemverilog
 // Fetch stage signals
@@ -90,7 +90,7 @@ logic        bp_taken;        // Predicted taken
 logic [31:0] bp_target;       // Predicted target
 ```
 
-### Log Seviyeleri
+### Log Levels
 
 ```systemverilog
 // Basic fetch log
@@ -108,15 +108,15 @@ logic [31:0] bp_target;       // Predicted target
 
 ---
 
-## Kullanım
+## Usage
 
-### Basit Fetch Log
+### Simple Fetch Log
 
 ```systemverilog
 `include "fetch_log.svh"
 
 module fetch_stage
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic        clk_i,
     // ...
@@ -134,7 +134,7 @@ module fetch_stage
 endmodule
 ```
 
-### Detaylı Fetch Log
+### Detailed Fetch Log
 
 ```systemverilog
 `ifdef LOG_FETCH_VERBOSE
@@ -174,12 +174,12 @@ endmodule
 
 ---
 
-## Debug Senaryoları
+## Debug Scenarios
 
 ### 1. I-Cache Miss Analizi
 
 ```systemverilog
-// Cache miss sayısını takip et
+// Track cache miss count
 `ifdef LOG_FETCH
     int icache_miss_count = 0;
     int icache_hit_count = 0;
@@ -219,7 +219,7 @@ endmodule
 `endif
 ```
 
-### 3. Pipeline Stall İzleme
+### 3. Pipeline Stall Monitoring
 
 ```systemverilog
 `ifdef LOG_FETCH
@@ -245,24 +245,24 @@ endmodule
 
 ---
 
-## İlgili Dosyalar
+## Related Files
 
-| Dosya | Açıklama |
+| File | Description |
 |-------|----------|
-| `rtl/core/stage01_fetch/` | Fetch stage modülleri |
-| `rtl/core/mmu/cache.sv` | I-Cache implementasyonu |
-| `writeback_log.svh` | Commit trace (karşılaştırma için) |
+| `rtl/core/stage01_fetch/` | Fetch stage modules |
+| `rtl/core/mmu/cache.sv` | I-cache implementation |
+| `writeback_log.svh` | Commit trace (for comparison) |
 
 ---
 
-## Özet
+## Summary
 
-`fetch_log.svh` dosyası:
+The `fetch_log.svh` file:
 
-1. **PC/Instruction Log**: Temel fetch izleme
-2. **Cache Analysis**: Hit/miss istatistikleri
-3. **Branch Debug**: Misprediction izleme
-4. **Stall Analysis**: Pipeline stall nedenleri
-5. **Conditional Compilation**: `ifdef` ile kontrol
+1. **PC/Instruction Log**: Basic fetch monitoring
+2. **Cache Analysis**: Hit/miss statistics
+3. **Branch Debug**: Misprediction monitoring
+4. **Stall Analysis**: Pipeline stall reasons
+5. **Conditional Compilation**: Control via `ifdef`
 
-Bu dosya, fetch stage debug ve performans analizi için kullanılır.
+This file is used for fetch-stage debug and performance analysis.

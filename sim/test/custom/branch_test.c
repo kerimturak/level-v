@@ -1,5 +1,5 @@
 /**
- * Branch Prediction Test - Ceres-V RV32IMC_Zicsr
+ * Branch Prediction Test - Level-V RV32IMC_Zicsr
  * 
  * Tests various branch patterns:
  * - Predictable branches (always taken/not taken)
@@ -7,7 +7,7 @@
  * - Branch with loop
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 int main(void) {
     uart_init();

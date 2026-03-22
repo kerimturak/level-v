@@ -1,12 +1,12 @@
-// RISC-V Imperas Test Model Header File for Ceres Processor
-// Copyright (c) 2024, Ceres-V Project
+// RISC-V Imperas Test Model Header File for Level Processor
+// Copyright (c) 2024, Level-V Project
 // See LICENSE for license details.
 //
 // Description: Target-specific macros for Imperas riscv-tests framework
-// Ceres-V RV32IMC_Zicsr Processor
+// Level-V RV32IMC_Zicsr Processor
 //
 // Note: Imperas tests use the same macro format as riscv-arch-test.
-// This file provides Ceres-specific implementations of RVMODEL_* macros.
+// This file provides level-specific implementations of RVMODEL_* macros.
 
 #ifndef _MODEL_TEST_H
 #define _MODEL_TEST_H
@@ -27,7 +27,7 @@
 #endif
 
 #ifndef RVMODEL_NUM_PMPS
-  #define RVMODEL_NUM_PMPS    0  // Ceres doesn't have PMP yet
+  #define RVMODEL_NUM_PMPS    0  // Level doesn't have PMP yet
 #endif
 
 // Vectored trap handler alignment
@@ -39,7 +39,7 @@
 // Boot and Halt Macros
 //=============================================================================
 
-// Boot sequence - setup trap handler for Ceres
+// Boot sequence - setup trap handler for level
 // Jump over the handler, set mtvec, then continue
 #define RVMODEL_BOOT                                                    \
     j _rvtest_boot_continue;                                            \
@@ -130,7 +130,7 @@ halt_loop:                                                              \
 #define RVMODEL_IO_ASSERT_DFPR_EQ(_D, _R, _I)
 
 //=============================================================================
-// Interrupt Clearing Macros (stubs - Ceres minimal interrupt support)
+// Interrupt Clearing Macros (stubs - Level minimal interrupt support)
 //=============================================================================
 
 #define RVMODEL_SET_MSW_INT

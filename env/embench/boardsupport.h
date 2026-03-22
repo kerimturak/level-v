@@ -1,5 +1,5 @@
 /* ============================================================
- * Ceres-V Board Support Header for Embench-IoT
+ * Level-V Board Support Header for Embench-IoT
  * ============================================================
  */
 

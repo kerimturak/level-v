@@ -9,12 +9,12 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 `timescale 1ns / 1ps
 /* verilator lint_off VARHIDDEN */
 module align_buffer
-  import ceres_param::*;
+  import level_param::*;
 #(
-    parameter CACHE_SIZE = ceres_param::ABUFF_SIZE,
-    parameter BLK_SIZE   = ceres_param::BLK_SIZE,
-    parameter XLEN       = ceres_param::XLEN,
-    parameter NUM_WAY    = ceres_param::ABUFF_WAY
+    parameter CACHE_SIZE = level_param::ABUFF_SIZE,
+    parameter BLK_SIZE   = level_param::BLK_SIZE,
+    parameter XLEN       = level_param::XLEN,
+    parameter NUM_WAY    = level_param::ABUFF_WAY
 ) (
     input  logic       clk_i,
     input  logic       rst_ni,

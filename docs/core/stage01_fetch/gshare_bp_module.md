@@ -1,91 +1,91 @@
-# GSHARE BRANCH PREDICTOR Modülü - Teknik Döküman
+# Gshare Branch Predictor Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`gshare_bp.sv` modülü, RISC-V işlemcisinde gelişmiş dallanma tahmini (branch prediction) yapar. GSHARE (Global History with Shared indexing) algoritmasını, Tournament predictor ile, RAS (Return Address Stack), BTB (Branch Target Buffer), IBTC (Indirect Branch Target Cache) ve Loop predictor ile birleştirerek yüksek doğruluk oranı sağlar.
+The `gshare_bp.sv` module implements advanced branch prediction for the RISC-V core. It combines GSHARE (global history with shared indexing), a tournament meta-predictor, RAS (return address stack), BTB (branch target buffer), IBTC (indirect branch target cache), and a loop predictor for high accuracy.
 
-## Branch Prediction Neden Önemli?
+## Why branch prediction matters
 
-Modern pipeline'lı işlemcilerde:
-- Branch resolution Execute aşamasında olur (3-4 cycle sonra)
-- Yanlış tahmin → **Pipeline flush** → 3-4 cycle penalty
-- Doğru tahmin → Pipeline akışı kesintisiz
+Modern pipelined processors:
+- Branches resolve in execute (often 3–4 cycles after fetch)
+- A wrong guess forces a **pipeline flush** (typically a 3–4 cycle penalty)
+- A correct guess keeps the pipeline full
 
-**Örnek:**
-- 100M instruction, %20 branch
-- Misprediction rate %10 → 2M misprediction
-- Penalty 4 cycle → **8M cycle loss** (~8% performance kaybı)
+**Example:**
+- 100M instructions, 20% branches
+- 10% misprediction rate → 2M mispredictions
+- 4-cycle penalty → **~8M wasted cycles** (~8% performance loss)
 
-## Temel Mimariler
+## Core predictor structures
 
-### 1. GSHARE (Primary Predictor)
-- **Global History Register (GHR)**: Son N branch sonuçlarını tutar
-- **Pattern History Table (PHT)**: PC ⊕ GHR ile index'lenen 2-bit saturating counter'lar
-- **Avantaj**: Global branch pattern correlation
+### 1. GSHARE (primary)
+- **Global history register (GHR):** last *N* branch outcomes
+- **Pattern history table (PHT):** 2-bit saturating counters indexed by PC ⊕ GHR
+- **Strength:** captures global branch correlation
 
-### 2. Bimodal Predictor (Secondary)
-- **Pattern History Table**: Sadece PC ile index'lenen 2-bit counter'lar
-- **Avantaj**: Basit, local pattern'lerde iyi
+### 2. Bimodal (secondary)
+- **PHT:** 2-bit counters indexed by PC only
+- **Strength:** simple; good on more local patterns
 
-### 3. Tournament Predictor (Meta)
-- **Choice Table**: GSHARE vs Bimodal seçimi
-- Hangisi daha başarılıysa onu kullan
-- **Accuracy:** %90-95 (kod tipine göre)
+### 3. Tournament (meta)
+- **Choice table:** selects GSHARE vs bimodal
+- Favors whichever was more accurate
+- **Typical accuracy:** ~90–95% (workload-dependent)
 
-### 4. Return Address Stack (RAS)
-- **Function Return Prediction**: `ret` instruction'ları için
-- Stack-based, LIFO
-- **Accuracy:** %95-99
+### 4. Return address stack (RAS)
+- **Return prediction:** for `ret`-style control flow
+- Stack-based LIFO
+- **Typical accuracy:** ~95–99%
 
-### 5. Branch Target Buffer (BTB)
-- **Target Address Cache**: Branch hedef adreslerini cache'ler
-- Tag + Target pair
-- BTB miss → Static prediction (BTFN)
+### 5. Branch target buffer (BTB)
+- **Target cache:** stores branch target addresses
+- Tag + target pair
+- BTB miss → static BTFN-style fallback
 
-### 6. Indirect Branch Target Cache (IBTC)
-- **JALR Prediction**: Indirect jump'lar için
-- PC → Target mapping
-- RAS'ın cover etmediği indirect jump'ları handle eder
+### 6. Indirect branch target cache (IBTC)
+- **JALR prediction:** for indirect jumps
+- PC → target map
+- Covers indirect jumps the RAS does not handle
 
-### 7. Loop Predictor
-- **Loop Iteration Tracking**: Döngü iterasyon sayısını tahmin eder
-- Trip count learning
-- Backward branch detection
+### 7. Loop predictor
+- **Iteration tracking:** estimates loop trip counts
+- Learns trip counts
+- Detects backward branches
 
-## Port Tanımları
+## Port definitions
 
-### Giriş Portları
+### Input ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `spec_hit_i` | logic | Prediction doğru mu? (1=doğru, 0=misprediction) |
-| `stall_i` | logic | Pipeline stall sinyali |
-| `inst_i` | inst_t | Fetch edilen instruction |
-| `pc_target_i` | [XLEN-1:0] | Execute'dan gelen gerçek branch hedefi |
-| `pc_i` | [XLEN-1:0] | Mevcut program counter |
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `spec_hit_i` | logic | Was the prediction correct? (1=yes, 0=misprediction) |
+| `stall_i` | logic | Pipeline stall signal |
+| `inst_i` | inst_t | Fetched instruction |
+| `pc_target_i` | [XLEN-1:0] | Resolved branch/jump target from execute |
+| `pc_i` | [XLEN-1:0] | Current program counter |
 | `pc_incr_i` | [XLEN-1:0] | PC + 4 (sequential) |
-| `fetch_valid_i` | logic | Fetch geçerli mi? |
+| `fetch_valid_i` | logic | Fetch cycle is valid |
 | `de_info_i` | pipe_info_t | Decode pipeline info |
 | `ex_info_i` | pipe_info_t | Execute pipeline info |
 
-### Çıkış Portları
+### Output ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
-| `spec_o` | predict_info_t | Prediction bilgisi (pc, taken, spectype) |
+| `spec_o` | predict_info_t | Prediction bundle (PC, taken, spectype) |
 
-**predict_info_t yapısı:**
+**`predict_info_t` layout:**
 ```systemverilog
 typedef struct packed {
-  logic [XLEN-1:0] pc;        // Tahmin edilen hedef PC
-  logic            taken;     // Branch taken mı?
-  spec_type_e      spectype;  // Prediction tipi (BRANCH/JUMP/RAS/NO_SPEC)
+  logic [XLEN-1:0] pc;        // Predicted target PC
+  logic            taken;     // Branch taken?
+  spec_type_e      spectype;  // Prediction type (BRANCH/JUMP/RAS/NO_SPEC)
 } predict_info_t;
 ```
 
-## Veri Yapıları
+## Data structures
 
 ### Global History Register (GHR)
 
@@ -94,13 +94,13 @@ logic [GHR_SIZE-1:0] ghr;        // Committed GHR (EX feedback)
 logic [GHR_SIZE-1:0] ghr_spec;   // Speculative GHR (prediction)
 ```
 
-**Boyut:** `GHR_SIZE = 8-16 bit` (ceres_param.sv'den)
+**Size:** `GHR_SIZE = 8–16` bits (from `level_param.sv`)
 
-**Güncelleme:**
-- **Speculative:** Her prediction'da shift left, tahmin sonucu append
-- **Committed:** Execute'da branch resolve olduğunda shift left, gerçek sonuç append
+**Updates:**
+- **Speculative:** on each prediction, shift left and append the predicted outcome
+- **Committed:** when the branch resolves in execute, shift left and append the actual outcome
 
-**Örnek (GHR_SIZE=8):**
+**Example (GHR_SIZE=8):**
 ```
 Initial:    GHR = 8'b00000000
 Branch 1 (taken):     GHR_spec = 8'b00000001
@@ -115,7 +115,7 @@ logic [1:0] pht [PHT_SIZE];      // GSHARE PHT
 logic [1:0] bimodal [PHT_SIZE];  // Bimodal PHT
 ```
 
-**Boyut:** `PHT_SIZE = 256-1024` (2^8 to 2^10)
+**Size:** `PHT_SIZE = 256–1024` entries (2^8 to 2^10)
 
 **2-Bit Saturating Counter:**
 ```
@@ -173,7 +173,7 @@ logic [TAG_WIDTH-1:0] btb_tag [BTB_SIZE];
 logic [XLEN-1:0] btb_target [BTB_SIZE];
 ```
 
-**Boyut:** `BTB_SIZE = 128-512`
+**Size:** `BTB_SIZE = 128–512`
 
 **Lookup:**
 ```systemverilog
@@ -197,11 +197,11 @@ logic [TAG_WIDTH-1:0] ibtc_tag [IBTC_SIZE];
 logic [XLEN-1:0] ibtc_target [IBTC_SIZE];
 ```
 
-**Boyut:** `IBTC_SIZE = 32-128`
+**Size:** `IBTC_SIZE = 32–128`
 
-**Kullanım:**
-- JALR instruction'ları için (RAS'ın cover etmedikleri)
-- Örnek: Computed jumps, virtual function calls, switch-case jump tables
+**Usage:**
+- JALR targets the RAS does not cover  
+- Examples: computed jumps, vtable dispatches, switch jump tables  
 
 **Lookup:**
 ```systemverilog
@@ -219,25 +219,25 @@ logic loop_valid [LOOP_SIZE];
 logic [TAG_WIDTH-1:0] loop_tag [LOOP_SIZE];
 ```
 
-**Boyut:** `LOOP_SIZE = 32-64`
+**Size:** `LOOP_SIZE = 32–64`
 
-**İşlem:**
-1. Backward branch tespit edilir (`$signed(target - pc) < 0`)
+**Operation:**
+1. Detect backward branch (`$signed(target - pc) < 0`)
 2. Loop entry: `loop_count = 1`
-3. Her iteration: `loop_count++`
-4. Loop exit: `loop_trip = loop_count`, `loop_count = 0`
-5. Prediction: `loop_count >= loop_trip - 1` → predict exit
+3. Each iteration: `loop_count++`
+4. On loop exit: `loop_trip = loop_count`, `loop_count = 0`
+5. Predict exit when `loop_count >= loop_trip - 1`
 
-**Örnek:**
+**Example:**
 ```c
 for (int i = 0; i < 10; i++) {  // Loop trip count = 10
   // ...
 }
 ```
-- İlk 9 iteration: Predict TAKEN (loop continue)
-- 10. iteration: Predict NOT-TAKEN (loop exit)
+- Iterations 1–9: predict TAKEN (continue loop)
+- Iteration 10: predict NOT-TAKEN (exit)
 
-## Prediction Logic (Öncelik Sırası)
+## Prediction Logic (Priority order)
 
 ```systemverilog
 if (popped.valid) 
@@ -260,17 +260,17 @@ else
   spec_o = Sequential (PC + 4);
 ```
 
-### 1. RAS Prediction (En Yüksek Öncelik)
+### 1. RAS prediction (highest priority)
 
 ```systemverilog
 if (popped.valid) begin
-  spec_o.pc       = popped.data;       // RAS'tan pop edilen return address
+  spec_o.pc       = popped.data;       // return address popped from RAS
   spec_o.taken    = 1'b1;
   spec_o.spectype = RAS;
 end
 ```
 
-**Koşul:** `jr_type && (rd_addr == x1 || rd_addr == x5) && (rs1_addr == x1 || rs1_addr == x5)`
+**Condition:** `jr_type && (rd_addr == x1 || rd_addr == x5) && (rs1_addr == x1 || rs1_addr == x5)`
 
 ### 2. JAL Prediction (Unconditional Jump)
 
@@ -282,7 +282,7 @@ if (j_type) begin
 end
 ```
 
-**Doğruluk:** %100 (unconditional, target deterministik)
+**Accuracy:** 100% (unconditional; target is deterministic)
 
 ### 3. JALR with IBTC Prediction
 
@@ -294,7 +294,7 @@ if (jr_type && ibtc_hit) begin
 end
 ```
 
-**IBTC Miss:** Sequential fetch devam eder (target bilinmiyor)
+**IBTC miss:** sequential fetch continues (target unknown)
 
 ### 4. Conditional Branch Prediction
 
@@ -346,8 +346,8 @@ end
 ```
 
 **Rationale:**
-- Backward branch'ler genelde loop'tur → TAKEN
-- Forward branch'ler genelde if-statement → NOT-TAKEN (early exit daha az frequent)
+- Backward branches are usually loops → predict TAKEN  
+- Forward branches are usually `if` tests → predict NOT-TAKEN (early exits are less common)  
 
 ## GHR Update Mechanism
 
@@ -379,10 +379,10 @@ always_ff @(posedge clk_i) begin
 end
 ```
 
-**Dual GHR Neden?**
-- **ghr_spec**: Prediction için kullanılır (fetch stage)
-- **ghr**: Committed (execute feedback), recovery için
-- Misprediction'da `ghr_spec` restore edilir
+**Why two GHR copies?**
+- **`ghr_spec`:** used during prediction (fetch)
+- **`ghr`:** committed history from execute; used for recovery  
+- On misprediction, `ghr_spec` is restored from `ghr` (plus correction)
 
 ## Predictor Update (Training)
 
@@ -414,7 +414,7 @@ if (pht[pht_wr_idx][1] != bimodal[bimodal_wr_idx][1]) begin
 end
 ```
 
-**Update sadece disagreement varsa:** Predictionlar aynıysa seçim değişmez (her ikisi de doğru/yanlış)
+**Update only on disagreement:** if both predictors agree, the choice table is left unchanged (both right or both wrong).
 
 ### BTB Update
 
@@ -424,7 +424,7 @@ btb_tag[btb_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(BTB_SIZE)+2];
 btb_target[btb_wr_idx] <= pc_target_i;
 ```
 
-**Her branch resolution'da:** BTB her zaman update edilir (hit/miss fark etmez)
+**On every resolved branch:** the BTB is updated regardless of hit/miss.
 
 ### Loop Predictor Update
 
@@ -447,11 +447,11 @@ if ($signed(pc_target_i - ex_info_i.pc) < 0) begin  // Backward branch
 end
 ```
 
-## Branch Prediction Logger (Optional)
+## Branch prediction logger (Optional)
 
-`+define+LOG_BP` ile etkinleştirilir.
+`+define+LOG_BP` enables it.
 
-### İstatistikler
+### Statistics
 
 ```systemverilog
 logic [63:0] total_branches;
@@ -464,7 +464,7 @@ logic [63:0] ibtc_predictions, ibtc_correct;
 logic [63:0] btb_hits, btb_misses;
 ```
 
-### Çıktı Formatı
+### Output format
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
@@ -505,7 +505,7 @@ logic [63:0] btb_hits, btb_misses;
 
 ### Pipeline Impact
 
-**Örnek (Coremark benchmark):**
+**Example (Coremark benchmark):**
 - Total instructions: 10M
 - Branch instructions: 2M (20%)
 - Misprediction rate: 5%
@@ -526,7 +526,7 @@ logic [63:0] btb_hits, btb_misses;
    PC → BTB lookup → PHT lookup → Tournament select → Mux → spec_o.pc
    ```
    - Timing critical (single cycle)
-   - BTB/PHT genelde BRAM/SRAM → asenkron read
+   - BTB/PHT often map to BRAM/SRAM → combinational read from registered address
 
 2. **Update Path (Execute Stage):**
    ```
@@ -536,7 +536,7 @@ logic [63:0] btb_hits, btb_misses;
 
 ### Area Overhead
 
-**Örnek Configuration:**
+**Example Configuration:**
 - PHT: 256 entries × 2-bit × 2 (GSHARE+Bimodal) = 1 Kbit
 - Choice: 256 entries × 2-bit = 512 bit
 - BTB: 128 entries × (22-bit tag + 32-bit target) = 6.75 Kbit
@@ -557,39 +557,39 @@ logic [63:0] btb_hits, btb_misses;
 5. **Switch-Case:** IBTC accuracy ~85% (after warmup)
 6. **Random Branches:** Tournament accuracy ~75-80%
 
-### Assertions (Önerilen)
+### Suggested assertions
 
 ```systemverilog
-// Speculation hit durumunda GHR update yapılmamalı (already updated)
+// On correct speculation, committed GHR must not double-update
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   spec_hit_i && ex_is_branch |-> $stable(ghr));
 
-// Misprediction durumunda GHR restore edilmeli
+// On misprediction, speculative GHR must be repaired
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   !spec_hit_i && ex_is_branch |=> ghr_spec == {$past(ghr[GHR_SIZE-2:0]), $past(ex_was_taken)});
 
-// BTB update her branch'te yapılmalı
+// BTB should update on every resolved branch
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   ex_is_branch |=> btb_valid[$past(btb_wr_idx)]);
 ```
 
-## Gelecek İyileştirmeler
+## Future improvements
 
-1. **TAGE Predictor**: Tagged Geometric History Length (daha yüksek accuracy)
-2. **Perceptron Predictor**: Neural network-based prediction
-3. **BTB Associativity**: Multi-way BTB (alias reduction)
-4. **Loop Predictor Enhancement**: Nested loop support
-5. **Prefetch Integration**: Predicted path'i proactive fetch et
-6. **Power Optimization**: Gated clock, selective update
+1. **TAGE predictor:** tagged geometric history length (higher accuracy potential)  
+2. **Perceptron predictor:** neural-style predictors  
+3. **BTB associativity:** multi-way BTB to reduce aliasing  
+4. **Loop predictor:** deeper nested-loop support  
+5. **Prefetch integration:** fetch ahead along the predicted path  
+6. **Power:** clock gating, selective predictor updates  
 
-## İlgili Modüller
+## Related modules
 
-1. **fetch.sv**: Branch predictor'ı kullanır
+1. **fetch.sv:** instantiates and queries the branch predictor  
 2. **ras.sv**: Return Address Stack implementation
 3. **hazard_unit.sv**: Misprediction handling
 4. **execute.sv**: Branch resolution feedback
 
-## Referanslar
+## References
 
 1. "The GShare Predictor" - Scott McFarling, 1993
 2. "A Case for (Partially) TAged GEometric History Length Branch Prediction" - André Seznec, 2006 (TAGE)
@@ -599,6 +599,6 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 
 ---
 
-**Son Güncelleme:** 4 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** 4 December 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

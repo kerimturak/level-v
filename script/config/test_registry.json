@@ -1,6 +1,5 @@
 {
-  "$schema": "./test_registry.schema.json",
-  "_comment": "CERES RISC-V Test Registry - Central database for all tests",
+  "_comment": "Level RISC-V Test Registry - Central database for all tests",
   "_description": "This file maintains a registry of all available tests with metadata, tags, and configuration",
 
   "version": "1.0.0",
@@ -9,7 +8,7 @@
   "test_suites": {
     "isa_basic": {
       "description": "Basic RISC-V ISA compliance tests (RV32I)",
-      "config": "script/config/tests/default.json",
+      "config": "script/config/tests/isa.conf",
       "flist": "sim/test/riscv_test_list.flist",
       "tags": ["isa", "compliance", "quick"],
       "enabled": true,
@@ -21,7 +20,7 @@
 
     "isa_compressed": {
       "description": "Compressed instruction extension tests (RV32C)",
-      "config": "script/config/tests/default.json",
+      "config": "script/config/tests/isa.conf",
       "flist": "sim/test/riscv_test_list.flist",
       "tags": ["isa", "compliance", "compressed"],
       "enabled": true,
@@ -34,7 +33,7 @@
 
     "isa_multiply": {
       "description": "Multiply/Divide extension tests (RV32M)",
-      "config": "script/config/tests/default.json",
+      "config": "script/config/tests/isa.conf",
       "flist": "sim/test/riscv_test_list.flist",
       "tags": ["isa", "compliance", "multiply"],
       "enabled": true,
@@ -47,7 +46,7 @@
 
     "arch_tests": {
       "description": "RISC-V Architecture Tests",
-      "config": "script/config/tests/arch.json",
+      "config": "script/config/tests/arch.conf",
       "flist": "sim/test/arch_test.flist",
       "tags": ["arch", "compliance", "official"],
       "enabled": true,
@@ -66,7 +65,7 @@
       "tests": {
         "coremark": {
           "description": "CoreMark CPU benchmark",
-          "config": "script/config/tests/coremark.json",
+          "config": "script/config/tests/coremark.conf",
           "tags": ["benchmark", "performance", "slow"],
           "enabled": true,
           "timeout_seconds": 300,
@@ -74,7 +73,7 @@
         },
         "dhrystone": {
           "description": "Dhrystone CPU benchmark",
-          "config": "script/config/tests/dhrystone.json",
+          "config": "script/config/tests/dhrystone.conf",
           "tags": ["benchmark", "performance", "medium"],
           "enabled": true,
           "timeout_seconds": 120,
@@ -85,7 +84,7 @@
 
     "branch_tests": {
       "description": "Branch predictor and control flow tests",
-      "config": "script/config/tests/branch_test.json",
+      "config": "script/config/tests/branch_test.conf",
       "flist": "sim/test/branch_test.flist",
       "tags": ["branch", "predictor", "custom"],
       "enabled": true,
@@ -97,7 +96,7 @@
 
     "exception_tests": {
       "description": "Exception and interrupt handling tests",
-      "config": "script/config/tests/default.json",
+      "config": "script/config/tests/default.conf",
       "flist": "sim/test/exception_test.flist",
       "tags": ["exception", "interrupt", "privilege"],
       "enabled": true,
@@ -109,7 +108,7 @@
 
     "csr_tests": {
       "description": "Control and Status Register tests",
-      "config": "script/config/tests/csr.json",
+      "config": "script/config/tests/csr.conf",
       "flist": "sim/test/machine_csr_test.flist",
       "tags": ["csr", "privilege", "machine"],
       "enabled": true,
@@ -121,7 +120,7 @@
 
     "custom_tests": {
       "description": "Custom user-defined tests",
-      "config": "script/config/tests/custom.json",
+      "config": "script/config/tests/custom.conf",
       "flist": "sim/test/custom_tests.flist",
       "tags": ["custom", "user"],
       "enabled": true,
@@ -133,7 +132,7 @@
 
     "embench": {
       "description": "Embench IoT benchmark suite",
-      "config": "script/config/tests/embench.json",
+      "config": "script/config/tests/embench.conf",
       "flist": "sim/test/embench.flist",
       "tags": ["benchmark", "embench", "iot"],
       "enabled": false,
@@ -145,7 +144,7 @@
 
     "imperas": {
       "description": "Imperas RISC-V test suite",
-      "config": "script/config/tests/imperas.json",
+      "config": "script/config/tests/imperas.conf",
       "flist": "sim/test/imperas_test_list.flist",
       "tags": ["imperas", "compliance"],
       "enabled": false,
@@ -157,7 +156,7 @@
 
     "torture": {
       "description": "RISC-V Torture random instruction tests",
-      "config": "script/config/tests/torture.json",
+      "config": "script/config/tests/torture.conf",
       "tags": ["torture", "random", "stress"],
       "enabled": false,
       "validation": {

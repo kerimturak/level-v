@@ -1,8 +1,8 @@
-# CERES Parameter Package - Teknik Dokümantasyon
+# Level Parameter Package — Technical Documentation
 
-## İçindekiler
+## Table of Contents
 
-1. [Genel Bakış](#genel-bakış)
+1. [General Overview](#general-overview)
 2. [Core Parameters](#core-parameters)
 3. [Cache Parameters](#cache-parameters)
 4. [Branch Predictor Parameters](#branch-predictor-parameters)
@@ -16,29 +16,29 @@
 
 ---
 
-## Genel Bakış
+## General Overview
 
-### Amaç
+### Purpose
 
-`ceres_param.sv` dosyası, CERES RISC-V işlemcisinin **merkezi konfigürasyon paketi**dir. Tüm RTL modülleri bu paketi import ederek parametrelere, tiplere ve fonksiyonlara erişir.
+The `level_param.sv` file is the **central configuration package** for the Level RISC-V processor. All RTL modules import this package to access parameters, types, and functions.
 
-### Dosya Konumu
+### File Location
 
 ```
-rtl/pkg/ceres_param.sv
+rtl/pkg/level_param.sv
 ```
 
-### Kullanım
+### Usage
 
 ```systemverilog
-import ceres_param::*;
+import level_param::*;
 ```
 
-### Organizasyon
+### Organization
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                        CERES_PARAM PACKAGE STRUCTURE                             │
+│                        LEVEL_PARAM PACKAGE STRUCTURE                             │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                  │
 │   ┌─────────────────────────────────────────────────────────────────────────┐   │
@@ -98,7 +98,7 @@ import ceres_param::*;
 
 ## Core Parameters
 
-### Temel CPU Ayarları
+### Basic CPU Settings
 
 ```systemverilog
 localparam int CPU_CLK = 50_000_000;           // 50 MHz
@@ -106,17 +106,17 @@ localparam int XLEN = 32;                       // 32-bit architecture
 localparam logic [31:0] RESET_VECTOR = 32'h8000_0000;  // Boot address
 ```
 
-| Parametre | Değer | Açıklama |
-|-----------|-------|----------|
-| `CPU_CLK` | 50 MHz | Sistem saat frekansı |
-| `XLEN` | 32 | Register genişliği (RV32) |
-| `RESET_VECTOR` | 0x8000_0000 | Reset sonrası PC değeri |
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `CPU_CLK` | 50 MHz | System clock frequency |
+| `XLEN` | 32 | Register width (RV32) |
+| `RESET_VECTOR` | 0x8000_0000 | PC value after reset |
 
 ---
 
 ## Cache Parameters
 
-### Cache Boyutları
+### Cache Sizes
 
 ```systemverilog
 // Block size
@@ -137,9 +137,9 @@ localparam int ABUFF_SIZE = 512;
 localparam int ABUFF_WAY = 1;
 ```
 
-### Cache Özet Tablosu
+### Cache Summary Table
 
-| Cache | Kapasite | Way | Block Size | Sets |
+| Cache | Capacity | Way | Block Size | Sets |
 |-------|----------|-----|------------|------|
 | I-Cache | 8 KB | 8 | 128-bit | 64 |
 | D-Cache | 8 KB | 8 | 128-bit | 64 |
@@ -149,7 +149,7 @@ localparam int ABUFF_WAY = 1;
 
 ## Branch Predictor Parameters
 
-### Predictor Boyutları
+### Predictor Sizes
 
 ```systemverilog
 localparam int PHT_SIZE = 512;    // Pattern History Table entries
@@ -161,7 +161,7 @@ localparam int LOOP_SIZE = 8;     // Loop predictor entries
 localparam int BP_LOG_INTERVAL = 10000;  // Stats log interval
 ```
 
-### Predictor Yapısı
+### Predictor Structure
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -183,17 +183,17 @@ localparam int BP_LOG_INTERVAL = 10000;  // Stats log interval
 
 ## Peripheral Parameters
 
-### UART Parametreleri
+### UART Parameters
 
 ```systemverilog
 localparam int PROG_BAUD_RATE = 115200;
-localparam PROGRAM_SEQUENCE = "CERESTEST";
+localparam PROGRAM_SEQUENCE = "LEVELTEST";
 localparam int UART_DATA_WIDTH = 8;
 localparam int UART_TX_FIFO_DEPTH = 256;
 localparam int UART_RX_FIFO_DEPTH = 32;
 ```
 
-### GPIO Parametreleri
+### GPIO Parameters
 
 ```systemverilog
 localparam int GPIO_WIDTH = 32;
@@ -208,7 +208,7 @@ localparam int DIV_WIDTH = 32;
 localparam int Mul_Type = 0;  // 0: Wallace, 1: Dadda
 ```
 
-### Prefetcher (Şu an devre dışı)
+### Prefetcher (currently disabled)
 
 ```systemverilog
 localparam int PREFETCH_TYPE = 0;      // 0=Disabled
@@ -222,7 +222,7 @@ localparam int PREFETCH_DEGREE = 4;
 
 ## Wishbone Bus Parameters
 
-### Bus Genişlikleri
+### Bus Widths
 
 ```systemverilog
 localparam int WB_DATA_WIDTH = 32;
@@ -236,7 +236,7 @@ localparam int WB_BURST_LEN = BLK_SIZE / WB_DATA_WIDTH;  // 4
 
 ## Memory Map
 
-### Base Adresler
+### Base Addresses
 
 ```systemverilog
 localparam logic [31:0] MMAP_DEBUG_BASE   = 32'h0000_0000;
@@ -247,7 +247,7 @@ localparam logic [31:0] MMAP_EXTMEM_BASE  = 32'h4000_0000;
 localparam logic [31:0] MMAP_RAM_BASE     = 32'h8000_0000;
 ```
 
-### Peripheral Offset'leri
+### Peripheral Offsets
 
 ```systemverilog
 localparam logic [15:0] PERIPH_UART0_OFF = 16'h0000;  // 0x2000_0xxx
@@ -263,7 +263,7 @@ localparam logic [15:0] PERIPH_DMA_OFF   = 16'h9000;  // 0x2000_9xxx
 localparam logic [15:0] PERIPH_VGA_OFF   = 16'hD000;  // 0x200D_xxxx
 ```
 
-### CLINT Register Offset'leri
+### CLINT Register Offsets
 
 ```systemverilog
 localparam logic [15:0] CLINT_MSIP_OFF     = 16'h0000;  // Software interrupt
@@ -271,7 +271,7 @@ localparam logic [15:0] CLINT_MTIMECMP_OFF = 16'h4000;  // Timer compare
 localparam logic [15:0] CLINT_MTIME_OFF    = 16'hBFF8;  // Timer counter
 ```
 
-### Memory Map Diyagramı
+### Memory Map Diagram
 
 ```
 0xFFFF_FFFF ┬─────────────────────────────────────────────────────
@@ -309,7 +309,7 @@ localparam logic [15:0] CLINT_MTIME_OFF    = 16'hBFF8;  // Timer counter
 
 ## RISC-V Opcodes
 
-### Opcode Tanımları
+### Opcode Definitions
 
 ```systemverilog
 localparam logic [6:0] system        = 7'b11100_11;  // SYSTEM (ECALL, CSR)
@@ -605,14 +605,14 @@ endfunction
 
 ---
 
-## Özet
+## Summary
 
-`ceres_param.sv` paketi:
+The `level_param.sv` package:
 
-1. **1000+ Satır**: Tüm RTL konfigürasyonu
-2. **Merkezi Tanımlar**: Tüm modüller bu paketi import eder
-3. **Type Safety**: Enum ve struct ile tip güvenliği
-4. **Functions**: Decode ve utility fonksiyonları
-5. **Memory Map**: Tam SoC adres haritası
+1. **1000+ lines**: Full RTL configuration
+2. **Central definitions**: All modules import this package
+3. **Type safety**: Enums and structs for type-safe design
+4. **Functions**: Decode and utility functions
+5. **Memory map**: Complete SoC address map
 
-Bu paket, CERES RISC-V işlemcisinin **single source of truth**'udur.
+This package is the **single source of truth** for the Level RISC-V processor.

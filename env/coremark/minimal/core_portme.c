@@ -76,7 +76,7 @@ static inline uint32_t read_csr_mcycle(void)
 /* Timing Functions     */
 /************************/
 
-/* Use mcycle CSR - available in both Ceres-V and Spike
+/* Use mcycle CSR - available in both Level-V and Spike
    Assumes ~50MHz CPU clock for time calculations */
 #define CPU_FREQ_HZ        50000000
 #define CORETIMETYPE       ee_u32

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OPENLANE_FLOW="${ROOT_DIR}/script/shell/openlane_flow.sh"
-SRAM_GEN="${ROOT_DIR}/script/shell/generate_sram_macros.sh"
+SRAM_GEN="${ROOT_DIR}/script/shell/fetch_sky130_sram_macros_for_openlane.sh"
 RESUME_TCL="${ROOT_DIR}/asic/openlane/resume_routing.tcl"
 OPENLANE_IMAGE="${OPENLANE_IMAGE:-efabless/openlane:2023.09.07}"
 PDK_ROOT="${PDK_ROOT:-${HOME}/.volare}"

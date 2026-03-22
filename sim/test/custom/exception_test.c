@@ -3,7 +3,7 @@
  * Tests various exception types and trap behavior
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 // CSR macros
 #define read_csr(reg) ({ \

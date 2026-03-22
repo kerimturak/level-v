@@ -1,45 +1,45 @@
-# Writeback Log - Teknik Dokümantasyon
+# Writeback Log - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Spike Uyumlu Commit Trace](#spike-uyumlu-commit-trace)
-3. [Log Formatları](#log-formatları)
-4. [PASS/FAIL Algılama](#passfail-algılama)
+1. [Overview](#overview)
+2. [Spike-Compatible Commit Trace](#spike-compatible-commit-trace)
+3. [Log Formats](#log-formats)
+4. [PASS/FAIL Detection](#passfail-detection)
 5. [Konata Pipeline Trace](#konata-pipeline-trace)
 6. [CSR Trace](#csr-trace)
-7. [Kullanım ve Entegrasyon](#kullanım-ve-entegrasyon)
+7. [Usage and Integration](#usage-and-integration)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`writeback_log.svh` dosyası, **Writeback stage** için kapsamlı trace ve log mekanizmalarını tanımlar. Özellikle **Spike simulator** ile karşılaştırılabilir commit trace formatı sağlar.
+The `writeback_log.svh` file defines comprehensive trace and logging for the **writeback stage**. In particular, it provides a commit trace format comparable to the **Spike** simulator.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/include/writeback_log.svh
 ```
 
-### Temel Özellikler
+### Key Features
 
-| Özellik | Açıklama |
+| Feature | Description |
 |---------|----------|
 | **Spike Format** | `core 0: PC (INSTR) rd DATA` |
-| **PASS/FAIL** | Otomatik test sonucu algılama |
-| **Konata** | Pipeline visualizer desteği |
-| **CSR Trace** | CSR register değişiklikleri |
+| **PASS/FAIL** | Automatic test result detection |
+| **Konata** | Pipeline visualizer support |
+| **CSR Trace** | CSR register changes |
 
 ---
 
-## Spike Uyumlu Commit Trace
+## Spike-Compatible Commit Trace
 
-### Format Tanımı
+### Format Definition
 
-Spike simulator'ün commit trace formatı:
+Spike commit trace format:
 
 ```
 core   0: 0x80000000 (0x00000297) x5  0x80000000
@@ -49,7 +49,7 @@ core   0: 0x80000008 (0x30529073)
 
 **Format:** `core <hart_id>: 0x<PC> (0x<INSTR>) [x<rd> 0x<DATA>]`
 
-### Implementasyon
+### Implementation
 
 ```systemverilog
 `ifdef LOG_COMMIT
@@ -76,24 +76,24 @@ core   0: 0x80000008 (0x30529073)
 `endif
 ```
 
-### Spike Karşılaştırma
+### Spike Comparison
 
 ```bash
-# RTL simülasyonu
+# RTL simulation
 make run T=rv32ui-p-add LOG_COMMIT=1 > rtl_trace.log
 
-# Spike simülasyonu
+# Spike simulation
 spike --log-commits rv32ui-p-add > spike_trace.log
 
-# Karşılaştırma
+# Comparison
 diff rtl_trace.log spike_trace.log
 ```
 
 ---
 
-## Log Formatları
+## Log Formats
 
-### Temel Commit Log
+### Basic Commit Log
 
 ```systemverilog
 `ifdef LOG_COMMIT
@@ -107,7 +107,7 @@ diff rtl_trace.log spike_trace.log
 `endif
 ```
 
-### Genişletilmiş Log
+### Extended Log
 
 ```systemverilog
 `ifdef LOG_COMMIT_VERBOSE
@@ -160,11 +160,11 @@ diff rtl_trace.log spike_trace.log
 
 ---
 
-## PASS/FAIL Algılama
+## PASS/FAIL Detection
 
 ### RISC-V Test Signature
 
-RISC-V testleri sonucu `tohost` adresine yazarak bildirir:
+RISC-V tests report results by writing to `tohost`:
 
 ```systemverilog
 // Test result detection
@@ -191,7 +191,7 @@ localparam TOHOST_ADDR = 32'h8000_1000;  // Configurable
 `endif
 ```
 
-### Benchmark Sonucu Algılama
+### Benchmark Result Detection
 
 ```systemverilog
 `ifdef SIM_UART_MONITOR
@@ -252,7 +252,7 @@ end
 
 ### Konata Format
 
-Konata pipeline visualizer için özel trace format:
+Special trace format for the Konata pipeline visualizer:
 
 ```systemverilog
 `ifdef KONATA_TRACER
@@ -307,9 +307,9 @@ Konata pipeline visualizer için özel trace format:
 `endif
 ```
 
-### Konata Komutları
+### Konata Commands
 
-| Komut | Format | Açıklama |
+| Command | Format | Description |
 |-------|--------|----------|
 | I | `I id cycle 0` | Instruction issue |
 | S | `S id cycle stage` | Stage transition |
@@ -390,9 +390,9 @@ Konata pipeline visualizer için özel trace format:
 
 ---
 
-## Kullanım ve Entegrasyon
+## Usage and Integration
 
-### Makefile Entegrasyonu
+### Makefile Integration
 
 ```makefile
 # Log kontrolleri
@@ -411,7 +411,7 @@ ifeq ($(KONATA_TRACER),1)
 endif
 ```
 
-### Kullanım Örnekleri
+### Usage Examples
 
 ```bash
 # ISA test with commit trace
@@ -424,24 +424,24 @@ make run T=rv32ui-p-add KONATA_TRACER=1
 make run T=test LOG_COMMIT=1 LOG_CSR=1 LOG_MEM=1
 
 # Benchmark with UART monitoring
-make cm SIM_UART_MONITOR=1 LOG_COMMIT=1
+make run_coremark SIM_UART_MONITOR=1 LOG_COMMIT=1
 ```
 
-### Log Dosyaları
+### Log Files
 
-| Log | Dosya | İçerik |
+| Log | File | Content |
 |-----|-------|--------|
-| Commit | stdout/commit.log | Spike-uyumlu trace |
+| Commit | stdout/commit.log | Spike-compatible trace |
 | Pipeline | pipeline.log | Konata format |
-| UART | uart.log | UART çıktısı |
+| UART | uart.log | UART output |
 
 ---
 
-## Performans Etkisi
+## Performance Impact
 
 ### Log Overhead
 
-| Mode | Overhead | Kullanım |
+| Mode | Overhead | Use |
 |------|----------|----------|
 | No logging | 0% | Production |
 | LOG_COMMIT | ~5% | Debug |
@@ -452,23 +452,23 @@ make cm SIM_UART_MONITOR=1 LOG_COMMIT=1
 
 ```systemverilog
 `ifdef SIM_FAST
-    // Tüm log'lar devre dışı
-    // Maksimum simülasyon hızı
+    // All logs disabled
+    // Maximum simulation speed
 `else
-    // Normal log modları aktif
+    // Normal log modes enabled
 `endif
 ```
 
 ---
 
-## Özet
+## Summary
 
-`writeback_log.svh` dosyası:
+The `writeback_log.svh` file:
 
 1. **Spike Format**: `core 0: PC (INSTR) rd DATA`
-2. **PASS/FAIL**: tohost ve UART izleme
-3. **Konata**: Pipeline visualizer desteği
-4. **CSR Trace**: Register değişiklikleri
-5. **Configurable**: Makefile ile kontrol
+2. **PASS/FAIL**: tohost and UART monitoring
+3. **Konata**: Pipeline visualizer support
+4. **CSR Trace**: Register changes
+5. **Configurable**: Controlled via Makefile
 
-Bu dosya, CERES RISC-V işlemcisinin doğrulama ve debug altyapısının temelini oluşturur.
+This file forms the basis of the Level RISC-V core verification and debug infrastructure.

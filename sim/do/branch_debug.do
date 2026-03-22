@@ -1,12 +1,12 @@
 ##################################################################################
-#                     CERES RISC-V — Branch Prediction Debug                    #
+#                     Level RISC-V — Branch Prediction Debug                    #
 ##################################################################################
 # Focused on: GShare, BTB, RAS, Branch/Jump handling
 ##################################################################################
 
 ################## Hierarchy Paths ##################
 set TB        "sim:/tb_wrapper"
-set WRAPPER   "$TB/ceres_wrapper"
+set WRAPPER   "$TB/level_wrapper"
 set SOC       "$WRAPPER/i_soc"
 set FETCH     "$SOC/i_fetch"
 set GSHARE    "$FETCH/i_gshare_bp"
@@ -174,5 +174,5 @@ run 10000ns
 wave zoom full
 
 puts "═══════════════════════════════════════════════════════════════════"
-puts "  CERES Branch Prediction Debug Waveform Loaded!"
+puts "  Level Branch Prediction Debug Waveform Loaded!"
 puts "═══════════════════════════════════════════════════════════════════"

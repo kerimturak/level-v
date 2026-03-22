@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 VGA Controller Module
 ================================================================================
 Description:
-  Full-featured VGA controller for CERES SoC with:
+  Full-featured VGA controller for Level SoC with:
   - Standard VGA timing (640x480 @ 60Hz, 25.175MHz pixel clock)
   - Configurable resolution support
   - Text mode (80x30 characters with 8x16 font)
@@ -55,7 +55,7 @@ Description:
 `timescale 1ns / 1ps
 
 module vga_controller
-  import ceres_param::*;
+  import level_param::*;
 #(
     // Display Resolution
     parameter int H_VISIBLE   = 640,

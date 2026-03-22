@@ -1,29 +1,29 @@
-# Wishbone CLINT Slave - Teknik Dokümantasyon
+# Wishbone CLINT Slave - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [Register Map](#register-map)
-4. [Timer Implementasyonu](#timer-implementasyonu)
-5. [Wishbone Protokol](#wishbone-protokol)
-6. [Interrupt Üretimi](#interrupt-üretimi)
+4. [Timer Implementation](#timer-implementation)
+5. [Wishbone Protocol](#wishbone-protocol)
+6. [Interrupt Generation](#interrupt-generation)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`wb_clint_slave` modülü, **RISC-V Core Local Interruptor (CLINT)** fonksiyonalitesini Wishbone bus arayüzüyle sunar. Timer interrupt ve software interrupt yönetimi sağlar.
+The `wb_clint_slave` module, exposes **RISC-V Core Local Interruptor (CLINT)** functionality over a Wishbone slave interface. Provides timer and software interrupt handling.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/wrapper/wb_clint_slave.sv
 ```
 
-### CLINT Blok Diyagramı
+### CLINT Block Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -58,19 +58,19 @@ rtl/wrapper/wb_clint_slave.sv
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
 ### Parametreler
 
 ```systemverilog
 module wb_clint_slave
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_HARTS = 1  // Number of harts (cores)
 )
 ```
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 (
@@ -87,10 +87,10 @@ module wb_clint_slave
 );
 ```
 
-### Wishbone Struct Detayları
+### Wishbone Struct Details
 
 ```systemverilog
-// wb_master_t (from ceres_param)
+// wb_master_t (from level_param)
 typedef struct packed {
     logic        cyc;        // Bus cycle active
     logic        stb;        // Strobe (valid transfer)
@@ -102,7 +102,7 @@ typedef struct packed {
     logic [1:0]  bte;        // Burst type extension
 } wb_master_t;
 
-// wb_slave_t (from ceres_param)
+// wb_slave_t (from level_param)
 typedef struct packed {
     logic        ack;        // Acknowledge
     logic        err;        // Error
@@ -151,7 +151,7 @@ logic        msip_q;         // Software interrupt pending
 
 ---
 
-## Timer Implementasyonu
+## Timer Implementation
 
 ### MTIME Counter
 
@@ -166,10 +166,10 @@ always_ff @(posedge clk_i or negedge rst_ni) begin
 end
 ```
 
-### MTIME Yazma
+### MTIME Writes
 
 ```systemverilog
-// mtime yazılabilir (debugging/test için)
+// mtime is writable (for debugging / tests)
 always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
         mtime_q <= '0;
@@ -200,7 +200,7 @@ end
 
 ---
 
-## Wishbone Protokol
+## Wishbone Protocol
 
 ### Request Detection
 
@@ -296,7 +296,7 @@ assign wb_s_o.rty = 1'b0;
 
 ---
 
-## Interrupt Üretimi
+## Interrupt Generation
 
 ### Timer Interrupt
 
@@ -315,13 +315,13 @@ assign sw_irq_o = msip_q;
 ### Interrupt Clearing
 
 ```systemverilog
-// Timer interrupt: mtimecmp'ye mtime'dan büyük değer yazarak
+// Timer interrupt: write mtimecmp > mtime to trigger
 // Software interrupt: msip'e 0 yazarak
 ```
 
 ---
 
-## Timing Diyagramı
+## Timing Diagram
 
 ### Timer Interrupt Sequence
 
@@ -433,9 +433,9 @@ void clear_sw_interrupt(void) {
 
 ---
 
-## Özet
+## Summary
 
-`wb_clint_slave` modülü:
+The `wb_clint_slave` module:
 
 1. **MTIME**: 64-bit free-running timer
 2. **MTIMECMP**: 64-bit timer compare
@@ -443,4 +443,4 @@ void clear_sw_interrupt(void) {
 4. **Wishbone**: Single-cycle response
 5. **Interrupts**: Timer (mtime >= mtimecmp), SW (msip)
 
-Bu modül, RISC-V standardına uygun CLINT fonksiyonalitesi sağlar.
+This module provides CLINT functionality consistent with common RISC-V practice.

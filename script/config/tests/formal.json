@@ -1,5 +1,4 @@
 {
-  "$schema": "./formal.schema.json",
   "_comment": "RISC-V Formal Verification Configuration",
   "_description": "Formal verification using SymbiYosys and RISC-V Formal",
 
@@ -120,7 +119,7 @@
       "rtl/pkg"
     ],
     "packages": [
-      "rtl/pkg/ceres_pkg.sv"
+      "rtl/pkg/level_param.sv"
     ],
     "sources": [
       "rtl/core/*.sv",

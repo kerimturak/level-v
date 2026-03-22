@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RISC-V Torture Test Generator for Ceres-V
+RISC-V Torture Test Generator for Level-V
 ==========================================
 Generates random but valid RISC-V instruction sequences for processor stress testing.
 
@@ -12,7 +12,7 @@ Features:
 - Deterministic via seed control
 - Comprehensive error handling
 
-Author: Ceres-V Project
+Author: Level-V Project
 License: MIT
 """
 

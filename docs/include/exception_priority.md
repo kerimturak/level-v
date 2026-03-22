@@ -1,52 +1,52 @@
-# Exception Priority - Teknik Dokümantasyon
+# Exception Priority - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [RISC-V Exception Modeli](#risc-v-exception-modeli)
-3. [Priority Konfigürasyonu](#priority-konfigürasyonu)
-4. [Exception Türleri](#exception-türleri)
+1. [Overview](#overview)
+2. [RISC-V Exception Model](#risc-v-exception-model)
+3. [Priority Configuration](#priority-configuration)
+4. [Exception Types](#exception-types)
 5. [Trap Handling](#trap-handling)
-6. [Pipeline Entegrasyonu](#pipeline-entegrasyonu)
-7. [Kullanım Örnekleri](#kullanım-örnekleri)
+6. [Pipeline Integration](#pipeline-integration)
+7. [Usage Examples](#usage-examples)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`exception_priority.svh` dosyası, RISC-V exception'larının **öncelik sırasını** tanımlar. Aynı cycle'da birden fazla exception oluştuğunda hangi exception'ın işleneceğini belirler.
+The `exception_priority.svh` file defines the **priority order** of RISC-V exceptions and selects which exception is handled when multiple exceptions occur in the same cycle.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/include/exception_priority.svh
 ```
 
-### Temel Konsept
+### Basic Concept
 
 ```
-Aynı anda birden fazla exception oluşabilir:
+Multiple exceptions can occur at the same time:
 - Instruction page fault (fetch)
 - Illegal instruction (decode)
 - Load/Store fault (memory)
 
-Priority sayısı düşük olan exception önce işlenir.
+The exception with the lowest priority number is taken first.
 ```
 
 ---
 
-## RISC-V Exception Modeli
+## RISC-V Exception Model
 
 ### Exception vs Interrupt
 
-| Tip | Özellik | Örnek |
+| Type | Property | Example |
 |-----|---------|-------|
-| **Exception** | Senkron, instruction kaynaklı | Illegal instruction |
-| **Interrupt** | Asenkron, dış kaynaklı | Timer interrupt |
+| **Exception** | Synchronous, instruction-related | Illegal instruction |
+| **Interrupt** | Asynchronous, external | Timer interrupt |
 
-### Exception Sınıfları
+### Exception Classes
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -93,11 +93,11 @@ Priority sayısı düşük olan exception önce işlenir.
 
 ---
 
-## Priority Konfigürasyonu
+## Priority Configuration
 
-### RISC-V Standart Priority
+### RISC-V Standard Priority
 
-RISC-V spesifikasyonu exception önceliklerini belirler:
+The RISC-V specification defines exception priorities:
 
 ```systemverilog
 // exception_priority.svh
@@ -133,13 +133,13 @@ localparam int PRIORITY_ECALL_M               = 10;
 `endif // EXCEPTION_PRIORITY_SVH
 ```
 
-### Priority Tablosu
+### Priority Table
 
-| Priority | Exception | Code | Açıklama |
+| Priority | Exception | Code | Description |
 |----------|-----------|------|----------|
-| 0 | Instruction Address Misaligned | 0 | En yüksek öncelik |
+| 0 | Instruction Address Misaligned | 0 | Highest priority |
 | 1 | Instruction Access Fault | 1 | I-Cache/Bus fault |
-| 2 | Illegal Instruction | 2 | Geçersiz opcode |
+| 2 | Illegal Instruction | 2 | Invalid opcode |
 | 3 | Breakpoint | 3 | EBREAK instruction |
 | 4 | Load Address Misaligned | 4 | Unaligned load |
 | 5 | Load Access Fault | 5 | D-Cache/Bus fault |
@@ -151,14 +151,14 @@ localparam int PRIORITY_ECALL_M               = 10;
 
 ---
 
-## Exception Türleri
+## Exception Types
 
 ### Instruction Address Misaligned
 
 ```systemverilog
 // Fetch stage'de kontrol
-// Compressed (RV32C) ile 2-byte aligned olabilir
-// Standard instructions 4-byte aligned olmalı
+// Compressed (RV32C) may be 2-byte aligned
+// Standard instructions must be 4-byte aligned
 
 logic instr_addr_misaligned;
 
@@ -239,8 +239,8 @@ assign store_access_fault = dcache_error && is_store;
 ### Exception Priority Resolver
 
 ```systemverilog
-// Aynı cycle'da birden fazla exception varsa
-// En yüksek öncelikli olanı seç
+// If multiple exceptions occur in the same cycle
+// Select the highest-priority one
 
 function automatic logic [3:0] resolve_exception_priority(
     input logic instr_addr_mis,
@@ -270,7 +270,7 @@ endfunction
 ### Trap Entry
 
 ```systemverilog
-// Exception oluştuğunda
+// When an exception occurs
 always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
         mepc   <= '0;
@@ -300,7 +300,7 @@ end
 
 ---
 
-## Pipeline Entegrasyonu
+## Pipeline Integration
 
 ### Exception Propagation
 
@@ -345,7 +345,7 @@ end
 
 ### Exception Register
 
-Pipeline stage'ler arasında exception bilgisi taşınır:
+Exception information is carried between pipeline stages:
 
 ```systemverilog
 typedef struct packed {
@@ -361,11 +361,11 @@ exception_t ex_exception_q, mem_exception_q;
 
 ### Precise Exception
 
-RISC-V precise exception gerektirir:
+RISC-V requires precise exceptions:
 
 ```systemverilog
-// Exception olan instruction'dan önceki tüm instruction'lar
-// commit edilmiş olmalı
+// All instructions before the faulting instruction
+// must have committed
 // Sonrakiler flush edilmeli
 
 always_comb begin
@@ -383,13 +383,13 @@ end
 
 ---
 
-## Kullanım Örnekleri
+## Usage Examples
 
 ### Exception Handler
 
 ```systemverilog
 module exception_handler
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic        clk_i,
     input  logic        rst_ni,
@@ -462,14 +462,14 @@ void test_store_access_fault() {
 
 ---
 
-## Özet
+## Summary
 
-`exception_priority.svh` dosyası:
+The `exception_priority.svh` file:
 
-1. **Priority Definition**: RISC-V exception öncelikleri
-2. **Exception Types**: 11 farklı exception tipi
-3. **Trap Handling**: CSR kayıtları (mepc, mcause, mtval)
-4. **Precise Exception**: Pipeline flush ve recovery
-5. **Configurable**: Parametre ile özelleştirilebilir
+1. **Priority Definition**: RISC-V exception priorities
+2. **Exception Types**: 11 distinct exception types
+3. **Trap Handling**: CSR registers (mepc, mcause, mtval)
+4. **Precise exception**: Pipeline flush and recovery
+5. **Configurable**: Customizable via parameters
 
-Bu dosya, CERES RISC-V işlemcisinin exception handling mekanizmasının temelini oluşturur.
+This file forms the basis of the Level RISC-V core exception-handling mechanism.

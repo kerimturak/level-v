@@ -1,4 +1,4 @@
-site_name: CERES RISC-V Documentation
+site_name: Level RISC-V Documentation
 site_description: RV32IMC RISC-V Processor Core Documentation
 site_author: Kerim Turak
 site_url: https://kerimturak.github.io/level-v/
@@ -10,20 +10,20 @@ copyright: Copyright &copy; 2024-2025 Kerim Turak
 
 theme:
   name: material
-  language: tr
+  language: en
   palette:
     - scheme: default
       primary: indigo
       accent: indigo
       toggle:
         icon: material/brightness-7
-        name: Karanlık moda geç
+        name: Switch to dark mode
     - scheme: slate
       primary: indigo
       accent: indigo
       toggle:
         icon: material/brightness-4
-        name: Aydınlık moda geç
+        name: Switch to light mode
   features:
     - navigation.instant
     - navigation.tracking
@@ -46,7 +46,7 @@ theme:
 
 plugins:
   - search:
-      lang: tr
+      lang: en
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -80,13 +80,13 @@ extra:
   generator: false
 
 nav:
-  - Ana Sayfa: index.md
-  - Başlangıç:
-    - Hızlı Başlangıç: getting-started.md
-    - Araçlar: tools.md
-    - Mimari: architecture.md
-  - RTL Core:
-    - Genel Bakış: core/index.md
+  - Home: index.md
+  - Getting started:
+    - Quick start: getting-started.md
+    - Tools: tools.md
+    - Architecture: architecture.md
+  - RTL core:
+    - Overview: core/index.md
     - CPU: core/cpu_module.md
     - Hazard Unit: core/hazard_unit_module.md
     - Fetch Stage:
@@ -95,6 +95,8 @@ nav:
       - Compressed Decoder: core/stage01_fetch/compressed_decoder_module.md
       - Branch Predictor: core/stage01_fetch/gshare_bp_module.md
       - RAS: core/stage01_fetch/ras_module.md
+      - Next-line prefetcher: core/stage01_fetch/next_line_prefetcher_module.md
+      - Prefetcher wrapper: core/stage01_fetch/prefetcher_wrapper_module.md
     - Decode Stage:
       - Decode: core/stage02_decode/decode_module.md
       - Control Unit: core/stage02_decode/control_unit_module.md
@@ -105,24 +107,34 @@ nav:
       - ALU: core/stage03_execute/alu_module.md
       - CSR: core/stage03_execute/cs_reg_file_module.md
       - Multiplier: core/stage03_execute/mul_int_module.md
+      - Pipelined multiplier: core/stage03_execute/mul_pipelined_module.md
       - Divider: core/stage03_execute/divu_int_module.md
+      - Pipelined divider: core/stage03_execute/divu_pipelined_module.md
+      - Wallace multiplier: core/stage03_execute/wallace_multiplier_module.md
     - Memory Stage:
       - Memory: core/stage04_memory/memory_module.md
+      - Store buffer: core/stage04_memory/store_buffer_module.md
+      - Cache logger: core/stage04_memory/cache_logger_module.md
     - Writeback Stage:
       - Writeback: core/stage05_writeback/writeback_module.md
     - Memory Management:
       - Cache: core/mmu/cache_module.md
+      - I-cache: core/mmu/icache_module.md
+      - D-cache: core/mmu/dcache_module.md
+      - FENCE.I helper: core/mmu/dcache_fencei_module.md
+      - L2 cache: core/mmu/l2_cache_module.md
       - Memory Arbiter: core/mmu/memory_arbiter_module.md
       - WB Interconnect: core/mmu/wb_interconnect_module.md
       - WB Master Bridge: core/mmu/wb_master_bridge_module.md
     - Memory Protection:
       - PMA: core/pmp_pma/pma_module.md
   - Peripherals:
-    - Genel Bakış: periph/index.md
+    - Overview: periph/index.md
     - UART: periph/uart.md
     - SPI: periph/spi.md
     - I2C: periph/i2c.md
     - GPIO: periph/gpio.md
+    - GPIO (AXI / Xilinx): periph/gpio_axi_integration.md
     - Timer: periph/timer.md
     - PLIC: periph/plic.md
     - PWM: periph/pwm.md
@@ -132,23 +144,26 @@ nav:
   - Support:
     - Include:
       - Overview: include/overview.md
-      - Defines: include/ceres_defines.md
+      - Defines: include/level_defines.md
       - Exception Priority: include/exception_priority.md
       - Fetch Log: include/fetch_log.md
       - Writeback Log: include/writeback_log.md
     - Package: pkg/overview.md
-    - RAM: ram/overview.md
+    - RAM:
+      - Single-port BRAM: ram/overview.md
+      - Dual-port BRAM: ram/dp_bram_module.md
     - Tracer: tracer/overview.md
     - Utilities: util/overview.md
     - Wrapper:
       - Overview: wrapper/overview.md
-      - CERES SoC: wrapper/ceres_soc.md
-      - CERES Wrapper: wrapper/ceres_wrapper.md
+      - Level SoC: wrapper/level_soc.md
+      - Level Wrapper: wrapper/level_wrapper.md
       - RAM Programmer: wrapper/ram_programmer.md
       - WB CLINT Slave: wrapper/wb_clint_slave.md
       - WB PBUS Slave: wrapper/wb_pbus_slave.md
       - WB RAM Slave: wrapper/wb_ram_slave.md
       - Wrapper RAM: wrapper/wrapper_ram.md
+      - Systessis (FPGA top): wrapper/systessis_wrapper_module.md
   - Build System:
     - Script Overview: script/overview.md
     - Makefiles: script/makefiles.md
@@ -161,7 +176,7 @@ nav:
     - Simulation: sim/overview.md
     - Environments: env/overview.md
     - Test Suites: subrepo/overview.md
-  - Referans:
+  - Reference:
     - Wishbone Bus: wishbone-bus.md
     - Exception Priority: parametric-exception-priority.md
     - FENCE.I: fence-i-implementation.md
@@ -182,11 +197,9 @@ nav:
       - Validation System: VALIDATION_SYSTEM.md
     - CoreMark:
       - Quick Start: COREMARK_QUICK_START.md
-      - Comparison: COREMARK_COMPARISON.md
-      - Final Comparison: COREMARK_COMPARISON_FINAL.md
     - Configuration:
       - Cache Config: CACHE_CONFIG_README.md
       - Makefile Separation: MAKEFILE_SEPARATION.md
-  - Gelecek Planları:
+  - Roadmap:
     - AI Enhancement: ai-enhancement-plans.md
     - SoC Roadmap: soc-roadmap.md

@@ -1,4 +1,4 @@
-// ceres RISC-V Processor
+// Level RISC-V Processor
 // Copyright (c) 2024 Kerim TURAK
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 // and associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -15,14 +15,14 @@
 //                 --                                                         //
 //                                                                            //
 // Design Name:    seq_multiplier                                             //
-// Project Name:   ceres                                                      //
+// Project Name:   level                                                      //
 // Language:       SystemVerilog                                              //
 //                                                                            //
 // Description:    Slow multiplication                                        //
 ////////////////////////////////////////////////////////////////////////////////
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module mul_int #(
     parameter SIZE = 32
 ) (

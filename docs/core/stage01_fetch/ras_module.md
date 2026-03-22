@@ -1,10 +1,10 @@
-# RAS (Return Address Stack) Modülü - Teknik Döküman
+# RAS (Return Address Stack) Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`ras.sv` modülü, RISC-V işlemcisinde function call/return instruction'larının hedef adreslerini tahmin etmek için kullanılan Return Address Stack implementasyonudur. Stack-based LIFO (Last-In-First-Out) yapısı ile function call chain'ini takip eder ve %95-99 doğruluk oranı sağlar.
+The `ras.sv` module implements a return-address stack (RAS) used to predict targets for function call and return sequences on the RISC-V core. It is a LIFO stack that tracks the dynamic call chain and typically achieves ~95–99% accuracy on returns.
 
-## RAS Neden Gerekli?
+## Why the RAS is needed
 
 ### Function Call/Return Pattern
 
@@ -41,54 +41,54 @@ baz:
   ret               # Pop from RAS
 ```
 
-### Neden BTB/IBTC Yetersiz?
+### Why BTB/IBTC alone are insufficient
 
-**Problem:** `ret` instruction'ı (`jalr x0, 0(x1)`) her function'dan farklı adrese döner:
-- `foo` → bar'ı call eder, bar'dan dönerken foo'daki farklı bir adrese döner
-- `bar` → baz'ı call eder, baz'dan dönerken bar'daki farklı bir adrese döner
+**Problem:** A `ret` (`jalr x0, 0(x1)`) returns to different PCs depending on how you reached the callee:
+- When `foo` calls `bar`, the return from `bar` goes back into `foo` at one site.
+- When `bar` calls `baz`, the return from `baz` goes back into `bar` at another.
 
-**BTB/IBTC** PC-based lookup yapar:
-- Aynı `ret` instruction'ı (aynı PC) her seferinde aynı hedefi tahmin eder
-- Ancak gerçek hedef çağrı context'ine bağlıdır
+**BTB/IBTC** key only on the branch PC:
+- The same `ret` at the same PC would always get the same predicted target.
+- The real target depends on *call* context, not the `ret` PC alone.
 
-**RAS** call-return matching yapar:
-- Her `call` return address'i push eder
-- Her `return` stack'ten pop ederek doğru adresi bulur
+**RAS** matches calls to returns:
+- Each call pushes the link address.
+- Each return pops the matching address.
 
-## Port Tanımları
+## Port definitions
 
-| Port | Yön | Tip | Açıklama |
+| Port | Direction | Type | Description |
 |------|-----|-----|----------|
-| `clk_i` | Input | logic | Sistem clock'u |
-| `rst_ni` | Input | logic | Aktif-düşük asenkron reset |
-| `restore_i` | Input | ras_t | Misprediction durumunda restore data |
-| `req_valid_i` | Input | logic | RAS operation request geçerli mi? |
-| `j_type_i` | Input | logic | JAL instruction mı? |
-| `jr_type_i` | Input | logic | JALR instruction mı? |
+| `clk_i` | Input | logic | System clock |
+| `rst_ni` | Input | logic | Active-low asynchronous reset |
+| `restore_i` | Input | ras_t | Snapshot to restore after misprediction |
+| `req_valid_i` | Input | logic | RAS operation request is valid |
+| `j_type_i` | Input | logic | Instruction is JAL |
+| `jr_type_i` | Input | logic | Instruction is JALR |
 | `rd_addr_i` | Input | [4:0] | Destination register (link register check) |
 | `r1_addr_i` | Input | [4:0] | Source register (return address check) |
-| `return_addr_i` | Input | [XLEN-1:0] | Push edilecek return address (PC+2/PC+4) |
-| `popped_o` | Output | ras_t | Pop edilen return address |
+| `return_addr_i` | Input | [XLEN-1:0] | Return address to push (PC+2/PC+4) |
+| `popped_o` | Output | ras_t | Popped return address |
 
-**ras_t yapısı:**
+**`ras_t` layout:**
 ```systemverilog
 typedef struct packed {
   logic [XLEN-1:0] data;   // Return address
-  logic            valid;  // Entry geçerli mi?
+  logic            valid;  // Entry valid?
 } ras_t;
 ```
 
-## Parametreler
+## Parameters
 
-| Parametre | Default | Açıklama |
+| Parameter | Default | Description |
 |-----------|---------|----------|
-| `RAS_SIZE` | ceres_param::RAS_SIZE | Stack derinliği (genelde 8-16) |
+| `RAS_SIZE` | level_param::RAS_SIZE | Stack depth (typically 8–16) |
 
-**Typical Values:**
-- 4: Çok az call depth (embedded)
-- 8: Standard (çoğu kod için yeterli)
-- 16: Deep recursion support
-- 32: Aggressive optimization (area overhead artar)
+**Typical values:**
+- 4: very shallow call depth (embedded)
+- 8: default for most code
+- 16: deeper recursion
+- 32: larger area for marginal gain
 
 ## RAS Operation Types
 
@@ -103,7 +103,7 @@ typedef enum logic [1:0] {
 
 ## Link Register Detection
 
-RISC-V convention'a göre:
+Per RISC-V convention:
 - **x1 (ra)**: Return address register (primary)
 - **x5 (t0)**: Alternative link register (secondary)
 
@@ -134,9 +134,9 @@ always_comb begin
 end
 ```
 
-### Karar Tablosu
+### Decision table
 
-| Instruction | rd | rs1 | ras_op | Açıklama |
+| Instruction | rd | rs1 | ras_op | Description |
 |-------------|-----|-----|---------|----------|
 | `jal x1, foo` | x1 | - | PUSH | Function call |
 | `jal x5, foo` | x5 | - | PUSH | Alternative link |
@@ -146,7 +146,7 @@ end
 | `jalr x1, 0(x1)` | x1 | x1 | PUSH | Return with update (corner case) |
 | `jalr x1, 0(x5)` | x1 | x5 | BOTH | Tail call (pop x5, push x1) |
 
-### Özel Durumlar
+### Special cases
 
 **1. Tail Call Optimization:**
 ```c
@@ -169,8 +169,8 @@ foo:
 ```asm
 jalr x1, 0(x1)  # rd == rs1 == link
 ```
-- Mantık: Aynı register'a hem load hem store
-- RAS operation: `PUSH` (yeni return address yazılıyor)
+- Semantics: same register for base and destination (unusual return-with-link pattern)
+- RAS operation: `PUSH` (writes a new link value)
 
 ## Stack Operations
 
@@ -189,7 +189,7 @@ case (ras_op)
 endcase
 ```
 
-**Örnek (RAS_SIZE=4):**
+**Example (RAS_SIZE=4):**
 ```
 Before PUSH (return_addr_i = 0x80000010):
   ras[0] = {0x80000000, valid=1}
@@ -204,9 +204,9 @@ After PUSH:
   ras[3] = {0x80000200, valid=1}  ← Oldest (was ras[2])
 ```
 
-**Overflow Handling:** 
-- En eski entry (ras[RAS_SIZE-1]) kaybedilir
-- Deep recursion durumunda misprediction olabilir
+**Overflow:** 
+- Oldest entry (`ras[RAS_SIZE-1]`) is dropped  
+- Deep recursion can cause RAS mispredictions  
 
 ### POP (Function Return)
 
@@ -223,7 +223,7 @@ case (ras_op)
 endcase
 ```
 
-**Örnek (RAS_SIZE=4):**
+**Example (RAS_SIZE=4):**
 ```
 Before POP:
   ras[0] = {0x80000010, valid=1}  ← To be popped
@@ -238,9 +238,9 @@ After POP:
   ras[3] = {0x00000000, valid=0}  ← Cleared
 ```
 
-**Underflow Handling:** 
-- `ras[3].valid = 0` olduğunda POP invalid
-- `popped_o.valid = 0` → Branch predictor fallback (BTB/IBTC)
+**Underflow:** 
+- POP is invalid when the stack is empty (e.g. `ras[3].valid = 0` in the RAS_SIZE=4 example)  
+- `popped_o.valid = 0` → predictor falls back to BTB/IBTC  
 
 ### BOTH (Tail Call)
 
@@ -253,9 +253,9 @@ case (ras_op)
 endcase
 ```
 
-**Mantık:** 
-- Tail call: Eski function'dan çıkıp yeni function'a giriş
-- POP (old return) + PUSH (new return) = Replace top entry
+**Semantics:** 
+- Tail call: leave the old callee and enter the new one without growing the stack  
+- Equivalent to POP old link + PUSH new link → replace top entry  
 
 ## Misprediction Restore
 
@@ -275,7 +275,7 @@ end
 2. Execute stage: Misprediction detected (RAS was wrong)
 3. Restore: Push back the correct return address
 
-**Not:** Pipeline'da comment: "pipeline bu bilgiyi vermiyor sanırım" → gelecekte iyileştirme noktası
+**Note:** RTL comment notes the pipeline may not supply full context here — room for future refinement.
 
 ## Output Logic
 
@@ -286,18 +286,18 @@ always_comb begin
 end
 ```
 
-**Koşullar:**
-- `ras[0].valid = 1`: Stack top geçerli
-- `req_valid_i = 1`: Request aktif
-- `ras_op ∈ {POP, BOTH}`: Pop operation
+**Conditions:**
+- `ras[0].valid = 1`: top of stack is valid  
+- `req_valid_i = 1`: RAS request is active  
+- `ras_op ∈ {POP, BOTH}`: pop path selected  
 
-**Invalid Pop:**
-- `ras[0].valid = 0` → `popped_o.valid = 0`
-- Branch predictor IBTC veya BTB'ye fallback yapar
+**Invalid pop:**
+- `ras[0].valid = 0` → `popped_o.valid = 0`  
+- Predictor falls back to IBTC/BTB  
 
 ## Call/Return Matching Examples
 
-### Örnek 1: Simple Function Call
+### Example 1: Simple Function Call
 
 ```c
 void main() {
@@ -321,7 +321,7 @@ void foo() {
    → Prediction: Jump to 0x80000004 ✓
 ```
 
-### Örnek 2: Nested Calls
+### Example 2: Nested Calls
 
 ```c
 void main() {
@@ -359,7 +359,7 @@ void bar() {
    → Prediction: Jump to 0x80000004 ✓
 ```
 
-### Örnek 3: Stack Overflow (RAS_SIZE=4)
+### Example 3: Stack Overflow (RAS_SIZE=4)
 
 ```c
 void recursive(int n) {
@@ -412,7 +412,7 @@ Call depth distribution:
 - +1 entry: ~40 bit × 2 (data + valid) = 80 bit area
 - Accuracy gain: ~0.5-1% per doubling
 
-## Timing & Synthesis
+## Timing and synthesis
 
 ### Critical Paths
 
@@ -469,19 +469,19 @@ Call depth distribution:
 ### Assertions
 
 ```systemverilog
-// PUSH sonrası ras[0] yeni return address olmalı
+// After PUSH, ras[0] must hold the new return address
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (ras_op == PUSH) |=> ras[0].data == $past(return_addr_i));
 
-// POP sonrası ras[0] eski ras[1] olmalı
+// After POP, ras[0] must equal former ras[1]
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (ras_op == POP) |=> ras[0].data == $past(ras[1].data));
 
-// Valid pop sonrası popped_o.valid=1
+// After valid pop popped_o.valid=1
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (ras_op inside {POP, BOTH}) && ras[0].valid |-> popped_o.valid);
 
-// BOTH operation'da ras[1..] değişmemeli
+// For BOTH, ras[1..] must not change
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (ras_op == BOTH) |=> $stable(ras[1]));
 ```
@@ -490,25 +490,25 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 
 ### 1. Checkpoint RAS (Speculative Recovery)
 
-**Problem:** Misprediction sonrası RAS state restore zor.
+**Problem:** After misprediction RAS state restore is hard.
 
-**Çözüm:**
+**Solution:**
 ```systemverilog
 ras_t ras_checkpoint [CHECKPOINT_SIZE];
 logic [CHECKPOINT_IDX-1:0] checkpoint_ptr;
 
-// Speculation'da checkpoint kaydet
+// Save checkpoint on speculation
 if (speculation_start)
   ras_checkpoint[checkpoint_ptr] = ras;
 
-// Misprediction'da restore
+// On misprediction restore
 if (misprediction)
   ras = ras_checkpoint[checkpoint_ptr];
 ```
 
 ### 2. Adaptive RAS Size
 
-**Idea:** Call depth profiling ile dinamik RAS boyutu ayarla.
+**Idea:** Resize RAS depth based on observed call depth.
 
 ```systemverilog
 if (stack_depth > RAS_SIZE * 0.9)
@@ -517,20 +517,20 @@ if (stack_depth > RAS_SIZE * 0.9)
 
 ### 3. Compressed RAS (XOR encoding)
 
-**Idea:** Adjacent entries genelde yakın adresler → XOR ile sıkıştır.
+**Idea:** Adjacent entries are often nearby addresses → compress with XOR.
 
 ```systemverilog
 ras_compressed[i] = ras[i] ^ ras[i-1];
 // Recover: ras[i] = ras[i-1] ^ ras_compressed[i]
 ```
 
-## İlgili Modüller
+## Related modules
 
-1. **gshare_bp.sv**: RAS'ı kullanarak return prediction yapar
-2. **fetch.sv**: Prediction sonucunu alır ve PC'yi günceller
-3. **decode.sv**: JAL/JALR instruction'ları detect eder
+1. **gshare_bp.sv:** uses the RAS for return prediction  
+2. **fetch.sv:** applies prediction to the PC  
+3. **decode.sv:** classifies JAL/JALR for RAS hints  
 
-## Referanslar
+## References
 
 1. "The Alpha 21264 Microprocessor" - Richard E. Kessler (RAS description)
 2. "Speculative Return Address Stack Management Revisited" - Evers et al.
@@ -539,6 +539,6 @@ ras_compressed[i] = ras[i] ^ ras[i-1];
 
 ---
 
-**Son Güncelleme:** 4 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** 4 December 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

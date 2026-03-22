@@ -2,7 +2,7 @@
 // Implements iterative restoring division with reduced combinational logic depth
 // Uses 2 bits per cycle to balance performance and timing
 //
-// ceres RISC-V Processor
+// Level RISC-V Processor
 // Copyright (c) 2024 Kerim TURAK
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 // and associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -13,7 +13,7 @@
 // substantial portions of the Software.
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 module divu_pipelined #(
     parameter WIDTH = 32,

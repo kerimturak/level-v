@@ -2,7 +2,7 @@
 
 module tb_gshare_bp;
 
-  import ceres_param::*;
+  import level_param::*;
 
   logic                     clk;
   logic                     rst_ni;

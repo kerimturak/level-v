@@ -10,7 +10,7 @@ cd "$ROOT"
 ${VERILATOR} -sv --cc \
   sim/tb/pma_tb.sv \
   rtl/core/pmp_pma/pma.sv \
-  rtl/pkg/ceres_param.sv \
+  rtl/pkg/level_param.sv \
   -Irtl/include \
   --exe sim/tb/main.cpp
 

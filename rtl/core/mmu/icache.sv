@@ -10,15 +10,15 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 /* verilator lint_off VARHIDDEN */
 module icache
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter type cache_req_t = logic,
     parameter type cache_res_t = logic,
     parameter type lowX_res_t  = logic,
     parameter type lowX_req_t  = logic,
     parameter      CACHE_SIZE  = 1024,
-    parameter      BLK_SIZE    = ceres_param::BLK_SIZE,
-    parameter      XLEN        = ceres_param::XLEN,
+    parameter      BLK_SIZE    = level_param::BLK_SIZE,
+    parameter      XLEN        = level_param::XLEN,
     parameter      NUM_WAY     = 4
 ) (
     input  logic       clk_i,

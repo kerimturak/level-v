@@ -1,6 +1,6 @@
-# Ceres-V Extended Test Suites
+# Level-V Extended Test Suites
 
-This document describes the extended test suites available for testing the Ceres-V RISC-V processor.
+This document describes the extended test suites available for testing the Level-V RISC-V processor.
 
 ## Quick Reference
 

@@ -1,5 +1,5 @@
 /*
- * PWM Controller Test for Ceres-V RV32IMC
+ * PWM Controller Test for Level-V RV32IMC
  * 
  * Tests PWM functionality:
  * - Register access (GCR, PERIOD, PSC, etc.)
@@ -12,7 +12,7 @@
  * 
  * PWM has 8 channels with 16-bit resolution
  * 
- * Note: This peripheral is not yet connected in ceres_wrapper.sv
+ * Note: This peripheral is not yet connected in level_wrapper.sv
  *       Requires adding PWM instantiation and address decode (0x2000_5xxx)
  */
 
@@ -33,7 +33,7 @@
 #define UART_CTRL_RX_EN       0x2
 #define UART_STATUS_TX_FULL   0x1
 
-/* PWM MMIO Map (base 0x2000_5000 per ceres_param.sv) */
+/* PWM MMIO Map (base 0x2000_5000 per level_param.sv) */
 #define PWM_BASE         0x20005000
 
 /* Global Registers */
@@ -447,7 +447,7 @@ int main(void)
     uart_init();
     
     uart_puts("\n========================================\n");
-    uart_puts("   PWM Test - Ceres-V RV32IMC\n");
+    uart_puts("   PWM Test - Level-V RV32IMC\n");
     uart_puts("========================================\n");
     uart_puts("  8 channels, 16-bit resolution\n");
     

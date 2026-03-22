@@ -7,9 +7,9 @@
 package require openlane
 
 # Load existing run with the same tag (this restores all env vars)
-prep -design /home/kerim/level-v/asic/openlane/designs/ceres_wrapper \
+prep -design /home/kerim/level-v/asic/openlane/designs/level_wrapper \
      -tag run_20260217_200348 \
-     -run_path /home/kerim/level-v/results/asic/openlane/ceres_wrapper/runs \
+     -run_path /home/kerim/level-v/results/asic/openlane/level_wrapper/runs \
      -overwrite
 
 # Verify state is loaded correctly

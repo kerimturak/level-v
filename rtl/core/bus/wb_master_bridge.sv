@@ -20,8 +20,8 @@ Description:
 */
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
-import ceres_param::*;
+`include "level_defines.svh"
+import level_param::*;
 
 module wb_master_bridge (
     input logic clk_i,

@@ -1,12 +1,12 @@
 ##################################################################################
-#                      CERES RISC-V — Memory Access Debug                       #
+#                      Level RISC-V — Memory Access Debug                       #
 ##################################################################################
 # Focused on: Load/Store operations, DPMA, Address translation
 ##################################################################################
 
 ################## Hierarchy Paths ##################
 set TB        "sim:/tb_wrapper"
-set WRAPPER   "$TB/ceres_wrapper"
+set WRAPPER   "$TB/level_wrapper"
 set SOC       "$WRAPPER/i_soc"
 set MEMORY    "$SOC/i_memory"
 set DCACHE    "$MEMORY/i_dcache"
@@ -168,5 +168,5 @@ run 10000ns
 wave zoom full
 
 puts "═══════════════════════════════════════════════════════════════════"
-puts "  CERES Memory Access Debug Waveform Loaded!"
+puts "  Level Memory Access Debug Waveform Loaded!"
 puts "═══════════════════════════════════════════════════════════════════"

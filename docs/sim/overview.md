@@ -1,17 +1,17 @@
-# Simulation (sim/) - Teknik Dokümantasyon
+# Simulation (sim/) - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Testbench'ler (tb/)](#testbenchler-tb)
+1. [Overview](#overview)
+2. [Testbenches (tb/)](#testbenches-tb)
 3. [DO Scripts (do/)](#do-scripts-do)
-4. [Test Programları (test/)](#test-programları-test)
+4. [Test Programs (test/)](#test-programs-test)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 sim/
@@ -30,7 +30,7 @@ sim/
 │   ├── branch_debug.do    # Branch predictor debugging
 │   ├── exception_debug.do # Exception handling debug
 │   └── memory_debug.do    # Memory system debugging
-└── test/                  # Test programları ve listeler
+└── test/                  # Test programs and manifests
     ├── riscv_test_list.flist     # ISA test listesi
     ├── arch_test.flist           # Architecture test listesi
     ├── imperas_test_list.flist   # Imperas test listesi
@@ -41,7 +41,7 @@ sim/
     └── coremark/                 # CoreMark benchmark
 ```
 
-### Simülasyon Akışı
+### Simulation Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -74,15 +74,15 @@ sim/
 
 ---
 
-## Testbench'ler (tb/)
+## Testbenches (tb/)
 
 ### tb_wrapper.sv - SystemVerilog Testbench
 
 **Dosya:** `sim/tb/tb_wrapper.sv`
 
-ModelSim/Questa için ana testbench.
+Main testbench for ModelSim/Questa.
 
-#### Kod Yapısı
+#### Code Structure
 
 ```systemverilog
 `timescale 1ns / 1ps
@@ -119,7 +119,7 @@ module tb_wrapper;
   // ═══════════════════════════════════════════════════════════════
   // DUT Instantiation
   // ═══════════════════════════════════════════════════════════════
-  ceres_wrapper ceres_wrapper (
+  level_wrapper level_wrapper (
       .clk_i          (clk_i),
       .rst_ni         (rst_ni),
       .program_rx_i   (program_rx_i),
@@ -162,9 +162,9 @@ module tb_wrapper;
 endmodule
 ```
 
-#### Port Açıklamaları
+#### Port Descriptions
 
-| Port | Yön | Genişlik | Açıklama |
+| Port | Direction | Width | Description |
 |------|-----|----------|----------|
 | `clk_i` | input | 1 | System clock |
 | `rst_ni` | input | 1 | Active-low reset |
@@ -183,19 +183,19 @@ endmodule
 
 **Dosya:** `sim/tb/tb_wrapper.cpp`
 
-Verilator için C++ testbench driver.
+C++ testbench driver for Verilator.
 
-#### Özellikler
+#### Features
 
-- **Trace Support**: FST veya VCD format
+- **Trace support**: FST or VCD format
 - **Coverage**: Line/toggle coverage
-- **Progress Reporting**: %10 interval'lerle ilerleme
+- **Progress Reporting**: progress in 10% steps
 - **Configurable**: Command-line arguments
 
-#### Kod Yapısı
+#### Code Structure
 
 ```cpp
-#include "Vceres_wrapper.h"
+#include "Vlevel_wrapper.h"
 #include "verilated.h"
 
 #if defined(VM_TRACE_FST)
@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
 #endif
 
     // Instantiate DUT
-    Vceres_wrapper* top = new Vceres_wrapper{contextp};
+    Vlevel_wrapper* top = new Vlevel_wrapper{contextp};
 
     // Setup trace file
 #if defined(VM_TRACE_FST)
@@ -313,7 +313,7 @@ int main(int argc, char **argv) {
 
 #### Command Line Arguments
 
-| Argument | Format | Açıklama |
+| Argument | Format | Description |
 |----------|--------|----------|
 | `<cycles>` | integer | Maximum simulation cycles |
 | `+DUMP_FILE=` | path | Waveform output file |
@@ -325,15 +325,15 @@ int main(int argc, char **argv) {
 
 ### pipeline.do - Full Pipeline Debug
 
-**Dosya:** `sim/do/pipeline.do`
+**File:** `sim/do/pipeline.do`
 
-Kapsamlı pipeline debug waveform script'i.
+Full pipeline debug waveform script.
 
-#### Özellikler
+#### Features
 
 ```tcl
 ##################################################################################
-#                     CERES RISC-V — Advanced Debug Waveform                     #
+#                     Level RISC-V — Advanced Debug Waveform                     #
 ##################################################################################
 # Features:
 #   - Hierarchical grouping by pipeline stage
@@ -351,7 +351,7 @@ Kapsamlı pipeline debug waveform script'i.
 
 ```tcl
 set TB        "sim:/tb_wrapper"
-set WRAPPER   "$TB/ceres_wrapper"
+set WRAPPER   "$TB/level_wrapper"
 set SOC       "$WRAPPER/i_soc"
 set FETCH     "$SOC/i_fetch"
 set DECODE    "$SOC/i_decode"
@@ -364,23 +364,23 @@ set ARBITER   "$SOC/i_memory_arbiter"
 
 #### Signal Groups
 
-| Group | Renk | İçerik |
+| Group | Color | Contents |
 |-------|------|--------|
-| ⏱️ CLK/RST | Gold/Orange | Clock ve reset |
-| 🔄 PIPELINE | Gradient | PC ve instruction per stage |
-| ⚠️ STALL/FLUSH | Red/Orange | Stall ve flush sinyalleri |
-| 🎯 FETCH | Cyan | Fetch stage sinyalleri |
-| 📖 DECODE | Green | Decode stage sinyalleri |
-| ⚡ EXECUTE | Yellow | ALU ve execution |
+| ⏱️ CLK/RST | Gold/Orange | Clock and reset |
+| 🔄 PIPELINE | Gradient | PC and instruction per stage |
+| ⚠️ STALL/FLUSH | Red/Orange | Stall and flush signals |
+| 🎯 FETCH | Cyan | Fetch stage signals |
+| 📖 DECODE | Green | Decode stage signals |
+| ⚡ EXECUTE | Yellow | ALU and execution |
 | 💾 MEMORY | Magenta | Load/store operations |
 | ✅ WRITEBACK | Blue | Register writeback |
-| 🔀 HAZARD | Red | Forwarding ve hazard |
+| 🔀 HAZARD | Red | Forwarding and hazard |
 | 🌿 BRANCH | Cyan | Branch predictor |
 | 💥 EXCEPTION | Red | Exception handling |
 
-### Diğer DO Scripts
+### Other DO Scripts
 
-| Script | Açıklama |
+| Script | Description |
 |--------|----------|
 | `questa.do` | Questa simulation runner |
 | `minimal.do` | Minimal debug view |
@@ -392,29 +392,29 @@ set ARBITER   "$SOC/i_memory_arbiter"
 
 ---
 
-## Test Programları (test/)
+## Test Programs (test/)
 
-### Test Listeleri
+### Test Lists
 
-| Dosya | İçerik |
+| File | Contents |
 |-------|--------|
-| `riscv_test_list.flist` | riscv-tests ISA testleri |
+| `riscv_test_list.flist` | riscv-tests ISA tests |
 | `arch_test.flist` | riscv-arch-test compliance |
 | `imperas_test_list.flist` | Imperas extended tests |
-| `custom_tests.flist` | Custom C testleri |
-| `all_tests.flist` | Tüm testler (combined) |
-| `branch_test.flist` | Branch predictor testleri |
-| `exception_test.flist` | Exception testleri |
-| `machine_csr_test.flist` | CSR testleri |
+| `custom_tests.flist` | Custom C tests |
+| `all_tests.flist` | All tests (combined) |
+| `branch_test.flist` | Branch predictor tests |
+| `exception_test.flist` | Exception tests |
+| `machine_csr_test.flist` | CSR tests |
 
-### Custom Test Programları (custom/)
+### Custom Test Programs (custom/)
 
-#### Dosya Listesi
+#### File List
 
-| Dosya | Açıklama |
+| File | Description |
 |-------|----------|
 | `startup.s` | Assembly startup code |
-| `ceres_test.h` | Common test header |
+| `level_test.h` | Common test header |
 | `uart_hello_test.c` | UART basic test |
 | `gpio_test.c` | GPIO functionality |
 | `timer_test.c` | Timer peripheral |
@@ -459,11 +459,11 @@ __stack_start:
 __stack_end:
 ```
 
-#### uart_hello_test.c Örneği
+#### uart_hello_test.c Example
 
 ```c
 /**
- * UART Hello Test - Ceres-V RV32IMC_Zicsr
+ * UART Hello Test - Level-V RV32IMC_Zicsr
  */
 
 #include <stdint.h>
@@ -505,7 +505,7 @@ void uart_puts(const char *s) {
 
 int main(void) {
     uart_init();
-    uart_puts("Hello from Ceres!\n");
+    uart_puts("Hello from Level!\n");
     while (1);
     return 0;
 }
@@ -513,9 +513,9 @@ int main(void) {
 
 ---
 
-## Kullanım Örnekleri
+## Usage Examples
 
-### Verilator ile Simülasyon
+### Simulation with Verilator
 
 ```bash
 # Build
@@ -528,27 +528,27 @@ make run T=rv32ui-p-add
 make run T=rv32ui-p-add TRACE=1
 
 # Run CoreMark
-make cm SIM_FAST=1 SIM_UART_MONITOR=1
+make run_coremark FAST_SIM=1 SIM_UART_MONITOR=1
 ```
 
-### ModelSim ile Simülasyon
+### Simulation with ModelSim
 
 ```bash
 # Compile
 make compile
 
-# GUI simulation
-make simulate_gui
-
 # Batch simulation
-make simulate
+make simulate TEST_NAME=rv32ui-p-add
+
+# Questa/ModelSim GUI
+make simulate TEST_NAME=rv32ui-p-add GUI=1
 ```
 
 ### Custom Test Build
 
 ```bash
 # Build custom test
-./script/shell/build_custom_test.sh uart_hello_test
+./script/shell/build_level_custom_c_test.sh uart_hello_test
 
 # Run custom test
 make run T=uart_hello_test TEST_TYPE=custom
@@ -556,13 +556,13 @@ make run T=uart_hello_test TEST_TYPE=custom
 
 ---
 
-## Özet
+## Summary
 
-Simulation dizini:
+The simulation tree:
 
-1. **tb/**: SystemVerilog ve C++ testbench'ler
+1. **tb/**: SystemVerilog and C++ testbenches
 2. **do/**: ModelSim/Questa debug waveform scripts
-3. **test/**: Test programları ve listeler
-4. **Dual Simulator**: Verilator ve ModelSim desteği
+3. **test/**: Test programs and lists
+4. **Dual simulator**: Verilator and ModelSim support
 5. **Comprehensive Debug**: Color-coded, grouped waveforms
 6. **Custom Tests**: Peripheral test suite

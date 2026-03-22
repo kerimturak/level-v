@@ -1,5 +1,5 @@
 /* ============================================================
- * Ceres-V System Calls for Embench Benchmarks
+ * Level-V System Calls for Embench Benchmarks
  * ============================================================
  * Minimal syscall implementations for bare-metal execution
  */

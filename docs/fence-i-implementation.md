@@ -2,23 +2,23 @@
 
 ## Overview
 
-Bu dokümantasyon, RISC-V `fence.i` instruction'ının dcache tarafında nasıl implemente edildiğini açıklar. `fence.i` instruction'ı, instruction cache ile data cache arasında tutarlılık sağlamak için kullanılır.
+This document explains how the RISC-V `fence.i` instruction is implemented on the dcache side. The `fence.i` instruction is used to maintain consistency between the instruction cache and the data cache.
 
-## Problem Tanımı
+## Problem statement
 
-RISC-V mimarisinde self-modifying code (kendini değiştiren kod) desteklenmektedir. Bir program, memory'ye yeni instruction yazabilir ve ardından bu instruction'ları execute edebilir. Bunun için:
+The RISC-V architecture supports self-modifying code. A program can write new instructions to memory and then execute them. For that to work:
 
-1. Data cache'e yazılan yeni instruction'lar memory'ye flush edilmeli
-2. Instruction cache invalidate edilmeli
-3. Pipeline temizlenmeli
+1. New instructions written to the data cache must be flushed to memory
+2. The instruction cache must be invalidated
+3. The pipeline must be cleaned up
 
-## Implementasyon Detayları
+## Implementation details
 
-### 1. Dirty Array Register Yapısı
+### 1. Dirty array register structure
 
-**Önceki Durum:** Dirty bit'ler SRAM içinde tutuluyordu, bu da tek cycle'da tüm dirty durumlarını görmeyi imkansız kılıyordu.
+**Previous state:** Dirty bits lived inside SRAM, making it impossible to see all dirty states in a single cycle.
 
-**Çözüm:** Dirty array'i register olarak tuttuk:
+**Solution:** Hold the dirty array in registers:
 
 ```systemverilog
 // Dirty bits as register array for instant access
@@ -26,13 +26,13 @@ logic [NUM_WAY-1:0] dirty_reg_q [NUM_SET];
 logic [NUM_WAY-1:0] dirty_reg_d [NUM_SET];
 ```
 
-Bu sayede:
-- Tek cycle'da herhangi bir set'in dirty durumunu okuyabiliyoruz
-- Fence.i state machine'i için gerekli dirty taramasını hızlı yapabiliyoruz
+This allows:
+- Reading any set’s dirty state in one cycle
+- Fast dirty scanning for the fence.i state machine
 
-### 2. Fence.i State Machine
+### 2. Fence.i state machine
 
-Dcache için 8 state'li bir FSM implemente ettik:
+We implemented an 8-state FSM for the dcache:
 
 ```
 FI_IDLE → FI_SCAN → FI_CHECK_WAY → FI_WRITEBACK_REQ → FI_WRITEBACK_WAIT → FI_MARK_CLEAN → FI_NEXT_WAY → FI_DONE
@@ -40,50 +40,50 @@ FI_IDLE → FI_SCAN → FI_CHECK_WAY → FI_WRITEBACK_REQ → FI_WRITEBACK_WAIT 
     └─────────────────────┴──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-| State | Açıklama |
-|-------|----------|
-| `FI_IDLE` | Bekleme durumu, fence.i sinyali beklenir |
-| `FI_SCAN` | Set index'i ayarla, SRAM'a adres gönder |
-| `FI_CHECK_WAY` | Mevcut set'te dirty way var mı kontrol et |
-| `FI_WRITEBACK_REQ` | LowX interface üzerinden memory'ye yazma isteği gönder |
-| `FI_WRITEBACK_WAIT` | Memory yazma işleminin tamamlanmasını bekle |
-| `FI_MARK_CLEAN` | Dirty bit'i temizle |
-| `FI_NEXT_WAY` | Sonraki way'e geç veya sonraki set'e ilerle |
-| `FI_DONE` | İşlem tamamlandı, stall sinyalini kaldır |
+| State | Description |
+|-------|-------------|
+| `FI_IDLE` | Idle; wait for fence.i |
+| `FI_SCAN` | Set index; send address to SRAM |
+| `FI_CHECK_WAY` | Check if current set has a dirty way |
+| `FI_WRITEBACK_REQ` | Issue write to memory via LowX interface |
+| `FI_WRITEBACK_WAIT` | Wait for memory write to complete |
+| `FI_MARK_CLEAN` | Clear dirty bit |
+| `FI_NEXT_WAY` | Advance to next way or next set |
+| `FI_DONE` | Done; deassert stall |
 
-### 3. Pipeline Stall Mekanizması
+### 3. Pipeline stall mechanism
 
-Fence.i işlemi sırasında pipeline'ı durdurmak için yeni bir stall tipi ekledik:
+We added a new stall type to stop the pipeline during fence.i:
 
 ```systemverilog
-// ceres_param.sv
+// level_param.sv
 typedef enum logic [2:0] {
     NO_STALL      = 0,
     DMEM_STALL    = 1,
     IMEM_STALL    = 2,
     MUL_STALL     = 3,
     DIV_STALL     = 4,
-    FENCEI_STALL  = 5  // Yeni eklendi
+    FENCEI_STALL  = 5  // New
 } stall_e;
 ```
 
-**Stall önceliği:** `FENCEI_STALL` en yüksek önceliğe sahip (diğer stall'lardan önce kontrol edilir).
+**Stall priority:** `FENCEI_STALL` has highest priority (checked before other stalls).
 
-### 4. Flush Sinyali Yönetimi
+### 4. Flush signal management
 
-**Problem:** Fence.i geldiğinde hem icache flush hem dcache dirty writeback gerekiyor. Ancak ortak `flush` sinyali her iki cache'i de etkiliyor ve dcache tag'lerini hemen sıfırlıyordu - dirty writeback tamamlanmadan!
+**Problem:** When fence.i arrives, both icache flush and dcache dirty writeback are needed. But a shared `flush` signal affected both caches and cleared dcache tags immediately — before dirty writeback finished.
 
-**Çözüm:** Dcache için fence.i aktifken flush yazımlarını engelledik:
+**Solution:** Block flush writes to the dcache tag array while fence.i is active:
 
 ```systemverilog
-// Tag array write - fence.i sırasında flush yazımını engelle
+// Tag array write — block flush writes during fence.i
 for (int i = 0; i < NUM_WAY; i++) 
     tsram.way[i] = (flush && !fi_active) ? '1 : (cache_wr_way[i] && tag_array_wr_en);
 ```
 
-### 5. Fence.i Başlatma Koşulu
+### 5. Fence.i start condition
 
-Rising edge detection ile fence.i'yı güvenilir şekilde tespit ettik:
+We detect fence.i reliably with rising-edge detection:
 
 ```systemverilog
 logic flush_i_prev;
@@ -95,85 +95,85 @@ end
 wire fencei_rising_edge = flush_i && !flush_i_prev;
 ```
 
-### 6. Pipe2 Flush Koşulu
+### 6. Pipe2 flush condition
 
-**Problem:** Fence.i instruction'ı pipe2'de iken `fencei_flush` sinyali pipe2'yu flush ediyordu, bu da fence.i'nın kendisinin kaybolmasına neden oluyordu.
+**Problem:** While the fence.i instruction was in pipe2, `fencei_flush` flushed pipe2, which dropped fence.i itself.
 
-**Çözüm:** Pipe2 flush koşulundan `fencei_flush` kaldırıldı:
+**Solution:** Removed `fencei_flush` from the pipe2 flush condition:
 
 ```systemverilog
-// Önce (hatalı):
+// Before (buggy):
 if (!rst_ni || ex_flush_en || priority_flush == 3 || priority_flush == 2 || fencei_flush)
 
-// Sonra (düzeltilmiş):
+// After (fixed):
 if (!rst_ni || ex_flush_en || priority_flush == 3 || priority_flush == 2)
 ```
 
-## Kullanılan Test
+## Test used
 
 ### rv32ui-p-fence_i
 
-Bu test, fence.i instruction'ının doğru çalışıp çalışmadığını kontrol eder:
+This test checks that fence.i behaves correctly:
 
-1. Memory'den instruction okur (örn: `0x80002000` adresinden)
-2. Aynı adrese yeni instruction yazar (store)
-3. `fence.i` execute eder
-4. Yeni yazılan adrese jump eder
-5. Yeni instruction'ın doğru execute edilip edilmediğini kontrol eder
+1. Fetches an instruction from memory (e.g. from `0x80002000`)
+2. Stores a new instruction to the same address
+3. Executes `fence.i`
+4. Jumps to the newly written address
+5. Checks that the new instruction executes correctly
 
-**Test Akışı:**
+**Test flow:**
 ```
-PC=0x80000144: sh x13, 0x80002004  # Yeni instruction yaz (0x8693)
-PC=0x8000014c: sh x11, 0x80002006  # Yeni instruction yaz (0x14d6)
+PC=0x80000144: sh x13, 0x80002004  # Write new instruction (0x8693)
+PC=0x8000014c: sh x11, 0x80002006  # Write new instruction (0x14d6)
 PC=0x80000150: fence.i             # Dcache flush + Icache invalidate
-PC=0x8000015c: jalr x6, x15        # 0x80002004'e jump
-PC=0x80002004: addi x13, x13, 0x14d6  # Yeni yazılan instruction execute
+PC=0x8000015c: jalr x6, x15        # Jump to 0x80002004
+PC=0x80002004: addi x13, x13, 0x14d6  # Execute newly written instruction
 ```
 
-## Kullanılmayan/Alternatif Yaklaşımlar
+## Unused / alternative approaches
 
-### 1. SRAM-based Dirty Array (Kullanılmadı)
+### 1. SRAM-based dirty array (not used)
 
-**Sebep:** SRAM'dan okuma 1 cycle latency'ye sahip. Fence.i sırasında tüm set'leri taramak için çok fazla cycle gerekiyordu.
+**Reason:** SRAM read has 1-cycle latency. Scanning all sets during fence.i would take too many cycles.
 
-**Tercih edilen:** Register-based dirty array - O(1) erişim süresi.
+**Preferred:** Register-based dirty array — O(1) access time.
 
-### 2. Blocking Cache During Fence.i (Kısmen Kullanıldı)
+### 2. Blocking cache during fence.i (partially used)
 
-Pipeline stall ile cache'i bloke ettik ama normal cache işlemlerinin state machine'i bozmadığından emin olduk.
+We block the cache with a pipeline stall but ensured the normal cache state machine is not corrupted.
 
-### 3. Write-Through Cache (Kullanılmadı)
+### 3. Write-through cache (not used)
 
-**Sebep:** Write-through cache'de her yazma işlemi doğrudan memory'ye gider, bu da fence.i'yı basitleştirir ama performansı düşürür.
+**Reason:** Every store goes straight to memory, simplifying fence.i but hurting performance.
 
-**Tercih edilen:** Write-back cache - daha iyi performans, fence.i'da dirty writeback gerekir.
+**Preferred:** Write-back cache — better performance; fence.i requires dirty writeback.
 
-### 4. Invalidate-Only Approach (Kullanılmadı)
+### 4. Invalidate-only approach (not used)
 
-**Sebep:** Sadece cache invalidate etmek veri kaybına neden olur. Dirty data'lar memory'ye yazılmadan kaybolur.
+**Reason:** Invalidating alone loses data. Dirty lines would be dropped without writeback to memory.
 
-**Tercih edilen:** Dirty writeback + invalidate.
+**Preferred:** Dirty writeback + invalidate.
 
-## Dosya Değişiklikleri
+## File changes
 
-| Dosya | Değişiklik |
-|-------|------------|
-| `rtl/core/mmu/cache.sv` | Fence.i state machine, dirty register array, fencei_stall_o port |
-| `rtl/core/stage04_memory/memory.sv` | fencei_stall_o port passthrough |
-| `rtl/core/cpu.sv` | FENCEI_STALL entegrasyonu, pipe2 flush düzeltmesi |
-| `rtl/pkg/ceres_param.sv` | FENCEI_STALL enum değeri |
-| `rtl/include/writeback_log.svh` | FENCEI_STALL logging koşulu |
+| File | Change |
+|------|--------|
+| `rtl/core/mmu/cache.sv` | Fence.i FSM, dirty register array, `fencei_stall_o` port |
+| `rtl/core/stage04_memory/memory.sv` | `fencei_stall_o` passthrough |
+| `rtl/core/cpu.sv` | `FENCEI_STALL` integration, pipe2 flush fix |
+| `rtl/pkg/level_param.sv` | `FENCEI_STALL` enum value |
+| `rtl/include/writeback_log.svh` | `FENCEI_STALL` logging condition |
 
-## Test Sonucu
+## Test result
 
 ```
 ✅ MATCH | PC=0x80002004 INST=0x14d68693 x13 0x000001bc | PC=0x80002004 INST=0x14d68693 x13 0x000001bc
 ```
 
-Test başarıyla geçti. Dcache dirty data'yı memory'ye yazdı ve icache yeni instruction'ı doğru şekilde fetch etti.
+The test passed. The dcache wrote dirty data to memory and the icache fetched the new instruction correctly.
 
-## Gelecek İyileştirmeler
+## Future improvements
 
-1. **Parallel Dirty Scan:** Tüm set'lerdeki dirty bit'leri paralel tarayarak daha hızlı writeback
-2. **Priority Encoder:** Birden fazla dirty way varsa öncelik sırası belirleme
-3. **Writeback Buffer:** Ardışık writeback'leri buffer'layarak memory bandwidth kullanımını optimize etme
+1. **Parallel dirty scan:** Scan dirty bits across sets in parallel for faster writeback
+2. **Priority encoder:** Ordering when multiple dirty ways exist
+3. **Writeback buffer:** Buffer back-to-back writebacks to optimize memory bandwidth

@@ -1,23 +1,23 @@
-# 🔧 Test Sistemi Düzeltme Planı
+# 🔧 Test system fix plan
 
-## 🎯 Tespit Edilen Sorunlar
+## 🎯 Issues found
 
-### 1. ❌ Log Dizini Yanlış
-**Sorun:** `build/log/verilator/TEST` yerine `results/logs/verilator/TEST` olmalı
+### 1. ❌ Wrong log directory
+**Problem:** Logs should be under `results/logs/verilator/TEST`, not `build/log/verilator/TEST`
 
-**Çözüm:**
-- Makefile.verilator: `LOG_DIR` değişkenini değiştir
-- test_manager.py: Log path'i düzelt
-- validation_runner.py: results/ kullan
+**Fix:**
+- Makefile.verilator: change `LOG_DIR` variable
+- test_manager.py: fix log paths
+- validation_runner.py: use `results/`
 
 ---
 
-### 2. ❌ Validation Otomatik Çağrılmıyor
-**Sorun:** `test-run` komutu sadece RTL çalıştırıyor, Spike validation yok
+### 2. ❌ Validation not invoked automatically
+**Problem:** `test-run` only runs RTL; no Spike validation
 
-**Çözüm:**
+**Fix:**
 ```python
-# test_manager.py içinde
+# Inside test_manager.py
 def run_test_with_validation(test_name):
     # 1. RTL simulation
     rtl_ok = run_rtl_simulation(test_name)
@@ -25,7 +25,7 @@ def run_test_with_validation(test_name):
     if not rtl_ok:
         return "SIMULATION_CRASHED"
 
-    # 2. Validation (opsiyonel - suite'e göre)
+    # 2. Validation (optional — per suite)
     if should_validate(test_name):
         validation = run_validation(test_name)
         return "VALIDATED_PASS" if validation.passed else "VALIDATED_FAIL"
@@ -35,16 +35,16 @@ def run_test_with_validation(test_name):
 
 ---
 
-### 3. ❌ Yanlış Mesajlar
-**Sorun:**
-- "✓ Test PASSED" → Yanlış! Sadece simülasyon tamamlandı
-- "✓ Simülasyon Başarılı" → Doğru ama validation yok
+### 3. ❌ Misleading messages
+**Problem:**
+- "✓ Test PASSED" → Wrong! Simulation merely finished
+- "✓ Simulation successful" → OK when there is no validation
 
-**Çözüm:**
+**Fix:**
 ```python
 # verilator_runner.py
 if exit_code == 0:
-    print("✓ SIMULATION COMPLETED")  # Test değil, simülasyon
+    print("✓ SIMULATION COMPLETED")  # Not "test passed" — simulation
 ```
 
 ```python
@@ -59,34 +59,34 @@ else:
 
 ---
 
-### 4. ❌ Simülasyon Süresi 0.0
-**Sorun:** verilator_runner.py timing hesabı yanlış
+### 4. ❌ Simulation duration shows 0.0
+**Problem:** Wrong timing calculation in verilator_runner.py
 
-**Çözüm:**
+**Fix:**
 ```python
 start_time = datetime.now()
 # ... simulation ...
 end_time = datetime.now()
 elapsed = (end_time - start_time).total_seconds()
-print(f"Süre: {elapsed:.2f} saniye")  # .2f formatı
+print(f"Duration: {elapsed:.2f} s")  # .2f format
 ```
 
 ---
 
-### 5. ❌ Debug Log Klasörleri Boş
-**Sorun:** Debug logger dosya yazmıyor
+### 5. ❌ Debug log directories empty
+**Problem:** Debug logger not writing files
 
-**Çözüm:**
-- debug_logger.py: File write hatalarını kontrol et
-- Permission check ekle
-- Directory creation güvence altına al
+**Fix:**
+- debug_logger.py: check file write errors
+- Add permission checks
+- Ensure directory creation is reliable
 
 ---
 
-### 6. ❌ Verilator Logları Ekranda
-**Sorun:** Verilator çıktısı ekranı doldurur, özet görmek zor
+### 6. ❌ Verilator logs on screen
+**Problem:** Verilator output floods the terminal; hard to see summaries
 
-**Çözüm:**
+**Fix:**
 ```python
 # verilator_runner.py
 LOG_FILE = log_dir / "verilator_full.log"
@@ -98,16 +98,16 @@ with open(LOG_FILE, 'w') as logf:
         stderr=subprocess.STDOUT
     )
 
-# Sadece özet göster
+# Show summary only
 print("✓ Simulation completed - Full log: {LOG_FILE}")
 ```
 
 ---
 
-### 7. ❌ HTML Rapor Yok
-**Sorun:** HTML rapor otomatik oluşmuyor
+### 7. ❌ No HTML report
+**Problem:** HTML report not generated automatically
 
-**Çözüm:**
+**Fix:**
 ```python
 # test_manager.py
 if validation.passed:
@@ -116,16 +116,16 @@ if validation.passed:
 
 ---
 
-### 8. ❌ Debug Loglarında Parametre Yok
-**Sorun:** Hangi komutlar çalıştı bilinmiyor
+### 8. ❌ No parameters in debug logs
+**Problem:** Unknown which commands ran with which args
 
-**Çözüm:**
+**Fix:**
 ```python
-# debug_logger.py - step içinde
+# debug_logger.py — inside step
 step.command("verilator --cc ...")
 step.arguments(["--test", "rv32ui-p-add", "--max-cycles", "100000"])
 
-# JSON'da:
+# In JSON:
 {
   "execution_flow": [
     {
@@ -139,36 +139,36 @@ step.arguments(["--test", "rv32ui-p-add", "--max-cycles", "100000"])
 
 ---
 
-## 🔨 Uygulama Sırası
+## 🔨 Implementation order
 
-### Faz 1: Log Dizin Yapısı (Kritik)
+### Phase 1: Log directory layout (critical)
 1. Makefile.verilator: `LOG_DIR` → `results/logs/verilator/`
-2. test_manager.py: Path güncelleme
-3. validation_runner.py: Path güncelleme
+2. test_manager.py: path updates
+3. validation_runner.py: path updates
 
-### Faz 2: Mesaj Düzeltmeleri (Kolay)
+### Phase 2: Message fixes (easy)
 1. verilator_runner.py: "Test PASSED" → "SIMULATION COMPLETED"
-2. test_manager.py: Final karar mantığı
+2. test_manager.py: final decision logic
 
-### Faz 3: Validation Entegrasyonu (Orta)
-1. test_manager.py: `run_validation()` fonksiyonu
+### Phase 3: Validation integration (medium)
+1. test_manager.py: `run_validation()` function
 2. test_registry.json: `validation_enabled` flag
-3. Otomatik çağrı
+3. Automatic invocation
 
-### Faz 4: Debug İyileştirmeleri (Kolay)
+### Phase 4: Debug improvements (easy)
 1. Timing fix
 2. Command logging
 3. Output redirection
 
-### Faz 5: HTML Rapor (Opsiyonel)
-1. html_report_generator.py entegrasyonu
+### Phase 5: HTML report (optional)
+1. Integrate html_report_generator.py
 
 ---
 
-## 📝 Öncelikli Düzeltmeler
+## 📝 Priority fixes
 
-### ÖNCELİK 1: Log Dizini
-**Etki:** Yüksek - Tüm dosyalar yanlış yerde
+### PRIORITY 1: Log directory
+**Impact:** High — files were landing in the wrong place
 
 ```makefile
 # Makefile.verilator
@@ -176,45 +176,45 @@ step.arguments(["--test", "rv32ui-p-add", "--max-cycles", "100000"])
 +LOG_DIR := $(RESULTS_DIR)/logs/verilator/$(TEST_NAME)
 ```
 
-### ÖNCELİK 2: Validation Çağrısı
-**Etki:** Kritik - Test doğruluğu bilinmiyor
+### PRIORITY 2: Validation invocation
+**Impact:** Critical — test correctness was unknown
 
 ```python
-# test_manager.py - cmd_run() içinde
+# test_manager.py — inside cmd_run()
 results = runner.run_tests_with_validation(tests_to_run, **kwargs)
 ```
 
-### ÖNCELİK 3: Mesajlar
-**Etki:** Orta - Kullanıcı kafası karışık
+### PRIORITY 3: Messages
+**Impact:** Medium — user confusion
 
 ```python
-print("✓ SIMULATION COMPLETED")  # "Test PASSED" değil
+print("✓ SIMULATION COMPLETED")  # not "Test PASSED"
 ```
 
 ---
 
-## 🧪 Test Planı
+## 🧪 Test plan
 
-Her düzeltmeden sonra:
+After each fix:
 ```bash
-# Test et
+# Run test
 make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add
 
-# Kontrol et
+# Verify
 ls -la results/logs/verilator/rv32ui-p-add/
 cat results/logs/verilator/rv32ui-p-add/diff.log
 ```
 
 ---
 
-## ✅ Başarı Kriterleri
+## ✅ Success criteria
 
-Düzeltme başarılı sayılır eğer:
-- ✅ Loglar `results/logs/SIMULATOR/TEST/` altında
-- ✅ Validation otomatik çalışıyor
-- ✅ Mesajlar doğru: "SIMULATION COMPLETED" vs "TEST PASSED (VALIDATED)"
-- ✅ Süre doğru gösteriliyor
-- ✅ Debug logs dolu ve bilgilendirici
-- ✅ Verilator çıktısı dosyada, ekranda özet
-- ✅ HTML rapor otomatik
-- ✅ Permission errorları yok
+The fix is successful if:
+- ✅ Logs under `results/logs/SIMULATOR/TEST/`
+- ✅ Validation runs automatically
+- ✅ Correct messages: "SIMULATION COMPLETED" vs "TEST PASSED (VALIDATED)"
+- ✅ Duration displayed correctly
+- ✅ Debug logs populated and informative
+- ✅ Verilator output in file, summary on screen
+- ✅ HTML report automatic
+- ✅ No permission errors

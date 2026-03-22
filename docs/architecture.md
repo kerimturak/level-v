@@ -1,31 +1,31 @@
 ---
-title: "Mimari Tasarım"
-description: "Ceres RISC-V Procesöründen Detaylı Mimari Tasarım Dökümantasyonu"
+title: "Architecture"
+description: "Detailed architectural design documentation for the Level RISC-V processor"
 date: 2025-12-01
 draft: false
 weight: 100
 ---
 
-# Ceres RISC-V Processor - Mimari Tasarım
+# Level RISC-V Processor — Architecture
 
-Bu dökümantasyon, Ceres RISC-V procesörün detaylı mimari tasarımını açıklamaktadır. Her bileşen kendi alt bölümünde ayrıntılı bir şekilde ele alınmıştır.
+This documentation describes the detailed architectural design of the Level RISC-V processor. Each major block is covered in its own subsection.
 
 ---
 
-## 1. Genel Mimari Özet
+## 1. High-Level Architecture Summary
 
-Ceres RISC-V, 32-bit hafif ve modüler bir RISC-V processor çekirdeğidir. RV32IMC komut setini destekler ve CSR (Control and Status Register) ile FENCE komutları için destek sunmaktadır.
+Level RISC-V is a lightweight, modular 32-bit RISC-V processor core. It implements RV32IMC and supports CSR (Control and Status Register) and FENCE operations.
 
-### Temel Özellikler
+### Key Features
 
-- **Komut Seti**: RV32IMC (Integer Base + Multiply/Divide + Compressed)
-- **Register Seti**: 32 x 32-bit
-- **Bellek Mimarisi**: Von Neumann (Unified Memory)
-- **Pipeline Yapısı**: 5-aşamalı (5-stage)
-- **Hata Yönetimi**: Parametrik Exception Priority sistemi
-- **Performans**: 1 DMIPS/MHz
+- **ISA**: RV32IMC (integer base + multiply/divide + compressed)
+- **Register file**: 32 × 32-bit
+- **Memory model**: Von Neumann (unified memory)
+- **Pipeline**: 5-stage
+- **Exception handling**: Parametric exception priority
+- **Performance**: ~1 DMIPS/MHz
 
-### İçerik Haritası
+### Content Map
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -58,21 +58,21 @@ Ceres RISC-V, 32-bit hafif ve modüler bir RISC-V processor çekirdeğidir. RV32
 
 ## 2. Fetch Stage (IF - Instruction Fetch)
 
-### 2.1 Genel Açıklama
+### 2.1 Overview
 
-Fetch aşaması, Program Counter (PC) yönetiminden sorumludur ve talimatları instruction memory'den almaktadır.
+The fetch stage owns Program Counter (PC) management and brings instructions from instruction memory.
 
-**Dosya Konumu**: `rtl/core/stage01_fetch/`
+**Path**: `rtl/core/stage01_fetch/`
 
-### 2.2 Ana Bileşenler
+### 2.2 Main Blocks
 
 #### Program Counter (PC) Management
 
 ```systemverilog
-// PC güncellemesi
+// PC update
 always_comb begin
     if (rst) begin
-        next_pc = PC_RESET_VALUE;  // Varsayılan: 0x8000_0000
+        next_pc = PC_RESET_VALUE;  // Default: 0x8000_0000
     end else if (is_branch_taken) begin
         next_pc = branch_target;
     end else if (is_jump) begin
@@ -80,60 +80,60 @@ always_comb begin
     end else if (exception_occurred) begin
         next_pc = exception_vector;
     end else begin
-        next_pc = pc + increment;  // increment = 2 (RV32C) veya 4 (RV32I)
+        next_pc = pc + increment;  // increment = 2 (RV32C) or 4 (RV32I)
     end
 end
 ```
 
-**PC Sabitler**:
-- `PC_RESET_VALUE`: 0x8000_0000 (Önyükleme adresi)
-- `PC_ALIGN`: RV32C için 2 byte, RV32I için 4 byte hizalama
+**PC constants**:
+- `PC_RESET_VALUE`: 0x8000_0000 (boot address)
+- `PC_ALIGN`: 2-byte alignment for RV32C, 4-byte for RV32I
 
 #### Instruction Buffer (I-Buffer)
 
-Fetch aşamasında bir instruction buffer bulunur. Bu buffer:
-- Sıkıştırılmış (16-bit) ve normal (32-bit) komutları tamponlar
-- Pipeline stall durumunda talimatları geciktirir
-- Cache miss sırasında bekleme yapar
+The fetch stage includes an instruction buffer that:
+- Buffers compressed (16-bit) and normal (32-bit) instructions
+- Holds instructions across pipeline stalls
+- Waits on cache miss
 
 ```systemverilog
 typedef struct {
-    logic [31:0] instr;      // 32-bit talimat (aligned)
-    logic valid;             // Geçerli bit
+    logic [31:0] instr;      // 32-bit instruction (aligned)
+    logic valid;             // Valid bit
     logic [31:0] pc;         // Program Counter
-    logic [4:0] exc_type;    // Exception tipi
+    logic [4:0] exc_type;    // Exception type
 } instr_buffer_t;
 ```
 
 #### Exception Detection @ Fetch
 
-Fetch aşamasında tespit edilen istisnalar:
+Exceptions detected in fetch:
 
-| İstisna | Sebep | Kod |
-|---------|-------|-----|
+| Exception | Cause | Code |
+|-----------|-------|------|
 | Debug Breakpoint | `tdata1[2] == 1'b1 && PC == tdata2` | 1 |
-| Instruction Misaligned | RV32C için PC[0]!=0 veya RV32I için PC[1:0]!=0 | 0 |
-| Instruction Access Fault | Bellek erişim hatası (grand signal) | 1 |
-| Illegal Instruction | Tanımlanmamış komut | 2 |
+| Instruction Misaligned | PC[0]!=0 for RV32C or PC[1:0]!=0 for RV32I | 0 |
+| Instruction Access Fault | Memory access error (grant signal) | 1 |
+| Illegal Instruction | Undefined opcode | 2 |
 
-### 2.3 Parametrik Exception Priority
+### 2.3 Parametric Exception Priority
 
-Ceres, RISC-V Privileged Specification'a uygun olarak parametrik exception priority sistemi kullanmaktadır.
+Level uses a parametric exception priority scheme aligned with the RISC-V Privileged Specification.
 
 ```systemverilog
-// Exception Priority Tanımları (ceres_param.sv)
+// Exception priority definitions (level_param.sv)
 typedef enum logic [4:0] {
-    PRIORITY_1,           // En yüksek (ilk kontrol edilir)
+    PRIORITY_1,           // Highest (checked first)
     PRIORITY_2,
     PRIORITY_3,
     PRIORITY_4,
     PRIORITY_5,
     PRIORITY_6,
-    PRIORITY_7,           // En düşük (son kontrol edilir)
-    PRIORITY_DISABLED     // İstisna devre dışı
+    PRIORITY_7,           // Lowest (checked last)
+    PRIORITY_DISABLED     // Exception disabled
 } exc_priority_t;
 
-// Varsayılan RISC-V Spec-uyumlu Priority:
+// Default RISC-V spec-aligned priorities:
 localparam exc_priority_t EXC_PRIORITY_DEBUG_BREAKPOINT = PRIORITY_1;
 localparam exc_priority_t EXC_PRIORITY_INSTR_MISALIGNED = PRIORITY_2;
 localparam exc_priority_t EXC_PRIORITY_INSTR_ACCESS_FAULT = PRIORITY_3;
@@ -142,37 +142,36 @@ localparam exc_priority_t EXC_PRIORITY_EBREAK = PRIORITY_5;
 localparam exc_priority_t EXC_PRIORITY_ECALL = PRIORITY_6;
 ```
 
-**Konfigürasyon Dosyası**: `rtl/include/exception_priority.svh`
+**Configuration file**: `rtl/include/exception_priority.svh`
 
-Alternatif konfigürasyonlar:
-- `EXCEPTION_PRIORITY_DEBUG_FIRST` (Varsayılan - RISC-V Spec uyumlu)
-- `EXCEPTION_PRIORITY_MISALIGNED_FIRST` (Test amaçlı)
-- `EXCEPTION_PRIORITY_ILLEGAL_FIRST` (Test amaçlı)
-- `EXCEPTION_PRIORITY_DISABLED_DEBUG` (Debug devre dışı)
+Alternative configurations:
+- `EXCEPTION_PRIORITY_DEBUG_FIRST` (default — RISC-V spec aligned)
+- `EXCEPTION_PRIORITY_MISALIGNED_FIRST` (testing)
+- `EXCEPTION_PRIORITY_ILLEGAL_FIRST` (testing)
+- `EXCEPTION_PRIORITY_DISABLED_DEBUG` (debug disabled)
 
-### 2.4 Priority Check Fonksiyonu
+### 2.4 Priority Check Function
 
 ```systemverilog
 function automatic logic check_exc_priority(
     input exc_priority_t exc_pri,
     input exc_priority_t min_pri
 );
-    // exc_pri, min_pri'den daha yüksekse (ya da eşitse) ve 
-    // devre dışı değilse TRUE döner
+    // TRUE if exc_pri is higher than or equal to min_pri and not disabled
     return (exc_pri <= min_pri) && (exc_pri != PRIORITY_DISABLED);
 endfunction
 ```
 
-### 2.5 Exception Priority Seçim Mantığı
+### 2.5 Exception Priority Selection Logic
 
 ```systemverilog
-// Tüm istisnalar tespit edilir
+// All exceptions are detected
 has_debug_breakpoint = fetch_valid && tdata1[2] && (pc == tdata2);
 has_instr_misaligned = fetch_valid && (misa_c ? pc[0] : (pc[1:0] != 2'b00));
 has_instr_access_fault = fetch_valid && !grand;
 has_illegal_instr = fetch_valid && illegal_instr && buff_res.valid;
 
-// Parametrik priority-tabanlı seçim
+// Parametric priority-based selection
 if (has_debug_breakpoint && check_exc_priority(
     EXC_PRIORITY_DEBUG_BREAKPOINT, PRIORITY_7)) begin
     exc_type = BREAKPOINT;
@@ -182,7 +181,7 @@ end else if (has_instr_misaligned && check_exc_priority(
 end else if (has_instr_access_fault && check_exc_priority(
     EXC_PRIORITY_INSTR_ACCESS_FAULT, PRIORITY_7)) begin
     exc_type = INSTR_ACCESS_FAULT;
-// ... diğer istisnalar
+// ... other exceptions
 end
 ```
 
@@ -190,15 +189,15 @@ end
 
 ## 3. Decode Stage (ID - Instruction Decode)
 
-### 3.1 Genel Açıklama
+### 3.1 Overview
 
-Decode aşaması, instruction buffer'dan gelen talimatı çözer (decode eder) ve register dosyasından değerleri okur.
+The decode stage decodes the instruction from the instruction buffer and reads the register file.
 
-**Dosya Konumu**: `rtl/core/stage02_decode/`
+**Path**: `rtl/core/stage02_decode/`
 
 ### 3.2 Instruction Decoder
 
-Decoder modülü, 32-bit (veya sıkıştırılmış 16-bit) talimatı aşağıdaki alanlara ayırır:
+The decoder splits a 32-bit (or compressed 16-bit) instruction into the following fields:
 
 ```systemverilog
 typedef struct {
@@ -208,58 +207,58 @@ typedef struct {
     logic [4:0] rs2;         // Source register 2
     logic [11:0] imm12;      // 12-bit immediate
     logic [31:0] imm32;      // 32-bit immediate (sign-extended)
-    instr_type_t instr_type; // Komut tipi (add, sub, ld, sd, vb)
-    logic valid;             // Geçerli bit
+    instr_type_t instr_type; // Instruction type (add, sub, ld, sd, etc.)
+    logic valid;             // Valid bit
 } decoded_instr_t;
 ```
 
-### 3.3 Komut Tipleri
+### 3.3 Instruction Categories
 
-Ceres RISC-V desteklediği komut tipleri:
+Instruction families supported by Level RISC-V:
 
-#### Integer Aritmetik (RV32I)
-- **ADD/SUB**: Toplama/Çıkarma
-- **AND/OR/XOR**: Bit işlemleri
-- **SLL/SRL/SRA**: Kaydırma işlemleri
-- **SLT/SLTU**: Karşılaştırma
+#### Integer arithmetic (RV32I)
+- **ADD/SUB**: Add/subtract
+- **AND/OR/XOR**: Bitwise ops
+- **SLL/SRL/SRA**: Shifts
+- **SLT/SLTU**: Compare
 
-#### Multiply/Divide (RV32M)
-- **MUL/MULH/MULHSU/MULHU**: Çarpma
-- **DIV/DIVU**: Bölüm
-- **REM/REMU**: Kalan
+#### Multiply/divide (RV32M)
+- **MUL/MULH/MULHSU/MULHU**: Multiply
+- **DIV/DIVU**: Divide
+- **REM/REMU**: Remainder
 
-#### Load/Store (Memory)
-- **LW/LH/LB/LHU/LBU**: Load (Yükleme)
-- **SW/SH/SB**: Store (Saklama)
+#### Load/store (memory)
+- **LW/LH/LB/LHU/LBU**: Loads
+- **SW/SH/SB**: Stores
 
-#### Branch & Jump
-- **BEQ/BNE/BLT/BGE/BLTU/BGEU**: Şartlı atlama
-- **JAL/JALR**: Koşulsuz atlama (link ile)
+#### Branch and jump
+- **BEQ/BNE/BLT/BGE/BLTU/BGEU**: Conditional branches
+- **JAL/JALR**: Unconditional jumps (with link)
 
 #### System
-- **ECALL/EBREAK**: Sistem çağrıları
-- **FENCE/FENCE.I**: Bellek bariyerleri
-- **CSR***: Control & Status Register işlemleri
+- **ECALL/EBREAK**: System traps
+- **FENCE/FENCE.I**: Memory barriers
+- **CSR***: CSR access
 
 ### 3.4 Register File
 
-32 adet 32-bit registerden oluşur:
-- `x0-x31`: Genel amaçlı registerler
-- `x0 (zero)`: Her zaman 0 (yazma yoksayılır)
+Thirty-two 32-bit registers:
+- `x0`–`x31`: General-purpose
+- `x0 (zero)`: Hard-wired zero (writes ignored)
 - `x1 (ra)`: Return Address
 - `x2 (sp)`: Stack Pointer
 
 ```systemverilog
-// Register File yapısı
+// Register file
 logic [31:0] reg_file [0:31];
 
-// Dual-port read (aynı cycle'da 2 okuma)
+// Dual-port read (two reads same cycle)
 always @(*) begin
     read_data1 = (rs1 == 5'b0) ? 32'b0 : reg_file[rs1];
     read_data2 = (rs2 == 5'b0) ? 32'b0 : reg_file[rs2];
 end
 
-// Write (WB aşamasından)
+// Write (from WB stage)
 always @(posedge clk) begin
     if (wr_en && (wr_addr != 5'b0)) begin
         reg_file[wr_addr] <= wr_data;
@@ -269,17 +268,17 @@ end
 
 ### 3.5 Hazard Detection
 
-Decode aşamasında data hazards tespit edilir ve stall işlemi gerçekleştirilir.
+The decode stage detects data hazards and asserts stalls.
 
 ```systemverilog
-// Data Hazard: Önceki komut rd'yi yazacaksa ve
-// bu komut rs1 veya rs2 olarak kullanıyor
+// Data hazard: previous instruction will write rd and
+// this instruction uses rs1 or rs2
 logic data_hazard;
 assign data_hazard = (prev_rd_wr_en && 
                       ((prev_rd == rs1 && rs1 != 5'b0) ||
                        (prev_rd == rs2 && rs2 != 5'b0)));
 
-// Pipeline stall gerekiyorsa
+// Pipeline stall when needed
 assign stall = data_hazard || memory_stall;
 ```
 
@@ -287,21 +286,21 @@ assign stall = data_hazard || memory_stall;
 
 ## 4. Execute Stage (EX - Execution)
 
-### 4.1 Genel Açıklama
+### 4.1 Overview
 
-Execute aşaması, ALU (Arithmetic Logic Unit), Multiplier ve Branch Logic'i içerir.
+The execute stage contains the ALU (arithmetic logic unit), multiplier, and branch logic.
 
-**Dosya Konumu**: `rtl/core/stage03_execute/`
+**Path**: `rtl/core/stage03_execute/`
 
 ### 4.2 ALU (Arithmetic Logic Unit)
 
-ALU, temel aritmetik ve mantıksal işlemleri gerçekleştirir.
+The ALU performs basic arithmetic and logical operations.
 
 ```systemverilog
-// ALU Operasyonları
+// ALU operations
 typedef enum logic [3:0] {
-    ALU_ADD,      // Toplama
-    ALU_SUB,      // Çıkarma
+    ALU_ADD,      // Add
+    ALU_SUB,      // Subtract
     ALU_AND,      // AND
     ALU_OR,       // OR
     ALU_XOR,      // XOR
@@ -331,21 +330,21 @@ always_comb begin
 end
 ```
 
-**ALU Özellikleri**:
-- 32-bit işlenenler
-- Kombinasyonel tasarım (1 cycle)
-- Flags: Zero, Carry, Overflow, Sign
+**ALU characteristics**:
+- 32-bit operands
+- Combinational (1 cycle)
+- Flags: zero, carry, overflow, sign
 
 ### 4.3 Multiplier (RV32M)
 
-Ceres, Multiply/Divide opsiyonunu destekler.
+Level implements the M extension (multiply/divide).
 
-#### Multiplier Tasarımı
+#### Multiplier design
 
 ```systemverilog
-// Yaramaz Multiplier (Radix-4)
-// 32x32 → 64 bit
-// 2 cycle sürer
+// Radix-4 multiplier
+// 32×32 → 64 bit
+// 2 cycles
 
 module multiplier_radix4 (
     input clk, rst,
@@ -357,21 +356,21 @@ module multiplier_radix4 (
     output logic valid
 );
 
-// İç işlem: 16 aşama (32 bit / 2)
-// Adım başına: 2 bit işlenir
+// Internal: 16 steps (32 bits / 2)
+// 2 bits processed per step
 ```
 
-**Multiplier Özellikleri**:
-- Radix-4 algoritması
-- 2 cycle latency
-- Signed ve unsigned destekler
+**Multiplier characteristics**:
+- Radix-4 algorithm
+- 2-cycle latency
+- Signed and unsigned
 
-#### Divider Tasarımı
+#### Divider design
 
 ```systemverilog
-// Bölüm Algoritması (Non-restoring Division)
+// Non-restoring division
 // 32 ÷ 32 → Q + R
-// 34 cycle sürer (iteratif)
+// 34 cycles (iterative)
 
 module divider (
     input clk, rst,
@@ -386,16 +385,16 @@ module divider (
 );
 ```
 
-**Divider Özellikleri**:
+**Divider characteristics**:
 - Non-restoring division
-- 34 cycle latency (32 bit + overhead)
-- Zero divisor detection
-- Signed ve unsigned destekler
+- 34-cycle latency (32 bits + overhead)
+- Divide-by-zero detection
+- Signed and unsigned
 
 ### 4.4 Branch Logic
 
 ```systemverilog
-// Şart Kontrolleri
+// Branch conditions
 logic branch_taken;
 
 always_comb begin
@@ -410,7 +409,7 @@ always_comb begin
     endcase
 end
 
-// Branch Hedgehog (Branch Target)
+// Branch target
 assign branch_target = pc + imm;
 ```
 
@@ -437,11 +436,11 @@ assign jalr_target = (reg_data[rs1] + imm) & ~32'h1;  // LSB = 0
 
 ## 5. Memory Stage (MEM - Memory Access)
 
-### 5.1 Genel Açıklama
+### 5.1 Overview
 
-Memory aşaması, Load/Store işlemleri için veri belleğine erişimden sorumludur.
+The memory stage handles data memory access for loads and stores.
 
-**Dosya Konumu**: `rtl/core/stage04_memory/`
+**Path**: `rtl/core/stage04_memory/`
 
 ### 5.2 Data Cache Architecture
 
@@ -462,20 +461,20 @@ Memory aşaması, Load/Store işlemleri için veri belleğine erişimden sorumlu
 └──────────────────────────────────────┘
 ```
 
-**Cache Parametreleri**:
+**Cache parameters**:
 
-| Parametre | Değer | Açıklama |
-|-----------|-------|----------|
-| CACHE_LINE_SIZE | 16B (128b) | Minimal cache satırı |
-| CACHE_SETS | 128 | Toplam cache set sayısı |
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| CACHE_LINE_SIZE | 16B (128b) | Cache line size |
+| CACHE_SETS | 128 | Number of sets |
 | CACHE_WAYS | 2 | 2-way associative |
-| CACHE_SIZE | 4KB | Toplam cache boyutu |
-| CACHE_POLICY | LRU | Replacement: Least Recently Used |
+| CACHE_SIZE | 4KB | Total cache size |
+| CACHE_POLICY | LRU | Replacement: least recently used |
 
-### 5.3 Load İşlemleri
+### 5.3 Load Operations
 
 ```systemverilog
-// Load Komutları
+// Load opcodes
 typedef enum logic [2:0] {
     LOAD_BYTE,           // LB (8-bit signed)
     LOAD_BYTE_UNSIGNED,  // LBU (8-bit unsigned)
@@ -484,21 +483,21 @@ typedef enum logic [2:0] {
     LOAD_WORD            // LW (32-bit)
 } load_type_t;
 
-// Load İşlem Akışı
+// Load flow
 always @(posedge clk) begin
-    // 1. Address hesaplama: addr = rs1 + imm
+    // 1. Address: addr = rs1 + imm
     mem_addr = reg_data[rs1] + sign_extend(imm);
     
     // 2. Cache lookup
     if (cache_hit) begin
         load_data = cache_data;
     end else begin
-        // Miss: Main memory'den getir
+        // Miss: fetch from main memory
         mem_req_valid = 1'b1;
         wait_memory = 1'b1;
     end
     
-    // 3. Sign extension veya zero padding
+    // 3. Sign extension or zero padding
     case (load_type)
         LOAD_BYTE: rd_data = sign_extend_8(load_data[7:0]);
         LOAD_HALF: rd_data = sign_extend_16(load_data[15:0]);
@@ -507,22 +506,22 @@ always @(posedge clk) begin
 end
 ```
 
-### 5.4 Store İşlemleri
+### 5.4 Store Operations
 
 ```systemverilog
-// Store Komutları
+// Store opcodes
 typedef enum logic [1:0] {
     STORE_BYTE,  // SB (8-bit)
     STORE_HALF,  // SH (16-bit)
     STORE_WORD   // SW (32-bit)
 } store_type_t;
 
-// Store İşlem Akışı
+// Store flow
 always @(posedge clk) begin
-    // 1. Address hesaplama
+    // 1. Address calculation
     mem_addr = rs1 + sign_extend(imm);
     
-    // 2. Data hazırlama (alignment)
+    // 2. Data preparation (alignment)
     case (store_type)
         STORE_BYTE: begin
             write_enable = 4'b0001 << mem_addr[1:0];
@@ -542,13 +541,13 @@ always @(posedge clk) begin
     if (cache_hit) begin
         cache_write(mem_addr, write_data, write_enable);
     end else begin
-        // Write-through: Main memory'ye yaz
+        // Write-through to main memory
         mem_write_req = 1'b1;
     end
 end
 ```
 
-### 5.5 Bellek Hizalama
+### 5.5 Memory Alignment
 
 ```systemverilog
 // Misalignment Detection
@@ -566,14 +565,14 @@ end
 assign exc_data_misaligned = misaligned && mem_valid;
 ```
 
-### 5.6 Cache Kontrol
+### 5.6 Cache Control
 
 ```systemverilog
-// Cache Write-through Policy
+// Cache write-through policy
 typedef enum logic [1:0] {
-    CACHE_DIRTY,     // Yazılmış ama bellekte değil
-    CACHE_CLEAN,     // Bellekte güncel
-    CACHE_INVALID    // Geçersiz
+    CACHE_DIRTY,     // Written but not in memory
+    CACHE_CLEAN,     // Coherent with memory
+    CACHE_INVALID    // Invalid
 } cache_state_t;
 
 // LRU Replacement
@@ -588,24 +587,24 @@ assign cache_miss = ~cache_hit && mem_req_valid;
 
 ## 6. Write-Back Stage (WB - Write-Back)
 
-### 6.1 Genel Açıklama
+### 6.1 Overview
 
-Write-Back aşaması, compute sonuçlarını register dosyasına geri yazar.
+The write-back stage writes computed results back to the register file.
 
-**Dosya Konumu**: `rtl/core/stage05_writeback/`
+**Path**: `rtl/core/stage05_writeback/`
 
-### 6.2 Write-Back Kontrol
+### 6.2 Write-Back Control
 
 ```systemverilog
-// Write-back Sources
+// Write-back sources
 typedef enum logic [1:0] {
-    WB_ALU,       // ALU sonucu
-    WB_MEMORY,    // Load sonucu
+    WB_ALU,       // ALU result
+    WB_MEMORY,    // Load result
     WB_PC_NEXT,   // PC+4 (JAL/JALR)
-    WB_CSR        // CSR değeri
+    WB_CSR        // CSR read data
 } wb_source_t;
 
-// Write-back Multiplexer
+// Write-back multiplexer
 always_comb begin
     case (wb_source)
         WB_ALU:     wb_data = alu_result;
@@ -626,22 +625,22 @@ end
 
 ### 6.3 Forward Detection
 
-Forwarding (data bypass) kümesi, data hazards'ı minimize eder:
+Forwarding (bypass) reduces data hazards:
 
 ```systemverilog
-// EX Forward: Execute'dan Decode'a
+// EX forward: execute → decode
 logic ex_forward_valid;
 assign ex_forward_valid = (ex_rd_wr_en && 
                            ((ex_rd == id_rs1 && id_rs1 != 5'b0) ||
                             (ex_rd == id_rs2 && id_rs2 != 5'b0)));
 
-// MEM Forward: Memory'den Decode'a
+// MEM forward: memory → decode
 logic mem_forward_valid;
 assign mem_forward_valid = (mem_rd_wr_en && 
                             ((mem_rd == id_rs1 && id_rs1 != 5'b0) ||
                              (mem_rd == id_rs2 && id_rs2 != 5'b0)));
 
-// WB Forward: Write-Back'ten Decode'a (nadir)
+// WB forward: write-back → decode (less common)
 logic wb_forward_valid;
 assign wb_forward_valid = (wb_enable && 
                            ((wb_rd == id_rs1 && id_rs1 != 5'b0) ||
@@ -652,20 +651,20 @@ assign wb_forward_valid = (wb_enable &&
 
 ## 7. Control & Status Registers (CSR)
 
-### 7.1 Desteklenen CSR'ler
+### 7.1 Supported CSRs
 
-Ceres, aşağıdaki CSR'leri destekler:
+Level supports the following CSRs (representative set):
 
-#### User-Level CSR'ler
-| CSR Adı | Adres | Açıklama |
+#### User-level CSRs
+| CSR | Address | Description |
 |---------|-------|----------|
 | FCSR | 0x001 | Floating-Point Control |
 | FFLAGS | 0x004 | FP Exception Flags |
 | FRM | 0x005 | FP Rounding Mode |
 | UTIME | 0xC00 | User Timer (Read-only) |
 
-#### Supervisor-Level CSR'ler
-| CSR Adı | Adres | Açıklama |
+#### Supervisor-level CSRs
+| CSR | Address | Description |
 |---------|-------|----------|
 | SSTATUS | 0x100 | Supervisor Status |
 | SIE | 0x104 | Supervisor Interrupt Enable |
@@ -673,8 +672,8 @@ Ceres, aşağıdaki CSR'leri destekler:
 | SCAUSE | 0x142 | Supervisor Cause |
 | STVAL | 0x143 | Supervisor Trap Value |
 
-#### Machine-Level CSR'ler
-| CSR Adı | Adres | Açıklama |
+#### Machine-level CSRs
+| CSR | Address | Description |
 |---------|-------|----------|
 | MSTATUS | 0x300 | Machine Status |
 | MISA | 0x301 | Machine ISA |
@@ -688,7 +687,7 @@ Ceres, aşağıdaki CSR'leri destekler:
 ### 7.2 CSR Read/Write
 
 ```systemverilog
-// CSR Komutları
+// CSR operations
 typedef enum logic [2:0] {
     CSR_RW,      // Read-Write
     CSR_RS,      // Read-Set
@@ -698,7 +697,7 @@ typedef enum logic [2:0] {
     CSR_RCI      // Read-Clear Immediate
 } csr_op_t;
 
-// CSR İşlemleri
+// CSR access
 always @(posedge clk) begin
     case (csr_op)
         CSR_RW: begin
@@ -719,9 +718,9 @@ end
 
 ---
 
-## 8. İstisna ve Interrupt Yönetimi
+## 8. Exception and Interrupt Handling
 
-### 8.1 İstisna Türleri
+### 8.1 Exception Types
 
 ```systemverilog
 typedef enum logic [3:0] {
@@ -743,65 +742,64 @@ typedef enum logic [3:0] {
 } exception_code_t;
 ```
 
-### 8.2 İstisna İşleme Akışı
+### 8.2 Exception Handling Flow
 
 ```
     ┌─────────────────────┐
-    │  İstisna Tespit     │
-    │  (Herhangi aşamada) │
+    │ Exception detect    │
+    │ (any stage)         │
     └──────────┬──────────┘
                │
     ┌──────────▼──────────┐
-    │ Exception Priority  │
-    │ Seç (Parametrik)    │
+    │ Exception priority  │
+    │ (parametric)        │
     └──────────┬──────────┘
                │
     ┌──────────▼──────────┐
-    │ Pipeline Flush      │
-    │ (Önceki aşamalar)   │
+    │ Pipeline flush      │
+    │ (younger stages)    │
     └──────────┬──────────┘
                │
     ┌──────────▼──────────┐
-    │ CSR Güncellemeleri  │
+    │ CSR updates         │
     │ - MCAUSE            │
     │ - MTVAL             │
     │ - MEPC              │
     └──────────┬──────────┘
                │
     ┌──────────▼──────────┐
-    │ Handler Çıkartılır  │
-    │ (MTVEC adresinden)  │
+    │ Handler fetched     │
+    │ (from MTVEC)        │
     └──────────┬──────────┘
                │
     ┌──────────▼──────────┐
-    │ PC ← Handler Adres  │
-    │ Pipeline Yeniden    │
-    │ Başlatılır          │
+    │ PC ← handler        │
+    │ Pipeline restarted  │
     └─────────────────────┘
 ```
 
-### 8.3 Exception Priority Örneği
+### 8.3 Exception Priority Example
 
-**Senaryo**: Aynı anda 3 istisna var
+**Scenario**: Three exceptions at once
 
 ```
-Durumu:
+State:
 - Debug Breakpoint (EXC_PRIORITY_DEBUG_BREAKPOINT = PRIORITY_1)
 - Instruction Misaligned (EXC_PRIORITY_INSTR_MISALIGNED = PRIORITY_2)
 - Illegal Instruction (EXC_PRIORITY_ILLEGAL = PRIORITY_4)
 
-Priority Check Sırası:
-1. Debug Breakpoint: check_exc_priority(PRIORITY_1, PRIORITY_7) → TRUE ✓
-   → Debug Breakpoint seçilir
+Priority check order:
+1. Debug breakpoint: check_exc_priority(PRIORITY_1, PRIORITY_7) → TRUE ✓
+   → Debug breakpoint wins
 
-Sonuç: Debug Breakpoint işlenir (en yüksek priority)
+**Result**: Debug breakpoint is taken (highest priority)
 ```
 
 ---
 
-## 9. Bellek Sistemi
+## 9. Memory System
 
-### 9.1 Bellek Mimarisi
+### 9.1 Memory Map
 
 ```
 ┌──────────────────────────────────┐
@@ -818,20 +816,20 @@ Sonuç: Debug Breakpoint işlenir (en yüksek priority)
 └──────────────────────────────────┘
 ```
 
-### 9.2 Bellek Erişim Latency
+### 9.2 Memory Access Latency
 
-| Bellek Türü | Latency | Cache | Notes |
+| Memory | Latency | Cache | Notes |
 |-------------|---------|-------|-------|
 | L1 I-Cache | 1 cycle | Hit | On-chip, fast |
 | L1 D-Cache | 1 cycle | Hit | On-chip, fast |
-| L2 Cache (None) | — | — | Tasarımda yok |
+| L2 cache (none) | — | — | Not in this design |
 | Main Memory | 10+ cycle | Miss | AXI4 via fabric |
 | Peripherals | Variable | None | UART vs real devices |
 
 ### 9.3 Memory Ordering (FENCE)
 
 ```systemverilog
-// FENCE Komut İşlemi
+// FENCE handling
 typedef struct {
     logic predecessor_read;    // PI (Predecessor Instruction)
     logic predecessor_write;   // PW
@@ -839,11 +837,11 @@ typedef struct {
     logic successor_write;     // SW
 } fence_bits_t;
 
-// FENCE Pipeline Stall
+// FENCE pipeline stall
 always @(posedge clk) begin
     if (fence_instruction) begin
         pipeline_stall = 1'b1;
-        // Tüm önceki instruction'lar tamamlanana kadar
+        // Wait until all prior instructions complete
         wait_for_completion = 1'b1;
     end
 end
@@ -851,11 +849,11 @@ end
 
 ---
 
-## 10. Debug ve Trace Sistemi
+## 10. Debug and Trace
 
 ### 10.1 Trace Port
 
-Ceres, simulation ve debug amaçlı trace çıkışı sağlar:
+Level can emit trace information for simulation and debug:
 
 ```systemverilog
 // Trace Signals
@@ -883,31 +881,31 @@ typedef struct {
 ### 10.2 Debug Triggers (Trigger Module)
 
 ```systemverilog
-// Debug Trigger Kontrol (tdata1)
+// Debug trigger control (tdata1)
 typedef struct {
-    logic type_select;     // Trigger tipi
+    logic type_select;     // Trigger type
     logic dmode;           // Debug mode
-    logic [3:0] match_type; // Match kriteri
+    logic [3:0] match_type; // Match criteria
     logic execute;         // Execute trigger
     logic store;           // Store trigger
     logic load;            // Load trigger
 } trigger_control_t;
 
 // Debug Trigger Data (tdata2)
-logic [31:0] tdata2;  // Breakpoint adresi
+logic [31:0] tdata2;  // Breakpoint address
 
-// Breakpoint Tespit
+// Breakpoint detect
 logic breakpoint = tdata1[2] && (pc == tdata2);
 ```
 
 ---
 
-## 11. Performans Özellikleri
+## 11. Performance
 
 ### 11.1 Pipeline Throughput
 
 ```
-Ideal Durum (Stall yok):
+Ideal case (no stalls):
     1 instruction per cycle (1 IPC)
     
 With Hazards:
@@ -917,9 +915,9 @@ With Hazards:
     - MUL: +2 cycle latency
 ```
 
-### 11.2 Çevirme Gecikmesi (latency)
+### 11.2 Operation Latency
 
-| İşlem | Latency | Notes |
+| Operation | Latency | Notes |
 |-------|---------|-------|
 | ADD/SUB/AND/OR/XOR/SLL/SRL/SRA | 2 | 1 EX + 1 WB |
 | SLT/SLTU | 2 | 1 EX + 1 WB |
@@ -931,24 +929,24 @@ With Hazards:
 | DIV/DIVU | 36 | 34 DIV + 2 WB |
 | CSR Operations | 2 | 1 EX + 1 WB |
 
-### 11.3 DMIPS Skor
+### 11.3 DMIPS
 
 ```
-Ceres RISC-V @ 1 MHz:
+Level RISC-V @ 1 MHz:
     ~1 DMIPS/MHz
     
-Örnek:
+Example:
     @ 100 MHz: ~100 DMIPS
     @ 200 MHz: ~200 DMIPS
 ```
 
 ---
 
-## 12. Parametrik Tasarım
+## 12. Parametric Design
 
-### 12.1 Önemli Parametreler
+### 12.1 Key Parameters
 
-**Dosya**: `rtl/pkg/ceres_param.sv`
+**File**: `rtl/pkg/level_param.sv`
 
 ```systemverilog
 // Instruction Set Extensions
@@ -967,20 +965,20 @@ localparam int CACHE_WAYS = 2;
 // Exception Priority (Configurable)
 localparam exc_priority_t EXC_PRIORITY_DEBUG_BREAKPOINT = PRIORITY_1;
 localparam exc_priority_t EXC_PRIORITY_INSTR_MISALIGNED = PRIORITY_2;
-// ... (daha fazla)
+// ... more
 ```
 
-### 12.2 Kustomizasyon
+### 12.2 Customization
 
-Alternatif yapılandırmalar `rtl/include/exception_priority.svh`'de tanımlanmıştır:
+Alternative configurations are defined in `rtl/include/exception_priority.svh`:
 
 ```systemverilog
-// Örnek: Alternative Priority Configuration
+// Example: alternative priority configuration
 `ifdef EXCEPTION_PRIORITY_MISALIGNED_FIRST
     localparam exc_priority_t EXC_PRIORITY_INSTR_MISALIGNED = PRIORITY_1;  // Swap
     localparam exc_priority_t EXC_PRIORITY_DEBUG_BREAKPOINT = PRIORITY_2;
 `else
-    // Default RISC-V spec-uyumlu
+    // Default RISC-V spec aligned
     localparam exc_priority_t EXC_PRIORITY_DEBUG_BREAKPOINT = PRIORITY_1;
     localparam exc_priority_t EXC_PRIORITY_INSTR_MISALIGNED = PRIORITY_2;
 `endif
@@ -988,11 +986,11 @@ Alternatif yapılandırmalar `rtl/include/exception_priority.svh`'de tanımlanm�
 
 ---
 
-## 13. Testlenebilirlik
+## 13. Testability
 
-### 13.1 DPI-C İnterface
+### 13.1 DPI-C Interface
 
-Ceres, C ile yazılmış test harness'leri desteklemek için DPI-C arayüzü sağlar.
+Level exposes a DPI-C interface for test harnesses written in C.
 
 ```systemverilog
 // DPI-C Export Functions
@@ -1006,89 +1004,89 @@ export "DPI-C" function get_csr_value;
 ### 13.2 VCD Dump
 
 ```bash
-# VCD oluştur (waveform.vcd)
+# Generate VCD (waveform.vcd)
 make wave
 
-# VCD'yi GTKWave ile aç
+# Open VCD in GTKWave
 gtkwave build/work/waveform.vcd &
 ```
 
 ### 13.3 Test Coverage
 
 ```bash
-# Coverage raporu oluştur
+# Generate coverage report
 make coverage
 
-# HTML raporu aç
+# Open HTML report
 firefox build/logs/coverage/index.html &
 ```
 
 ---
 
-## 14. Hata Ayıklama (Debugging)
+## 14. Debugging
 
-### 14.1 Breakpoint Ayarı
+### 14.1 Breakpoint Setup
 
 ```
-Machine Debug Interface (MDI) yazmaç:
-1. tdata1 ← breakpoint kontrol
-2. tdata2 ← breakpoint adresi
-3. Debugger bu adreste trap alır
+Machine debug interface registers:
+1. tdata1 ← breakpoint control
+2. tdata2 ← breakpoint address
+3. Debugger takes trap at this address
 ```
 
-### 14.2 Trace Analiz
+### 14.2 Trace Analysis
 
 ```bash
-# Simülasyondan trace almak
+# Capture trace from simulation
 make trace
 
-# Trace dosyası: build/logs/trace.txt
-# Her instruction bir satır (PC, opcode, rd, rd_data, vb)
+# Trace file: build/logs/trace.txt
+# One line per instruction (PC, opcode, rd, rd_data, etc.)
 ```
 
-### 14.3 Post-Sim Analiz
+### 14.3 Post-Simulation Analysis
 
 ```python
 # Python script: analyze_trace.py
 import pandas as pd
 df = pd.read_csv('build/logs/trace.txt')
-# Exception'lar filtrele
+# Filter exceptions
 exceptions = df[df['exc_type'] != 'NONE']
 print(exceptions)
 ```
 
 ---
 
-## 15. Önerilen Okuma Sırası
+## 15. Suggested Reading Order
 
-1. **Başlayanlar için**: Bölüm 1 (Genel Özet) → Bölüm 2-3 (Fetch/Decode)
-2. **İleri seviye**: Bölüm 4-6 (EX/MEM/WB) → Bölüm 8 (İstisna Yönetimi)
-3. **Tasarımcılar**: Bölüm 7 (CSR) → Bölüm 12 (Parametrik Tasarım)
-4. **Test Yazanları**: Bölüm 13-14 (Testlenebilirlik/Debugging)
+1. **Beginners**: Section 1 (summary) → Sections 2–3 (fetch/decode)
+2. **Advanced**: Sections 4–6 (EX/MEM/WB) → Section 8 (exceptions)
+3. **RTL designers**: Section 7 (CSR) → Section 12 (parametric design)
+4. **Verification**: Sections 13–14 (testability/debugging)
 
 ---
 
-## 16. Kaynaklar ve Referanslar
+## 16. Resources and References
 
 ### RISC-V Specifications
 - [RISC-V User-Level ISA Spec](https://riscv.org/specifications/)
 - [RISC-V Privileged Spec](https://riscv.org/specifications/privileged-isa/)
 
-### Ceres İçsel Kaynaklar
-- `rtl/core/` - Verilog Tasarım dosyaları
-- `rtl/pkg/ceres_param.sv` - Parametrik tanımlar
-- `rtl/include/` - Header dosyaları
-- `script/` - Python ve Shell scriptler
-- `docs/` - Dökümantasyon
+### In-repo resources
+- `rtl/core/` — Verilog/SystemVerilog RTL
+- `rtl/pkg/level_param.sv` — Parametric definitions
+- `rtl/include/` — Include files
+- `script/` — Python and shell scripts
+- `docs/` — Documentation
 
-### İlgili Belgeler
+### Related documents
 - [PARAMETRIC_EXCEPTION_PRIORITY.md](parametric-exception-priority.md)
 - [IMPLEMENTATION_SUMMARY.md](#implementation)
 - [riscv-test.md](#riscv-tests)
 
 ---
 
-**Son Güncelleme**: 1 Aralık 2025  
-**Versiyon**: 1.0  
-**Yazar**: Ceres Development Team
+**Last updated**: 1 December 2025  
+**Version**: 1.0  
+**Author**: Level Development Team
 

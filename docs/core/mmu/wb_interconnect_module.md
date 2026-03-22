@@ -1,36 +1,36 @@
-# Wishbone Interconnect Modülü - Teknik Dokümantasyon
+# Wishbone Interconnect Module — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
-3. [Adres Çözümleme](#adres-çözümleme)
-4. [Slave Haritası](#slave-haritası)
-5. [Request/Response Yönlendirme](#requestresponse-yönlendirme)
-6. [Hata Yönetimi](#hata-yönetimi)
-7. [Zamanlama Diyagramları](#zamanlama-diyagramları)
-8. [Doğrulama ve Test](#doğrulama-ve-test)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
+3. [Address Decoding](#address-decoding)
+4. [Slave Map](#slave-map)
+5. [Request/Response Routing](#requestresponse-routing)
+6. [Error Handling](#error-handling)
+7. [Timing Diagrams](#timing-diagrams)
+8. [Verification and Testing](#verification-and-testing)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`wb_interconnect` modülü, **Wishbone B4** uyumlu bir **1-to-N crossbar interconnect** yapısıdır. CPU'dan gelen bellek isteklerini adres tabanlı olarak uygun slave'e yönlendirir.
+`wb_interconnect` is a **Wishbone B4**-compatible **1-to-N crossbar interconnect**. It routes memory requests from the CPU to the appropriate slave based on address.
 
-### Temel Özellikler
+### Key Features
 
-| Özellik | Değer |
+| Feature | Value |
 |---------|-------|
-| **Bus Standardı** | Wishbone B4 Pipelined |
-| **Topoloji** | 1 Master → N Slave |
-| **Adres Decode** | Tek cycle combinational |
-| **Slave Sayısı** | 3 (RAM, CLINT, PBUS) |
-| **Burst Desteği** | Evet (CTI/BTE) |
-| **Error Handling** | Unmapped address error |
+| **Bus standard** | Wishbone B4 pipelined |
+| **Topology** | 1 master → N slaves |
+| **Address decode** | Single-cycle combinational |
+| **Slave count** | 3 (RAM, CLINT, PBUS) |
+| **Burst support** | Yes (CTI/BTE) |
+| **Error handling** | Unmapped address error |
 
-### Wishbone Interconnect Blok Diyagramı
+### Wishbone Interconnect Block Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -73,34 +73,34 @@
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 module wb_interconnect #(
     parameter int NUM_SLAVES = 3
 ) (
-    input  logic       clk_i,           // Sistem saati
-    input  logic       rst_ni,          // Aktif-düşük reset
+    input  logic       clk_i,           // System clock
+    input  logic       rst_ni,          // Active-low reset
 
     // Wishbone Master interface (from CPU)
-    input  wb_master_t wb_m_i,          // Master'dan gelen istek
-    output wb_slave_t  wb_s_o,          // Master'a giden yanıt
+    input  wb_master_t wb_m_i,          // Request from master
+    output wb_slave_t  wb_s_o,          // Response to master
 
     // Wishbone Slave interfaces
-    output wb_master_t wb_m_o[NUM_SLAVES],  // Slave'lere giden istek
-    input  wb_slave_t  wb_s_i[NUM_SLAVES]   // Slave'lerden gelen yanıt
+    output wb_master_t wb_m_o[NUM_SLAVES],  // Request to slaves
+    input  wb_slave_t  wb_s_i[NUM_SLAVES]   // Response from slaves
 );
 ```
 
-### Wishbone Master Sinyalleri
+### Wishbone Master Signals
 
 ```systemverilog
 typedef struct packed {
-    logic [WB_ADDR_WIDTH-1:0] adr;  // Adres
-    logic [WB_DATA_WIDTH-1:0] dat;  // Yazma verisi
-    logic [WB_SEL_WIDTH-1:0]  sel;  // Byte seçimi
+    logic [WB_ADDR_WIDTH-1:0] adr;  // Address
+    logic [WB_DATA_WIDTH-1:0] dat;  // Write data
+    logic [WB_SEL_WIDTH-1:0]  sel;  // Byte select
     logic                     we;   // Write enable
     logic                     stb;  // Strobe
     logic                     cyc;  // Cycle
@@ -109,11 +109,11 @@ typedef struct packed {
 } wb_master_t;
 ```
 
-### Wishbone Slave Sinyalleri
+### Wishbone Slave Signals
 
 ```systemverilog
 typedef struct packed {
-    logic [WB_DATA_WIDTH-1:0] dat;    // Okuma verisi
+    logic [WB_DATA_WIDTH-1:0] dat;    // Read data
     logic                     ack;    // Acknowledge
     logic                     err;    // Error
     logic                     rty;    // Retry
@@ -123,12 +123,12 @@ typedef struct packed {
 
 ---
 
-## Adres Çözümleme
+## Address Decoding
 
-### Adres Decode Mantığı
+### Address Decode Logic
 
 ```systemverilog
-// Slave indeksleri
+// Slave indices
 localparam SLAVE_RAM   = 0;
 localparam SLAVE_CLINT = 1;
 localparam SLAVE_PBUS  = 2;
@@ -136,7 +136,7 @@ localparam SLAVE_PBUS  = 2;
 logic [NUM_SLAVES-1:0] slave_sel;
 logic                  addr_valid;
 
-// Kombinasyonel adres decode
+// Combinational address decode
 always_comb begin
     slave_sel  = '0;
     addr_valid = 1'b0;
@@ -155,48 +155,48 @@ always_comb begin
             addr_valid = 1'b1;
         end
         default: begin
-            addr_valid = 1'b0;  // Geçersiz adres → Error
+            addr_valid = 1'b0;  // Invalid address → error
         end
     endcase
 end
 ```
 
-### Adres Alanları
+### Address Ranges
 
-| Slave | Adres Aralığı | Boyut | Açıklama |
-|-------|---------------|-------|----------|
-| RAM | 0x8000_0000 - 0xFFFF_FFFF | 2GB | Ana bellek |
+| Slave | Address range | Size | Description |
+|-------|---------------|------|-------------|
+| RAM | 0x8000_0000 - 0xFFFF_FFFF | 2GB | Main memory |
 | CLINT | 0x3000_0000 - 0x3FFF_FFFF | 256MB | Core-local interruptor |
 | PBUS | 0x2000_0000 - 0x2FFF_FFFF | 256MB | Peripheral bus |
 
 ---
 
-## Slave Haritası
+## Slave Map
 
 ### Slave 0: RAM (Main Memory)
 
 ```
-Adres Aralığı: 0x8000_0000 - 0xFFFF_FFFF
-Boyut: 2GB (tipik kullanım: 128KB - 1MB)
+Address range: 0x8000_0000 - 0xFFFF_FFFF
+Size: 2GB (typical use: 128KB - 1MB)
 
-Özellikler:
+Attributes:
 - Cacheable
 - Executable
 - Read/Write
 
-Kullanım:
-- Program kodu
+Usage:
+- Program code
 - Data
-- Stack/Heap
+- Stack/heap
 ```
 
 ### Slave 1: CLINT (Core Local Interruptor)
 
 ```
-Adres Aralığı: 0x3000_0000 - 0x3000_FFFF
-Boyut: 64KB
+Address range: 0x3000_0000 - 0x3000_FFFF
+Size: 64KB
 
-Özellikler:
+Attributes:
 - Uncacheable
 - Non-executable
 - Read/Write
@@ -210,10 +210,10 @@ Register Map:
 ### Slave 2: PBUS (Peripheral Bus)
 
 ```
-Adres Aralığı: 0x2000_0000 - 0x2FFF_FFFF
-Boyut: 256MB
+Address range: 0x2000_0000 - 0x2FFF_FFFF
+Size: 256MB
 
-Özellikler:
+Attributes:
 - Uncacheable
 - Non-executable
 - Read/Write
@@ -234,11 +234,11 @@ Peripheral Offsets:
 
 ---
 
-## Request/Response Yönlendirme
+## Request/Response Routing
 
 ### Request Tracking
 
-Hangi slave'in aktif isteği olduğunu takip eder:
+Tracks which slave owns the active request:
 
 ```systemverilog
 logic [1:0] active_slave_q;
@@ -250,7 +250,7 @@ always_ff @(posedge clk_i or negedge rst_ni) begin
         req_pending_q  <= 1'b0;
     end else begin
         if (wb_m_i.cyc && wb_m_i.stb && !wb_s_o.stall) begin
-            // Yeni istek kabul edildi
+            // New request accepted
             for (int i = 0; i < NUM_SLAVES; i++) begin
                 if (slave_sel[i]) begin
                     active_slave_q <= i[1:0];
@@ -258,7 +258,7 @@ always_ff @(posedge clk_i or negedge rst_ni) begin
             end
             req_pending_q <= 1'b1;
         end else if (wb_s_o.ack || wb_s_o.err) begin
-            // İstek tamamlandı
+            // Request completed
             if (wb_m_i.cti == WB_CTI_CLASSIC || wb_m_i.cti == WB_CTI_EOB) begin
                 req_pending_q <= 1'b0;
             end
@@ -267,12 +267,12 @@ always_ff @(posedge clk_i or negedge rst_ni) begin
 end
 ```
 
-### Master → Slave Yönlendirme
+### Master → Slave Routing
 
 ```systemverilog
 always_comb begin
     for (int i = 0; i < NUM_SLAVES; i++) begin
-        // Tüm sinyalleri broadcast et
+        // Broadcast all signals
         wb_m_o[i].adr = wb_m_i.adr;
         wb_m_o[i].dat = wb_m_i.dat;
         wb_m_o[i].sel = wb_m_i.sel;
@@ -280,7 +280,7 @@ always_comb begin
         wb_m_o[i].cti = wb_m_i.cti;
         wb_m_o[i].bte = wb_m_i.bte;
 
-        // Strobe ve cycle'ı slave seçimine göre gate'le
+        // Gate strobe and cycle from slave select
         wb_m_o[i].stb = wb_m_i.stb && slave_sel[i];
         wb_m_o[i].cyc = wb_m_i.cyc && 
                         (slave_sel[i] || (req_pending_q && active_slave_q == i[1:0]));
@@ -288,11 +288,11 @@ always_comb begin
 end
 ```
 
-### Slave → Master Yönlendirme
+### Slave → Master Routing
 
 ```systemverilog
 always_comb begin
-    // Varsayılan: yanıt yok
+    // Default: no response
     wb_s_o.dat   = '0;
     wb_s_o.ack   = 1'b0;
     wb_s_o.err   = 1'b0;
@@ -300,10 +300,10 @@ always_comb begin
     wb_s_o.stall = 1'b0;
 
     if (!addr_valid && wb_m_i.cyc && wb_m_i.stb) begin
-        // Geçersiz adres - error üret
+        // Invalid address — assert error
         wb_s_o.err = 1'b1;
     end else begin
-        // Seçili slave'den yanıt yönlendir
+        // Forward response from selected slave
         for (int i = 0; i < NUM_SLAVES; i++) begin
             if (slave_sel[i] || (req_pending_q && active_slave_q == i[1:0])) begin
                 wb_s_o.dat   = wb_s_i[i].dat;
@@ -319,34 +319,34 @@ end
 
 ---
 
-## Hata Yönetimi
+## Error Handling
 
 ### Unmapped Address Error
 
-Geçersiz adrese erişim durumunda interconnect otomatik olarak error üretir:
+On access to an invalid address the interconnect automatically asserts error:
 
 ```systemverilog
 if (!addr_valid && wb_m_i.cyc && wb_m_i.stb) begin
-    wb_s_o.err = 1'b1;  // Error yanıtı
+    wb_s_o.err = 1'b1;  // Error response
 end
 ```
 
-### Error Senaryoları
+### Error Scenarios
 
-| Adres | Sonuç | Açıklama |
-|-------|-------|----------|
+| Address | Result | Description |
+|---------|--------|-------------|
 | 0x0xxx_xxxx | ERROR | Debug module (not implemented) |
 | 0x1xxx_xxxx | ERROR | Boot ROM (not implemented) |
 | 0x4xxx_xxxx | ERROR | External memory (not implemented) |
-| 0x5xxx_xxxx | ERROR | Rezerve |
-| 0x6xxx_xxxx | ERROR | Rezerve |
-| 0x7xxx_xxxx | ERROR | Rezerve |
+| 0x5xxx_xxxx | ERROR | Reserved |
+| 0x6xxx_xxxx | ERROR | Reserved |
+| 0x7xxx_xxxx | ERROR | Reserved |
 
 ---
 
-## Zamanlama Diyagramları
+## Timing Diagrams
 
-### Başarılı RAM Okuma
+### Successful RAM Read
 
 ```
 clk      ____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____/‾‾‾‾\____
@@ -413,55 +413,55 @@ wb_s_o   ────/‾‾‾‾\──────────────
 
 ---
 
-## Doğrulama ve Test
+## Verification and Testing
 
-### Assertion'lar
+### Assertions
 
 ```systemverilog
-// Tek slave seçili olmalı
+// Exactly one slave must be selected
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     addr_valid |-> $onehot(slave_sel)
 ) else $error("Only one slave should be selected");
 
-// Geçersiz adres error üretmeli
+// Invalid address must assert error
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     (!addr_valid && wb_m_i.cyc && wb_m_i.stb) |-> wb_s_o.err
 ) else $error("Invalid address should generate error");
 
-// ACK ve ERR aynı anda olamaz
+// ACK and ERR must not be active together
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     !(wb_s_o.ack && wb_s_o.err)
 ) else $error("ACK and ERR cannot be active simultaneously");
 ```
 
-### Test Senaryoları
+### Test Scenarios
 
-1. **Adres Decode**
-   - Her slave aralığına erişim
-   - Boundary adresleri test
+1. **Address decode**
+   - Access each slave range
+   - Boundary address tests
 
-2. **Error Generation**
-   - Geçersiz adres erişimi
-   - Reserved bölgelere erişim
+2. **Error generation**
+   - Invalid address access
+   - Access to reserved regions
 
-3. **Burst Transfer**
-   - Cache line burst
-   - CTI/BTE kombinasyonları
+3. **Burst transfer**
+   - Cache-line burst
+   - CTI/BTE combinations
 
-4. **Stall Handling**
-   - Slave stall durumu
-   - Master bekleme
+4. **Stall handling**
+   - Slave stall
+   - Master wait
 
 ---
 
-## Özet
+## Summary
 
-`wb_interconnect` modülü:
+The `wb_interconnect` module:
 
-1. **Simple 1-to-N Routing**: Tek master, çoklu slave
-2. **Address-based Selection**: 4-bit üst adres decode
-3. **Wishbone B4 Compliant**: Pipelined, burst destekli
-4. **Error Handling**: Unmapped address protection
-5. **Low Latency**: Combinational decode
+1. **Simple 1-to-N routing**: One master, multiple slaves
+2. **Address-based selection**: Upper 4-bit address decode
+3. **Wishbone B4 compliant**: Pipelined, burst-capable
+4. **Error handling**: Unmapped-address protection
+5. **Low latency**: Combinational decode
 
-Bu modül, CERES SoC'da CPU ile bellek/peripheral arasındaki bağlantıyı sağlar.
+It connects the CPU to memory and peripherals in the Level SoC.

@@ -1,27 +1,27 @@
-# Wishbone Peripheral Bus Slave - Teknik Dokümantasyon
+# Wishbone Peripheral Bus Slave - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
-3. [Bus Bridge Mantığı](#bus-bridge-mantığı)
-4. [Timing Karakteristikleri](#timing-karakteristikleri)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
+3. [Bus Bridge Logic](#bus-bridge-logic)
+4. [Timing Characteristics](#timing-karakteristikleri)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`wb_pbus_slave` modülü, Wishbone bus'tan peripheral modüllere köprü görevi görür. Adres ve kontrol sinyallerini basit memory-mapped arayüze çevirir.
+The `wb_pbus_slave` module, bridges from the Wishbone bus to peripheral modules. Translates address and control signals to a simple memory-mapped interface.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/wrapper/wb_pbus_slave.sv
 ```
 
-### Bridge Topolojisi
+### Bridge Topology
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -56,13 +56,13 @@ rtl/wrapper/wb_pbus_slave.sv
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 module wb_pbus_slave
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic clk_i,
     input  logic rst_ni,
@@ -84,7 +84,7 @@ module wb_pbus_slave
 
 ---
 
-## Bus Bridge Mantığı
+## Bus Bridge Logic
 
 ### Request Passthrough
 
@@ -120,7 +120,7 @@ assign wb_s_o.rty = 1'b0;
 ### Alternative: Combinational Ack
 
 ```systemverilog
-// Eğer peripheral single-cycle ise
+// If the peripheral is single-cycle
 assign wb_s_o.ack = wb_req;  // Immediate ack
 assign wb_s_o.dat = pbus_rdata_i;
 assign wb_s_o.err = 1'b0;
@@ -129,7 +129,7 @@ assign wb_s_o.rty = 1'b0;
 
 ---
 
-## Timing Karakteristikleri
+## Timing Characteristics
 
 ### Single-Cycle Access
 
@@ -202,7 +202,7 @@ wb_s_o.ack         ┌───────┐
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### SoC Integration
 
@@ -239,13 +239,13 @@ end
 
 ---
 
-## Özet
+## Summary
 
-`wb_pbus_slave` modülü:
+The `wb_pbus_slave` module:
 
 1. **Transparent Bridge**: Wishbone → Simple peripheral interface
 2. **Single-Cycle**: Minimum latency passthrough
 3. **Byte Enable**: Full sel/wstrb support
 4. **Simple Protocol**: Valid/ready handshake
 
-Bu modül, Wishbone bus'u basit memory-mapped peripherals'a bağlar.
+This module connects the Wishbone bus to simple memory-mapped peripherals.

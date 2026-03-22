@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
 module uart
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic            clk_i,
     input  logic            rst_ni,

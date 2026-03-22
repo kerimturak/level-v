@@ -7,7 +7,7 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module hazard_unit (
     input  logic [4:0] r1_addr_de_i,
     input  logic [4:0] r2_addr_de_i,

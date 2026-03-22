@@ -1,6 +1,5 @@
 {
-  "$schema": "./verilator.schema.json",
-  "_comment": "CERES RISC-V Verilator Simulation Configuration",
+  "_comment": "Level RISC-V Verilator Simulation Configuration",
 
   "simulation": {
     "max_cycles": 100000,

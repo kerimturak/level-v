@@ -1,10 +1,10 @@
-# ALU Modülü - Teknik Döküman
+# ALU Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`alu.sv` modülü, RISC-V işlemcisinin **Arithmetic Logic Unit** (ALU) implementasyonudur. RV32I base instruction set ve RV32M extension (multiply/divide) operasyonlarını destekler. CSR instruction'ları için de operasyon logic'i içerir.
+`alu.sv` implements the RISC-V processor **Arithmetic Logic Unit** (ALU). It supports the RV32I base instruction set and RV32M extension (multiply/divide) operations. It also contains operation logic for CSR instructions.
 
-## Desteklenen İşlemler
+## Supported Operations
 
 ### Base Integer (RV32I)
 
@@ -46,22 +46,22 @@
 | CSRRSI | CSRRSI | Atomic read and set bits (immediate) |
 | CSRRCI | CSRRCI | Atomic read and clear bits (immediate) |
 
-## Port Tanımları
+## Port Definitions
 
-### Giriş Portları
+### Input Ports
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `clk_i` | logic | Sistem clock'u (mul/div için) |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
+| Port | Type | Description |
+|------|------|-------------|
+| `clk_i` | logic | System clock (for mul/div) |
+| `rst_ni` | logic | Active-low asynchronous reset |
 | `alu_a_i` | [XLEN-1:0] | Operand A (rs1 or PC or PC+4) |
 | `alu_b_i` | [XLEN-1:0] | Operand B (rs2 or immediate) |
 | `csr_rdata_i` | [XLEN-1:0] | CSR read data (for CSR ops) |
 | `op_sel_i` | alu_op_e | Operation selection |
 
-### Çıkış Portları
+### Output Ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `alu_o` | [XLEN-1:0] | ALU result |
 | `zero_o` | logic | Comparison: rs1 == rs2 (signed) |
@@ -817,14 +817,14 @@ assert property (@(posedge clk_i)
   (div_dbz && (op_sel_i inside {OP_DIV, OP_DIVU})) |-> (alu_o == '1));
 ```
 
-## İlgili Modüller
+## Related Modules
 
 1. **execution.sv**: ALU wrapper
 2. **mul_int.sv**: Sequential multiplier
 3. **divu_int.sv**: Restoring divider
 4. **wallace32x32**: Wallace tree multiplier
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213 - Chapter 2 (RV32I), Chapter 7 (RV32M)
 2. "Computer Arithmetic: Algorithms and Hardware Designs" - Behrooz Parhami
@@ -832,6 +832,6 @@ assert property (@(posedge clk_i)
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** December 5, 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

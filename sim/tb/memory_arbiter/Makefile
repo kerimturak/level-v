@@ -13,7 +13,7 @@ TB_SV := $(TB_DIR)/tb_memory_arbiter.sv
 TB_CPP := $(TB_DIR)/tb_main.cpp
 
 RTL_SOURCES := \
-	$(RTL_DIR)/pkg/ceres_param.sv \
+	$(RTL_DIR)/pkg/level_param.sv \
 	$(RTL_DIR)/core/mmu/memory_arbiter.sv
 
 VERILATOR := verilator

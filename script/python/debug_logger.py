@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Debug Logger for CERES RISC-V Makefile & Script Execution
+Debug Logger for Level RISC-V Makefile & Script Execution
 ==========================================================
 
 Provides comprehensive audit trail and debug reporting for all
@@ -228,16 +228,21 @@ class DebugLogger:
         config_files = [
             "script/config/verilator.json",
             "script/config/test_registry.json",
-            f"script/config/tests/{self.test_name}.json"
+            "script/config/tests/default.conf",
+            f"script/config/tests/{self.test_name}.conf",
         ]
 
         for config_file in config_files:
             config_path = Path(config_file)
             if config_path.exists():
                 try:
-                    with open(config_path) as f:
-                        self.report["config_snapshot"][config_file] = json.load(f)
-                except:
+                    if config_file.endswith(".json"):
+                        with open(config_path) as f:
+                            self.report["config_snapshot"][config_file] = json.load(f)
+                    else:
+                        with open(config_path, encoding="utf-8") as f:
+                            self.report["config_snapshot"][config_file] = f.read()
+                except Exception:
                     pass
 
     @contextmanager

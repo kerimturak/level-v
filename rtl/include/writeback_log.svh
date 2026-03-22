@@ -1,5 +1,5 @@
 // ============================================================================
-// Spike-like Commit Trace — Ceres RISC-V
+// Spike-like Commit Trace — Level RISC-V
 // Engineer:  Kerim Turak
 // ----------------------------------------------------------------------------
 // Production order (Spike-compatible):
@@ -14,9 +14,9 @@
 
 // Define SOC path based on top module name
 `ifdef VERILATOR
-  `define SOC $root.ceres_wrapper.i_soc
+  `define SOC $root.level_wrapper.i_soc
 `else
-  `define SOC tb_wrapper.ceres_wrapper.i_soc
+  `define SOC tb_wrapper.level_wrapper.i_soc
 `endif
 
 // ============================================================================
@@ -150,7 +150,7 @@ end
 // ============================================================================
 
 always @(posedge clk_i) begin
-  // Not: Reset sırasında dosyayı yeniden açmıyoruz - sadece initial'da açıldı
+  // Note: We do not reopen the file during reset—it was opened only in initial
   // IMPORTANT: Skip commit if instruction was flushed or invalid
   if (rst_ni && !flushed_i && instr_type_i != instr_invalid &&
       !(downstream_stall_i && !trap_active_i)) begin
@@ -191,14 +191,14 @@ else if (instr_type_i == mret) begin : mret_commit
     $fwrite(trace_fd,
       "core   0: 3 0x%08h (0x%08h) c%0d_mstatus 0x%08h ",
       pc_i, fe_tracer_i.inst,
-      768,        // <<2 doğru
+      768,        // <<2 correct
       csr_log_value
     );
 
     // mstatush
     $fwrite(trace_fd,
       "c%0d_mstatush 0x00000000 ",
-      784         // <<2 doğru
+      784         // <<2 correct
     );
 
     // tcontrol - log actual value from CSR file
@@ -294,8 +294,8 @@ end
   end
 end
 
-// Periyodik flush - her 65536 cycle'da bir buffer'ı diske yaz
-// Reset-independent: initialization syntax kullanılıyor
+// Periodic flush—flush buffer to disk every 65536 cycles
+// Reset-independent: initialization syntax is used
 logic [15:0] flush_counter = '0;
 always @(posedge clk_i) begin
   if (rst_ni) begin
@@ -334,7 +334,7 @@ initial begin
     pass_addr = 32'h0;
     fail_addr = 32'h0;
   end
-  // Dosya ismini +arg ile al: +addr_file=/path/to/test_addr.txt
+  // Get filename via +arg: +addr_file=/path/to/test_addr.txt
   else if (!$value$plusargs("addr_file=%s", addr_file)) begin
     $display("[INFO] No +addr_file given. Skipping PASS/FAIL auto-stop.");
 `ifdef NO_COMMIT_TRACE
@@ -364,7 +364,7 @@ initial begin
     end
   end
 
-  // Exception address override - bu addr_file'ı override eder
+  // Exception address override—overrides addr_file
   if ($value$plusargs("PASS_ADDR=%h", pass_addr)) begin
     $display("[INFO] PASS address overridden to 0x%08h", pass_addr);
     addr_check_enabled = 1;
@@ -375,7 +375,7 @@ initial begin
   end
 end
 
-// Writeback veya memory stage içinde:
+// Inside writeback or memory stage:
 always_comb begin
   if (addr_check_enabled && pc_i == pass_addr && pass_addr != 32'h0) begin
     $display("🎯 PASS address reached at PC=0x%08h", pc_i);

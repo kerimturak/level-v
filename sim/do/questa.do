@@ -1,5 +1,5 @@
 ##################################################################################
-#                     CERES RISC-V - Debug Waveform                            #
+#                     Level RISC-V - Debug Waveform                            #
 #                        Questa Simulation Script                              #
 ##################################################################################
 # Features:
@@ -27,7 +27,7 @@ configure wave -signalnamewidth 1
 
 ################## Hierarchy Paths ##################
 set TB            "/tb_wrapper"
-set WRAPPER       "$TB/ceres_wrapper"
+set WRAPPER       "$TB/level_wrapper"
 set CPU           "$WRAPPER/i_soc"
 set FETCH         "$CPU/i_fetch"
 set DECODE        "$CPU/i_decode"

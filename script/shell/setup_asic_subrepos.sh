@@ -20,7 +20,7 @@ done
 cat <<EOF
 [asic-subrepo] done.
 
-Not:
-  - sky130 PDK repo çok büyük olduğu için burada clone edilmiyor.
-  - PDK için Volare yolu önerilir: PDK_ROOT=\$HOME/.volare, PDK=sky130A
+Note:
+  - The sky130 PDK repo is very large and is not cloned here.
+  - For the PDK, Volare is recommended: PDK_ROOT=\$HOME/.volare, PDK=sky130A
 EOF

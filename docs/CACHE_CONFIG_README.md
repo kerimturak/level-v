@@ -1,8 +1,8 @@
-# CERES RISC-V Cache Configuration Guide
+# Level RISC-V Cache Configuration Guide
 
 ## Summary
 
-This directory contains comprehensive cache configuration tools and references for the CERES RISC-V processor.
+This directory contains comprehensive cache configuration tools and references for the Level RISC-V processor.
 
 ### Key Constraint
 
@@ -179,7 +179,7 @@ Where:
 ## Recommendations
 
 1. **For minimal changes:** Use 8 KB (Option B)
-   - Only change one number in ceres_param.sv
+   - Only change one number in level_param.sv
    - Still 2-way associative
    - Only +33% size increase from 6 KB
 

@@ -17,15 +17,15 @@ site/
 */__pycache__/
 *.pyc
 
-# Allow tracking spike-pk inside env/coremark (coremark is globally ignored)
+# Track CoreMark port sources under env/coremark (name "coremark" may be ignored elsewhere)
 !env/coremark/
-!env/coremark/spike-pk/
-!env/coremark/spike-pk/**
+!env/coremark/levelv/
+!env/coremark/levelv/**
 !env/coremark/minimal/
 !env/coremark/minimal/**
 
 # OpenLane generated artifacts
-asic/openlane/designs/ceres_wrapper/src/
-asic/openlane/designs/ceres_wrapper/runs/
-asic/openlane/designs/ceres_wrapper/sources_manifest.txt
-asic/openlane/designs/ceres_wrapper/src/ceres_wrapper_sv2v.v
+asic/openlane/designs/level_wrapper/src/
+asic/openlane/designs/level_wrapper/runs/
+asic/openlane/designs/level_wrapper/sources_manifest.txt
+asic/openlane/designs/level_wrapper/src/level_wrapper_sv2v.v

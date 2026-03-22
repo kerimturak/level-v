@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module tb_dcache_simple;
-  import ceres_param::*;
+  import level_param::*;
 
   // Parameters - 4-way 2KB config
   localparam int DC_WAY_TB = 4;
@@ -14,10 +14,10 @@ module tb_dcache_simple;
   logic                           rst_n;
 
   // DCache interfaces
-  ceres_param::dcache_req_t       cache_req;
-  ceres_param::dcache_res_t       cache_res;
-  ceres_param::dlowX_req_t        lowX_req;
-  ceres_param::dlowX_res_t        lowX_res;
+  level_param::dcache_req_t       cache_req;
+  level_param::dcache_res_t       cache_res;
+  level_param::dlowX_req_t        lowX_req;
+  level_param::dlowX_res_t        lowX_res;
   logic                           flush;
   logic                           fencei_stall;
 
@@ -33,10 +33,10 @@ module tb_dcache_simple;
 
   // DCache instance
   dcache #(
-      .cache_req_t(ceres_param::dcache_req_t),
-      .cache_res_t(ceres_param::dcache_res_t),
-      .lowX_res_t (ceres_param::dlowX_res_t),
-      .lowX_req_t (ceres_param::dlowX_req_t),
+      .cache_req_t(level_param::dcache_req_t),
+      .cache_res_t(level_param::dcache_res_t),
+      .lowX_res_t (level_param::dlowX_res_t),
+      .lowX_req_t (level_param::dlowX_req_t),
       .CACHE_SIZE (DC_CAPACITY_TB),
       .BLK_SIZE   (BLK_SIZE_TB),
       .XLEN       (XLEN_TB),
