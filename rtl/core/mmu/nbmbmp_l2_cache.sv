@@ -610,7 +610,7 @@
          mshr_entries[d_idx].wstrb     <= d_req_q.wstrb;
          mshr_entries[d_idx].from_dport <= 1'b1;
        end
- 
+
        // Fill issued → PENDING → FILL_ACTIVE
        if (fill_issued) begin
          for (int i = 0; i < L2_MSHR_DEPTH; i++)

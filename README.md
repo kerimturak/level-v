@@ -23,11 +23,37 @@ A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / mach
 | Area | What you get |
 |------|----------------|
 | **ISA** | RV32I + M + C, Zicsr, Zifencei, machine mode |
-| **Frontend** | Align buffer, RV32C decode, tournament branch predictor (GShare + bimodal), BTB, RAS, prefetch |
-| **Memory** | L1 I$/D$, L2, PMA; configurable sizes via `level_param.sv` |
+| **Frontend** | Align buffer, RV32C decode, tournament branch predictor (GShare + bimodal), BTB, RAS, optional **next-line prefetch** (`PREFETCH_TYPE` in `level_param.sv`) |
+| **Memory** | **L1** I$/D$ + PMA; optional **L2** — non-blocking, **dual-pipe** (I & D), **multi-bank**, write-back, MSHR, MESI-style tags (`USE_L2_CACHE=1`) |
 | **Execute** | ALU, CSR file, selectable multiply/divide implementations |
 | **Verify** | riscv-tests, riscv-arch-test, Imperas flows, Spike trace compare, optional formal / RISC-V DV |
-| **Observability** | Spike-style commit trace, Konata pipeline export, HTML diff dashboard |
+| **Observability** | Spike-style commit trace, Konata pipeline export, **HTML test dashboard** (`make dashboard`) |
+
+### Memory hierarchy (detail)
+
+| Block | Role |
+|--------|------|
+| **L1 I$ / D$** | Blocking line fills toward L2 or main memory; sizes and associativity from `rtl/pkg/level_param.sv`. |
+| **L2 `nbmbmp_l2_cache`** | *Non-blocking, multi-bank, multi-port* cache: separate **I-pipe** and **D-pipe** FSMs, `dp_bram` arrays per way/bank, shared memory controller, inline **MSHR** for concurrent misses, write-back evictions to Wishbone. Turn on with **`USE_L2_CACHE=1`** for sim/synth defines. |
+| **Prefetch** | **`next_line_prefetcher`** + **`prefetcher_wrapper`** in the fetch path; arms the line after a demand miss and refills through the same I$ → L2 port. Default **`PREFETCH_TYPE = 0`** (off); set to `1` for next-line mode. |
+
+### Test dashboard
+
+After runs under `results/logs/<sim>/`, **`make dashboard`** builds a browsable HTML report (pass/fail, diff stats, grouping by test family). Illustrative preview:
+
+<p align="center">
+  <img src="docs/dashboard_preview.png" alt="Level-V test dashboard preview1" width="640"/>
+  <img src="docs/dashboard_preview2.png" alt="Level-V test dashboard preview2" width="640"/>
+  <img src="docs/dashboard_preview3.png" alt="Level-V test dashboard preview3" width="640"/>
+  <img src="docs/dashboard_preview4.png" alt="Level-V test dashboard preview4" width="640"/>
+  <br/>
+  <sub>Stylized preview — open the generated <code>index.html</code> after <code>make dashboard</code> for live data.</sub>
+</p>
+
+---
+
+## Openlane
+  <img src="docs/openlane_im.png" alt="Level-V test dashboard preview4" width="640"/>
 
 ---
 

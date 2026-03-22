@@ -528,7 +528,7 @@ make run T=rv32ui-p-add
 make run T=rv32ui-p-add TRACE=1
 
 # Run CoreMark
-make run_coremark FAST_SIM=1 SIM_UART_MONITOR=1
+make run_coremark SIM_FAST=1 SIM_UART_MONITOR=1
 ```
 
 ### Simulation with ModelSim

@@ -315,7 +315,7 @@ end
 // ==========================================================
 // PASS/FAIL Address Detector (from per-test addr.txt file)
 // Disable with +no_addr plusarg
-// This section is always active (not affected by FAST_SIM)
+// This section is always active (not affected by SIM_FAST)
 // ==========================================================
 
 string addr_file;

@@ -64,6 +64,17 @@ module fetch
   icache_res_t            icache_res;
   icache_req_t            abuff_icache_req;  // Raw request from align_buffer
   icache_req_t            icache_req;  // Gated request to cache
+
+  localparam bit IC_PREFETCH_EN = (level_param::PREFETCH_TYPE != 0);
+  logic            pf_valid;
+  logic [XLEN-1:0] pf_addr;
+  logic            pf_ack;
+  logic            pf_ready_nc;
+  logic            ic_miss_uncached;
+  logic            pf_pma_uncached;
+  logic            pf_pma_grand;
+  logic            pf_pma_memregion;
+  logic [XLEN-1:0] pf_pma_addr;
   blowX_res_t             buff_lowX_res;
   logic                   buf_lookup_ack;
 
@@ -278,6 +289,30 @@ module fetch
     icache_req.uncached = abuff_icache_req.uncached;
   end
 
+  assign ic_miss_uncached = icache_res.miss && icache_req.uncached;
+  assign pf_pma_addr      = pf_valid ? pf_addr : pc_o;
+
+  prefetcher_wrapper #(
+      .PREFETCH_TYPE(level_param::PREFETCH_TYPE)
+  ) i_prefetcher (
+      .clk_i            (clk_i),
+      .rst_ni           (rst_ni),
+      .flush_i          (flush_i),
+      .cache_miss_i     (icache_res.miss),
+      .miss_uncached_i  (ic_miss_uncached),
+      .miss_addr_i      (icache_req.addr),
+      .prefetch_ack_i   (pf_ack),
+      .prefetch_valid_o (pf_valid),
+      .prefetch_addr_o  (pf_addr)
+  );
+
+  pma i_pma_pf (
+      .addr_i     (pf_pma_addr),
+      .uncached_o (pf_pma_uncached),
+      .memregion_o(pf_pma_memregion),
+      .grand_o    (pf_pma_grand)
+  );
+
   // Track pending request to icache - reset on response or new request from buffer
   /* verilator lint_off UNUSEDSIGNAL */
   logic prev_icache_req_valid;
@@ -359,15 +394,22 @@ module fetch
       .CACHE_SIZE (IC_CAPACITY),
       .BLK_SIZE   (BLK_SIZE),
       .XLEN       (XLEN),
-      .NUM_WAY    (IC_WAY)
+      .NUM_WAY    (IC_WAY),
+      .ENABLE_ICACHE_PREFETCH(IC_PREFETCH_EN)
   ) i_icache (
-      .clk_i      (clk_i),
-      .rst_ni     (rst_ni),
-      .flush_i    (flush_i),
-      .cache_req_i(icache_req),
-      .cache_res_o(icache_res),
-      .lowX_res_i (lx_ires_i),
-      .lowX_req_o (lx_ireq_o)
+      .clk_i              (clk_i),
+      .rst_ni             (rst_ni),
+      .flush_i            (flush_i),
+      .cache_req_i        (icache_req),
+      .cache_res_o        (icache_res),
+      .lowX_res_i         (lx_ires_i),
+      .lowX_req_o         (lx_ireq_o),
+      .prefetch_valid_i   (pf_valid),
+      .prefetch_addr_i    (pf_addr),
+      .prefetch_uncached_i(pf_pma_uncached),
+      .prefetch_grand_i   (pf_pma_grand),
+      .prefetch_ready_o   (pf_ready_nc),
+      .prefetch_ack_o     (pf_ack)
   );
 
   // ============================================================================

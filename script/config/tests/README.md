@@ -14,7 +14,7 @@ Example: a `SYNTHESIS=1` line becomes `+define+SYNTHESIS` for Verilator/ModelSim
 
 ## CLI
 
-Variables from the shell (`make MAX_CYCLES=50000`, `FAST_SIM=1`, …) override assignments of the same name coming from `.conf`, per normal GNU Make rules (unless `override` is used).
+Variables from the shell (`make MAX_CYCLES=50000`, `SIM_FAST=1`, …) override assignments of the same name coming from `.conf`, per normal GNU Make rules (unless `override` is used).
 
 Pick a profile with `TEST_CONFIG=<name>` (`script/config/tests/<name>.conf`, merged with `default.conf`).
 

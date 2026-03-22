@@ -44,6 +44,9 @@ theme:
     text: Roboto
     code: Roboto Mono
 
+hooks:
+  - mkdocs_hooks.py
+
 plugins:
   - search:
       lang: en
@@ -69,6 +72,10 @@ markdown_extensions:
   - tables
   - attr_list
   - md_in_html
+  # :material-*: / :octicons-*: in card grids (docs/index.md)
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - toc:
       permalink: true
       toc_depth: 3
@@ -176,6 +183,7 @@ nav:
     - Simulation: sim/overview.md
     - Environments: env/overview.md
     - Test Suites: subrepo/overview.md
+    - Test results dashboard: test-results-dashboard.md
   - Reference:
     - Wishbone Bus: wishbone-bus.md
     - Exception Priority: parametric-exception-priority.md

@@ -311,7 +311,7 @@ make run_coremark
 make run_verilator TEST_NAME=coremark TEST_CONFIG=coremark MEM_FILE=build/tests/coremark/coremark.mem NO_ADDR=1
 
 # Extra parameters (example)
-make run_coremark FAST_SIM=1 TRACE=0 MAX_CYCLES=10000000
+make run_coremark SIM_FAST=1 TRACE=0 MAX_CYCLES=10000000
 ```
 
 ### Sample Output

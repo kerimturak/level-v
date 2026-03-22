@@ -309,7 +309,7 @@ Simulation and most test flows go through the **root `makefile`**. Test profiles
 
 ### tests/ Subdirectory — Test profiles (`.conf`)
 
-With `TEST_CONFIG=<name>`, `<name>.conf` is layered on top of `default.conf`. Details: [script/config/tests/README.md](../../script/config/tests/README.md).
+With `TEST_CONFIG=<name>`, `<name>.conf` is layered on top of `default.conf`. Details: [script/config/tests/README.md on GitHub](https://github.com/kerimturak/level-v/blob/main/script/config/tests/README.md).
 
 | File (example) | Description |
 |----------------|-------------|

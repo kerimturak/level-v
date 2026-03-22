@@ -16,7 +16,7 @@ Artifacts under `build/tests/coremark/` (e.g. `coremark.mem` for simulation).
 make run_coremark
 ```
 
-Optional: `COREMARK_ITERATIONS`, `MAX_CYCLES`, `FAST_SIM=1`, `MINIMAL_SOC=1` — see `make coremark_help`.
+Optional: `COREMARK_ITERATIONS`, `MAX_CYCLES`, `SIM_FAST=1`, `MINIMAL_SOC=1` — see `make coremark_help`.
 
 Logs: `results/logs/<SIM>/coremark/` (e.g. `uart_output.log`).
 

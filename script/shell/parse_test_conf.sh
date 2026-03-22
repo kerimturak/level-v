@@ -94,7 +94,7 @@ emit_make() {
       TRACE_FORMAT)          printf 'CFG_TRACE_FORMAT := %s\n' "$v" ;;
       TRACE_DEPTH)           printf 'CFG_TRACE_DEPTH := %s\n' "$v" ;;
       OPT_LEVEL)             printf 'CFG_OPT_LEVEL := %s\n' "$v" ;;
-      FAST_SIM)              printf 'CFG_FAST_SIM := %s\n' "$v" ;;
+      SIM_FAST)              printf 'CFG_SIM_FAST := %s\n' "$v" ;;
       BP_LOG)                printf 'CFG_BP_LOG := %s\n' "$v" ;;
       VERBOSE)               printf 'CFG_VERBOSE := %s\n' "$v" ;;
       SPIKE_ISA)             printf 'CFG_SPIKE_ISA := %s\n' "$v" ;;

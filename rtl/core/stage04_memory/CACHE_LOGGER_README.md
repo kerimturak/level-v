@@ -44,7 +44,7 @@ make run:your_test LOG_CACHE=1
 make run:rv32ui-p-add LOG_CACHE=1
 
 # CoreMark with cache log
-make run_coremark FAST_SIM=1 TRACE=0 LOG_CACHE=1
+make run_coremark SIM_FAST=1 TRACE=0 LOG_CACHE=1
 
 # Custom program
 make verilate LOG_CACHE=1

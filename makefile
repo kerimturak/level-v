@@ -54,7 +54,7 @@ SIM           ?= verilator
 GUI           ?= 0
 TRACE         ?= 0
 NO_ADDR       ?= 0
-FAST_SIM      ?= 0
+SIM_FAST      ?= 0
 
 # MAX_CYCLES: in normal flow script/config/tests/default.conf + <TEST_CONFIG>.conf
 # → CFG_MAX_CYCLES in build/.test_config_<profile>.mk; applied below.
@@ -267,8 +267,8 @@ endif
 ifdef CFG_MAX_CYCLES
   MAX_CYCLES := $(CFG_MAX_CYCLES)
 endif
-ifdef CFG_FAST_SIM
-  FAST_SIM := $(CFG_FAST_SIM)
+ifdef CFG_SIM_FAST
+  SIM_FAST := $(CFG_SIM_FAST)
 endif
 ifdef CFG_BP_LOG
   BP_LOG := $(CFG_BP_LOG)
@@ -351,7 +351,7 @@ show-config config-info:
 	@echo -e "  TEST_CONFIG     = $(GREEN)$(TEST_CONFIG)$(RESET)"
 	@echo -e "  TEST_TYPE       = $(TEST_TYPE)"
 	@echo -e "  MAX_CYCLES      = $(MAX_CYCLES)"
-	@echo -e "  FAST_SIM        = $(FAST_SIM)"
+	@echo -e "  SIM_FAST        = $(SIM_FAST)"
 	@echo -e "  BP_LOG          = $(BP_LOG)"
 	@echo -e "  NO_ADDR         = $(NO_ADDR)"
 	@echo -e "  MODE            = $(MODE)"
@@ -563,9 +563,6 @@ endif
 MODELSIM_DEFINES += +define+COMMIT_TRACER
 
 # Shared feature defines (same as verilator.mk)
-ifeq ($(FAST_SIM),1)
-  MODELSIM_DEFINES += +define+SIM_FAST
-endif
 ifeq ($(SIM_FAST),1)
   MODELSIM_DEFINES += +define+SIM_FAST
 endif
@@ -931,13 +928,6 @@ endif
 # BP_VERBOSE -> LOG_BP_VERBOSE  
 ifeq ($(BP_VERBOSE),1)
   SV_DEFINES += +define+LOG_BP +define+LOG_BP_VERBOSE
-endif
-
-# FAST_SIM -> SIM_FAST
-ifeq ($(FAST_SIM),1)
-  SV_DEFINES += +define+SIM_FAST
-  TRACE_FLAGS :=
-  TRACE_DEFINE :=
 endif
 
 # MINIMAL_SOC -> Minimal peripherals for faster simulation
@@ -3195,7 +3185,7 @@ coremark_help:
 	@echo -e "$(YELLOW)Configuration:$(RESET)"
 	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1)"
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
-	@echo -e "  $(CYAN)FAST_SIM=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
+	@echo -e "  $(CYAN)SIM_FAST=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
 	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP for fast compile$(RESET)"
 	@echo -e "  $(CYAN)THREADS=N$(RESET)                - $(CYAN)Enable multi-threaded simulation$(RESET)"
 	@echo ""
@@ -3211,8 +3201,8 @@ coremark_help:
 	@echo ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
 	@echo -e "  make run_coremark"
-	@echo -e "  make run_coremark MAX_CYCLES=10000000 FAST_SIM=1 TRACE=0"
-	@echo -e "  make coremark COREMARK_ITERATIONS=0 && make run_coremark MAX_CYCLES=2000000 FAST_SIM=1 MINIMAL_SOC=1 TRACE=0"
+	@echo -e "  make run_coremark MAX_CYCLES=10000000 SIM_FAST=1 TRACE=0"
+	@echo -e "  make coremark COREMARK_ITERATIONS=0 && make run_coremark MAX_CYCLES=2000000 SIM_FAST=1 MINIMAL_SOC=1 TRACE=0"
 	@echo -e "  make coremark COREMARK_ITERATIONS=2000"
 	@echo -e "  make coremark_clean coremark         # Clean rebuild"
 	@echo ""
@@ -3758,14 +3748,14 @@ help_lists:
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "  SIM=verilator|modelsim   – Simulator (default: verilator)"
 	@echo -e "  CLEAN_LOGS=1             – Clear logs before batch run"
-	@echo -e "  FAST_SIM=1               – Disable logging for speed"
+	@echo -e "  SIM_FAST=1               – Disable logging for speed"
 	@echo -e "  COVERAGE=1               – Enable coverage collection"
 	@echo -e ""
 	@echo -e "$(YELLOW)Examples:$(RESET)"
 	@echo -e "  make quick                        # Quick smoke test"
 	@echo -e "  make full CLEAN_LOGS=1            # Full regression, clean logs first"
 	@echo -e "  make coverage                     # Full coverage analysis"
-	@echo -e "  make t T=rv32ui-p-add FAST_SIM=1  # Single fast test"
+	@echo -e "  make t T=rv32ui-p-add SIM_FAST=1  # Single fast test"
 	@echo -e ""
 
 # ====== custom_test.mk ======
@@ -6794,7 +6784,7 @@ help_tests:
 	@echo -e "$(CYAN)▶ Examples:$(RESET)"
 	@echo -e "  make run T=rv32ui-p-add LOG_COMMIT=1"
 	@echo -e "  make isa LOG_BP=1"
-	@echo -e "  make run_coremark FAST_SIM=1 SIM_UART_MONITOR=1"
+	@echo -e "  make run_coremark SIM_FAST=1 SIM_UART_MONITOR=1"
 	@echo -e "  make run_batch TEST_LIST=my_tests.list"
 	@echo -e ""
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"

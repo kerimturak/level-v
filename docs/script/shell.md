@@ -253,7 +253,7 @@ Merges `script/config/tests/default.conf` and `<profile>.conf`; with `--make` em
 ./script/shell/parse_test_conf.sh isa --make
 ```
 
-Details: [script/config/tests/README.md](../../script/config/tests/README.md).
+Details: [script/config/tests/README.md on GitHub](https://github.com/kerimturak/level-v/blob/main/script/config/tests/README.md).
 
 ---
 

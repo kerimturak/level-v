@@ -37,8 +37,8 @@
 //   - Sufficient for small benchmarks like CoreMark
 //
 // Usage: 
-//   make run_coremark COREMARK_ITERATIONS=0 FAST_SIM=1 MINIMAL_SOC=1 TRACE=0 MAX_CYCLES=2000000
-//   make verilate MINIMAL_SOC=1 FAST_SIM=1
+//   make run_coremark COREMARK_ITERATIONS=0 SIM_FAST=1 MINIMAL_SOC=1 TRACE=0 MAX_CYCLES=2000000
+//   make verilate MINIMAL_SOC=1 SIM_FAST=1
 
 
 // ============================================================================

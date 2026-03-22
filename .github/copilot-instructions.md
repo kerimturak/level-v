@@ -321,7 +321,7 @@ MODE=test         # RISC-V test mode with assertions
 make run T=rv32ui-p-add LOG_COMMIT=1
 
 # Run CoreMark in fast mode with branch stats
-make run_coremark FAST_SIM=1 LOG_BP=1 SIM_UART_MONITOR=1
+make run_coremark SIM_FAST=1 LOG_BP=1 SIM_UART_MONITOR=1
 
 # Run all ISA tests with commit log
 make isa LOG_COMMIT=1

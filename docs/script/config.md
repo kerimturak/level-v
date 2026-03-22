@@ -33,7 +33,7 @@ default.conf (base, always loaded)
     └── <TEST_CONFIG>.conf   # e.g. isa.conf — overrides / adds keys
 ```
 
-`make` sets `TEST_CONFIG` from `TEST_TYPE` if unset; override with `TEST_CONFIG=<profile>`. See `script/shell/parse_test_conf.sh` and `script/config/tests/README.md`.
+`make` sets `TEST_CONFIG` from `TEST_TYPE` if unset; override with `TEST_CONFIG=<profile>`. See `script/shell/parse_test_conf.sh` and [script/config/tests/README.md on GitHub](https://github.com/kerimturak/level-v/blob/main/script/config/tests/README.md).
 
 ---
 
@@ -276,7 +276,7 @@ Predefined configuration profiles:
 
 Test profiles are `script/config/tests/*.conf` files. The makefile merges `default.conf` first, then `<name>.conf` selected by `TEST_CONFIG`, via `script/shell/parse_test_conf.sh`, and writes `build/.test_config_<name>.mk`.
 
-Full format and key list: [script/config/tests/README.md](../../script/config/tests/README.md).
+Full format and key list: [script/config/tests/README.md on GitHub](https://github.com/kerimturak/level-v/blob/main/script/config/tests/README.md).
 
 ### Line format (summary)
 

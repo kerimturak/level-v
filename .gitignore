@@ -14,6 +14,8 @@ riscv-privileged.pdf
 riscv-unprivileged.pdf
 # MkDocs site
 site/
+# Copied from results/logs by mkdocs_hooks.py (do not commit)
+docs/dashboard.html
 */__pycache__/
 *.pyc
 
