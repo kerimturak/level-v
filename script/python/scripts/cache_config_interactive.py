@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Interactive Cache Configuration Tool for CERES RISC-V
+Interactive Cache Configuration Tool for Level RISC-V
 Allows custom way and block size combinations
 """
 
@@ -148,7 +148,7 @@ def generate_table(ways_list, blk_sizes_list, size_range_kb):
 
 def main():
     print("="*80)
-    print(" CERES RISC-V Interactive Cache Configuration Tool")
+    print(" Level RISC-V Interactive Cache Configuration Tool")
     print("="*80)
 
     if len(sys.argv) > 1:

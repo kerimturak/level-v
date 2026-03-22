@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-html_diff_generator.py — Beautiful HTML Report Generator for CERES vs SPIKE
+html_diff_generator.py — Beautiful HTML Report Generator for Level vs SPIKE
 ============================================================================
 Generates interactive, color-coded HTML comparison reports with:
   ✅ Search and filtering capabilities
@@ -241,7 +241,7 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CERES vs SPIKE - {test_name or 'Commit Log Comparison'}</title>
+    <title>Level vs SPIKE - {test_name or 'Commit Log Comparison'}</title>
     <style>
         :root {{
             /* Dark theme (default) */
@@ -1158,7 +1158,7 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
     <div class="container">
         <header>
             <button class="theme-toggle" onclick="toggleTheme()">🌓 Theme</button>
-            <h1>🔬 CERES vs SPIKE</h1>
+            <h1>🔬 Level vs SPIKE</h1>
             <div class="subtitle">Commit Log Comparison Report</div>
             {test_info_html}
             <div class="subtitle" style="margin-top: 8px; font-size: 0.85em;">
@@ -1333,7 +1333,7 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
                     <tr>
                         <th>#</th>
                         <th>Status</th>
-                        <th>CERES (RTL)</th>
+                        <th>Level (RTL)</th>
                         <th>SPIKE (Golden)</th>
                         {'<th>Disassembly</th>' if disasm_map else ''}
                     </tr>
@@ -1364,7 +1364,7 @@ def generate_html_diff(rtl, spike, html_path, stats, disasm_map=None,
                     <span>Extra Entry</span>
                 </div>
             </div>
-            <div>CERES RISC-V Processor Verification Suite | Press <kbd>?</kbd> for keyboard shortcuts</div>
+            <div>Level RISC-V Processor Verification Suite | Press <kbd>?</kbd> for keyboard shortcuts</div>
         </footer>
     </div>
     

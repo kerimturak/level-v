@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DESIGN_DIR="${ROOT_DIR}/asic/openlane/designs/ceres_wrapper"
-RESULTS_ROOT="${RESULTS_ROOT:-${ROOT_DIR}/results/asic/openlane/ceres_wrapper}"
+DESIGN_DIR="${ROOT_DIR}/asic/openlane/designs/level_wrapper"
+RESULTS_ROOT="${RESULTS_ROOT:-${ROOT_DIR}/results/asic/openlane/level_wrapper}"
 RUNS_DIR="${RESULTS_ROOT}/runs"
 
 OPENLANE_IMAGE="${OPENLANE_IMAGE:-efabless/openlane:2023.09.07}"
@@ -90,21 +90,21 @@ do_setup() {
         echo "[openlane:setup] Pulling image: ${OPENLANE_IMAGE}"
         docker pull "${OPENLANE_IMAGE}"
     else
-        echo "[openlane:setup] WARNING: Docker bulunamadı."
+        echo "[openlane:setup] WARNING: Docker not found."
         if has_local_openlane; then
-            echo "[openlane:setup] Local OpenLane bulundu: ${OPENLANE_LOCAL_ROOT}"
+            echo "[openlane:setup] Local OpenLane found: ${OPENLANE_LOCAL_ROOT}"
         else
-            echo "[openlane:setup] Local OpenLane de bulunamadı."
-            echo "[openlane:setup] Çözüm: make asic_subrepos veya Docker kurulumu"
+            echo "[openlane:setup] Local OpenLane not found either."
+            echo "[openlane:setup] Fix: run make asic_subrepos or install Docker"
         fi
     fi
 
     echo "[openlane:setup] PDK root: ${PDK_ROOT}"
     if [[ ! -d "${PDK_ROOT}/${PDK}" ]]; then
-        echo "[openlane:setup] WARNING: ${PDK_ROOT}/${PDK} bulunamadı."
-        echo "[openlane:setup] PDK henüz kurulu değilse OpenLane/Volare ile sky130A yüklemelisin."
+        echo "[openlane:setup] WARNING: ${PDK_ROOT}/${PDK} not found."
+        echo "[openlane:setup] If the PDK is not installed yet, install sky130A with OpenLane/Volare."
     else
-        echo "[openlane:setup] PDK dizini bulundu."
+        echo "[openlane:setup] PDK directory found."
     fi
 }
 
@@ -116,13 +116,13 @@ do_run() {
     do_prep
 
     if [[ ! -f "${DESIGN_DIR}/config.tcl" ]]; then
-        echo "[openlane:run] ERROR: config.tcl bulunamadı: ${DESIGN_DIR}/config.tcl"
+        echo "[openlane:run] ERROR: config.tcl not found: ${DESIGN_DIR}/config.tcl"
         exit 1
     fi
 
     if [[ ! -d "${PDK_ROOT}/${PDK}" ]]; then
-        echo "[openlane:run] ERROR: PDK bulunamadı: ${PDK_ROOT}/${PDK}"
-        echo "[openlane:run] Önce sky130A PDK kurulumunu tamamla."
+        echo "[openlane:run] ERROR: PDK not found: ${PDK_ROOT}/${PDK}"
+        echo "[openlane:run] Complete sky130A PDK installation first."
         exit 1
     fi
 
@@ -136,14 +136,14 @@ do_run() {
     case "${OPENLANE_MODE}" in
         docker)
             if ! has_docker; then
-                echo "[openlane:run] ERROR: OPENLANE_MODE=docker ama docker yok."
+                echo "[openlane:run] ERROR: OPENLANE_MODE=docker but docker is not available."
                 exit 1
             fi
             run_openlane_docker
             ;;
         local)
             if ! has_local_openlane; then
-                echo "[openlane:run] ERROR: OPENLANE_MODE=local ama flow.tcl yok: ${OPENLANE_LOCAL_ROOT}/flow.tcl"
+                echo "[openlane:run] ERROR: OPENLANE_MODE=local but flow.tcl missing: ${OPENLANE_LOCAL_ROOT}/flow.tcl"
                 exit 1
             fi
             run_openlane_local
@@ -154,13 +154,13 @@ do_run() {
             elif has_local_openlane; then
                 run_openlane_local
             else
-                echo "[openlane:run] ERROR: Ne docker var ne local OpenLane var."
-                echo "[openlane:run] Çözüm: Docker kur veya make asic_subrepos sonrası OPENLANE_MODE=local kullan."
+                echo "[openlane:run] ERROR: Neither docker nor local OpenLane is available."
+                echo "[openlane:run] Fix: install Docker or after make asic_subrepos use OPENLANE_MODE=local."
                 exit 1
             fi
             ;;
         *)
-            echo "[openlane:run] ERROR: Geçersiz OPENLANE_MODE=${OPENLANE_MODE} (auto|docker|local)"
+            echo "[openlane:run] ERROR: Invalid OPENLANE_MODE=${OPENLANE_MODE} (auto|docker|local)"
             exit 1
             ;;
     esac
@@ -172,16 +172,16 @@ do_run() {
 do_report() {
     local run_dir
     if ! run_dir="$(latest_run_dir)"; then
-        echo "[openlane:report] Henüz run yok: ${RUNS_DIR}"
+        echo "[openlane:report] No runs yet: ${RUNS_DIR}"
         exit 1
     fi
 
     echo "[openlane:report] Latest run: ${run_dir}"
 
     local summary="${run_dir}/reports/metrics.csv"
-    local final_gds="${run_dir}/results/final/gds/ceres_wrapper.gds"
-    local final_def="${run_dir}/results/final/def/ceres_wrapper.def"
-    local final_netlist="${run_dir}/results/final/verilog/gl/ceres_wrapper.v"
+    local final_gds="${run_dir}/results/final/gds/level_wrapper.gds"
+    local final_def="${run_dir}/results/final/def/level_wrapper.def"
+    local final_netlist="${run_dir}/results/final/verilog/gl/level_wrapper.v"
 
     [[ -f "${summary}" ]] && echo "  Metrics : ${summary}" || true
     [[ -f "${final_gds}" ]] && echo "  GDS     : ${final_gds}" || true

@@ -1,68 +1,70 @@
-# Cache Logger - Kullanım Kılavuzu
+# Cache logger user guide
 
-## Genel Bakış
+## Overview
 
-`cache_logger.sv` modülü, memory stage'deki unified cache'e giren tüm istekleri ve dönen cevapları tablo formatında loglayan bir debug aracıdır.
+`cache_logger.sv` is a debug helper that logs every request into the memory-stage unified cache and every response, in a tabular text format.
 
-## Özellikler
+## Features
 
-### Log Edilen Bilgiler
+### Logged fields
 
-**Request (İstek):**
-- ⏰ **Time**: İsteğin zamanı (ns)
-- ✓ **Valid**: İsteğin geçerli olup olmadığı
-- 📍 **Address**: Erişilen bellek adresi (hex)
-- 🔄 **Operation**: READ veya WRITE
-- 📏 **Size**: İşlem boyutu (1B, 2B, 4B)
-- 📝 **Write Data**: Write işlemlerinde yazılan veri (hex)
-- 🔓 **Uncached**: Uncached erişim flag'i
+**Request**
 
-**Response (Cevap):**
-- ⏰ **Time**: Cevabın zamanı (ns)
-- ✓ **Valid**: Cevabın geçerli olup olmadığı
-- 🎯 **Miss/Hit**: Cache miss veya hit durumu
-- 🚦 **Ready**: Cache'in hazır olup olmadığı
-- 📖 **Read Data**: Read işlemlerinde okunan veri (hex)
+- **Time**: Request time (ns)
+- **Valid**: Whether the request is valid
+- **Address**: Memory address (hex)
+- **Operation**: READ or WRITE
+- **Size**: Transfer size (1B, 2B, 4B)
+- **Write data**: Data written on stores (hex)
+- **Uncached**: Uncached access flag
 
-## Kullanım
+**Response**
 
-### 1. Verilator ile Simülasyon
+- **Time**: Response time (ns)
+- **Valid**: Whether the response is valid
+- **Miss/Hit**: Cache miss or hit
+- **Ready**: Whether the cache is ready
+- **Read data**: Data returned on loads (hex)
 
-Cache loglarını aktif etmek için:
+## Usage
+
+### 1. Verilator simulation
+
+Enable cache logs:
 
 ```bash
 make verilate LOG_CACHE=1
 make run:your_test LOG_CACHE=1
 ```
 
-### 2. Örnek Komutlar
+### 2. Example commands
 
 ```bash
-# RISC-V ISA testlerini cache log ile çalıştır
+# ISA test with cache log
 make run:rv32ui-p-add LOG_CACHE=1
 
-# CoreMark benchmark'ı cache log ile çalıştır
-make cm_quick LOG_CACHE=1
+# CoreMark with cache log
+make run_coremark SIM_FAST=1 TRACE=0 LOG_CACHE=1
 
-# Özel test programını cache log ile çalıştır
+# Custom program
 make verilate LOG_CACHE=1
-./build/obj_dir/Vceres_wrapper +firmware=your_program.hex
+./build/obj_dir/Vlevel_wrapper +firmware=your_program.hex
 ```
 
-### 3. Diğer Log'larla Birlikte Kullanım
+### 3. Combining with other logs
 
 ```bash
-# Cache + Commit trace
+# Cache + commit trace
 make run:rv32ui-p-add LOG_CACHE=1 LOG_COMMIT=1
 
-# Cache + UART + RAM logs
+# Cache + UART + RAM
 make run:your_test LOG_CACHE=1 LOG_UART=1 LOG_RAM=1
 
-# Tüm debug logları
+# Verbose bundle
 make run:your_test LOG_CACHE=1 LOG_COMMIT=1 LOG_UART=1 LOG_RAM=1 LOG_BP=1
 ```
 
-## Çıktı Formatı
+## Output format
 
 ```
 ╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
@@ -81,41 +83,41 @@ make run:your_test LOG_CACHE=1 LOG_COMMIT=1 LOG_UART=1 LOG_RAM=1 LOG_BP=1
 ╚═════════╩═══════════╩════════════╩═════════╩═════════╩═══════════════╩═════════╧════════╧═════════╧══════════════════╝
 ```
 
-## Implementasyon Detayları
+## Implementation notes
 
-### Dosya Konumları
+### Files
 
-- **Logger Modülü**: `rtl/core/stage04_memory/cache_logger.sv`
-- **Entegrasyon**: `rtl/core/stage04_memory/memory.sv` içinde instantiate edilmiş
-- **Defines**: `rtl/include/ceres_defines.svh` içinde `LOG_CACHE` flag'i
-- **Makefile**: `script/makefiles/sim/verilator.mk` içinde flag tanımı
+- **Logger**: `rtl/core/stage04_memory/cache_logger.sv`
+- **Hookup**: instantiated from `rtl/core/stage04_memory/memory.sv`
+- **Defines**: `LOG_CACHE` in `rtl/include/level_defines.svh`
+- **Makefile**: root `makefile` Verilator section passes `LOG_CACHE` and related defines
 
-### Sinyaller
+### Signals
 
-Logger, memory stage'den şu sinyalleri alır:
+The logger taps the memory-stage cache interface:
 
 ```systemverilog
-input dcache_req_t cache_req_i;  // Cache'e giden istek
-input dcache_res_t cache_res_i;  // Cache'den gelen cevap
+input dcache_req_t cache_req_i;  // Request toward cache
+input dcache_res_t cache_res_i;  // Response from cache
 ```
 
-### Performans Notu
+### Performance
 
-- Logger yalnızca `LOG_CACHE=1` ile aktif edildiğinde çalışır
-- Aktif olmadığında synthesize edilmez (sıfır overhead)
-- Simülasyon hızına minimal etki eder
+- Only active when `LOG_CACHE=1`
+- When disabled, intended to optimize away in synthesis (no overhead)
+- Small simulation-time cost when enabled
 
 ## Troubleshooting
 
-### Log çıktısı görünmüyor
+### No log output
 
-1. `LOG_CACHE=1` flag'ini kullandığınızdan emin olun
-2. Verilator build'ini yeniden yapın: `make verilate LOG_CACHE=1`
-3. Simülasyon sırasında cache erişimi olup olmadığını kontrol edin
+1. Confirm `LOG_CACHE=1` on the Verilator build and run.
+2. Rebuild: `make verilate LOG_CACHE=1`
+3. Ensure the workload actually exercises the cache path.
 
-### Log çok fazla satır üretiyor
+### Log volume too high
 
-Cache logları oldukça verbose olabilir. Filtreleme için:
+Cache logs are verbose. Filter at the shell:
 
 ```bash
 make run:your_test LOG_CACHE=1 | grep "READ "
@@ -123,8 +125,8 @@ make run:your_test LOG_CACHE=1 | grep "WRITE"
 make run:your_test LOG_CACHE=1 | grep "MISS"
 ```
 
-## İlgili Dökümanlar
+## Related docs
 
-- Memory Stage: `rtl/core/stage04_memory/memory.sv`
-- Cache Implementation: `rtl/core/cache/cache.sv` veya `rtl/core/mmu/dcache.sv`
-- Defines Reference: `rtl/include/ceres_defines.svh`
+- Memory stage: `rtl/core/stage04_memory/memory.sv`
+- Cache RTL: `rtl/core/mmu/cache.sv`, `rtl/core/mmu/dcache.sv`, etc.
+- Defines: `rtl/include/level_defines.svh`

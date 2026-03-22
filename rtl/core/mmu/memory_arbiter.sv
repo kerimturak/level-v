@@ -8,8 +8,8 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
-import ceres_param::*;
+`include "level_defines.svh"
+import level_param::*;
 
 module memory_arbiter (
     input logic clk_i,
@@ -38,7 +38,7 @@ module memory_arbiter (
 
   // Combinational logic for outputs using the latched request data
   always_comb begin
-    // Response paths: iomem_res_i.valid, artık bellek cevabının geçerli olduğunu bildiriyor.
+    // Response paths: iomem_res_i.valid indicates memory response is valid.
     icache_res_o.valid = (round == ICACHE) && iomem_res_i.valid;
     icache_res_o.ready = 1'b1;
     icache_res_o.blk   = iomem_res_i.data;
@@ -47,17 +47,20 @@ module memory_arbiter (
     dcache_res_o.ready = 1'b1;
     dcache_res_o.data  = iomem_res_i.data;
 
-    // Memory request: seçimi latched veriden yapıyoruz.
+    // Memory request: selection from latched request data.
     if (round == DCACHE) begin
-      iomem_req_o.addr  = dcache_req_reg.addr;
-      iomem_req_o.valid = dcache_req_reg.valid;
-    end else begin  // ICACHE veya IDLE durumunda icache isteklerine öncelik veriyoruz.
-      iomem_req_o.addr  = icache_req_reg.addr;
-      iomem_req_o.valid = icache_req_reg.valid;
+      iomem_req_o.addr     = dcache_req_reg.addr;
+      iomem_req_o.valid    = dcache_req_reg.valid;
+      iomem_req_o.uncached = dcache_req_reg.uncached;
+    end else begin  // In ICACHE or IDLE, prefer icache requests.
+      iomem_req_o.addr     = icache_req_reg.addr;
+      iomem_req_o.valid    = icache_req_reg.valid;
+      iomem_req_o.uncached = icache_req_reg.uncached;
     end
 
-    iomem_req_o.data = dcache_req_reg.data;  // dcache verisini kullanıyoruz.
-    iomem_req_o.rw   = '0;
+    iomem_req_o.ready = 1'b1;
+    iomem_req_o.data  = dcache_req_reg.data;  // use dcache write data
+    iomem_req_o.rw    = '0;
     if (round == DCACHE && dcache_req_reg.valid && dcache_req_reg.rw) begin
       if (dcache_req_reg.uncached) begin
         // Uncached write: use rw_size to determine byte enables
@@ -79,28 +82,28 @@ module memory_arbiter (
     end
   end
 
-  // Sequential block: Latching istekler ve round state güncellemesi
+  // Sequential: latch requests and update round-robin state
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       round          <= IDLE;
       icache_req_reg <= '{default: 0};
       dcache_req_reg <= '{rw_size: NO_SIZE, default: 0};
     end else begin
-      // Yeni istekleri latch’la (varsa). Tek cycle’lık pulse’u register’da tutuyoruz.
+      // Latch new requests when present; hold single-cycle pulse in registers.
       if (!icache_req_reg.valid && icache_req_i.valid) icache_req_reg <= icache_req_i;
       if (!dcache_req_reg.valid && dcache_req_i.valid) dcache_req_reg <= dcache_req_i;
 
-      // Bellek cevabı geçerli ise (iomem_res_i.valid aktifse) latched istek temizlenir ve round state güncellenir.
+      // When memory response is valid, clear latched request and update round state.
       if (iomem_res_i.valid || round == IDLE) begin
         case (round)
           ICACHE: begin
-            icache_req_reg.valid <= 1'b0;  // İstek işlendi, temizle
-            // Eğer dcache'te bekleyen istek varsa onu seç, yoksa ICACHE'da kal.
+            icache_req_reg.valid <= 1'b0;  // Request served, clear
+            // If dcache has a pending request, select it; else stay on ICACHE.
             round <= dcache_req_reg.valid ? DCACHE : icache_req_reg.valid && !iomem_res_i.valid ? ICACHE : IDLE;
           end
           DCACHE: begin
-            dcache_req_reg.valid <= 1'b0;  // İstek işlendi, temizle
-            // Eğer icache'te bekleyen istek varsa onu seç, yoksa DCACHE'te kal.
+            dcache_req_reg.valid <= 1'b0;  // Request served, clear
+            // If icache has a pending request, select it; else stay on DCACHE.
             round <= icache_req_reg.valid ? ICACHE : dcache_req_reg.valid && !iomem_res_i.valid ? DCACHE : IDLE;
           end
           IDLE: begin
@@ -111,7 +114,7 @@ module memory_arbiter (
           default: round <= IDLE;
         endcase
       end
-      // Eğer iomem_res_i.valid düşükse, round sabit kalır ve latch’lenen istek sürekli gönderilir.
+      // If iomem_res_i.valid is low, round stays fixed and latched request keeps driving.
     end
   end
 

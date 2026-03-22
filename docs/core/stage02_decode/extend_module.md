@@ -1,16 +1,16 @@
-# EXTEND (Immediate Generator) Modülü - Teknik Döküman
+# Extend (Immediate Generator) Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`extend.sv` modülü, RISC-V instruction'larından immediate değerleri çıkarır ve 32-bit'e genişletir (sign/zero extension). Instruction format'ına göre (I, S, B, U, J, CSR) bit shuffling ve extension işlemlerini yapar. Tamamen combinational logic ile çalışır.
+The `extend.sv` module extracts immediates from RISC-V instructions and widens them to 32 bits (sign or zero extension). For each format (I, S, B, U, J, CSR) it performs the required bit shuffle and extension. It is purely combinational.
 
-## RISC-V Immediate Formats
+## RISC-V immediate formats
 
-RISC-V instruction encoding'inde immediate değerler efficiency için bit shuffle edilmiş şekilde saklanır. Extend modülü bu bit'leri doğru sıraya koyar ve genişletir.
+RISC-V packs immediates into non-contiguous instruction bits for encoding efficiency. This module gathers those bits into order and widens them.
 
-### Format Özeti
+### Format summary
 
-| Format | Bit Count | Alignment | Extension Type | Kullanım |
+| Format | Bit Count | Alignment | Extension Type | Usage |
 |--------|-----------|-----------|----------------|----------|
 | I-Type | 12-bit | Byte | Sign | ADDI, Load, JALR |
 | S-Type | 12-bit | Byte | Sign | Store |
@@ -19,14 +19,14 @@ RISC-V instruction encoding'inde immediate değerler efficiency için bit shuffl
 | J-Type | 21-bit | 2-byte | Sign | JAL |
 | CSR-Imm | 5-bit | Byte | Zero | CSR immediate |
 
-## Port Tanımları
+## Port definitions
 
-### Giriş Portları
+### Input ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
-| `imm_i` | [31:7] | Instruction'ın immediate bit'leri (bit 31-7) |
-| `sel_i` | imm_e | Immediate format seçimi (control unit'ten) |
+| `imm_i` | [31:7] | Immediate bits from the instruction (31:7) |
+| `sel_i` | imm_e | Immediate format selection (from the control unit) |
 
 **imm_e enum:**
 ```systemverilog
@@ -42,11 +42,11 @@ typedef enum logic [2:0] {
 } imm_e;
 ```
 
-### Çıkış Portları
+### Output ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
-| `imm_o` | [31:0] | Sign/zero extended 32-bit immediate değer |
+| `imm_o` | [31:0] | Sign- or zero-extended 32-bit immediate |
 
 ## Immediate Format Details
 
@@ -71,7 +71,7 @@ I_IMM: imm_o = {{20{imm_i[31]}}, imm_i[31:20]};
 
 **Range:** -2048 to +2047 (12-bit signed)
 
-**Örnekler:**
+**Examples:**
 ```assembly
 addi x1, x2, 12       # imm = 12 (0x00000000C)
 addi x1, x2, -5       # imm = -5 (0xFFFFFFFB)
@@ -85,7 +85,7 @@ jalr x1, 0(x2)        # imm = 0
 I_USIMM: imm_o = {{20{1'b0}}, imm_i[31:20]};
 ```
 
-**Kullanım:** Shift instruction'ları (slli, srli, srai)
+**Usage:** Shift instructions (slli, srli, srai)
 
 **Extraction:**
 - Immediate: `inst[31:20]` (12-bit)
@@ -94,14 +94,14 @@ I_USIMM: imm_o = {{20{1'b0}}, imm_i[31:20]};
 
 **Range:** 0 to 4095 (12-bit unsigned)
 
-**Örnekler:**
+**Examples:**
 ```assembly
 slli x1, x2, 5   # imm = 5 (shift amount)
 srli x1, x2, 10  # imm = 10
 srai x1, x2, 15  # imm = 15
 ```
 
-**Not:** RV32I'de shift amount 5-bit (0-31), üst 7 bit illegal (control_unit check eder)
+**Note:** On RV32I the shift amount is 5 bits (0–31); the upper 7 bits are illegal (`control_unit` checks this).
 
 ### 3. S-Type Immediate (S_IMM)
 
@@ -125,7 +125,7 @@ S_IMM: imm_o = {{20{imm_i[31]}}, imm_i[31:25], imm_i[11:7]};
 
 **Range:** -2048 to +2047 (12-bit signed)
 
-**Örnekler:**
+**Examples:**
 ```assembly
 sw x3, 8(x2)   # imm = 8 (offset)
 sh x4, -4(x5)  # imm = -4 (0xFFFFFFC)
@@ -133,8 +133,8 @@ sb x6, 0(x7)   # imm = 0
 ```
 
 **Why Split?** 
-- rd field'i (inst[11:7]) S-type'da kullanılmaz
-- Immediate bit'leri rs1/rs2'nin etrafına dağıtılır (decoder simplicity)
+- The `rd` field (`inst[11:7]`) is unused in S-type encodings  
+- Immediate bits are split around rs1/rs2 for decode regularity  
 
 ### 4. B-Type Immediate (B_IMM)
 
@@ -160,7 +160,7 @@ B_IMM: imm_o = {{20{imm_i[31]}}, imm_i[7], imm_i[30:25], imm_i[11:8], 1'b0};
 
 **Range:** -4096 to +4094 (13-bit signed, even values only)
 
-**Örnekler:**
+**Examples:**
 ```assembly
 beq x1, x2, 8      # imm = 8 (PC + 8)
 bne x3, x4, -12    # imm = -12 (PC - 12)
@@ -196,13 +196,13 @@ U_IMM: imm_o = {imm_i[31:12], 12'b0};
 
 **Range:** 0x00000000 to 0xFFFFF000 (4KB aligned)
 
-**Örnekler:**
+**Examples:**
 ```assembly
 lui x1, 0x12345    # x1 = 0x12345000
 auipc x2, 0x10000  # x2 = PC + 0x10000000
 ```
 
-**Kullanım:**
+**Usage:**
 - **LUI (Load Upper Immediate):** Load 20-bit constant to upper 20 bits
 - **AUIPC (Add Upper Immediate to PC):** PC + (imm << 12)
 
@@ -237,7 +237,7 @@ J_IMM: imm_o = {{12{imm_i[31]}}, imm_i[19:12], imm_i[20], imm_i[30:21], 1'b0};
 
 **Range:** -1048576 to +1048574 (21-bit signed, even values only)
 
-**Örnekler:**
+**Examples:**
 ```assembly
 jal x1, 100        # Jump to PC + 100, x1 = PC + 4
 jal x0, -8         # Jump to PC - 8 (loop), no link
@@ -271,7 +271,7 @@ CSR_IMM: imm_o = {27'b0, imm_i[19:15]};
 
 **Range:** 0 to 31 (5-bit unsigned)
 
-**Örnekler:**
+**Examples:**
 ```assembly
 csrrwi x1, mstatus, 5   # CSR[mstatus] = 5 (immediate)
 csrrsi x2, mie, 8       # CSR[mie] |= 8
@@ -289,15 +289,15 @@ csrrci x3, mip, 3       # CSR[mip] &= ~3
 NO_IMM: imm_o = '0;  // 32'h00000000
 ```
 
-**Kullanım:**
-- R-type instruction'lar (register-register)
-- Immediate kullanılmayan instruction'lar
+**Usage:**
+- R-type instructions (register-register)
+- Instructions that do not use an immediate  
 
 ## Immediate Extension Logic
 
 ### Sign Extension
 
-**Mantık:** MSB (sign bit) tekrar edilerek 32-bit'e genişletir
+**Logic:** Replicate the MSB (sign bit) to widen to 32 bits  
 
 ```
 12-bit signed immediate:  0b0000_0000_1000 (8)
@@ -313,7 +313,7 @@ Result:                   32'hFFFFFFF8
 
 ### Zero Extension
 
-**Mantık:** Üst bit'ler 0 ile doldurulur
+**Logic:** Upper bits are zero-filled
 
 ```
 5-bit unsigned immediate: 0b11111 (31)
@@ -324,10 +324,10 @@ Result:                   32'h0000001F
 ## Bit Replication Syntax
 
 ```systemverilog
-{20{imm_i[31]}}  // imm_i[31] bit'ini 20 kez tekrarla
+{20{imm_i[31]}}  // imm_i[31] repeated 20 times
 ```
 
-**Örnek:**
+**Example:**
 ```
 imm_i[31] = 1
 {20{imm_i[31]}} = 20'b11111111111111111111
@@ -336,7 +336,7 @@ imm_i[31] = 0
 {20{imm_i[31]}} = 20'b00000000000000000000
 ```
 
-## Timing & Synthesis
+## Timing and synthesis
 
 ### Combinational Delay
 
@@ -427,7 +427,7 @@ zimm = imm_i[19:15] = 5'b00101 (5)
 Zero-extend: {27'b0, 5'b00101} = 32'h00000005
 ```
 
-## Common Pitfalls
+## Common pitfalls
 
 ### 1. Sign Extension Bug
 
@@ -459,7 +459,7 @@ B_IMM: imm_o = {{20{imm_i[31]}}, imm_i[7], imm_i[30:25], imm_i[11:8]};
 
 **Result:** Unaligned branch target (missing imm[0]=0)
 
-## Assertions (Önerilen)
+## Suggested assertions
 
 ```systemverilog
 // I-type signed: negative values extend with 1's
@@ -487,19 +487,19 @@ assert property (@(posedge clk_i)
   (sel_i == CSR_IMM) |-> (imm_o[31:5] == 27'h0));
 ```
 
-## İlgili Modüller
+## Related modules
 
-1. **decode.sv**: Extend modülünü kullanır
-2. **control_unit.sv**: `imm_sel` sinyalini üretir
-3. **execute.sv**: Extended immediate'i ALU'ya gönderir
+1. **decode.sv:** Instantiates `extend`  
+2. **control_unit.sv:** Drives `imm_sel`  
+3. **execute.sv:** Consumes the extended immediate for the ALU  
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213 - Chapter 2 (Immediate Encoding)
 2. "Computer Organization and Design: RISC-V Edition" - Patterson & Hennessy, Appendix B (Instruction Formats)
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** 5 December 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

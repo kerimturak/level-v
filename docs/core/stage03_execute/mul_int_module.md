@@ -1,26 +1,26 @@
-# MUL_INT (Sequential Multiplier) Modülü - Teknik Döküman
+# MUL_INT (Sequential Multiplier) Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`mul_int.sv` modülü, **shift-add algoritması** kullanarak 32×32-bit unsigned multiplication yapan sequential (çok-döngülü) bir çarpıcıdır. Minimal alan kullanımı için tasarlanmıştır ve 32 cycle'da sonuç üretir.
+`mul_int.sv` is a sequential (multi-cycle) multiplier that performs 32×32-bit unsigned multiplication using the **shift-add algorithm**. It is designed for minimal area and produces a result in 32 cycles.
 
-## Algoritma
+## Algorithm
 
 ### Shift-Add Multiplication
 
-**Temel Prensip:**
+**Basic principle:**
 ```
 A × B = A × (b₃₁·2³¹ + b₃₀·2³⁰ + ... + b₁·2¹ + b₀·2⁰)
       = A·b₃₁·2³¹ + A·b₃₀·2³⁰ + ... + A·b₁·2¹ + A·b₀·2⁰
 ```
 
-**Adım Adım:**
+**Step by step:**
 1. Product = 0, Multiplier = B
-2. Her cycle:
-   - Eğer Multiplier MSB = 1 → Product += Multiplicand
+2. Each cycle:
+   - If Multiplier MSB = 1 → Product += Multiplicand
    - Product << 1 (shift left)
    - Multiplier << 1 (next bit to MSB)
-3. 32 iteration sonra: Product = A × B
+3. After 32 iterations: Product = A × B
 
 ### Example (8-bit)
 
@@ -41,28 +41,28 @@ Cycle 8: MSB=1 → product = (24 + 6) << 0 = 30 (last cycle, no shift)
 Result: 30 (6 × 5)
 ```
 
-## Port Tanımları
+## Port Definitions
 
-### Giriş Portları
+### Input Ports
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `start_i` | logic | Başlat sinyali (1 cycle pulse) |
-| `multiplicand_i` | [SIZE-1:0] | Çarpılan (A) - unsigned |
-| `multiplier_i` | [SIZE-1:0] | Çarpan (B) - unsigned |
+| Port | Type | Description |
+|------|------|-------------|
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `start_i` | logic | Start signal (1-cycle pulse) |
+| `multiplicand_i` | [SIZE-1:0] | Multiplicand (A), unsigned |
+| `multiplier_i` | [SIZE-1:0] | Multiplier (B), unsigned |
 
-### Çıkış Portları
+### Output Ports
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `product_o` | [2*SIZE-1:0] | Çarpım sonucu (64-bit for RV32) |
-| `busy_o` | logic | İşlem devam ediyor (1 = busy) |
-| `done_o` | logic | İşlem tamamlandı (1 cycle pulse) |
-| `valid_o` | logic | Sonuç geçerli (1 = valid) |
+| Port | Type | Description |
+|------|------|-------------|
+| `product_o` | [2*SIZE-1:0] | Product (64-bit for RV32) |
+| `busy_o` | logic | Operation in progress (1 = busy) |
+| `done_o` | logic | Operation complete (1-cycle pulse) |
+| `valid_o` | logic | Result valid (1 = valid) |
 
-## İç Sinyaller
+## Internal Signals
 
 ```systemverilog
 logic [SIZE-1:0] mult;              // Multiplier (shifted)
@@ -125,14 +125,14 @@ end
 
 ### Last Cycle Optimization
 
-**Problem:** Cycle 31'de shift gerekmez (sonuç hazır)
+**Problem:** On cycle 31 no shift is needed (result is ready).
 
 **Solution:**
 ```systemverilog
 shift = |(counter ^ 31);  // 0 when counter == 31
 ```
 
-**Benefit:** Product son cycle'da shift edilmez → doğru sonuç
+**Benefit:** The product is not shifted on the last cycle, yielding the correct result.
 
 ## Timing Diagram
 
@@ -380,13 +380,13 @@ CFLAGS += -DFEAT_WALLACE_SINGLE
 CFLAGS += -DFEAT_DSP_MUL
 ```
 
-## İlgili Modüller
+## Related Modules
 
 1. **alu.sv**: ALU wrapper, sign management
 2. **wallace32x32**: Wallace tree alternative
 3. **execution.sv**: Pipeline integration
 
-## Referanslar
+## References
 
 1. "Computer Arithmetic: Algorithms and Hardware Designs" - Behrooz Parhami, Chapter 9 (Multiplication)
 2. "Digital Design and Computer Architecture" - Harris & Harris, Section 5.2 (Multiplication)
@@ -394,6 +394,6 @@ CFLAGS += -DFEAT_DSP_MUL
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** December 5, 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

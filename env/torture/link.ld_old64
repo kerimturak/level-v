@@ -1,5 +1,5 @@
 /* ============================================================
- * Ceres-V Linker Script for Torture Tests - 64KB Memory
+ * level-V Linker Script for Torture Tests - 64KB Memory
  * Safe space for large torture-generated code
  * ============================================================
  */

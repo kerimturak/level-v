@@ -3,7 +3,7 @@
  * Tests all implemented CSRs for correct read/write behavior
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 // CSR read/write macros
 #define read_csr(reg) ({ \

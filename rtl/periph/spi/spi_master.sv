@@ -17,7 +17,7 @@ Description:
 */
 `timescale 1ns / 1ps
 module spi_master
-  import ceres_param::*;
+  import level_param::*;
 (
     input logic clk_i,
     input logic rst_ni,

@@ -7,10 +7,10 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 ================================================================================
-Xilinx AXI GPIO Wrapper for CERES SoC
+Xilinx AXI GPIO Wrapper for Level SoC
 ================================================================================
 Description:
-  This module wraps Xilinx AXI GPIO IP for direct integration with CERES SoC.
+  This module wraps Xilinx AXI GPIO IP for direct integration with Level SoC.
   It instantiates the AXI-Lite bridge and connects to Xilinx GPIO IP.
 
   For Vivado:
@@ -27,7 +27,7 @@ Description:
     - Tri Default: Initial tri-state value (1=input)
     - Interrupt: Enable interrupt on change
 
-Usage in CERES SoC:
+Usage in Level SoC:
   Set GPIO_EN = 1'b0 (disable internal GPIO)
   Set XILINX_GPIO_EN = 1'b1 (enable this wrapper)
 ================================================================================
@@ -47,7 +47,7 @@ module xilinx_gpio_wrapper #(
     input logic rst_ni,
 
     // =========================================================================
-    // Simple Bus Interface (from CERES SoC peripheral mux)
+    // Simple Bus Interface (from Level SoC peripheral mux)
     // =========================================================================
     input  logic        stb_i,
     input  logic [ 6:0] adr_i,       // Word address [8:2]

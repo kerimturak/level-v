@@ -1,5 +1,5 @@
 /*
- * GPIO Test for Ceres-V RV32IMC
+ * GPIO Test for Level-V RV32IMC
  * 
  * Tests GPIO controller functionality:
  * - Direction control
@@ -7,7 +7,7 @@
  * - Input register read (loopback)
  * - Atomic set/clear/toggle
  * 
- * Note: This peripheral is not yet connected in ceres_wrapper.sv
+ * Note: This peripheral is not yet connected in level_wrapper.sv
  *       Requires adding GPIO instantiation and address decode (0x2000_4xxx)
  *       Currently uses loopback simulation
  */
@@ -30,7 +30,7 @@
 #define UART_CTRL_RX_EN       0x2
 #define UART_STATUS_TX_FULL   0x1
 
-/* GPIO MMIO Map (base 0x2000_4000 per ceres_param.sv) */
+/* GPIO MMIO Map (base 0x2000_4000 per level_param.sv) */
 #define GPIO_BASE        0x20004000
 #define GPIO_DIR         (*(volatile uint32_t*)(GPIO_BASE + 0x00))
 #define GPIO_OUT         (*(volatile uint32_t*)(GPIO_BASE + 0x04))
@@ -234,7 +234,7 @@ int main(void)
     uart_init();
     
     uart_puts("\n========================================\n");
-    uart_puts("   GPIO Test - Ceres-V RV32IMC\n");
+    uart_puts("   GPIO Test - Level-V RV32IMC\n");
     uart_puts("========================================\n");
     
     test_gpio_direction();

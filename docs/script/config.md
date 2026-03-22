@@ -1,53 +1,39 @@
-# Configuration Files - Teknik Dokümantasyon
+# Configuration Files — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
+1. [Overview](#overview)
 2. [Verilator Configuration](#verilator-configuration)
 3. [ModelSim Configuration](#modelsim-configuration)
 4. [Test Configuration](#test-configuration)
-5. [JSON Schema Validation](#json-schema-validation)
+5. [JSON files](#json-files)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 script/config/
 ├── verilator.json          # Verilator simulator config
-├── verilator.schema.json   # Verilator schema
 ├── modelsim.json           # ModelSim config
-├── modelsim.schema.json    # ModelSim schema
-└── tests/                  # Test suite configs
-    ├── default.json        # Base configuration
-    ├── tests.schema.json   # Test config schema
-    ├── isa.json            # riscv-tests config
-    ├── arch.json           # riscv-arch-test config
-    ├── imperas.json        # Imperas tests config
-    ├── coremark.json       # CoreMark config
-    ├── dhrystone.json      # Dhrystone config
-    ├── embench.json        # Embench config
-    ├── bench.json          # General benchmark config
-    ├── csr.json            # CSR test config
-    ├── custom.json         # Custom test config
-    ├── branch_test.json    # Branch predictor test config
-    ├── torture.json        # Torture test config
-    ├── riscv-dv.json       # RISCV-DV config
-    ├── formal.json         # Formal verification config
-    └── README.md           # Config documentation
+└── tests/                  # Test profiles (.conf)
+    ├── default.conf        # Base profile
+    ├── isa.conf            # riscv-tests
+    ├── README.md           # Format + behavior
+    ├── riscv-dv.json       # RISCV-DV (separate JSON flow)
+    └── formal.json         # Formal (separate JSON flow)
 ```
 
-### Configuration Hierarchy
+### Test profile hierarchy
 
 ```
-default.json (base)
-    ├── isa.json (extends default)
-    ├── arch.json (extends default)
-    ├── coremark.json (extends default)
-    └── ... other test configs
+default.conf (base, always loaded)
+    └── <TEST_CONFIG>.conf   # e.g. isa.conf — overrides / adds keys
 ```
+
+`make` sets `TEST_CONFIG` from `TEST_TYPE` if unset; override with `TEST_CONFIG=<profile>`. See `script/shell/parse_test_conf.sh` and [script/config/tests/README.md on GitHub](https://github.com/kerimturak/level-v/blob/main/script/config/tests/README.md).
 
 ---
 
@@ -55,14 +41,13 @@ default.json (base)
 
 ### verilator.json
 
-**Dosya:** `script/config/verilator.json`
+**File:** `script/config/verilator.json`
 
-#### Tam Yapı
+#### Full structure
 
 ```json
 {
-  "$schema": "./verilator.schema.json",
-  "_comment": "CERES RISC-V Verilator Simulation Configuration",
+  "_comment": "Level RISC-V Verilator Simulation Configuration",
 
   "simulation": {
     "max_cycles": 100000,
@@ -134,30 +119,30 @@ default.json (base)
 }
 ```
 
-#### Section Açıklamaları
+#### Section Descriptions
 
 ##### simulation
 
-| Field | Type | Default | Açıklama |
-|-------|------|---------|----------|
-| `max_cycles` | integer | 100000 | Maximum simülasyon cycle'ı |
-| `timeout` | integer | 0 | Wall-clock timeout (saniye, 0=devre dışı) |
-| `threads` | int/auto | auto | Multi-threaded simulation thread sayısı |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_cycles` | integer | 100000 | Maximum simulation cycles |
+| `timeout` | integer | 0 | Wall-clock timeout (seconds, 0=disabled) |
+| `threads` | int/auto | auto | Multi-threaded simulation thread count |
 | `seed` | int/auto | auto | Random seed |
 
 ##### build
 
-| Field | Type | Default | Açıklama |
-|-------|------|---------|----------|
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
 | `mode` | string | release | Build mode: debug/release |
-| `jobs` | int/auto | auto | Parallel compile job sayısı |
+| `jobs` | int/auto | auto | Parallel compile job count |
 | `opt_level` | string | -O3 | C++ optimization level |
 | `cpp_standard` | string | c++17 | C++ standard version |
 
 ##### trace
 
-| Field | Type | Default | Açıklama |
-|-------|------|---------|----------|
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
 | `enabled` | boolean | true | Waveform trace enable |
 | `format` | string | fst | Trace format: fst/vcd |
 | `depth` | integer | 99 | Trace depth (0=all) |
@@ -167,8 +152,8 @@ default.json (base)
 
 ##### coverage
 
-| Field | Type | Default | Açıklama |
-|-------|------|---------|----------|
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
 | `enabled` | boolean | true | Coverage collection |
 | `line` | boolean | true | Line coverage |
 | `toggle` | boolean | true | Toggle coverage |
@@ -176,8 +161,8 @@ default.json (base)
 
 ##### optimization
 
-| Field | Type | Default | Açıklama |
-|-------|------|---------|----------|
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
 | `output_split` | integer | 20000 | C++ output split size |
 | `output_split_cfuncs` | integer | 5000 | Function split size |
 | `unroll_count` | integer | 64 | Loop unroll count |
@@ -187,9 +172,9 @@ default.json (base)
 
 ##### logging
 
-| Field | Type | Default | Açıklama |
-|-------|------|---------|----------|
-| `fast_sim` | boolean | false | Fast mode (tüm log'lar kapalı) |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `fast_sim` | boolean | false | Fast mode (all logging off) |
 | `bp_log` | boolean | false | Branch predictor statistics |
 | `bp_verbose` | boolean | false | Per-branch verbose log |
 | `commit_trace` | boolean | true | Spike-compatible commit trace |
@@ -254,11 +239,10 @@ Predefined configuration profiles:
 
 ### modelsim.json
 
-**Dosya:** `script/config/modelsim.json`
+**File:** `script/config/modelsim.json`
 
 ```json
 {
-  "$schema": "./modelsim.schema.json",
   "_comment": "ModelSim/Questa Simulation Configuration",
 
   "simulation": {
@@ -290,238 +274,81 @@ Predefined configuration profiles:
 
 ## Test Configuration
 
-### default.json - Base Configuration
+Test profiles are `script/config/tests/*.conf` files. The makefile merges `default.conf` first, then `<name>.conf` selected by `TEST_CONFIG`, via `script/shell/parse_test_conf.sh`, and writes `build/.test_config_<name>.mk`.
 
-**Dosya:** `script/config/tests/default.json`
+Full format and key list: [script/config/tests/README.md on GitHub](https://github.com/kerimturak/level-v/blob/main/script/config/tests/README.md).
 
-Tüm test config'lerinin temel aldığı base configuration:
+### Line format (summary)
 
-```json
-{
-  "$schema": "./tests.schema.json",
-  "_comment": "CERES RISC-V Default Test Configuration",
+- `KEY=value` — comments with `#`; blank lines ignored.
+- Shortcuts (`MAX_CYCLES`, `SPIKE_ISA`, `COMPARE`, `TRACE`, …) → `CFG_*` makefile variables.
+- `CFG_*` lines are written directly into the generated `.mk`.
+- Names outside `^[A-Z][A-Z0-9_]*$` are not treated as macros; for macro names, `1` / `true` / `yes` / `on` → `+define+NAME`, otherwise `+define+NAME=value`, or (if falsy) omitted.
+- Optional: `CFG_SV_DEFINES=+define+FOO +define+BAR`.
 
-  "simulation": {
-    "max_cycles": 100000,
-    "timeout_seconds": 60,
-    "build_threads": "auto",
-    "sim_threads": 16
-  },
+### Example snippets
 
-  "comparison": {
-    "enabled": true,
-    "spike_enabled": true
-  },
+`default.conf`:
 
-  "spike": {
-    "enabled": true,
-    "isa": "rv32imc_zicsr_zicntr_zifencei",
-    "priv": "m",
-    "pc": "0x80000000",
-    "processors": 1,
-    "memory_mb": 256,
-    "triggers": 1,
-    "pmp_regions": 0,
-    "pmp_granularity": 4,
-    "misaligned": false,
-    "big_endian": false,
-    "halted": false,
-    "log_commits": true,
-    "log_cache_miss": false,
-    "debug_mode": true,
-    "instructions_limit": 0,
-    "real_time_clint": false,
-    "blocksz": 64
-  },
-
-  "defines": {
-    "COMMIT_TRACER": true,
-    "KONATA_TRACER": false,
-    "LOG_COMMIT": true,
-    "LOG_RAM": false,
-    "LOG_UART": false,
-    "LOG_BP": true,
-    "SIM_FAST": false,
-    "SIM_UART_MONITOR": false
-  }
-}
+```text
+MAX_CYCLES=100000
+TIMEOUT=60
+SPIKE_ISA=rv32imc_zicsr_zicntr_zifencei
+SPIKE_PRIV=m
+SPIKE_PC=0x80000000
+COMMIT_TRACER=1
+LOG_COMMIT=1
 ```
 
-### isa.json - riscv-tests Configuration
+`isa.conf`:
 
-```json
-{
-  "$schema": "./tests.schema.json",
-  "_comment": "riscv-tests ISA compliance",
-  "extends": "default",
-  "test_list": "sim/test/riscv_test_list.flist",
-  "simulation": {
-    "max_cycles": 10000
-  },
-  "defines": {
-    "COMMIT_TRACER": true,
-    "KONATA_TRACER": true,
-    "LOG_COMMIT": true,
-    "LOG_RAM": false,
-    "LOG_UART": false,
-    "LOG_BP": true,
-    "SIM_FAST": false,
-    "SIM_UART_MONITOR": false
-  }
-}
+```text
+MAX_CYCLES=10000
+KONATA_TRACER=1
 ```
 
-### coremark.json - CoreMark Configuration
+### Profile table (examples)
 
-```json
-{
-  "$schema": "./tests.schema.json",
-  "_comment": "CoreMark benchmark",
-  "extends": "default",
-  "test_list": "sim/test/coremark_test_list.flist",
-  "simulation": {
-    "max_cycles": 50000000,
-    "build_threads": "auto",
-    "sim_threads": 16
-  },
-  "defines": {
-    "COMMIT_TRACER": true,
-    "KONATA_TRACER": false,
-    "LOG_COMMIT": true,
-    "SIM_FAST": true,
-    "LOG_UART": true,
-    "LOG_BP": true,
-    "SIM_UART_MONITOR": true
-  }
-}
-```
+| Profile (`.conf`) | Typical use |
+|-------------------|-------------|
+| `isa` | riscv-tests, lower `MAX_CYCLES` |
+| `arch` | riscv-arch-test |
+| `coremark` | Long simulation time |
+| `custom` | Custom software tests |
+| `torture` | Torture / stress |
 
-### Test Config Özellikleri
+### JSON (separate flows)
 
-| Config | max_cycles | Özellikler |
-|--------|------------|------------|
-| `isa.json` | 10000 | KONATA_TRACER=true, hızlı ISA testleri |
-| `arch.json` | 50000 | Architecture compliance |
-| `imperas.json` | 100000 | Extended compliance |
-| `coremark.json` | 50000000 | SIM_FAST=true, UART_MONITOR=true |
-| `dhrystone.json` | 10000000 | Benchmark mode |
-| `embench.json` | 5000000 | Embedded benchmark suite |
-| `csr.json` | 10000 | CSR test specific |
-| `torture.json` | 1000000 | Random instruction torture |
-| `formal.json` | N/A | Formal verification settings |
+- `riscv-dv.json` — RISC-V DV generator  
+- `formal.json` — formal (SymbiYosys / makefile `FORMAL_CONFIG`)
+
+These are outside `.conf` profile merging.
 
 ---
 
-## JSON Schema Validation
+## JSON files
 
-### tests.schema.json
+Configuration JSON is read directly by the makefile and Python tools. Separate `.schema.json` files are not kept; validity is checked with schemas inside `verilator_config.py` / `modelsim_config.py`.
 
-Test configuration'ların validation schema'sı:
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "CERES RISC-V Test Configuration",
-  "description": "Configuration schema for test suites",
-  "type": "object",
-  "properties": {
-    "$schema": { "type": "string" },
-    "_comment": { "type": "string" },
-    
-    "test_list": {
-      "type": "string",
-      "description": "Path to test list file"
-    },
-    
-    "simulation": {
-      "type": "object",
-      "properties": {
-        "max_cycles": { 
-          "type": "integer", 
-          "minimum": 1 
-        },
-        "timeout_seconds": { 
-          "type": "integer", 
-          "minimum": 0 
-        },
-        "parallel_jobs": {
-          "oneOf": [
-            {"type": "integer", "minimum": 1}, 
-            {"const": "auto"}
-          ]
-        },
-        "build_threads": {
-          "oneOf": [
-            {"type": "integer", "minimum": 1}, 
-            {"const": "auto"}
-          ]
-        },
-        "sim_threads": {
-          "oneOf": [
-            {"type": "integer", "minimum": 1}, 
-            {"const": "auto"}
-          ]
-        }
-      }
-    },
-    
-    "comparison": {
-      "type": "object",
-      "properties": {
-        "enabled": { "type": "boolean" },
-        "spike_enabled": { "type": "boolean" }
-      }
-    },
-    
-    "defines": {
-      "type": "object",
-      "properties": {
-        "SIM_FAST": { "type": "boolean" },
-        "LOG_COMMIT": { "type": "boolean" },
-        "LOG_PIPELINE": { "type": "boolean" },
-        "LOG_RAM": { "type": "boolean" },
-        "LOG_UART": { "type": "boolean" },
-        "LOG_BP": { "type": "boolean" },
-        "LOG_BP_VERBOSE": { "type": "boolean" },
-        "KONATA_TRACER": { "type": "boolean" },
-        "COMMIT_TRACER": { "type": "boolean" }
-      }
-    }
-  }
-}
-```
-
-### Schema Kullanımı
-
-```bash
-# JSON validate etme (jq ile)
-jq --slurpfile schema tests.schema.json 'empty' isa.json
-
-# VS Code'da otomatik validation
-# "$schema" field ile automatic validation
-```
 
 ---
 
 ## Configuration Usage
 
-### Makefile Entegrasyonu
+### Makefile integration
+
+The root `makefile` uses both `verilator.json` (and related jq extractions) and, for tests, `parse_test_conf.sh` → `build/.test_config_<TEST_CONFIG>.mk`. Example (abbreviated):
 
 ```makefile
-# Config file loading
-CONFIG_FILE ?= script/config/verilator.json
+# Verilator (abbreviated — real rules live in the makefile)
+# MAX_CYCLES, TRACE, … from verilator.json via jq or overrides
 
-# Parse config with jq
-MAX_CYCLES := $(shell jq -r '.simulation.max_cycles' $(CONFIG_FILE))
-TRACE_ENABLED := $(shell jq -r '.trace.enabled' $(CONFIG_FILE))
-
-# Apply profile
-ifdef PROFILE
-  CONFIG := $(shell jq -s '.[0] * .[0].profiles.$(PROFILE)' $(CONFIG_FILE))
-endif
+# Test profile
+TEST_CONFIG ?= default
+# TEST_CONFIG_MK := build/.test_config_$(TEST_CONFIG).mk  # parse_test_conf.sh output
 ```
 
-### Shell Script Entegrasyonu
+### Shell script integration
 
 ```bash
 # Load config
@@ -536,7 +363,7 @@ if [ -n "$PROFILE" ]; then
 fi
 ```
 
-### Python Entegrasyonu
+### Python integration
 
 ```python
 import json
@@ -558,7 +385,7 @@ def load_config(config_file, profile=None):
 
 ### verilator.local.json
 
-Kullanıcı-specific override'lar için:
+For user-specific overrides:
 
 ```json
 {
@@ -577,29 +404,28 @@ Kullanıcı-specific override'lar için:
 ```
 # Local config overrides
 script/config/*.local.json
-script/config/tests/*.local.json
+# Optional: local test profile (example name; not in repo)
+# script/config/tests/local.conf
 ```
 
 ---
 
 ## Best Practices
 
-1. **Schema Kullanımı**: Her JSON dosyasında `$schema` field kullanın
-2. **Extends Kullanımı**: Tekrar eden config'ler için `extends` kullanın
-3. **Local Overrides**: Personal settings için `.local.json` kullanın
-4. **Comments**: `_comment` field ile documentation ekleyin
-5. **Profiles**: Farklı use-case'ler için profile tanımlayın
-6. **Validation**: CI/CD'de schema validation yapın
+1. **Simulator JSON**: Keep `verilator.json` / `modelsim.json` aligned with `verilator_config.py` / `modelsim_config.py`; test profiles are plain `.conf` text.
+2. **Test profiles**: Shared settings in `default.conf`; override per suite with `<name>.conf`.
+3. **Local overrides**: e.g. `verilator.local.json` for personal sim settings.
+4. **Profiles**: Select with `TEST_CONFIG=…`; list with `make list-configs`.
+5. **Validation**: Python config readers warn on unknown keys; for `.conf`, rely on the parser plus review.
 
 ---
 
-## Özet
+## Summary
 
 Configuration system:
 
-1. **JSON Format**: Human-readable, easy to edit
-2. **Schema Validation**: JSON Schema ile validation
-3. **Profiles**: Predefined configuration sets
-4. **Inheritance**: `extends` ile config reuse
-5. **Local Overrides**: User-specific overrides
-6. **Tool Integration**: Makefile, shell, Python support
+1. **Simulators**: `verilator.json` / `modelsim.json`
+2. **Test profiles**: `script/config/tests/*.conf` + `parse_test_conf.sh` + makefile cache
+3. **Special JSON**: `riscv-dv.json`, `formal.json` (separate flows)
+4. **Local overrides**: e.g. `verilator.local.json`
+5. **Tool integration**: Root `makefile`, shell, Python

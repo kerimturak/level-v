@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-CERES RISC-V — Verilator Simulation Runner
+Level RISC-V — Verilator Simulation Runner
 
-Verilator simülasyonunu JSON config ile çalıştırır.
-ModelSim runner ile aynı pattern'ı kullanır.
+Runs Verilator simulation with JSON config.
+Uses the same pattern as the ModelSim runner.
 
-Kullanım:
+Usage:
     python verilator_runner.py --test rv32ui-p-add --config verilator.json
     python verilator_runner.py --test coremark --profile benchmark
     
 Debug:
-    CERES_DEBUG=1 python verilator_runner.py --test rv32ui-p-add
+    LEVEL_DEBUG=1 python verilator_runner.py --test rv32ui-p-add
     python verilator_runner.py --test rv32ui-p-add --debug
 """
 
@@ -24,13 +24,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Config modülünü import et
+# Import config module
 try:
     from verilator_config import (
         Color, load_config, VerilatorConfig, supports_color
     )
 except ImportError:
-    # Aynı dizinden import
+    # Import from same directory
     sys.path.insert(0, str(Path(__file__).parent))
     from verilator_config import (
         Color, load_config, VerilatorConfig, supports_color
@@ -81,7 +81,7 @@ def success(msg: str) -> None:
 
 
 def header(title: str, char: str = "═") -> None:
-    """Renkli başlık banner'ı yazdır."""
+    """Print a colored title banner."""
     width = 60
     print(f"{Color.CYAN}{char * width}{Color.RESET}")
     print(f"{Color.CYAN}  {title}{Color.RESET}")
@@ -89,12 +89,12 @@ def header(title: str, char: str = "═") -> None:
 
 
 def subheader(title: str) -> None:
-    """Alt başlık yazdır."""
+    """Print a subheading."""
     print(f"\n{Color.BLUE}▶ {title}{Color.RESET}")
 
 
 def keyval(key: str, value: str, indent: int = 2) -> None:
-    """Anahtar-değer çifti yazdır."""
+    """Print a key-value pair."""
     spaces = " " * indent
     print(f"{spaces}{Color.DIM}{key}:{Color.RESET} {value}")
 
@@ -104,7 +104,7 @@ def keyval(key: str, value: str, indent: int = 2) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 @dataclass
 class SimRunConfig:
-    """Simülasyon çalışma konfigürasyonu."""
+    """Simulation run configuration."""
     test_name: str
     bin_path: Path
     log_dir: Path
@@ -145,7 +145,7 @@ class SimRunConfig:
 # File Finders
 # ═══════════════════════════════════════════════════════════════════════════
 def find_mem_file(test_name: str, mem_dirs: List[Path]) -> Optional[Path]:
-    """Memory dosyasını bul."""
+    """Find the memory file."""
     extensions = [".mem", ".hex", ".bin"]
     
     for mem_dir in mem_dirs:
@@ -153,12 +153,12 @@ def find_mem_file(test_name: str, mem_dirs: List[Path]) -> Optional[Path]:
             continue
         
         for ext in extensions:
-            # Doğrudan dosya
+            # Direct file in mem_dir
             mem_file = mem_dir / f"{test_name}{ext}"
             if mem_file.exists():
                 return mem_file
             
-            # Alt dizinlerde ara
+            # Search subdirectories
             for subdir in mem_dir.iterdir():
                 if subdir.is_dir():
                     mem_file = subdir / f"{test_name}{ext}"
@@ -169,8 +169,8 @@ def find_mem_file(test_name: str, mem_dirs: List[Path]) -> Optional[Path]:
 
 
 def find_addr_file(test_name: str, build_dir: Path) -> Optional[Path]:
-    """Pass/fail adres dosyasını bul."""
-    # Kesin dosya adı pattern'ları - test_name_addr.txt formatında olmalı
+    """Find the pass/fail address file."""
+    # Exact filename patterns — must be test_name_addr.txt style
     patterns = [
         f"pass_fail_addr/{test_name}_addr.txt",
         f"{test_name}_addr.txt",
@@ -182,7 +182,7 @@ def find_addr_file(test_name: str, build_dir: Path) -> Optional[Path]:
         if addr_file.exists():
             return addr_file
     
-    # Test tiplerine göre kesin path'lerde ara
+    # Search known paths per test suite layout
     test_dirs = [
         "tests/riscv-tests",
         "tests/riscv-arch-test", 
@@ -196,7 +196,7 @@ def find_addr_file(test_name: str, build_dir: Path) -> Optional[Path]:
         if addr_file.exists():
             return addr_file
     
-    # Son çare: Recursive arama ama TAM isim eşleşmesi
+    # Last resort: recursive search with exact filename match
     exact_filename = f"{test_name}_addr.txt"
     for addr_file in build_dir.rglob(exact_filename):
         return addr_file
@@ -204,8 +204,8 @@ def find_addr_file(test_name: str, build_dir: Path) -> Optional[Path]:
     return None
 
 
-def find_executable(obj_dir: Path, top_module: str = "ceres_wrapper") -> Optional[Path]:
-    """Verilator executable'ını bul."""
+def find_executable(obj_dir: Path, top_module: str = "level_wrapper") -> Optional[Path]:
+    """Find the Verilator executable."""
     exe_name = f"V{top_module}"
     exe_path = obj_dir / exe_name
     
@@ -219,9 +219,9 @@ def find_executable(obj_dir: Path, top_module: str = "ceres_wrapper") -> Optiona
 # Directory Management
 # ═══════════════════════════════════════════════════════════════════════════
 def prepare_log_dir(log_dir: Path) -> None:
-    """Log dizinini hazırla, varsa temizle."""
+    """Prepare log directory; remove if it already exists."""
     if log_dir.exists():
-        info(f"Önceki loglar temizleniyor: {log_dir}")
+        info(f"Removing previous logs: {log_dir}")
         import shutil
         shutil.rmtree(log_dir)
     
@@ -232,7 +232,7 @@ def prepare_log_dir(log_dir: Path) -> None:
 # Command Builder
 # ═══════════════════════════════════════════════════════════════════════════
 def build_run_command(config: SimRunConfig) -> List[str]:
-    """Verilator çalıştırma komutunu oluştur."""
+    """Build the Verilator run command line."""
     cmd = [str(config.bin_path)]
     
     # Max cycles - MUST be first positional argument (C++ testbench expects argv[1])
@@ -252,7 +252,7 @@ def build_run_command(config: SimRunConfig) -> List[str]:
     if config.addr_file:
         cmd.append(f"+addr_file={config.addr_file}")
 
-    # Exception address overrides (bu addr_file'ı override eder)
+    # Exception address overrides (override addr_file)
     if config.exception_pass_addr:
         cmd.append(f"+PASS_ADDR={config.exception_pass_addr}")
     if config.exception_fail_addr:
@@ -267,7 +267,7 @@ def build_run_command(config: SimRunConfig) -> List[str]:
     cmd.append(f"+trace_file={config.log_dir}/commit_trace.log")
     
     # Konata/pipeline log
-    cmd.append(f"+log_path={config.log_dir}/ceres.log")
+    cmd.append(f"+log_path={config.log_dir}/level.log")
     
     # UART log
     cmd.append(f"+uart_log_path={config.log_dir}/uart_output.log")
@@ -290,7 +290,7 @@ def build_run_command(config: SimRunConfig) -> List[str]:
 # Simulation Runner
 # ═══════════════════════════════════════════════════════════════════════════
 def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -> int:
-    """Simülasyonu çalıştır ve sonucu döndür."""
+    """Run simulation and return exit code."""
     
     # Debug logger
     if logger is None:
@@ -299,15 +299,15 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     logger.section("Run Configuration")
     logger.params_from_dataclass(config, source="merged")
     
-    # Başlık banner'ı
+    # Title banner
     print()
-    header("CERES RISC-V Verilator Simulation")
+    header("Level RISC-V Verilator Simulation")
     
-    # Test bilgisi
+    # Test info
     print(f"  {Color.WHITE}Test:{Color.RESET}   {Color.YELLOW}{config.test_name}{Color.RESET}")
     print(f"  {Color.WHITE}Mode:{Color.RESET}   {Color.GREEN}Verilator{Color.RESET}")
     
-    # JSON config bilgisi
+    # JSON config info
     if config.json_config:
         profile_str = f" → {Color.CYAN}{config.profile_name}{Color.RESET}" if config.profile_name else ""
         print(f"  {Color.WHITE}Config:{Color.RESET} JSON{profile_str}")
@@ -318,16 +318,16 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     
     logger.section("File Discovery")
     
-    # Memory dosyasını bul
-    subheader("Dosya Arama")
+    # Find memory file
+    subheader("File lookup")
     
     if not config.mem_file:
         config.mem_file = find_mem_file(config.test_name, config.mem_dirs)
         if not config.mem_file:
             logger.error(f"Memory file not found: {config.test_name}")
             logger.note(f"Searched dirs: {[str(d) for d in config.mem_dirs]}")
-            error(f"Memory dosyası bulunamadı: {config.test_name}")
-            error(f"Aranan dizinler: {[str(d) for d in config.mem_dirs]}")
+            error(f"Memory file not found: {config.test_name}")
+            error(f"Searched directories: {[str(d) for d in config.mem_dirs]}")
             logger.result(False, 1, "Memory file not found")
             logger.save()
             return 1
@@ -335,17 +335,17 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     logger.param("mem_file", config.mem_file, "found")
     keyval("Memory", str(config.mem_file))
     
-    # Adres dosyasını bul
+    # Find address file
     if config.build_dir:
         config.addr_file = find_addr_file(config.test_name, config.build_dir)
         if config.addr_file:
             logger.param("addr_file", config.addr_file, "found")
-            keyval("Adres", str(config.addr_file))
+            keyval("Address", str(config.addr_file))
         else:
             logger.note("Address file not found, skipping")
-            print(f"  {Color.DIM}Adres dosyası bulunamadı, atlanıyor.{Color.RESET}")
+            print(f"  {Color.DIM}Address file not found, skipping.{Color.RESET}")
 
-    # Exception override kontrolü
+    # Exception override check
     if config.exception_pass_addr or config.exception_fail_addr:
         logger.note(f"Exception address override: PASS={config.exception_pass_addr}, FAIL={config.exception_fail_addr}")
         print(f"  {Color.YELLOW}Exception Override:{Color.RESET}")
@@ -354,31 +354,31 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
         if config.exception_fail_addr:
             print(f"    FAIL: {config.exception_fail_addr}")
 
-    # Executable kontrol
+    # Executable check
     logger.file_check(config.bin_path, "Verilator executable")
     if not config.bin_path.exists():
         logger.error(f"Executable not found: {config.bin_path}")
-        error(f"Executable bulunamadı: {config.bin_path}")
-        error("Önce 'make verilate' çalıştırın.")
+        error(f"Executable not found: {config.bin_path}")
+        error("Run 'make verilate' first.")
         logger.result(False, 1, "Executable not found")
         logger.save()
         return 1
     
     keyval("Executable", str(config.bin_path))
     
-    # Log dizinini hazırla
+    # Prepare log directory
     prepare_log_dir(config.log_dir)
     logger.note(f"Log directory prepared: {config.log_dir}")
     
-    # Komutu oluştur
+    # Build command
     cmd = build_run_command(config)
     
     logger.section("Command")
     logger.command(cmd, "Verilator simulation", config.log_dir)
     
-    # Simülasyon ayarları özeti
+    # Simulation settings summary
     print()
-    subheader("Simülasyon Ayarları")
+    subheader("Simulation settings")
     keyval("Max Cycles", f"{config.max_cycles:,}")
     keyval("Trace", "Enabled" if config.trace_enabled else "Disabled")
     keyval("Log Dir", str(config.log_dir))
@@ -387,13 +387,13 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     
     logger.section("Execution")
     
-    # Simülasyon başlat
+    # Start simulation
     print()
-    subheader("Çalıştırılıyor")
+    subheader("Running")
     print(f"  {Color.DIM}$ {config.bin_path.name} ...{Color.RESET}")
     print()
 
-    # Log dosyası yolu
+    # Run log path
     run_log = config.log_dir / "verilator_run.log"
 
     start_time = datetime.now()
@@ -432,13 +432,13 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     
     except FileNotFoundError:
         logger.error(f"Executable could not run: {config.bin_path}")
-        error(f"Executable çalıştırılamadı: {config.bin_path}")
+        error(f"Could not execute: {config.bin_path}")
         logger.result(False, 127, "Executable not found")
         logger.save()
         return 127
     except KeyboardInterrupt:
         logger.warning("Simulation interrupted by user")
-        warn("Simülasyon kullanıcı tarafından durduruldu.")
+        warn("Simulation interrupted by user.")
         exit_code = 130
     
     end_time = datetime.now()
@@ -448,7 +448,7 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     logger.param("exit_code", exit_code, "execution")
     logger.param("elapsed_seconds", round(elapsed, 2), "execution")
     
-    # Summary JSON oluştur
+    # Write summary JSON
     summary = {
         "test": config.test_name,
         "simulator": "verilator",
@@ -476,7 +476,7 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     
     logger.note(f"Summary saved to: {summary_file}")
     
-    # Sonuç banner'ı
+    # Result banner
     print()
     if exit_code == 0:
         logger.success(f"Simulation passed: {config.test_name}")
@@ -487,14 +487,14 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
         })
         
         print(f"{Color.GREEN}{'═' * 60}{Color.RESET}")
-        print(f"{Color.GREEN}  ✓ Simülasyon Başarılı{Color.RESET}")
+        print(f"{Color.GREEN}  ✓ Simulation succeeded{Color.RESET}")
         print(f"{Color.GREEN}{'═' * 60}{Color.RESET}")
         keyval("Test", config.test_name)
-        keyval("Süre", f"{elapsed:.1f} saniye")
-        keyval("Loglar", str(config.log_dir))
+        keyval("Duration", f"{elapsed:.1f} s")
+        keyval("Logs", str(config.log_dir))
         keyval("Full Log", str(run_log))
 
-        # Waveform bilgisi
+        # Waveform path
         if config.trace_enabled:
             trace_file = config.log_dir / f"waveform.{config.trace_format}"
             if trace_file.exists():
@@ -508,13 +508,13 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
         })
         
         print(f"{Color.RED}{'═' * 60}{Color.RESET}")
-        print(f"{Color.RED}  ✗ Simülasyon Başarısız (exit={exit_code}){Color.RESET}")
+        print(f"{Color.RED}  ✗ Simulation failed (exit={exit_code}){Color.RESET}")
         print(f"{Color.RED}{'═' * 60}{Color.RESET}")
         keyval("Test", config.test_name)
-        keyval("Loglar", str(config.log_dir))
-        print(f"  {Color.DIM}Detaylar için: {run_log}{Color.RESET}")
+        keyval("Logs", str(config.log_dir))
+        print(f"  {Color.DIM}Details: {run_log}{Color.RESET}")
     
-    # Debug log kaydet
+    # Save debug log
     debug_log_path = logger.save()
     if debug_log_path:
         print(f"  {Color.DIM}Debug log: {debug_log_path}{Color.RESET}")
@@ -530,11 +530,11 @@ def merge_config_with_cli(
     json_config: Optional[VerilatorConfig],
     args: argparse.Namespace,
 ) -> SimRunConfig:
-    """JSON config ve CLI argümanlarını birleştir."""
+    """Merge JSON config with CLI arguments."""
     
     cli_overrides = []
     
-    # JSON'dan başla veya varsayılanları kullan
+    # Start from JSON or use defaults
     if json_config:
         max_cycles = json_config.simulation.max_cycles
         threads = json_config.simulation.get_threads()
@@ -554,7 +554,7 @@ def merge_config_with_cli(
         commit_trace = True
         bp_log = False
     
-    # CLI override'ları
+    # CLI overrides
     if args.max_cycles is not None:
         if json_config and args.max_cycles != max_cycles:
             cli_overrides.append(f"max_cycles={args.max_cycles} (JSON: {max_cycles})")
@@ -576,7 +576,7 @@ def merge_config_with_cli(
         fast_sim = True
         trace_enabled = False
     
-    # Path'leri parse et
+    # Parse paths
     mem_dirs = [Path(d) for d in args.mem_dirs.split()] if args.mem_dirs else []
     
     return SimRunConfig(
@@ -608,33 +608,33 @@ def merge_config_with_cli(
 # ═══════════════════════════════════════════════════════════════════════════
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="CERES RISC-V Verilator Simulation Runner",
+        description="Level RISC-V Verilator Simulation Runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-JSON Konfigürasyon:
-  Ayarlar önce script/config/verilator.json'dan okunur.
-  CLI argümanları JSON değerlerini override eder.
-  
-Profiller:
-  --profile fast       Maksimum hız, trace yok
-  --profile debug      Tam debug, tüm trace'ler aktif
-  --profile coverage   Coverage modu
-  --profile benchmark  Benchmark modu, BP logging aktif
+JSON configuration:
+  Settings are read from script/config/verilator.json first.
+  CLI arguments override JSON values.
 
-Örnekler:
-  %(prog)s --test rv32ui-p-add --bin-path build/obj_dir/Vceres_wrapper
+Profiles:
+  --profile fast       Maximum speed, no trace
+  --profile debug      Full debug, all traces on
+  --profile coverage   Coverage mode
+  --profile benchmark  Benchmark mode, BP logging on
+
+Examples:
+  %(prog)s --test rv32ui-p-add --bin-path build/obj_dir/Vlevel_wrapper
   %(prog)s --test coremark --profile benchmark --max-cycles 10000000
   %(prog)s --test dhrystone --fast
         """
     )
     
-    # Zorunlu argümanlar
+    # Required arguments
     required = parser.add_argument_group("required arguments")
     required.add_argument(
         "--test", "-t",
         dest="test",
         required=True,
-        help="Test adı (örn: rv32ui-p-add)"
+        help="Test name (e.g. rv32ui-p-add)"
     )
     required.add_argument(
         "--bin-path", "-b",
@@ -646,97 +646,97 @@ Profiller:
         "--log-dir", "-l",
         dest="log_dir",
         required=True,
-        help="Log çıktı dizini"
+        help="Log output directory"
     )
     required.add_argument(
         "--mem-dirs", "-m",
         dest="mem_dirs",
         required=True,
-        help="Memory dosyası arama dizinleri (boşlukla ayrılmış)"
+        help="Memory file search directories (space-separated)"
     )
     
-    # Config argümanları
+    # Configuration arguments
     config_group = parser.add_argument_group("configuration")
     config_group.add_argument(
         "--config", "-c",
-        help="JSON konfigürasyon dosyası"
+        help="JSON configuration file"
     )
     config_group.add_argument(
         "--profile", "-p",
-        help="Kullanılacak profil (fast, debug, coverage, benchmark)"
+        help="Profile to use (fast, debug, coverage, benchmark)"
     )
     config_group.add_argument(
         "--no-config",
         action="store_true",
-        help="JSON konfigürasyonu yükleme"
+        help="Do not load JSON configuration"
     )
-    
-    # Simülasyon argümanları
+
+    # Simulation arguments
     sim_group = parser.add_argument_group("simulation")
     sim_group.add_argument(
         "--max-cycles",
         type=int,
-        help="Maksimum cycle sayısı"
+        help="Maximum cycle count"
     )
     sim_group.add_argument(
         "--no-trace",
         action="store_true",
-        help="Trace'i devre dışı bırak"
+        help="Disable trace"
     )
     sim_group.add_argument(
         "--coverage",
         action="store_true",
-        help="Coverage'ı etkinleştir"
+        help="Enable coverage"
     )
     sim_group.add_argument(
         "--coverage-file",
-        help="Coverage output dosyası"
+        help="Coverage output file"
     )
     sim_group.add_argument(
         "--fast",
         action="store_true",
-        help="Hızlı mod (trace yok, minimal logging)"
+        help="Fast mode (no trace, minimal logging)"
     )
-    
-    # Path argümanları
+
+    # Path arguments
     path_group = parser.add_argument_group("paths")
     path_group.add_argument(
         "--build-dir",
-        help="Build dizini (addr dosyası için)"
+        help="Build directory (for addr file lookup)"
     )
     path_group.add_argument(
         "--mem-file",
-        help="Doğrudan memory dosyası belirt"
+        help="Explicit memory file path"
     )
     path_group.add_argument(
         "--exception-pass-addr",
-        help="Exception test için pass adresi override (örn: 0x80000040)"
+        help="Exception test: override pass address (e.g. 0x80000040)"
     )
     path_group.add_argument(
         "--exception-fail-addr",
-        help="Exception test için fail adresi override (örn: 0x8000103c)"
+        help="Exception test: override fail address (e.g. 0x8000103c)"
     )
 
-    # Diğer
+    # Other
     parser.add_argument(
         "--no-color",
         action="store_true",
-        help="Renkleri devre dışı bırak"
+        help="Disable ANSI colors"
     )
     parser.add_argument(
         "--dry-run", "-n",
         action="store_true",
-        help="Komutu çalıştırmadan göster"
+        help="Print command without running"
     )
     parser.add_argument(
         "--show-config",
         action="store_true",
-        help="Konfigürasyonu göster ve çık"
+        help="Print configuration and exit"
     )
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Debug logging'i etkinleştir (CERES_DEBUG=1 ile de aktif edilebilir)"
+        help="Enable debug logging (also with LEVEL_DEBUG=1)"
     )
     
     return parser.parse_args()
@@ -745,14 +745,14 @@ Profiller:
 def main() -> int:
     args = parse_args()
     
-    # Renk desteği
+    # Color support
     if args.no_color or not supports_color():
         Color.disable()
     
-    # Debug logging kontrolü
-    debug_enabled = args.debug or os.environ.get("CERES_DEBUG", "0") == "1"
+    # Debug logging
+    debug_enabled = args.debug or os.environ.get("LEVEL_DEBUG", "0") == "1"
     
-    # JSON config yükle
+    # Load JSON config
     json_config = None
     if not args.no_config:
         config_path = Path(args.config) if args.config else None
@@ -762,23 +762,23 @@ def main() -> int:
                 profile=args.profile,
             )
         except Exception as e:
-            warn(f"JSON config yüklenemedi: {e}")
-    
-    # Config'i birleştir
+            warn(f"Could not load JSON config: {e}")
+
+    # Merge config
     config = merge_config_with_cli(json_config, args)
     
-    # Debug logger oluştur
+    # Create debug logger
     logger = create_logger(
         tool_name="verilator",
         log_dir=config.log_dir,
         debug_enabled=debug_enabled
     )
     
-    # CLI arguments logla
+    # Log CLI arguments
     logger.section("CLI Arguments")
     logger.params_from_dict(vars(args), source="cli")
     
-    # JSON config logla
+    # Log JSON config
     if json_config:
         logger.section("JSON Configuration")
         logger.param("config_file", args.config or "default", "json")
@@ -790,7 +790,7 @@ def main() -> int:
             from verilator_config import print_config_summary
             print_config_summary(json_config)
         else:
-            info("JSON config yüklenmedi")
+            info("JSON config not loaded")
         return 0
     
     # Dry run mode
@@ -803,7 +803,7 @@ def main() -> int:
         print(f"  {' '.join(cmd)}")
         return 0
     
-    # Simülasyonu çalıştır
+    # Run simulation
     return run_simulation(config, logger)
 
 

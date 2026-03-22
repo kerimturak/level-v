@@ -62,7 +62,7 @@ if should_validate:
 - Confusing simulation success with test correctness
 
 **Fix Applied:**
-- **Simulation Layer:** Now says "✓ Simülasyon Başarılı" (Simulation Successful)
+- **Simulation Layer:** Now says "✓ Simulation successful"
 - **Validation Layer:**
   - `✅ TEST PASSED - VALIDATED` when RTL == Spike
   - `❌ TEST FAILED - VALIDATION MISMATCH` when RTL ≠ Spike
@@ -74,7 +74,7 @@ if should_validate:
 
 **Message Hierarchy:**
 ```
-Simulation Complete → "Simülasyon Başarılı" (just means no crash)
+Simulation Complete → "Simulation successful" (just means no crash)
     ↓
 Validation Run → Compare RTL vs Spike
     ↓
@@ -84,7 +84,7 @@ Final Decision → "TEST PASSED" or "TEST FAILED"
 ---
 
 ### ✅ 4. Simulation Time Showing 0.0
-**Problem:** Duration always showed `0.0 saniye`
+**Problem:** Duration always showed `0.0 s`
 
 **Fix Applied:**
 - Fixed timing calculation in `script/python/makefile/verilator_runner.py`
@@ -94,7 +94,7 @@ start_time = datetime.now()
 # ... simulation ...
 end_time = datetime.now()
 elapsed = (end_time - start_time).total_seconds()
-print(f"Süre: {elapsed:.1f} saniye")  # .1f formatting
+print(f"Duration: {elapsed:.1f} s")  # .1f formatting
 ```
 
 **Files Modified:**
@@ -312,16 +312,16 @@ make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add
   Test:     rv32ui-p-add
   Mode:     Verilator
 
-▶ Çalıştırılıyor
-  $ Vceres_wrapper ...
+▶ Running
+  $ Vlevel_wrapper ...
 
 ..........  (progress dots in quiet mode)
 
 ════════════════════════════════════════════════════════════
-  ✓ Simülasyon Başarılı
+  ✓ Simulation successful
 ════════════════════════════════════════════════════════════
   Test:      rv32ui-p-add
-  Süre:      2.3 saniye
+  Duration:  2.3 s
   Loglar:    results/logs/verilator/rv32ui-p-add
   Full Log:  results/logs/verilator/rv32ui-p-add/verilator_run.log
 ```
@@ -352,7 +352,7 @@ results/logs/verilator/rv32ui-p-add/
 ├── test_report.html          (Interactive HTML report)
 ├── waveform.fst             (Waveform trace)
 ├── uart_output.log          (UART output)
-├── ceres.log                (Pipeline log)
+├── level.log                (Pipeline log)
 └── summary.json             (Test summary)
 ```
 
@@ -365,7 +365,7 @@ All criteria from [FIX_PLAN.md](FIX_PLAN.md) are now met:
 - ✅ Logs in `results/logs/SIMULATOR/TEST/`
 - ✅ Validation automatically runs (when enabled for suite)
 - ✅ Correct messages: "SIMULATION COMPLETED" vs "TEST PASSED (VALIDATED)"
-- ✅ Duration shows correctly (e.g., "2.3 saniye")
+- ✅ Duration shows correctly (e.g., "2.3 s")
 - ✅ Debug logs populated with full command details
 - ✅ Verilator output in file, console shows summary
 - ✅ Permission errors fixed

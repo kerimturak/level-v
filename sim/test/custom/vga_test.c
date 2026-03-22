@@ -1,5 +1,5 @@
 /*
- * VGA Controller Test for Ceres-V RV32IMC
+ * VGA Controller Test for Level-V RV32IMC
  * 
  * Tests VGA Controller functionality:
  * - Control register access
@@ -12,7 +12,7 @@
  * 
  * VGA supports 640x480 @ 60Hz with text (80x30) and graphics modes
  * 
- * Note: This peripheral is not yet connected in ceres_wrapper.sv
+ * Note: This peripheral is not yet connected in level_wrapper.sv
  *       Requires adding VGA instantiation and address decode (0x2000_Axxx)
  *       Also requires 25.175 MHz pixel clock generation
  */
@@ -393,7 +393,7 @@ int main(void)
     uart_init();
     
     uart_puts("\n========================================\n");
-    uart_puts("   VGA Controller Test - Ceres-V\n");
+    uart_puts("   VGA Controller Test - Level-V\n");
     uart_puts("========================================\n");
     uart_puts("  640x480 @ 60Hz, Text/Graphics modes\n");
     

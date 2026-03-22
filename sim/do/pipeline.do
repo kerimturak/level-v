@@ -1,5 +1,5 @@
 ##################################################################################
-#                     CERES RISC-V — Advanced Debug Waveform                   #
+#                     Level RISC-V — Advanced Debug Waveform                   #
 #                           Questa Simulation Script                            #
 ##################################################################################
 # Features:
@@ -41,7 +41,7 @@ configure wave -timelineunits ns
 
 ################## Hierarchy Paths ##################
 set TB        "sim:/tb_wrapper"
-set WRAPPER   "$TB/ceres_wrapper"
+set WRAPPER   "$TB/level_wrapper"
 set SOC       "$WRAPPER/i_soc"
 set FETCH     "$SOC/i_fetch"
 set DECODE    "$SOC/i_decode"
@@ -335,7 +335,7 @@ wave zoom full
 # write format wave -window .main_pane.wave.interior.cs.body.pw.wf questa_waves.do
 
 puts "═══════════════════════════════════════════════════════════════════"
-puts "  CERES RISC-V Debug Waveform Loaded Successfully!"
+puts "  Level RISC-V Debug Waveform Loaded Successfully!"
 puts "═══════════════════════════════════════════════════════════════════"
 puts "  Quick Tips:"
 puts "    - Use 'run 1000ns' to run more simulation"

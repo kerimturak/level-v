@@ -1,258 +1,76 @@
-# Shell Scripts - Teknik Dokümantasyon
+# Shell Scripts — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Simülasyon Scripts](#simülasyon-scripts)
+1. [Overview](#overview)
+2. [Simulation Scripts](#simulation-scripts)
 3. [Build Scripts](#build-scripts)
 4. [Config Parsers](#config-parsers)
 5. [Utility Scripts](#utility-scripts)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 script/shell/
-├── run_verilator.sh           # Verilator simulation runner
-├── build_custom_test.sh       # Custom test builder
-├── parse_verilator_config.sh  # Verilator JSON config parser
-├── parse_modelsim_config.sh   # ModelSim JSON config parser
-├── parse_test_config.sh       # Test suite config parser
-├── init_ceres_structure.sh    # Proje initialization
-├── uart_test_quickstart.sh    # UART test quick start
-├── exception_priority_test.sh # Exception priority test
-└── PARAMETRIC_PRIORITY_QUICKSTART.sh  # Priority quick start
+├── parse_test_conf.sh         # Test .conf → Makefile fragment
+├── build_level_custom_c_test.sh       # Custom C test build + optional run
+├── scaffold_level_project_skeleton.sh    # Empty Level project skeleton
+├── guide_level_uart_custom_test.sh    # UART custom test guide (stdout)
+├── run_level_exception_priority_tests.sh # Exception priority matrix
+├── guide_exception_priority_parametric.sh  # Parametric priority summary
+└── …                          # OpenLane / setup scripts
 ```
 
-### Ortak Özellikler
+### Common Features
 
 - **Shell**: Bash/Zsh compatible
 - **Error Handling**: `set -euo pipefail`
-- **Colored Output**: ANSI renk kodları
+- **Colored Output**: ANSI color codes
 - **Logging**: Consistent log format
 - **Signal Handling**: Cleanup on SIGINT/SIGTERM
 
 ---
 
-## Simülasyon Scripts
+## Simulation Scripts
 
-### run_verilator.sh - Verilator Runner
+### Verilator simulation (root makefile)
 
-**Dosya:** `script/shell/run_verilator.sh`
+**Note:** `script/shell/run_verilator.sh` was removed; the flow uses the root `makefile` (`make verilate`, `make run`, `TEST_CONFIG=…`).
 
-#### Amaç
-
-Verilator simülasyonunu kontrollü bir şekilde çalıştırır. MEM dosyası resolution, logging, timeout ve signal handling sağlar.
-
-#### Kullanım
+Examples:
 
 ```bash
-# Basic usage
-TEST_NAME=rv32ui-p-add ./run_verilator.sh
-
-# With explicit MEM file
-MEM_FILE=/path/to/test.mem ./run_verilator.sh
-
-# With options
-MAX_CYCLES=100000 TIMEOUT=60 VERBOSE=1 ./run_verilator.sh
+make run T=rv32ui-p-add
+make verilate TEST_CONFIG=isa
 ```
 
-#### Environment Variables
-
-| Variable | Default | Açıklama |
-|----------|---------|----------|
-| `TEST_NAME` | (required) | Test adı (MEM file resolution için) |
-| `MEM_FILE` | auto | Explicit MEM file path |
-| `MAX_CYCLES` | 100000 | Maximum simulation cycles |
-| `TIMEOUT` | 0 | Timeout in seconds (0=disabled) |
-| `VERILATOR_LOG_DIR` | auto | Log output directory |
-| `VERILATOR_THREADS` | 1 | Thread count for multi-threaded sim |
-| `VERBOSE` | 0 | Verbose output |
-| `QUIET` | 0 | Suppress info messages |
-
-#### Script Yapısı
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Color codes
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly CYAN='\033[0;36m'
-readonly RESET='\033[0m'
-
-# -----------------------------------------
-# Path Configuration
-# -----------------------------------------
-ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
-OBJ_DIR="${OBJ_DIR:-$BUILD_DIR/obj_dir}"
-RUN_BIN="${RUN_BIN:-$OBJ_DIR/Vceres_wrapper}"
-
-# -----------------------------------------
-# Helper Functions
-# -----------------------------------------
-log_info() {
-  [[ "$QUIET" == "1" ]] && return
-  echo -e "${CYAN}[INFO]${RESET} $*"
-}
-
-log_success() {
-  echo -e "${GREEN}[SUCCESS]${RESET} $*"
-}
-
-log_warn() {
-  echo -e "${YELLOW}[WARNING]${RESET} $*" >&2
-}
-
-log_error() {
-  echo -e "${RED}[ERROR]${RESET} $*" >&2
-}
-
-# Cleanup on signal
-cleanup() {
-  local exit_code=$?
-  if [[ -n "${SIM_PID:-}" ]] && kill -0 "$SIM_PID" 2>/dev/null; then
-    log_warn "Terminating simulation (PID: $SIM_PID)..."
-    kill -TERM "$SIM_PID" 2>/dev/null || true
-    wait "$SIM_PID" 2>/dev/null || true
-  fi
-  exit "$exit_code"
-}
-
-trap cleanup INT TERM
-
-# -----------------------------------------
-# Log Directory Setup
-# -----------------------------------------
-if [ -z "${VERILATOR_LOG_DIR:-}" ]; then
-  VERILATOR_LOG_DIR="$RESULTS_DIR/logs/verilator/$TEST_NAME"
-fi
-mkdir -p "$VERILATOR_LOG_DIR"
-
-# -----------------------------------------
-# MEM File Resolution
-# -----------------------------------------
-resolve_mem_file() {
-  if [ -n "${MEM_FILE:-}" ] && [ -f "$MEM_FILE" ]; then
-    echo "$MEM_FILE"
-    return 0
-  fi
-  
-  # Search in known locations
-  local search_paths=(
-    "$BUILD_DIR/tests/riscv-tests/mem/${TEST_NAME}.mem"
-    "$BUILD_DIR/tests/riscv-arch-test/mem/${TEST_NAME}.mem"
-    "$BUILD_DIR/tests/imperas/mem/${TEST_NAME}.mem"
-    "$BUILD_DIR/tests/coremark/${TEST_NAME}.mem"
-    "$BUILD_DIR/tests/custom/${TEST_NAME}.mem"
-  )
-  
-  for path in "${search_paths[@]}"; do
-    if [ -f "$path" ]; then
-      echo "$path"
-      return 0
-    fi
-  done
-  
-  log_error "MEM file not found for test: $TEST_NAME"
-  return 1
-}
-
-# -----------------------------------------
-# Main Execution
-# -----------------------------------------
-main() {
-  log_info "Starting Verilator simulation..."
-  log_info "Test: $TEST_NAME"
-  log_info "Max cycles: $MAX_CYCLES"
-  
-  # Resolve MEM file
-  MEM_FILE=$(resolve_mem_file)
-  log_info "MEM file: $MEM_FILE"
-  
-  # Build command
-  local cmd="$RUN_BIN"
-  cmd+=" +mem=$MEM_FILE"
-  cmd+=" +max_cycles=$MAX_CYCLES"
-  cmd+=" +log_dir=$VERILATOR_LOG_DIR"
-  
-  # Run simulation
-  local start_time=$(date +%s)
-  
-  if [ "$TIMEOUT" -gt 0 ]; then
-    timeout "$TIMEOUT" $cmd &
-    SIM_PID=$!
-  else
-    $cmd &
-    SIM_PID=$!
-  fi
-  
-  wait "$SIM_PID"
-  local exit_code=$?
-  
-  local end_time=$(date +%s)
-  local elapsed=$((end_time - start_time))
-  
-  # Generate summary
-  generate_summary "$exit_code" "$elapsed"
-  
-  return "$exit_code"
-}
-
-generate_summary() {
-  local exit_code=$1
-  local elapsed=$2
-  
-  cat > "$VERILATOR_LOG_DIR/summary.json" <<EOF
-{
-  "test_name": "$TEST_NAME",
-  "exit_code": $exit_code,
-  "elapsed_seconds": $elapsed,
-  "max_cycles": $MAX_CYCLES,
-  "mem_file": "$MEM_FILE",
-  "timestamp": "$(date -Iseconds)"
-}
-EOF
-  
-  if [ "$exit_code" -eq 0 ]; then
-    log_success "Simulation completed in ${elapsed}s"
-  else
-    log_error "Simulation failed with exit code $exit_code"
-  fi
-}
-
-main "$@"
-```
-
----
+Test profiles: `script/config/tests/*.conf` and `parse_test_conf.sh`.
 
 ## Build Scripts
 
-### build_custom_test.sh - Custom Test Builder
+### build_level_custom_c_test.sh - Custom Test Builder
 
-**Dosya:** `script/shell/build_custom_test.sh`
+**File:** `script/shell/build_level_custom_c_test.sh`
 
-#### Amaç
+#### Purpose
 
-Custom C test programlarını derler. Startup, linker script ve output dosyalarını oluşturur.
+Builds custom C test programs. Creates startup, linker script, and output artifacts.
 
-#### Kullanım
+#### Usage
 
 ```bash
 # Build and optionally run
-./build_custom_test.sh uart_hello_test
+./build_level_custom_c_test.sh uart_hello_test
 
 # Build only
-./build_custom_test.sh uart_hello_test --no-run
+./build_level_custom_c_test.sh uart_hello_test --no-run
 ```
 
-#### Script Yapısı
+#### Script Structure
 
 ```bash
 #!/bin/bash
@@ -406,7 +224,7 @@ print_summary() {
 # ============================================================================
 
 main() {
-    print_header "CERES Custom Test Builder"
+    print_header "Level Custom Test Builder"
     
     check_prerequisites
     compile_test
@@ -422,137 +240,42 @@ main "$@"
 ---
 
 ## Config Parsers
+Verilator / ModelSim JSON files (`script/config/verilator.json`, `modelsim.json`) are handled inside the root makefile; there are no separate `parse_*_config.sh` scripts.
 
-### parse_verilator_config.sh - Verilator Config Parser
+### parse_test_conf.sh — Test profile parser
 
-**Dosya:** `script/shell/parse_verilator_config.sh`
+**File:** `script/shell/parse_test_conf.sh`
 
-#### Amaç
-
-`verilator.json` dosyasını parse edip Makefile include edilebilir format üretir.
-
-#### Kullanım
+Merges `script/config/tests/default.conf` and `<profile>.conf`; with `--make` emits `CFG_*` and `+define+` lines (makefile writes `build/.test_config_<name>.mk`).
 
 ```bash
-# Generate makefile include
-./parse_verilator_config.sh --make > .verilator_config.mk
-
-# With profile
-./parse_verilator_config.sh --make --profile fast > .verilator_config.mk
-
-# Show parsed values
-./parse_verilator_config.sh --show
+./script/shell/parse_test_conf.sh --list
+./script/shell/parse_test_conf.sh isa --make
 ```
 
-#### Script Yapısı
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_FILE="${SCRIPT_DIR}/../config/verilator.json"
-LOCAL_CONFIG="${SCRIPT_DIR}/../config/verilator.local.json"
-
-# Check jq availability
-if ! command -v jq &> /dev/null; then
-    echo "Error: jq is required but not installed" >&2
-    exit 1
-fi
-
-# Parse arguments
-OUTPUT_MODE="make"
-PROFILE=""
-
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --make) OUTPUT_MODE="make"; shift ;;
-        --show) OUTPUT_MODE="show"; shift ;;
-        --profile) PROFILE="$2"; shift 2 ;;
-        *) echo "Unknown option: $1" >&2; exit 1 ;;
-    esac
-done
-
-# Merge configs
-if [ -f "$LOCAL_CONFIG" ]; then
-    CONFIG=$(jq -s '.[0] * .[1]' "$CONFIG_FILE" "$LOCAL_CONFIG")
-else
-    CONFIG=$(cat "$CONFIG_FILE")
-fi
-
-# Apply profile if specified
-if [ -n "$PROFILE" ]; then
-    PROFILE_CONFIG=$(echo "$CONFIG" | jq ".profiles.$PROFILE // {}")
-    CONFIG=$(echo "$CONFIG" | jq ". * $PROFILE_CONFIG")
-fi
-
-# Extract values
-get_value() {
-    echo "$CONFIG" | jq -r "$1 // empty"
-}
-
-# Output based on mode
-case $OUTPUT_MODE in
-    make)
-        echo "# Auto-generated from verilator.json"
-        echo "CFG_MAX_CYCLES := $(get_value '.simulation.max_cycles')"
-        echo "CFG_TIMEOUT := $(get_value '.simulation.timeout')"
-        echo "CFG_BUILD_MODE := $(get_value '.build.mode')"
-        echo "CFG_OPT_LEVEL := $(get_value '.build.opt_level')"
-        echo "CFG_TRACE_ENABLED := $(get_value '.trace.enabled')"
-        echo "CFG_TRACE_FORMAT := $(get_value '.trace.format')"
-        echo "CFG_TRACE_DEPTH := $(get_value '.trace.depth')"
-        echo "CFG_COVERAGE_ENABLED := $(get_value '.coverage.enabled')"
-        echo "CFG_LOG_COMMIT := $(get_value '.logging.commit_trace')"
-        echo "CFG_LOG_PIPELINE := $(get_value '.logging.pipeline_log')"
-        ;;
-    show)
-        echo "Verilator Configuration:"
-        echo "========================"
-        echo "Simulation:"
-        echo "  max_cycles: $(get_value '.simulation.max_cycles')"
-        echo "  timeout: $(get_value '.simulation.timeout')"
-        echo "Build:"
-        echo "  mode: $(get_value '.build.mode')"
-        echo "  opt_level: $(get_value '.build.opt_level')"
-        echo "Trace:"
-        echo "  enabled: $(get_value '.trace.enabled')"
-        echo "  format: $(get_value '.trace.format')"
-        ;;
-esac
-```
-
-### parse_modelsim_config.sh - ModelSim Config Parser
-
-**Dosya:** `script/shell/parse_modelsim_config.sh`
-
-Benzer yapıda, `modelsim.json` için config parsing.
-
-### parse_test_config.sh - Test Config Parser
-
-**Dosya:** `script/shell/parse_test_config.sh`
-
-Test suite JSON config'lerini parse eder.
+Details: [script/config/tests/README.md on GitHub](https://github.com/kerimturak/level-v/blob/main/script/config/tests/README.md).
 
 ---
 
 ## Utility Scripts
 
-### init_ceres_structure.sh - Proje Initialization
+### scaffold_level_project_skeleton.sh — Project initialization
 
-**Dosya:** `script/shell/init_ceres_structure.sh`
+**File:** `script/shell/scaffold_level_project_skeleton.sh`
 
-#### Amaç
+#### Purpose
 
-Yeni CERES projesi için dizin yapısını ve template dosyalarını oluşturur.
+Creates directory layout and template files for a new Level project. It creates a skeleton named `level-riscv/` in the current working directory (no CLI arguments; `PROJECT_NAME` is set inside the script).
 
-#### Kullanım
+#### Usage
 
 ```bash
-./init_ceres_structure.sh /path/to/new/project
+cd /path/where/parent/should/live
+./script/shell/scaffold_level_project_skeleton.sh
+# → ./level-riscv/ ...
 ```
 
-#### Oluşturulan Yapı
+#### Created Layout
 
 ```
 new_project/
@@ -570,7 +293,7 @@ new_project/
 │   ├── test/
 │   └── do/
 ├── script/
-│   ├── makefiles/
+│   ├── makefiles/     # optional local.mk
 │   ├── python/
 │   └── shell/
 ├── build/
@@ -582,37 +305,47 @@ new_project/
 └── README.md
 ```
 
-### uart_test_quickstart.sh - UART Test Quick Start
+### guide_level_uart_custom_test.sh — UART custom C test guide
 
-**Dosya:** `script/shell/uart_test_quickstart.sh`
+**File:** `script/shell/guide_level_uart_custom_test.sh`
 
-#### Amaç
+#### Purpose
 
-UART test programını hızlıca derleyip çalıştırır.
+Prints a short guide to stdout for writing / building / simulating a custom UART C test (it does not run tests; it shows `build_level_custom_c_test.sh` and `make` commands).
 
-#### Kullanım
+#### Usage
 
 ```bash
-./uart_test_quickstart.sh
+./script/shell/guide_level_uart_custom_test.sh
 ```
 
-### exception_priority_test.sh - Exception Priority Test
+### run_level_exception_priority_tests.sh — Exception priority matrix
 
-**Dosya:** `script/shell/exception_priority_test.sh`
+**File:** `script/shell/run_level_exception_priority_tests.sh`
 
-#### Amaç
+#### Purpose
 
-Parametrik exception priority sistemini test eder.
+Runs a `make`-based regression / comparison flow for different `level_param` priority modes and CSR tests.
 
-#### Kullanım
+#### Usage
 
 ```bash
-./exception_priority_test.sh
+./script/shell/run_level_exception_priority_tests.sh
+```
+
+### guide_exception_priority_parametric.sh — Parametric priority guide
+
+**File:** `script/shell/guide_exception_priority_parametric.sh`
+
+Summary: prints exception priority parameters from `rtl/pkg/level_param.sv` and validation steps to the terminal.
+
+```bash
+./script/shell/guide_exception_priority_parametric.sh
 ```
 
 ---
 
-## Ortak Patterns
+## Common Patterns
 
 ### Error Handling
 
@@ -668,14 +401,14 @@ realpath() {
 
 ---
 
-## Özet
+## Summary
 
 Shell scripts:
 
-1. **run_verilator.sh**: Comprehensive Verilator runner
-2. **build_custom_test.sh**: Custom C test builder
-3. **Config Parsers**: JSON → Makefile variable conversion
-4. **Utility Scripts**: Initialization, quick starts
+1. **Root makefile**: Verilator build and simulation
+2. **parse_test_conf.sh**: Test `.conf` → Makefile fragment
+3. **build_level_custom_c_test.sh**: Custom C test builder
+4. **Utility scripts**: Initialization, quick starts, OpenLane helpers
 5. **Error Handling**: Robust error and signal handling
 6. **Logging**: Consistent colored output
 7. **Portability**: Bash/Zsh compatible

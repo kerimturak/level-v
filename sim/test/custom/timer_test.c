@@ -1,5 +1,5 @@
 /*
- * Timer (GPTimer) Test for Ceres-V RV32IMC
+ * Timer (GPTimer) Test for Level-V RV32IMC
  * 
  * Tests General Purpose Timer functionality:
  * - Timer control register access
@@ -8,7 +8,7 @@
  * - Compare/Capture registers
  * - Status register flags
  * 
- * Note: This peripheral is not yet connected in ceres_wrapper.sv
+ * Note: This peripheral is not yet connected in level_wrapper.sv
  *       Requires adding Timer instantiation and address decode (0x2000_6xxx)
  */
 
@@ -29,7 +29,7 @@
 #define UART_CTRL_RX_EN       0x2
 #define UART_STATUS_TX_FULL   0x1
 
-/* Timer MMIO Map (base 0x2000_6000 per ceres_param.sv) */
+/* Timer MMIO Map (base 0x2000_6000 per level_param.sv) */
 #define TIMER_BASE       0x20006000
 #define TIMER_STRIDE     0x40    /* 0x40 bytes per timer */
 
@@ -337,7 +337,7 @@ int main(void)
     uart_init();
     
     uart_puts("\n========================================\n");
-    uart_puts("   Timer Test - Ceres-V RV32IMC\n");
+    uart_puts("   Timer Test - Level-V RV32IMC\n");
     uart_puts("========================================\n");
     
     test_timer_registers();

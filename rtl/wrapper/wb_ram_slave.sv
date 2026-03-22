@@ -20,8 +20,8 @@ Description:
 */
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
-import ceres_param::*;
+`include "level_defines.svh"
+import level_param::*;
 
 module wb_ram_slave #(
     parameter int RAM_DEPTH   = 32768,  // Number of 32-bit words

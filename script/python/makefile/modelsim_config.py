@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-CERES RISC-V — ModelSim Configuration Manager
+Level RISC-V — ModelSim Configuration Manager
 
-JSON konfigürasyon dosyasını okur, doğrular ve Python dict'e dönüştürür.
-Schema validation, profile merging ve uyarı sistemi içerir.
+Reads the JSON configuration file, validates it, and converts it to a Python dict.
+Includes schema validation, profile merging, and a warning system.
 
-Kullanım:
+Usage:
     from modelsim_config import load_config, SimConfig
     
     config = load_config(profile="debug")
@@ -60,7 +60,7 @@ def info(msg: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # Configuration Schema Definition
 # ═══════════════════════════════════════════════════════════════════════════
-# Bu schema, JSON dosyasındaki tüm geçerli alanları ve varsayılan değerlerini tanımlar
+# This schema defines all valid fields and defaults in the JSON file
 
 CONFIG_SCHEMA = {
     "simulation": {
@@ -74,13 +74,6 @@ CONFIG_SCHEMA = {
         "mfcu": {"type": "bool", "default": True},
         "svinputport": {"type": "str", "default": "relaxed", "choices": ["relaxed", "compat", "var"]},
         "incremental": {"type": "bool", "default": False},
-    },
-    "lint": {
-        "enabled": {"type": "bool", "default": True},
-        "mode": {"type": "str", "default": "default", "choices": ["default", "fast", "full"]},
-        "pedantic": {"type": "bool", "default": False},
-        "style_checks": {"type": "bool", "default": True},
-        "width_checks": {"type": "bool", "default": True},
     },
     "debug": {
         "acc": {"type": "str", "default": "npr"},
@@ -121,8 +114,9 @@ CONFIG_SCHEMA = {
     },
 }
 
-# Bilinen üst-düzey anahtarlar (profiles, $schema, _comment gibi özel alanlar dahil)
-KNOWN_TOP_KEYS = set(CONFIG_SCHEMA.keys()) | {"profiles", "$schema", "_comment", "_version"}
+# Known top-level keys (including special keys like profiles, $schema, _comment)
+# "lint" kept for compatibility with older modelsim.json (unused)
+KNOWN_TOP_KEYS = set(CONFIG_SCHEMA.keys()) | {"profiles", "$schema", "_comment", "_version", "lint"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -145,15 +139,6 @@ class CompileConfig:
 
 
 @dataclass
-class LintConfig:
-    enabled: bool = True
-    mode: str = "default"
-    pedantic: bool = False
-    style_checks: bool = True
-    width_checks: bool = True
-
-
-@dataclass
 class DebugConfig:
     acc: str = "npr"
     fsmdebug: bool = False
@@ -172,7 +157,7 @@ class CoverageConfig:
     toggle: bool = True
 
     def get_spec_string(self) -> str:
-        """Coverage spec string oluştur (e.g., 'sbceft')"""
+        """Build coverage spec string (e.g. 'sbceft')"""
         if not self.enabled:
             return ""
         spec = ""
@@ -200,7 +185,7 @@ class GlsConfig:
     delay_mode: str = "typ"
 
     def get_delay_flag(self) -> str:
-        """Delay mode flag'ını döndür"""
+        """Return delay-mode flag for vsim"""
         mode_map = {
             "min": "+mindelays",
             "max": "+maxdelays",
@@ -228,10 +213,9 @@ class MulticoreConfig:
 
 @dataclass
 class ModelSimConfig:
-    """Ana konfigürasyon container'ı"""
+    """Root configuration container"""
     simulation: SimulationConfig = field(default_factory=SimulationConfig)
     compile: CompileConfig = field(default_factory=CompileConfig)
-    lint: LintConfig = field(default_factory=LintConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
     coverage: CoverageConfig = field(default_factory=CoverageConfig)
     language: LanguageConfig = field(default_factory=LanguageConfig)
@@ -244,7 +228,7 @@ class ModelSimConfig:
     config_file: Optional[Path] = None
     local_config_file: Optional[Path] = None
     
-    # Uyarılar
+    # Warnings collected during load/validate
     warnings: List[str] = field(default_factory=list)
 
 
@@ -252,14 +236,14 @@ class ModelSimConfig:
 # Validation Functions
 # ═══════════════════════════════════════════════════════════════════════════
 class ConfigValidator:
-    """Konfigürasyon doğrulama sınıfı"""
+    """Configuration validation"""
     
     def __init__(self):
         self.warnings: List[str] = []
         self.errors: List[str] = []
     
     def validate_type(self, value: Any, expected_type: str, path: str) -> bool:
-        """Değer tipini doğrula"""
+        """Validate value type"""
         type_map = {
             "str": str,
             "bool": bool,
@@ -269,72 +253,72 @@ class ConfigValidator:
         }
         expected = type_map.get(expected_type)
         if expected and not isinstance(value, expected):
-            self.errors.append(f"{path}: Beklenen tip '{expected_type}', alınan '{type(value).__name__}'")
+            self.errors.append(f"{path}: expected type '{expected_type}', got '{type(value).__name__}'")
             return False
         return True
     
     def validate_choices(self, value: Any, choices: List[Any], path: str) -> bool:
-        """Değerin geçerli seçenekler arasında olup olmadığını kontrol et"""
+        """Check value is one of allowed choices"""
         if value not in choices:
-            self.errors.append(f"{path}: '{value}' geçersiz. Geçerli değerler: {choices}")
+            self.errors.append(f"{path}: '{value}' invalid. Allowed: {choices}")
             return False
         return True
     
     def validate_range(self, value: int, min_val: Optional[int], max_val: Optional[int], path: str) -> bool:
-        """Sayısal değerin aralıkta olup olmadığını kontrol et"""
+        """Check numeric value is within range"""
         if min_val is not None and value < min_val:
-            self.errors.append(f"{path}: {value} minimum değer {min_val}'den küçük")
+            self.errors.append(f"{path}: {value} is below minimum {min_val}")
             return False
         if max_val is not None and value > max_val:
-            self.errors.append(f"{path}: {value} maksimum değer {max_val}'den büyük")
+            self.errors.append(f"{path}: {value} is above maximum {max_val}")
             return False
         return True
     
     def check_unknown_keys(self, data: Dict, schema: Dict, path: str = "") -> None:
-        """Bilinmeyen anahtarları tespit et"""
+        """Detect unknown keys"""
         if not isinstance(data, dict):
             return
         
         known_keys = set(schema.keys()) if isinstance(schema, dict) else set()
         
         for key in data.keys():
-            if key.startswith("_"):  # _comment gibi özel alanları atla
+            if key.startswith("_"):  # skip _comment etc.
                 continue
             if key not in known_keys:
                 self.warnings.append(f"{path}.{key}" if path else key)
     
     def validate_section(self, data: Dict, section_name: str, schema: Dict) -> Dict:
-        """Bir bölümü doğrula ve varsayılanlarla doldur"""
+        """Validate one section and fill defaults"""
         result = {}
         section_data = data.get(section_name, {})
         
         if not isinstance(section_data, dict):
-            self.errors.append(f"{section_name}: Dict bekleniyor, {type(section_data).__name__} alındı")
+            self.errors.append(f"{section_name}: expected dict, got {type(section_data).__name__}")
             section_data = {}
         
-        # Bilinmeyen anahtarları kontrol et
+        # Unknown keys in section
         known_keys = set(schema.keys())
         for key in section_data.keys():
             if key.startswith("_"):
                 continue
             if key not in known_keys:
-                self.warnings.append(f"{section_name}.{key}: Bilinmeyen parametre")
+                self.warnings.append(f"{section_name}.{key}: unknown parameter")
         
-        # Her alanı doğrula
+        # Validate each field
         for field_name, field_schema in schema.items():
             path = f"{section_name}.{field_name}"
             
             if field_name in section_data:
                 value = section_data[field_name]
                 
-                # Tip kontrolü
+                # Type check
                 self.validate_type(value, field_schema["type"], path)
                 
-                # Seçenek kontrolü
+                # Choices check
                 if "choices" in field_schema:
                     self.validate_choices(value, field_schema["choices"], path)
                 
-                # Aralık kontrolü
+                # Range check
                 if field_schema["type"] == "int":
                     self.validate_range(
                         value,
@@ -345,7 +329,7 @@ class ConfigValidator:
                 
                 result[field_name] = value
             else:
-                # Varsayılan değeri kullan
+                # Use default
                 result[field_name] = field_schema["default"]
         
         return result
@@ -355,9 +339,9 @@ class ConfigValidator:
 # Config Loading Functions
 # ═══════════════════════════════════════════════════════════════════════════
 def find_config_files(config_dir: Optional[Path] = None) -> tuple[Optional[Path], Optional[Path]]:
-    """Konfigürasyon dosyalarını bul"""
+    """Locate configuration files"""
     if config_dir is None:
-        # Script dizinine göre bul
+        # Relative to script location
         script_dir = Path(__file__).parent.parent.parent  # script/python/makefile -> script
         config_dir = script_dir / "config"
     
@@ -371,7 +355,7 @@ def find_config_files(config_dir: Optional[Path] = None) -> tuple[Optional[Path]
 
 
 def merge_dicts(base: Dict, override: Dict) -> Dict:
-    """İki dict'i recursive olarak birleştir"""
+    """Recursively merge two dicts"""
     result = base.copy()
     
     for key, value in override.items():
@@ -384,16 +368,16 @@ def merge_dicts(base: Dict, override: Dict) -> Dict:
 
 
 def apply_profile(config_data: Dict, profile_name: str) -> Dict:
-    """Profili uygula"""
+    """Apply named profile overlay"""
     profiles = config_data.get("profiles", {})
     
     if profile_name not in profiles:
         available = list(profiles.keys())
-        raise ValueError(f"Profil bulunamadı: '{profile_name}'. Mevcut profiller: {available}")
+        raise ValueError(f"Profile not found: '{profile_name}'. Available: {available}")
     
     profile = profiles[profile_name]
     
-    # Profildeki her bölümü base config ile birleştir
+    # Merge each profile section into base config
     result = config_data.copy()
     for section in CONFIG_SCHEMA.keys():
         if section in profile:
@@ -412,89 +396,88 @@ def load_config(
     quiet: bool = False,
 ) -> ModelSimConfig:
     """
-    Konfigürasyonu yükle ve doğrula.
-    
+    Load and validate configuration.
+
     Args:
-        config_file: Ana konfigürasyon dosyası (None ise otomatik bul)
-        local_config_file: Lokal override dosyası
-        profile: Uygulanacak profil adı
-        strict: True ise uyarıları hata olarak ele al
-        quiet: True ise uyarıları gösterme
-    
+        config_file: Main config file (None = auto-discover)
+        local_config_file: Local override file
+        profile: Profile name to apply
+        strict: If True, treat warnings as errors
+        quiet: If True, suppress warning banners
+
     Returns:
-        ModelSimConfig: Doğrulanmış konfigürasyon nesnesi
-    
+        ModelSimConfig: Validated configuration object
+
     Raises:
-        FileNotFoundError: Konfigürasyon dosyası bulunamazsa
-        ValueError: Geçersiz konfigürasyon
+        FileNotFoundError: Config file missing
+        ValueError: Invalid configuration
     """
-    # Dosyaları bul
+    # Resolve files
     if config_file is None:
         config_file, auto_local = find_config_files()
         if local_config_file is None:
             local_config_file = auto_local
     
     if config_file is None or not config_file.exists():
-        raise FileNotFoundError(f"Konfigürasyon dosyası bulunamadı: {config_file}")
+        raise FileNotFoundError(f"Configuration file not found: {config_file}")
     
-    # JSON'ları oku
+    # Read JSON
     with open(config_file, 'r', encoding='utf-8') as f:
         config_data = json.load(f)
     
-    # Lokal override'ı birleştir
+    # Merge local override
     if local_config_file and local_config_file.exists():
         with open(local_config_file, 'r', encoding='utf-8') as f:
             local_data = json.load(f)
         config_data = merge_dicts(config_data, local_data)
         if not quiet:
-            info(f"Lokal override yüklendi: {local_config_file.name}")
+            info(f"Loaded local override: {local_config_file.name}")
     
-    # Profili uygula
+    # Apply profile
     if profile:
         config_data = apply_profile(config_data, profile)
         if not quiet:
-            info(f"Profil uygulandı: {profile}")
+            info(f"Applied profile: {profile}")
     
-    # Doğrulama
+    # Validate
     validator = ConfigValidator()
     
-    # Üst düzey bilinmeyen anahtarları kontrol et
+    # Unknown top-level keys
     for key in config_data.keys():
         if key not in KNOWN_TOP_KEYS and not key.startswith("_"):
-            validator.warnings.append(f"Bilinmeyen üst düzey anahtar: '{key}'")
+            validator.warnings.append(f"Unknown top-level key: '{key}'")
     
-    # Her bölümü doğrula
+    # Validate each schema section
     validated = {}
     for section_name, section_schema in CONFIG_SCHEMA.items():
         validated[section_name] = validator.validate_section(config_data, section_name, section_schema)
     
-    # Uyarıları göster
+    # Print warnings
     if validator.warnings and not quiet:
         print(f"\n{Color.YELLOW}{'═' * 60}{Color.RESET}")
-        print(f"{Color.YELLOW}  ⚠ Konfigürasyon Uyarıları ({len(validator.warnings)} adet){Color.RESET}")
+        print(f"{Color.YELLOW}  ⚠ Configuration warnings ({len(validator.warnings)}){Color.RESET}")
         print(f"{Color.YELLOW}{'═' * 60}{Color.RESET}")
         for warning in validator.warnings:
             print(f"  {Color.YELLOW}•{Color.RESET} {warning}")
         print(f"{Color.YELLOW}{'═' * 60}{Color.RESET}\n")
         
         if strict:
-            raise ValueError(f"Strict modda {len(validator.warnings)} uyarı bulundu")
+            raise ValueError(f"Strict mode: {len(validator.warnings)} warning(s)")
     
-    # Hataları kontrol et
+    # Errors
     if validator.errors:
         print(f"\n{Color.RED}{'═' * 60}{Color.RESET}")
-        print(f"{Color.RED}  ✗ Konfigürasyon Hataları ({len(validator.errors)} adet){Color.RESET}")
+        print(f"{Color.RED}  ✗ Configuration errors ({len(validator.errors)}){Color.RESET}")
         print(f"{Color.RED}{'═' * 60}{Color.RESET}")
         for err in validator.errors:
             print(f"  {Color.RED}•{Color.RESET} {err}")
         print(f"{Color.RED}{'═' * 60}{Color.RESET}\n")
-        raise ValueError(f"Konfigürasyonda {len(validator.errors)} hata bulundu")
+        raise ValueError(f"Configuration has {len(validator.errors)} error(s)")
     
-    # Dataclass'lara dönüştür
+    # Build dataclasses
     result = ModelSimConfig(
         simulation=SimulationConfig(**validated["simulation"]),
         compile=CompileConfig(**validated["compile"]),
-        lint=LintConfig(**validated["lint"]),
         debug=DebugConfig(**validated["debug"]),
         coverage=CoverageConfig(**validated["coverage"]),
         language=LanguageConfig(**validated["language"]),
@@ -514,29 +497,29 @@ def load_config(
 # Config Summary
 # ═══════════════════════════════════════════════════════════════════════════
 def _kv(key: str, value: Any, indent: int = 4) -> None:
-    """Key-value çifti yazdır."""
+    """Print key-value line."""
     spaces = " " * indent
     key_fmt = f"{Color.DIM}{key}:{Color.RESET}"
     print(f"{spaces}{key_fmt:20} {value}")
 
 def _section(title: str) -> None:
-    """Section başlığı yazdır."""
+    """Print section heading."""
     print(f"\n  {Color.BOLD}{Color.WHITE}▸ {title}{Color.RESET}")
 
 def _bool_str(val: bool) -> str:
-    """Boolean değeri renkli string'e çevir."""
+    """Format boolean with color."""
     if val:
         return f"{Color.GREEN}Yes{Color.RESET}"
     return f"{Color.DIM}No{Color.RESET}"
 
 def print_config_summary(config: ModelSimConfig) -> None:
-    """Konfigürasyon özetini yazdır"""
+    """Print configuration summary"""
     print()
     print(f"{Color.CYAN}{'═' * 60}{Color.RESET}")
-    print(f"{Color.CYAN}  ModelSim Konfigürasyon Özeti{Color.RESET}")
+    print(f"{Color.CYAN}  ModelSim configuration summary{Color.RESET}")
     print(f"{Color.CYAN}{'═' * 60}{Color.RESET}")
     
-    # Kaynak bilgisi
+    # Source info
     if config.config_file or config.profile_name:
         print()
         if config.config_file:
@@ -544,7 +527,7 @@ def print_config_summary(config: ModelSimConfig) -> None:
         if config.local_config_file:
             _kv("Local", config.local_config_file)
         if config.profile_name:
-            _kv("Profil", f"{Color.CYAN}{config.profile_name}{Color.RESET}")
+            _kv("Profile", f"{Color.CYAN}{config.profile_name}{Color.RESET}")
     
     _section("Simulation")
     _kv("Sim Time", config.simulation.sim_time)
@@ -556,12 +539,6 @@ def print_config_summary(config: ModelSimConfig) -> None:
     _kv("MFCU", _bool_str(config.compile.mfcu))
     _kv("Inputport", config.compile.svinputport)
     
-    _section("Lint")
-    _kv("Enabled", _bool_str(config.lint.enabled))
-    if config.lint.enabled:
-        _kv("Mode", config.lint.mode)
-        _kv("Pedantic", _bool_str(config.lint.pedantic))
-    
     _section("Coverage")
     _kv("Enabled", _bool_str(config.coverage.enabled))
     if config.coverage.enabled:
@@ -571,14 +548,14 @@ def print_config_summary(config: ModelSimConfig) -> None:
     _kv("Timing", _bool_str(config.gls.timing_checks))
     _kv("Delay Mode", config.gls.delay_mode)
     
-    # Uyarılar
+    # Warnings
     if config.warnings:
         print()
-        print(f"  {Color.YELLOW}⚠ {len(config.warnings)} uyarı{Color.RESET}")
-        for w in config.warnings[:3]:  # Max 3 uyarı göster
+        print(f"  {Color.YELLOW}⚠ {len(config.warnings)} warning(s){Color.RESET}")
+        for w in config.warnings[:3]:  # show at most 3
             print(f"    {Color.DIM}• {w}{Color.RESET}")
         if len(config.warnings) > 3:
-            print(f"    {Color.DIM}... ve {len(config.warnings) - 3} uyarı daha{Color.RESET}")
+            print(f"    {Color.DIM}... and {len(config.warnings) - 3} more{Color.RESET}")
     
     print(f"\n{Color.CYAN}{'═' * 60}{Color.RESET}\n")
 
@@ -591,66 +568,66 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="CERES RISC-V ModelSim Configuration Manager",
+        description="Level RISC-V ModelSim Configuration Manager",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     
     parser.add_argument(
         "--config", "-c",
         type=Path,
-        help="Ana konfigürasyon dosyası"
+        help="Main configuration file"
     )
     
     parser.add_argument(
         "--local", "-l",
         type=Path,
-        help="Lokal override dosyası"
+        help="Local override file"
     )
     
     parser.add_argument(
         "--profile", "-p",
-        help="Uygulanacak profil (fast, debug, lint_only, coverage, gls)"
+        help="Profile to apply (fast, debug, coverage, gls)"
     )
     
     parser.add_argument(
         "--strict", "-s",
         action="store_true",
-        help="Uyarıları hata olarak ele al"
+        help="Treat warnings as errors"
     )
     
     parser.add_argument(
         "--quiet", "-q",
         action="store_true",
-        help="Sadece hataları göster"
+        help="Show errors only"
     )
     
     parser.add_argument(
         "--summary",
         action="store_true",
-        help="Konfigürasyon özetini göster"
+        help="Print configuration summary"
     )
     
     parser.add_argument(
         "--get",
-        help="Belirli bir değeri al (örn: simulation.sim_time)"
+        help="Print one dotted path (e.g. simulation.sim_time)"
     )
     
     parser.add_argument(
         "--validate",
         action="store_true",
-        help="Konfigürasyonu doğrula"
+        help="Validate configuration"
     )
 
     parser.add_argument(
         "--make",
         action="store_true",
-        help="Makefile için Make değişkenleri çıktısı (Make fragment)"
+        help="Emit Make variables fragment for Makefile integration"
     )
     
     parser.add_argument(
         "--no-color",
         action="store_true",
-        help="Renkli çıktıyı devre dışı bırak"
+        help="Disable colored output"
     )
     
     args = parser.parse_args()
@@ -668,14 +645,14 @@ def main():
         )
         
         if args.get:
-            # Belirli bir değeri al
+            # Print single dotted path
             parts = args.get.split(".")
             value = config
             for part in parts:
                 if hasattr(value, part):
                     value = getattr(value, part)
                 else:
-                    error(f"Alan bulunamadı: {args.get}")
+                    error(f"Field not found: {args.get}")
                     return 1
             print(value)
         
@@ -693,27 +670,16 @@ def main():
             # Basic simulation vars
             print(f"MODELSIM_TIME_RES ?= {config.simulation.time_resolution}")
             print(f"SIM_TIME ?= {config.simulation.sim_time}")
-            print(f"MODELSIM_VOPTARGS ?= {config.simulation.voptargs}")
-            if config.simulation.quiet:
-                print("MODELSIM_QUIET ?= -quiet")
 
             # Compile settings
             print(f"MODELSIM_SV_MODE ?= {'-sv' if config.compile.sv_mode else ''}")
             print(f"MODELSIM_MFCU ?= {'-mfcu' if config.compile.mfcu else '-sfcu'}")
             print(f"MODELSIM_SVINPUTPORT ?= {config.compile.svinputport}")
 
-            # Lint
-            print(f"MODELSIM_LINT_ENABLED ?= {fmt_bool(config.lint.enabled)}")
-            print(f"MODELSIM_LINT_MODE ?= {config.lint.mode}")
-            if config.lint.pedantic:
-                print('MODELSIM_PEDANTIC ?= -pedanticerrors')
-
             # Debug
             print(f"MODELSIM_ACC ?= {config.debug.acc}")
             if config.debug.fsmdebug:
                 print('MODELSIM_FSMDEBUG ?= -fsmdebug')
-            if config.debug.classdebug:
-                print('MODELSIM_CLASSDEBUG ?= -classdebug')
             if config.debug.assertdebug:
                 print('MODELSIM_ASSERTDEBUG ?= -assertdebug')
 
@@ -730,9 +696,6 @@ def main():
             # GLS
             if not config.gls.timing_checks:
                 print('MODELSIM_NOTIMINGCHECKS ?= +notimingchecks')
-            if not config.gls.specify_delays:
-                print('MODELSIM_NOSPECIFY ?= +nospecify')
-            print(f"MODELSIM_DELAY_MODE ?= {config.gls.get_delay_flag()}")
 
             # Messages
             if config.messages.suppress:
@@ -764,7 +727,7 @@ def main():
             return 0
 
         else:
-            # Varsayılan: özet göster
+            # Default: print summary
             print_config_summary(config)
             return 0
     
@@ -775,7 +738,7 @@ def main():
         error(str(e))
         return 1
     except json.JSONDecodeError as e:
-        error(f"JSON parse hatası: {e}")
+        error(f"JSON parse error: {e}")
         return 1
 
 

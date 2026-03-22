@@ -1,23 +1,23 @@
-# 📦 Test Manager Sistemi - Özet
+# 📦 Test manager system — summary
 
-## ✨ Ne Yaptık?
+## ✨ What we built
 
-CERES RISC-V projeniz için **kapsamlı bir test yönetim ve debug sistemi** geliştirdik.
+A **full test management and debug system** for the Level RISC-V project.
 
 ---
 
-## 📂 Oluşturulan Dosyalar
+## 📂 Files created
 
-### 1. Python Scripts (Core)
+### 1. Python scripts (core)
 
 #### `script/python/test_manager.py` ⭐
-**Ana test yönetim CLI aracı**
-- Test çalıştırma (tek, suite, tag-based)
-- Test listeleme ve filtreleme
-- Test ekleme/çıkarma
-- Debug logging entegrasyonu
+**Main test management CLI**
+- Run tests (single, suite, tag-based)
+- List and filter tests
+- Add/remove tests
+- Debug logging integration
 
-**Kullanım:**
+**Usage:**
 ```bash
 python3 script/python/test_manager.py run --test rv32ui-p-add
 python3 script/python/test_manager.py list --suite benchmarks
@@ -25,29 +25,29 @@ python3 script/python/test_manager.py run --tags quick,isa
 ```
 
 #### `script/python/debug_logger.py` 🔍
-**Debug rapor oluşturma kütüphanesi**
+**Debug report library**
 - Execution flow tracking
 - File access monitoring
 - Performance metrics (optional psutil)
 - Error/warning aggregation
 - Hierarchical step tracking
 
-**Özellikler:**
-- Her adımın timestamp'i
-- Command'ların tam kaydı
-- Exit code'lar
-- Stdout/stderr loglama
-- Config snapshot'lar
+**Features:**
+- Timestamp per step
+- Full command recording
+- Exit codes
+- Stdout/stderr logging
+- Config snapshots
 
 #### `script/python/debug_viewer.py` 📊
-**Debug rapor görüntüleme ve analiz aracı**
-- Pretty-print raporları
-- Error-only görünüm
-- Summary istatistikleri
-- İki raporun karşılaştırması
-- Renkli terminal çıktısı
+**Debug report viewer and analysis**
+- Pretty-print reports
+- Errors-only view
+- Summary statistics
+- Compare two reports
+- Colored terminal output
 
-**Kullanım:**
+**Usage:**
 ```bash
 python3 script/python/debug_viewer.py
 python3 script/python/debug_viewer.py --errors-only
@@ -56,12 +56,12 @@ python3 script/python/debug_viewer.py --compare report1.json report2.json
 
 ---
 
-### 2. Konfigürasyon Dosyaları
+### 2. Configuration files
 
 #### `script/config/test_registry.json` 📝
-**Merkezi test veritabanı**
+**Central test database**
 
-Yapısı:
+Structure:
 ```json
 {
   "test_suites": {
@@ -74,7 +74,7 @@ Yapısı:
     "benchmarks": {
       "tests": {
         "coremark": {
-          "config": "script/config/tests/coremark.json",
+          "config": "script/config/tests/coremark.conf",
           "tags": ["benchmark", "slow"]
         }
       }
@@ -84,94 +84,89 @@ Yapısı:
 }
 ```
 
-#### `script/config/test_registry.schema.json`
-**JSON schema validation**
+### 3. Makefile updates
 
----
+#### `Makefile.verilator` (updated) 🔧
 
-### 3. Makefile Güncellemeleri
-
-#### `Makefile.verilator` (Güncellenmiş) 🔧
-
-**Yeni Değişkenler:**
+**New variables:**
 ```makefile
 TEST_MANAGER := $(PYTHON) $(SCRIPT_DIR)/python/test_manager.py
 DEBUG_VIEWER := $(PYTHON) $(SCRIPT_DIR)/python/debug_viewer.py
 DEBUG_ENABLE ?= 1
 ```
 
-**Yeni Target'lar:**
+**New targets:**
 
-**Test Manager:**
-- `test-run` - Tek test çalıştır
-- `test-run-suite` - Suite çalıştır
-- `test-run-tags` - Tag'lere göre çalıştır
-- `test-list` - Testleri listele
-- `test-add` - Test ekle
-- `test-remove` - Test çıkar
+**Test manager:**
+- `test-run` — run one test
+- `test-run-suite` — run a suite
+- `test-run-tags` — run by tags
+- `test-list` — list tests
+- `test-add` — add test
+- `test-remove` — remove test
 
-**Debug Reports:**
-- `debug-latest` - Son raporu göster
-- `debug-view` - Belirli raporu göster
-- `debug-errors` - Sadece hataları göster
-- `debug-summary` - Özet göster
-- `debug-compare` - İki rapor karşılaştır
-- `debug-list` - Tüm raporları listele
-- `debug-clean` - Raporları temizle
+**Debug reports:**
+- `debug-latest` — show latest report
+- `debug-view` — show a specific report
+- `debug-errors` — errors only
+- `debug-summary` — summary
+- `debug-compare` — compare two reports
+- `debug-list` — list all reports
+- `debug-clean` — clean reports
 
 ---
 
-### 4. Dokümantasyon
+### 4. Documentation
 
 #### `docs/TEST_MANAGER_README.md` 📚
-**Kapsamlı kullanım kılavuzu** (100+ sayfa)
-- Detaylı kullanım örnekleri
-- Tüm özelliklerin açıklaması
-- Sorun giderme
+**Full user guide** (100+ sections)
+- Detailed examples
+- Feature descriptions
+- Troubleshooting
 - Best practices
 
 #### `docs/QUICKSTART_TESTMANAGER.md` 🚀
-**Hızlı başlangıç kılavuzu**
-- 5 dakikada başlangıç
-- Yaygın senaryolar
+**Quick start**
+- Up and running in 5 minutes
+- Common scenarios
 - Pro tips
 - Checklist
 
-#### `docs/TEST_MANAGER_SUMMARY.md` (Bu dosya)
-**Sistem özeti**
+#### `docs/TEST_MANAGER_SUMMARY.md` (this file)
+**System overview**
 
 ---
 
-## 🎯 Temel Özellikler
+## 🎯 Main features
 
-### 1. ✅ Kolay Test Yönetimi
+### 1. ✅ Easy test management
 
-**Öncesi:**
+**Before:**
 ```bash
-# Test listesini manuel .flist dosyasında düzenle
+# Manually edit test list in .flist
 vim sim/test/custom_tests.flist
-# Manuel olarak test adını ekle
-# Makefile'ı çalıştır
+# Add test name by hand
+# Run Makefile
 make -f Makefile.verilator run TEST_NAME=my_test
 ```
 
-**Sonrası:**
+**After:**
 ```bash
-# Tek komutla test ekle
+# Add a test in one command
 make -f Makefile.verilator test-add TEST_NAME=my_test SUITE=custom_tests
-# Çalıştır
+# Run
 make -f Makefile.verilator test-run TEST_NAME=my_test
 ```
 
-### 2. 🔍 Otomatik Debug Raporları
+### 2. 🔍 Automatic debug reports
 
-**Her test çalıştırmasında:**
-- Execution flow kaydedilir
-- Tüm dosya erişimleri loglanır
-- Performance metrikleri toplanır
-- Hatalar ve uyarılar aggregate edilir
+**On every test run:**
+- Execution flow is recorded
+- All file accesses are logged
+- Performance metrics collected
+- Errors and warnings aggregated
 
-**Rapor formatı:**
+**Report format:**
 ```json
 {
   "metadata": { "test_name": "...", "timestamp": "..." },
@@ -182,36 +177,36 @@ make -f Makefile.verilator test-run TEST_NAME=my_test
 }
 ```
 
-### 3. 🏷️ Tag-Based Organization
+### 3. 🏷️ Tag-based organization
 
-**Tag'lere göre gruplandırma:**
+**Group by tags:**
 ```bash
-# Quick testleri çalıştır
+# Quick tests
 make -f Makefile.verilator test-run-tags TAGS=quick
 
-# Tüm compliance testleri
+# All compliance tests
 make -f Makefile.verilator test-run-tags TAGS=compliance
 
-# Performans testleri
+# Benchmarks
 make -f Makefile.verilator test-run-tags TAGS=benchmark
 ```
 
-### 4. 📊 Debug Analiz Araçları
+### 4. 📊 Debug analysis tools
 
 ```bash
-# Son raporu göster
+# Latest report
 make -f Makefile.verilator debug-latest
 
-# Sadece hataları göster
+# Errors only
 make -f Makefile.verilator debug-errors
 
-# İki çalıştırmayı karşılaştır
+# Compare two runs
 make -f Makefile.verilator debug-compare REPORT1=... REPORT2=...
 ```
 
 ---
 
-## 🎨 Debug Rapor Örneği
+## 🎨 Sample debug report
 
 ```
 ================================================================================
@@ -248,7 +243,7 @@ Files Accessed:
   Read (3 files):
     • script/config/verilator.json
     • build/tests/riscv-tests/mem/rv32ui-p-add.mem
-    • rtl/wrapper/ceres_wrapper.sv
+    • rtl/wrapper/level_wrapper.sv
 
   Written (2 files):
     • build/log/verilator/rv32ui-p-add/commit_trace.log
@@ -272,148 +267,147 @@ Summary Statistics:
 
 ---
 
-## 📈 Kullanım İstatistikleri
+## 📈 Usage statistics
 
-### Test Registry'de Tanımlı Suite'ler:
+### Suites defined in the test registry:
 
-| Suite | Test Sayısı | Durum |
-|-------|-------------|-------|
-| isa_basic | 51 | ✓ Aktif |
-| isa_compressed | 1 | ✓ Aktif |
-| isa_multiply | 8 | ✓ Aktif |
-| arch_tests | 91 | ✓ Aktif |
-| benchmarks | 2 | ✓ Aktif |
-| branch_tests | 8 | ✓ Aktif |
-| exception_tests | 2 | ✓ Aktif |
-| csr_tests | 16 | ✓ Aktif |
-| custom_tests | 20 | ✓ Aktif |
-| embench | 16 | ✗ Pasif |
-| imperas | 45 | ✗ Pasif |
+| Suite | Test count | Status |
+|-------|------------|--------|
+| isa_basic | 51 | ✓ Active |
+| isa_compressed | 1 | ✓ Active |
+| isa_multiply | 8 | ✓ Active |
+| arch_tests | 91 | ✓ Active |
+| benchmarks | 2 | ✓ Active |
+| branch_tests | 8 | ✓ Active |
+| exception_tests | 2 | ✓ Active |
+| csr_tests | 16 | ✓ Active |
+| custom_tests | 20 | ✓ Active |
+| embench | 16 | ✗ Disabled |
+| imperas | 45 | ✗ Disabled |
 
-**Toplam:** 260 test (199 aktif)
+**Total:** 260 tests (199 active)
 
 ---
 
-## 🚀 Hızlı Başlangıç
+## 🚀 Quick start
 
-### 1. Test Listele
+### 1. List tests
 ```bash
 make -f Makefile.verilator test-list
 ```
 
-### 2. Test Çalıştır
+### 2. Run a test
 ```bash
 make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add
 ```
 
-### 3. Debug Raporu Görüntüle
+### 3. View debug report
 ```bash
 make -f Makefile.verilator debug-latest
 ```
 
 ---
 
-## 💡 Avantajlar
+## 💡 Benefits
 
-### ✅ Geriye Dönük Uyumluluk
-- Eski tüm Makefile target'ları çalışmaya devam eder
-- Mevcut .flist dosyaları kullanılır
-- İsteğe bağlı debug logging (DEBUG_ENABLE)
+### ✅ Backward compatible
+- All legacy Makefile targets still work
+- Existing `.flist` files are used
+- Optional debug logging (`DEBUG_ENABLE`)
 
-### ✅ Kolay Test Yönetimi
-- Tek komutla test ekle/çıkar
+### ✅ Easier test management
+- Add/remove tests in one command
 - Tag-based filtering
-- Suite bazlı organizasyon
-- JSON merkezi veritabanı
+- Suite-based organization
+- Central JSON database
 
-### ✅ Detaylı Debug İzleme
-- Her adımın kaydı
-- Dosya erişim takibi
-- Performance metrikleri
+### ✅ Rich debug visibility
+- Every step recorded
+- File access tracking
+- Performance metrics
 - Error aggregation
-- Rapor karşılaştırma
+- Report comparison
 
-### ✅ Geliştirilmeye Açık
-- Python modüler yapı
+### ✅ Extensible
+- Modular Python
 - JSON schema validation
-- Kolay extension
-- Plugin sistemi hazır
+- Easy to extend
+- Ready for a plugin model
 
 ---
 
-## 🔧 Teknik Detaylar
+## 🔧 Technical details
 
-### Python Bağımlılıkları
+### Python dependencies
 
-**Zorunlu:**
+**Required:**
 - Python 3.6+
 - Standard library (json, pathlib, subprocess, etc.)
 
-**Opsiyonel:**
-- `psutil` - Performance metrikleri için
-  - Yoksa: "Warning: psutil not available, performance metrics disabled"
-  - Kurulum: `pip3 install psutil`
+**Optional:**
+- `psutil` — performance metrics
+  - If missing: "Warning: psutil not available, performance metrics disabled"
+  - Install: `pip3 install psutil`
 
-### Dosya Yapısı
+### Directory layout
 
 ```
 level-v/
 ├── script/
 │   ├── config/
-│   │   ├── test_registry.json          ⭐ YENİ
-│   │   ├── test_registry.schema.json   ⭐ YENİ
+│   │   ├── test_registry.json          ⭐ NEW
 │   │   └── tests/
-│   │       └── *.json (mevcut)
+│   │       └── *.conf (test profiles)
 │   └── python/
-│       ├── test_manager.py             ⭐ YENİ
-│       ├── debug_logger.py             ⭐ YENİ
-│       └── debug_viewer.py             ⭐ YENİ
+│       ├── test_manager.py             ⭐ NEW
+│       ├── debug_logger.py             ⭐ NEW
+│       └── debug_viewer.py             ⭐ NEW
 ├── build/
-│   └── debug_reports/                  ⭐ YENİ (otomatik)
+│   └── debug_reports/                  ⭐ NEW (automatic)
 │       ├── run_TIMESTAMP_TEST.json
 │       └── latest_TEST.json (symlink)
 ├── docs/
-│   ├── TEST_MANAGER_README.md          ⭐ YENİ
-│   ├── QUICKSTART_TESTMANAGER.md       ⭐ YENİ
-│   └── TEST_MANAGER_SUMMARY.md         ⭐ YENİ
-└── Makefile.verilator                  🔧 GÜNCELLENDI
+│   ├── TEST_MANAGER_README.md          ⭐ NEW
+│   ├── QUICKSTART_TESTMANAGER.md       ⭐ NEW
+│   └── TEST_MANAGER_SUMMARY.md         ⭐ NEW
+└── makefile                            (root unified Makefile)
 ```
 
 ---
 
-## 🎯 Sonraki Adımlar (Opsiyonel)
+## 🎯 Next steps (optional)
 
-### 1. Paralel Test Çalıştırma
+### 1. Parallel test runs
 ```python
-# test_manager.py'ye eklenebilir
+# Could be added to test_manager.py
 def run_tests_parallel(test_names, num_jobs=4):
-    # multiprocessing ile paralel çalıştırma
+    # Run in parallel with multiprocessing
 ```
 
-### 2. Web Dashboard
+### 2. Web dashboard
 ```python
-# Flask/FastAPI ile web arayüzü
-# Debug raporlarını browser'da görüntüleme
+# Flask/FastAPI UI
+# View debug reports in the browser
 ```
 
-### 3. CI/CD Entegrasyonu
+### 3. CI/CD integration
 ```yaml
 # .github/workflows/tests.yml
 - name: Run tests
   run: make -f Makefile.verilator test-run-tags TAGS=quick
 ```
 
-### 4. Email Raporlama
+### 4. Email reporting
 ```python
-# Test sonuçlarını email ile gönderme
-# Başarısız testler için otomatik bildirim
+# Email test results
+# Auto-notify on failures
 ```
 
 ---
 
-## 📞 Destek
+## 📞 Support
 
-Sorunlar için debug raporunu kontrol edin:
+For issues, inspect the debug report:
 ```bash
 make -f Makefile.verilator debug-latest
 make -f Makefile.verilator debug-errors
@@ -421,19 +415,19 @@ make -f Makefile.verilator debug-errors
 
 ---
 
-## ✅ Tamamlanan Özellikler
+## ✅ Completed features
 
-- [x] Test registry JSON sistemi
+- [x] Test registry JSON system
 - [x] Test manager Python CLI
-- [x] Debug logger kütüphanesi
-- [x] Debug viewer aracı
-- [x] Makefile entegrasyonu
+- [x] Debug logger library
+- [x] Debug viewer tool
+- [x] Makefile integration
 - [x] Tag-based filtering
-- [x] Rapor karşılaştırma
-- [x] Kapsamlı dokümantasyon
-- [x] Hızlı başlangıç kılavuzu
-- [x] psutil optional hale getirilmesi
+- [x] Report comparison
+- [x] Full documentation
+- [x] Quick start guide
+- [x] psutil made optional
 
 ---
 
-**🎉 Sistem hazır! Test etmeye başlayabilirsiniz!**
+**🎉 The system is ready — you can start testing.**

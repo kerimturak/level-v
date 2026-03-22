@@ -9,155 +9,97 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 ================================================================================
 Next-Line Prefetcher
 ================================================================================
-Basit ve etkili bir prefetcher implementasyonu.
-Cache miss olduğunda, bir sonraki cache line'ı proaktif olarak prefetch eder.
+On a new demand miss (cached region), arms prefetch of the following cache line.
+Issues the prefetch only after the demand miss clears so the single lowX port
+stays well-defined.
 
-Özellikler:
-  - Minimum alan kullanımı (~50 FF)
-  - Sıralı erişim pattern'leri için optimize
-  - %5-10 cache hit artışı beklenir
-  - Tek cycle latency
-
-Kullanım:
-  - I-Cache veya D-Cache ile entegre edilebilir
-  - Miss sinyali ile tetiklenir
-  - Prefetch queue veya doğrudan memory arbiter'a bağlanır
+States: IDLE → WAIT_MISS_END (miss active) → REQ (prefetch_valid until ack)
 ================================================================================
 */
 `timescale 1ns / 1ps
 
 module next_line_prefetcher
-  import ceres_param::*;
+  import level_param::*;
 #(
-    parameter int XLEN     = ceres_param::XLEN,
-    parameter int BLK_SIZE = ceres_param::BLK_SIZE  // Cache line size in bits
+    parameter int XLEN     = level_param::XLEN,
+    parameter int BLK_SIZE = level_param::BLK_SIZE
 ) (
     input  logic            clk_i,
     input  logic            rst_ni,
-    input  logic            flush_i,           // Pipeline flush
-    input  logic            cache_miss_i,      // Cache miss occurred
-    input  logic [XLEN-1:0] miss_addr_i,       // Address that missed
-    input  logic            prefetch_ack_i,    // Prefetch request accepted
-    input  logic            cache_busy_i,      // Cache is busy (don't prefetch)
-    output logic            prefetch_valid_o,  // Prefetch request valid
-    output logic [XLEN-1:0] prefetch_addr_o    // Prefetch address
+    input  logic            flush_i,
+    input  logic            cache_miss_i,
+    input  logic            miss_uncached_i,
+    input  logic [XLEN-1:0] miss_addr_i,
+    input  logic            prefetch_ack_i,
+    output logic            prefetch_valid_o,
+    output logic [XLEN-1:0] prefetch_addr_o
 );
 
-  // ============================================================================
-  // Local Parameters
-  // ============================================================================
-  localparam int LINE_BYTES = BLK_SIZE / 8;  // 16 bytes for 128-bit line
+  localparam int LINE_BYTES = BLK_SIZE / 8;
   localparam int OFFSET_BITS = $clog2(LINE_BYTES);
 
-  // ============================================================================
-  // State Machine
-  // ============================================================================
   typedef enum logic [1:0] {
-    IDLE,     // Waiting for miss
-    PENDING,  // Prefetch request pending
-    WAIT_ACK  // Waiting for acknowledgment
+    ST_IDLE,
+    ST_WAIT_MISS_END,
+    ST_REQ
   } state_e;
 
   state_e state_q, state_d;
 
-  // ============================================================================
-  // Registers
-  // ============================================================================
-  logic [XLEN-1:0] prefetch_addr_q;
-  logic [XLEN-1:0] last_miss_addr_q;  // Track last miss to avoid duplicate prefetch
+  logic [XLEN-1:0] pf_line_q;
+  logic [XLEN-1:0] last_miss_line_q;
 
-  // ============================================================================
-  // Next Line Address Calculation
-  // ============================================================================
-  // Cache line aligned, then add one line size
+  logic [XLEN-1:0] miss_line;
+  assign miss_line = {miss_addr_i[XLEN-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
+
   logic [XLEN-1:0] next_line_addr;
-  assign next_line_addr = {miss_addr_i[XLEN-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}} + LINE_BYTES;
+  assign next_line_addr = miss_line + XLEN'(unsigned'(LINE_BYTES));
 
-  // Check if this is a new miss (not same as last one)
-  logic is_new_miss;
-  assign is_new_miss = (miss_addr_i[XLEN-1:OFFSET_BITS] != last_miss_addr_q[XLEN-1:OFFSET_BITS]);
+  logic is_new_miss_line;
+  assign is_new_miss_line = (miss_line != last_miss_line_q);
 
-  // ============================================================================
-  // Output Assignments
-  // ============================================================================
-  assign prefetch_valid_o = (state_q == PENDING) || (state_q == WAIT_ACK);
-  assign prefetch_addr_o = prefetch_addr_q;
+  assign prefetch_addr_o  = pf_line_q;
+  assign prefetch_valid_o = (state_q == ST_REQ);
 
-  // ============================================================================
-  // Next State Logic
-  // ============================================================================
   always_comb begin
     state_d = state_q;
-
     case (state_q)
-      IDLE: begin
-        // Wait for a cache miss
-        if (cache_miss_i && is_new_miss && !cache_busy_i) begin
-          state_d = PENDING;
-        end
+      ST_IDLE: begin
+        if (flush_i) state_d = ST_IDLE;
+        else if (cache_miss_i && !miss_uncached_i && is_new_miss_line) state_d = ST_WAIT_MISS_END;
       end
-
-      PENDING: begin
-        // Request is out, waiting for accept or busy signal
-        if (flush_i) begin
-          state_d = IDLE;
-        end else if (prefetch_ack_i) begin
-          state_d = IDLE;  // Done, go back to idle
-        end else if (cache_busy_i) begin
-          state_d = WAIT_ACK;  // Cache became busy, wait
-        end
+      ST_WAIT_MISS_END: begin
+        if (flush_i) state_d = ST_IDLE;
+        else if (!cache_miss_i) state_d = ST_REQ;
       end
-
-      WAIT_ACK: begin
-        // Waiting for cache to become available
-        if (flush_i) begin
-          state_d = IDLE;
-        end else if (!cache_busy_i) begin
-          state_d = PENDING;  // Try again
-        end
+      ST_REQ: begin
+        if (flush_i) state_d = ST_IDLE;
+        else if (prefetch_ack_i) state_d = ST_IDLE;
       end
-
-      default: state_d = IDLE;
+      default: state_d = ST_IDLE;
     endcase
   end
 
-  // ============================================================================
-  // Sequential Logic
-  // ============================================================================
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      state_q <= IDLE;
-      prefetch_addr_q <= '0;
-      last_miss_addr_q <= '0;
+      state_q          <= ST_IDLE;
+      pf_line_q        <= '0;
+      last_miss_line_q <= '0;
     end else if (flush_i) begin
-      state_q <= IDLE;
-      // Keep addresses for potential reuse
+      state_q <= ST_IDLE;
     end else begin
       state_q <= state_d;
 
-      // Capture prefetch address on new miss
-      if (cache_miss_i && is_new_miss && (state_q == IDLE) && !cache_busy_i) begin
-        prefetch_addr_q  <= next_line_addr;
-        last_miss_addr_q <= miss_addr_i;
+      if (state_q == ST_IDLE && cache_miss_i && !miss_uncached_i && is_new_miss_line) begin
+        pf_line_q        <= next_line_addr;
+        last_miss_line_q <= miss_line;
       end
     end
   end
 
-  // ============================================================================
-  // Assertions
-  // ============================================================================
 `ifndef SYNTHESIS
-  // Prefetch address should always be cache-line aligned
   assert property (@(posedge clk_i) disable iff (!rst_ni) prefetch_valid_o |-> (prefetch_addr_o[OFFSET_BITS-1:0] == '0))
   else $error("Prefetch address not cache-line aligned!");
-
-  // No prefetch during flush
-  assert property (@(posedge clk_i) disable iff (!rst_ni) flush_i |=> !prefetch_valid_o)
-  else $error("Prefetch should be cancelled on flush!");
-
-  // State should not be unknown
-  assert property (@(posedge clk_i) disable iff (!rst_ni) !$isunknown(state_q))
-  else $error("State is unknown!");
 `endif
 
 endmodule

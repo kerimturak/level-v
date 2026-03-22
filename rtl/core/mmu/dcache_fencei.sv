@@ -51,7 +51,8 @@ module dcache_fencei #(
     else flush_i_prev <= flush_i;
   end
 
-  wire fi_start = flush_i && !flush_i_prev && (fi_state_q == FI_IDLE);
+  logic fi_start;
+  assign fi_start = flush_i && !flush_i_prev && (fi_state_q == FI_IDLE);
 
   // one-hot current way
   always_comb begin
@@ -60,7 +61,8 @@ module dcache_fencei #(
   end
 
   // check dirty: using tag valid bit stored at MSB of tag word
-  wire fi_has_dirty = drsram_rd_rdirty[fi_way_idx_q] && tsram_rtag[fi_way_idx_q][TAG_SIZE];
+  logic fi_has_dirty;
+  assign fi_has_dirty = drsram_rd_rdirty[fi_way_idx_q] && tsram_rtag[fi_way_idx_q][TAG_SIZE];
 
   always_comb begin
     fi_evict_tag  = tsram_rtag[fi_way_idx_q][TAG_SIZE-1:0];

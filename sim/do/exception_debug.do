@@ -1,12 +1,12 @@
 ##################################################################################
-#                     CERES RISC-V — Exception Debug Waveform                   #
+#                     Level RISC-V — Exception Debug Waveform                   #
 ##################################################################################
 # Focused on: Exceptions, Traps, CSRs, Interrupt handling
 ##################################################################################
 
 ################## Hierarchy Paths ##################
 set TB        "sim:/tb_wrapper"
-set WRAPPER   "$TB/ceres_wrapper"
+set WRAPPER   "$TB/level_wrapper"
 set SOC       "$WRAPPER/i_soc"
 set FETCH     "$SOC/i_fetch"
 set DECODE    "$SOC/i_decode"
@@ -156,5 +156,5 @@ run 10000ns
 wave zoom full
 
 puts "═══════════════════════════════════════════════════════════════════"
-puts "  CERES Exception Debug Waveform Loaded!"
+puts "  Level Exception Debug Waveform Loaded!"
 puts "═══════════════════════════════════════════════════════════════════"

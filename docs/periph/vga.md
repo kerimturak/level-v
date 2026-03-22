@@ -1,29 +1,29 @@
-# VGA Controller - Teknik Dokümantasyon
+# VGA Controller — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [VGA Timing](#vga-timing)
 4. [Register Map](#register-map)
-5. [Display Modları](#display-modları)
+5. [Display Modes](#display-modes)
 6. [Double Buffering](#double-buffering)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`vga_controller` modülü, **640x480@60Hz VGA** video çıkışı sağlar. Text ve graphics modları, hardware cursor, palette RAM ve double buffering destekler.
+The `vga_controller` module provides **640×480 @ ~60 Hz VGA** video output. It supports text and graphics modes, a hardware cursor, palette RAM, and double buffering.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/periph/vga/vga_controller.sv
 ```
 
-### Özellikler
+### Features
 
 - 640x480 @ 60Hz resolution
 - 25.175 MHz pixel clock
@@ -37,13 +37,13 @@ rtl/periph/vga/vga_controller.sv
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 module vga_controller
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter H_VISIBLE = 640,
     parameter H_FRONT   = 16,
@@ -180,7 +180,7 @@ assign vga_blank_o = (h_cnt < H_VISIBLE) && (v_cnt < V_VISIBLE);
 
 ## Register Map
 
-| Offset | Register | Açıklama |
+| Offset | Register | Description |
 |--------|----------|----------|
 | 0x00 | CTRL | Control register |
 | 0x04 | STATUS | Status register |
@@ -229,7 +229,7 @@ assign vga_blank_o = (h_cnt < H_VISIBLE) && (v_cnt < V_VISIBLE);
 
 ---
 
-## Display Modları
+## Display Modes
 
 ### Text Mode (80x30)
 
@@ -357,7 +357,7 @@ assign vga_blank_o = (h_cnt < H_VISIBLE) && (v_cnt < V_VISIBLE);
 
 ## Double Buffering
 
-### Konsept
+### Concept
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -413,7 +413,7 @@ VBLANK ────────────┐  │  ┌────────
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### C Header
 
@@ -578,9 +578,9 @@ void game_loop(void) {
 
 ---
 
-## Özet
+## Summary
 
-`vga_controller` modülü:
+The `vga_controller` module provides:
 
 1. **640x480@60Hz**: Standard VGA timing
 2. **Text Mode**: 80x30 characters, 8x16 font

@@ -3,7 +3,7 @@
  * Tests timer, software and external interrupts
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 // CSR addresses
 #define CSR_MSTATUS   0x300

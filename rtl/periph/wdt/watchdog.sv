@@ -53,7 +53,7 @@ KEY Register:
 `timescale 1ns / 1ps
 
 module watchdog
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int RESET_PULSE_WIDTH = 16  // Reset pulse width in cycles
 ) (

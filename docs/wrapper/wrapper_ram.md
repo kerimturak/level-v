@@ -1,29 +1,29 @@
-# Wrapper RAM - Cache Line Burst Destekli RAM Teknik Dokümantasyon
+# Wrapper RAM - Cache-Line-Burst RAM Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
-3. [Bellek Organizasyonu](#bellek-organizasyonu)
-4. [Cache Line Okuma](#cache-line-okuma)
-5. [Byte-Granular Yazma](#byte-granular-yazma)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
+3. [Memory Organization](#memory-organization)
+4. [Cache-Line Read](#cache-line-read)
+5. [Byte-Granular Writes](#byte-granular-writes)
 6. [Programming Interface](#programming-interface)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`wrapper_ram` modülü, **128-bit cache line** okuma ve **byte-granular yazma** destekleyen RAM modülüdür. Ayrıca UART üzerinden programlama arayüzü içerir.
+The `wrapper_ram` module, is a RAM with **128-bit cache-line** reads and **byte-granular writes**. Also includes a UART programming interface.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/wrapper/wrapper_ram.sv
 ```
 
-### RAM Blok Diyagramı
+### RAM Block Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -58,23 +58,23 @@ rtl/wrapper/wrapper_ram.sv
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
 ### Parametreler
 
 ```systemverilog
 module wrapper_ram
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int CPU_CLK          = 50_000_000,
     parameter int PROG_BAUD_RATE   = 115200,
-    parameter string PROGRAM_SEQUENCE = "CERESTEST",
+    parameter string PROGRAM_SEQUENCE = "LEVELTEST",
     parameter int RAM_SIZE_KB      = 1024,         // 1 MB default
     parameter int RAM_INIT_FILE    = ""            // Optional hex init
 )
 ```
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 (
@@ -97,9 +97,9 @@ module wrapper_ram
 
 ---
 
-## Bellek Organizasyonu
+## Memory Organization
 
-### Bank Yapısı
+### Bank Structure
 
 ```systemverilog
 // 4 x 32-bit banks = 128-bit cache line
@@ -144,7 +144,7 @@ wire [1:0]  word_sel   = addr_i[3:2];
 
 ---
 
-## Cache Line Okuma
+## Cache-Line Read
 
 ### 128-bit Read
 
@@ -176,13 +176,13 @@ Cache controller extracts:
 
 ---
 
-## Byte-Granular Yazma
+## Byte-Granular Writes
 
 ### Write Logic
 
 ```systemverilog
 always_ff @(posedge clk_i) begin
-    // CPU write veya Programming write
+    // CPU write or programming-port write
     if (cpu_we || prog_we) begin
         logic [31:0] write_addr;
         logic [31:0] write_data;
@@ -235,7 +235,7 @@ SB x1, 0(x2)    // Byte: wstrb=0001, 0010, 0100, or 1000
 
 ## Programming Interface
 
-### RAM Programmer Entegrasyonu
+### RAM Programmer Integration
 
 ```systemverilog
 ram_programmer #(
@@ -257,7 +257,7 @@ ram_programmer #(
 ### Priority Arbitration
 
 ```systemverilog
-// Programming port öncelikli
+// Programming port takes priority
 wire prog_active = !system_reset_o;  // During programming
 wire cpu_we      = |wstrb_i && !prog_active;
 ```
@@ -271,7 +271,7 @@ wire cpu_we      = |wstrb_i && !prog_active;
 ```systemverilog
 initial begin
     if (RAM_INIT_FILE != "") begin
-        // 4 bank için ayrı init
+        // Separate init for each of the 4 banks
         $readmemh({RAM_INIT_FILE, "_b0.hex"}, bank0);
         $readmemh({RAM_INIT_FILE, "_b1.hex"}, bank1);
         $readmemh({RAM_INIT_FILE, "_b2.hex"}, bank2);
@@ -302,7 +302,7 @@ end
 
 ---
 
-## Timing Diyagramı
+## Timing Diagram
 
 ### Cache Line Read
 
@@ -358,9 +358,9 @@ bank0[idx]     ────────┤ UPDATED ├─
 
 ---
 
-## Özet
+## Summary
 
-`wrapper_ram` modülü:
+The `wrapper_ram` module:
 
 1. **128-bit Read**: Full cache line single-cycle
 2. **Byte-Granular Write**: wstrb-based selective write
@@ -368,4 +368,4 @@ bank0[idx]     ────────┤ UPDATED ├─
 4. **Programming**: UART-based boot loading
 5. **Priority**: Programming port > CPU port
 
-Bu modül, CERES cache sisteminin backend belleğidir.
+This module is the backing memory for the Level cache system.

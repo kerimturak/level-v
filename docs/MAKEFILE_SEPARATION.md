@@ -1,55 +1,55 @@
-# 🔧 Makefile Sorumluluk Ayrımı
+# 🔧 Makefile responsibility split
 
 ## 📅 Date: 2025-12-13
 
 ## 🎯 Problem
 
-Önceden **Makefile.verilator** hem Verilator hem de Spike işlerini yapıyordu. Bu karışıklığa yol açıyordu:
-- Verilator Makefile'ı Spike çalıştırıyordu
-- `ENABLE_SPIKE`, `ENABLE_COMPARE` flag'leri karmaşık
-- Sorumluluklar net değildi
+Previously **Makefile.verilator** handled both Verilator and Spike. That caused confusion:
+- The Verilator Makefile was running Spike
+- `ENABLE_SPIKE`, `ENABLE_COMPARE` flags were tangled
+- Responsibilities were unclear
 
-## ✅ Çözüm: Sorumluluk Ayrımı
+## ✅ Solution: split responsibilities
 
-Her Makefile artık **sadece kendi işinden** sorumlu:
+Each Makefile is now responsible **only for its own job**:
 
 ```
 ┌─────────────────────────────────────────┐
 │ Makefile.verilator                     │
-│ └─ Sadece Verilator işleri            │
-│    ├─ Build (verilate)                 │
+│ └─ Verilator only                      │
+│    ├─ Build (verilate)                  │
 │    ├─ Run RTL simulation               │
-│    └─ Waveform açma                    │
+│    └─ Open waveforms                   │
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
 │ Makefile.spike                         │
-│ └─ Sadece Spike işleri                │
-│    ├─ Spike çalıştır                   │
-│    ├─ Log karşılaştır                  │
+│ └─ Spike only                          │
+│    ├─ Run Spike                        │
+│    ├─ Compare logs                     │
 │    └─ Validate                         │
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
 │ test_manager.py                        │
-│ └─ Orkestrasyon                        │
-│    ├─ RTL çalıştır                     │
-│    ├─ Validation çalıştır (opsiyonel)  │
-│    └─ HTML rapor oluştur               │
+│ └─ Orchestration                       │
+│    ├─ Run RTL                          │
+│    ├─ Run validation (optional)        │
+│    └─ Generate HTML report             │
 └─────────────────────────────────────────┘
 ```
 
 ---
 
-## 📁 Makefile.verilator - Sadece Verilator
+## 📁 Makefile.verilator — Verilator only
 
-### Sorumluluğu:
+### Responsibilities:
 - ✅ Verilator build (verilate)
-- ✅ RTL simulation çalıştır
-- ✅ Waveform oluştur
-- ✅ Logları kaydet
+- ✅ Run RTL simulation
+- ✅ Generate waveforms
+- ✅ Save logs
 
-### Kaldırılanlar:
+### Removed:
 - ❌ `run-spike` target (→ Makefile.spike)
 - ❌ `compare-logs` target (→ Makefile.spike)
 - ❌ `html-report` target (→ test_manager.py)
@@ -57,43 +57,43 @@ Her Makefile artık **sadece kendi işinden** sorumlu:
 - ❌ `ENABLE_COMPARE` flag
 - ❌ `ENABLE_HTML_REPORT` flag
 
-### Kullanım:
+### Usage:
 
-**Sadece RTL simülasyonu (validation yok):**
+**RTL simulation only (no validation):**
 ```bash
 make -f Makefile.verilator run TEST_NAME=rv32ui-p-add
 ```
 
-**Sonuç:**
+**Result:**
 - `results/logs/verilator/rv32ui-p-add/commit_trace.log`
 - `results/logs/verilator/rv32ui-p-add/waveform.fst`
 - `results/logs/verilator/rv32ui-p-add/uart_output.log`
-- **Spike çalışmaz!** ✅
+- **Spike does not run** ✅
 
 ---
 
-## 📁 Makefile.spike - Sadece Spike
+## 📁 Makefile.spike — Spike only
 
-### Sorumluluğu:
-- ✅ Spike çalıştır
-- ✅ RTL ve Spike loglarını karşılaştır
-- ✅ diff.log oluştur
+### Responsibilities:
+- ✅ Run Spike
+- ✅ Compare RTL and Spike logs
+- ✅ Produce diff.log
 
-### Target'lar:
-- `run-spike` - Spike golden reference çalıştır
-- `compare` - RTL vs Spike karşılaştır
-- `validate` - Spike + Compare (tek komut)
+### Targets:
+- `run-spike` — run Spike golden reference
+- `compare` — RTL vs Spike comparison
+- `validate` — Spike + compare (one command)
 
-### Kullanım:
+### Usage:
 
-**Spike çalıştır:**
+**Run Spike:**
 ```bash
 make -f Makefile.spike run-spike \
     TEST_NAME=rv32ui-p-add \
     LOG_DIR=results/logs/verilator/rv32ui-p-add
 ```
 
-**Logları karşılaştır:**
+**Compare logs:**
 ```bash
 make -f Makefile.spike compare \
     TEST_NAME=rv32ui-p-add \
@@ -101,7 +101,7 @@ make -f Makefile.spike compare \
     SPIKE_LOG=results/logs/verilator/rv32ui-p-add/spike_commit.log
 ```
 
-**Full validation (Spike + Compare):**
+**Full validation (Spike + compare):**
 ```bash
 make -f Makefile.spike validate \
     TEST_NAME=rv32ui-p-add \
@@ -109,161 +109,161 @@ make -f Makefile.spike validate \
     RTL_LOG=results/logs/verilator/rv32ui-p-add/commit_trace.log
 ```
 
-**Sonuç:**
+**Result:**
 - `results/logs/verilator/rv32ui-p-add/spike_commit.log`
 - `results/logs/verilator/rv32ui-p-add/diff.log`
 
 ---
 
-## 🐍 test_manager.py - Orkestrasyon
+## 🐍 test_manager.py — orchestration
 
-### Sorumluluğu:
-- ✅ RTL simulation çağır (Makefile.verilator)
-- ✅ Validation çağır (validation_runner.py → Makefile.spike)
-- ✅ HTML rapor oluştur
-- ✅ Test pass/fail kararı
+### Responsibilities:
+- ✅ Invoke RTL simulation (Makefile.verilator)
+- ✅ Invoke validation (validation_runner.py → Makefile.spike)
+- ✅ Generate HTML report
+- ✅ Test pass/fail decision
 
-### Kullanım:
+### Usage:
 
-**Otomatik validation ile test:**
+**Test with automatic validation:**
 ```bash
 make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add
 ```
 
-**Ne yapar:**
+**What it does:**
 1. `make -f Makefile.verilator run TEST_NAME=rv32ui-p-add` (RTL)
-2. `validation_runner.py --test-name rv32ui-p-add` (Spike + Compare)
-3. HTML report oluştur
-4. Final sonuç: `TEST PASSED - VALIDATED` veya `TEST FAILED`
+2. `validation_runner.py --test-name rv32ui-p-add` (Spike + compare)
+3. Generate HTML report
+4. Final result: `TEST PASSED - VALIDATED` or `TEST FAILED`
 
 ---
 
-## 🔄 Workflow Örnekleri
+## 🔄 Workflow examples
 
-### Senaryo 1: Sadece RTL Simulation (Hızlı Test)
+### Scenario 1: RTL simulation only (quick test)
 
 ```bash
-# Sadece Verilator, validation yok
+# Verilator only, no validation
 make -f Makefile.verilator run TEST_NAME=rv32ui-p-add
 ```
 
-**Kullanım Alanı:**
-- Hızlı RTL değişiklik testi
-- Waveform'a bakmak
-- Crash olup olmadığını görmek
+**When to use:**
+- Quick RTL change checks
+- Inspecting waveforms
+- Checking for crashes
 
 ---
 
-### Senaryo 2: RTL + Validation (Full Test)
+### Scenario 2: RTL + validation (full test)
 
 ```bash
-# test_manager.py ile otomatik validation
+# Automatic validation via test_manager.py
 make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add
 ```
 
-**Ne Olur:**
-1. RTL simulation çalışır
-2. Spike otomatik çalışır
-3. Loglar karşılaştırılır
-4. HTML rapor oluşur
-5. Sonuç: PASSED/FAILED
+**What happens:**
+1. RTL simulation runs
+2. Spike runs automatically
+3. Logs are compared
+4. HTML report is generated
+5. Result: PASSED/FAILED
 
-**Kullanım Alanı:**
+**When to use:**
 - Regression testing
-- Test doğruluğunu garanti etme
-- CI/CD pipeline
+- Ensuring test correctness
+- CI/CD pipelines
 
 ---
 
-### Senaryo 3: Manuel Adım Adım
+### Scenario 3: Manual step by step
 
 ```bash
 # 1. RTL simulation
 make -f Makefile.verilator run TEST_NAME=rv32ui-p-add
 
-# 2. Spike çalıştır
+# 2. Run Spike
 make -f Makefile.spike run-spike \
     TEST_NAME=rv32ui-p-add \
     LOG_DIR=results/logs/verilator/rv32ui-p-add
 
-# 3. Karşılaştır
+# 3. Compare
 make -f Makefile.spike compare \
     TEST_NAME=rv32ui-p-add \
     RTL_LOG=results/logs/verilator/rv32ui-p-add/commit_trace.log \
     SPIKE_LOG=results/logs/verilator/rv32ui-p-add/spike_commit.log
 ```
 
-**Kullanım Alanı:**
-- Debug yaparken
-- Spike parametrelerini özelleştirme
-- Adım adım kontrol
+**When to use:**
+- Debugging
+- Customizing Spike parameters
+- Step-by-step control
 
 ---
 
-## 🎯 Avantajlar
+## 🎯 Benefits
 
-### ✅ Sorumluluk Ayrımı
-- Verilator Makefile → Sadece Verilator
-- Spike Makefile → Sadece Spike
-- test_manager.py → Orkestrasyon
+### ✅ Clear split
+- Verilator Makefile → Verilator only
+- Spike Makefile → Spike only
+- test_manager.py → orchestration
 
-### ✅ Bağımsızlık
-- Makefileler birbirinden bağımsız
-- İstediğinizi çalıştırabilirsiniz
-- Karışıklık yok
+### ✅ Independence
+- Makefiles are independent of each other
+- Run what you need
+- Less confusion
 
-### ✅ Esneklik
-- Sadece RTL → Hızlı test
-- RTL + Validation → Full test
-- Manuel adımlar → Debug
+### ✅ Flexibility
+- RTL only → quick test
+- RTL + validation → full test
+- Manual steps → debug
 
-### ✅ Bakım Kolaylığı
-- Her Makefile kendi işine bakar
-- Değişiklikler kolay
-- Anlaşılır yapı
-
----
-
-## 📚 Komut Özeti
-
-| Ne İstiyorum? | Komut |
-|---------------|-------|
-| **Sadece RTL** | `make -f Makefile.verilator run TEST_NAME=...` |
-| **RTL + Validation** | `make -f Makefile.verilator test-run TEST_NAME=...` |
-| **Sadece Spike** | `make -f Makefile.spike run-spike TEST_NAME=... LOG_DIR=...` |
-| **Spike + Compare** | `make -f Makefile.spike validate TEST_NAME=... LOG_DIR=... RTL_LOG=...` |
-| **Waveform aç** | `make -f Makefile.verilator view TEST_NAME=...` |
+### ✅ Easier maintenance
+- Each Makefile owns one area
+- Changes are localized
+- Structure is easy to follow
 
 ---
 
-## 🔧 Geçiş Rehberi
+## 📚 Command cheat sheet
 
-### Eski Komut → Yeni Komut
+| Goal | Command |
+|------|---------|
+| **RTL only** | `make -f Makefile.verilator run TEST_NAME=...` |
+| **RTL + validation** | `make -f Makefile.verilator test-run TEST_NAME=...` |
+| **Spike only** | `make -f Makefile.spike run-spike TEST_NAME=... LOG_DIR=...` |
+| **Spike + compare** | `make -f Makefile.spike validate TEST_NAME=... LOG_DIR=... RTL_LOG=...` |
+| **Open waveform** | `make -f Makefile.verilator view TEST_NAME=...` |
+
+---
+
+## 🔧 Migration guide
+
+### Old command → new command
 
 ```bash
-# ESKİ (artık çalışmaz):
+# OLD (no longer works):
 make -f Makefile.verilator run TEST_NAME=rv32ui-p-add \
     ENABLE_SPIKE=1 ENABLE_COMPARE=1 ENABLE_HTML_REPORT=1
 
-# YENİ:
+# NEW:
 make -f Makefile.verilator test-run TEST_NAME=rv32ui-p-add
 ```
 
 ```bash
-# ESKİ (artık yok):
+# OLD (removed):
 make -f Makefile.verilator run-spike TEST_NAME=rv32ui-p-add
 
-# YENİ:
+# NEW:
 make -f Makefile.spike run-spike \
     TEST_NAME=rv32ui-p-add \
     LOG_DIR=results/logs/verilator/rv32ui-p-add
 ```
 
 ```bash
-# ESKİ (artık yok):
+# OLD (removed):
 make -f Makefile.verilator compare-logs TEST_NAME=rv32ui-p-add
 
-# YENİ:
+# NEW:
 make -f Makefile.spike compare \
     TEST_NAME=rv32ui-p-add \
     RTL_LOG=results/logs/verilator/rv32ui-p-add/commit_trace.log \
@@ -272,44 +272,44 @@ make -f Makefile.spike compare \
 
 ---
 
-## ✅ Düzeltilen Hatalar
+## ✅ Fixes
 
-### 1. mkdir Hatası
+### 1. mkdir error
 **Problem:** `mkdir: cannot create directory '': No such file or directory`
 
-**Sebep:** `VERILATOR_LOG` değişkeni `TEST_NAME` olmadan boş kalıyordu
+**Cause:** `VERILATOR_LOG` was empty when `TEST_NAME` was unset
 
-**Çözüm:**
+**Fix:**
 ```makefile
-# ESKİ:
+# OLD:
 dirs:
 	@mkdir -p "$(BUILD_DIR)" "$(OBJ_DIR)" "$(LOG_DIR)" "$(VERILATOR_LOG)"
 
-# YENİ:
+# NEW:
 dirs:
 	@mkdir -p "$(BUILD_DIR)" "$(OBJ_DIR)" "$(RESULTS_DIR)/logs"
 	@if [ -n "$(TEST_NAME)" ]; then mkdir -p "$(VERILATOR_LOG)"; fi
 ```
 
-### 2. Sorumluluk Karışıklığı
-**Problem:** Verilator Makefile Spike işlerini de yapıyordu
+### 2. Mixed responsibilities
+**Problem:** Verilator Makefile was also doing Spike work
 
-**Çözüm:**
-- Spike target'ları kaldırıldı
-- Validation test_manager.py'ye taşındı
-- Her Makefile sadece kendi işini yapar
+**Fix:**
+- Spike targets removed
+- Validation moved to test_manager.py
+- Each Makefile does only its own job
 
 ---
 
-## 🎉 Sonuç
+## 🎉 Conclusion
 
-Artık:
-- ✅ Makefileler birbirinden bağımsız
-- ✅ Sorumluluklar net
-- ✅ Kullanımı kolay
-- ✅ mkdir hatası yok
-- ✅ Verilator sadece Verilator
-- ✅ Spike sadece Spike
-- ✅ test_manager.py orkestrasyon
+You now have:
+- ✅ Independent Makefiles
+- ✅ Clear responsibilities
+- ✅ Simpler usage
+- ✅ No mkdir error
+- ✅ Verilator = Verilator only
+- ✅ Spike = Spike only
+- ✅ test_manager.py = orchestration
 
-**Temiz, modüler, anlaşılır!** 🚀
+**Clean, modular, and easy to understand** 🚀

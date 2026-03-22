@@ -1,12 +1,12 @@
 ##################################################################################
-#                     CERES RISC-V — Cache Debug Waveform                       #
+#                     Level RISC-V — Cache Debug Waveform                       #
 ##################################################################################
 # Focused on: ICache, DCache, Memory Arbiter, Memory Transactions
 ##################################################################################
 
 ################## Hierarchy Paths ##################
 set TB        "sim:/tb_wrapper"
-set WRAPPER   "$TB/ceres_wrapper"
+set WRAPPER   "$TB/level_wrapper"
 set SOC       "$WRAPPER/i_soc"
 set FETCH     "$SOC/i_fetch"
 set MEMORY    "$SOC/i_memory"
@@ -163,5 +163,5 @@ run 10000ns
 wave zoom full
 
 puts "═══════════════════════════════════════════════════════════════════"
-puts "  CERES Cache Debug Waveform Loaded!"
+puts "  Level Cache Debug Waveform Loaded!"
 puts "═══════════════════════════════════════════════════════════════════"

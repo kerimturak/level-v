@@ -1,50 +1,50 @@
-# 🎯 Ceres-V Kustom UART Test Sistemi - Hızlı Referans
+# Level-V Custom UART Test System — Quick Reference
 
-## ✅ Kurulum Tamamlandı
+## Setup Complete
 
-Artık **Ceres-V RV32IMC_Zicsr** işlemciniz için kendi C testlerini yazabilir, derleyebilir ve simülasyonda çalıştırabilirsiniz!
-
----
-
-## 📦 Oluşturulan Sistem Bileşenleri
-
-| Dosya | Lokasyon | Açıklama |
-|-------|----------|----------|
-| **uart_hello_test.c** | `sim/test/custom/` | Örnek UART test (hepsi bir referans) |
-| **build_custom_test.sh** | `script/shell/` | Derleme ve çalıştırma scripti |
-| **custom_test.mk** | `script/makefiles/` | Makefile entegrasyonu |
-| **README.md** | `sim/test/custom/` | Detaylı rehber ve örnekler |
-| **uart_test_quickstart.sh** | `script/shell/` | Quick start kılavuzu |
+You can now write, build, and run your own C tests in simulation for your **Level-V RV32IMC_Zicsr** core.
 
 ---
 
-## 🚀 Başlamak İçin
+## System Components
 
-### 1️⃣ Kök dizine gidin
+| File | Location | Description |
+|------|----------|-------------|
+| **uart_hello_test.c** | `sim/test/custom/` | Sample UART test (all-in-one reference) |
+| **build_level_custom_c_test.sh** | `script/shell/` | Build and run script |
+| **custom test targets** | root `makefile` | Targets such as `custom_test` |
+| **README.md** | `sim/test/custom/` | Detailed guide and examples |
+| **guide_level_uart_custom_test.sh** | `script/shell/` | Quick start script |
+
+---
+
+## Getting Started
+
+### 1. Go to the repository root
 ```bash
 cd /home/kerim/level-v
 ```
 
-### 2️⃣ Örnek testi derle ve çalıştır
+### 2. Build and run the sample test
 ```bash
 make custom_test TEST=uart_hello_test
 ```
 
-### 3️⃣ UART çıktısını gör
+### 3. View UART output
 ```bash
 cat uart_output.log
 ```
 
 ---
 
-## 📝 Kendi Test Yazma
+## Writing Your Own Test
 
-### Adım 1: Yeni dosya oluştur
+### Step 1: Create a new file
 ```bash
 cp sim/test/custom/uart_hello_test.c sim/test/custom/my_test.c
 ```
 
-### Adım 2: C kodunuzu yazın
+### Step 2: Write your C code
 ```c
 #include <stdint.h>
 
@@ -74,36 +74,36 @@ int main(void) {
 }
 ```
 
-### Adım 3: Derle ve çalıştır
+### Step 3: Build and run
 ```bash
 make custom_test TEST=my_test
 ```
 
 ---
 
-## 🔧 Util Makefile Komutları
+## Utility Makefile Commands
 
 ```bash
-# Test listesi
+# List tests
 make custom_list
 
-# Derle
+# Build
 make custom_build TEST=my_test
 
-# Çalıştır
+# Run
 make custom_run TEST=my_test MAX_CYCLES=100000
 
-# Derle + Çalıştır
+# Build + run
 make custom_test TEST=my_test
 
-# Temizle
+# Clean
 make custom_clean TEST=my_test
-make custom_clean  # Hepsi
+make custom_clean  # all
 
 # Disassembly
 make custom_disass TEST=my_test
 
-# Dosya boyutu
+# File size
 make custom_size TEST=my_test
 
 # Info
@@ -115,31 +115,31 @@ make custom_help
 
 ---
 
-## 📌 Hazır UART Fonksiyonları
+## Ready-Made UART Helpers
 
-`uart_hello_test.c` dosyasında tanımlanmış:
+Defined in `uart_hello_test.c`:
 
-- `uart_init()` - UART başlat
-- `uart_putc(char)` - Bir karakter gönder
-- `uart_puts(const char*)` - String gönder
-- `uart_puthex(uint32_t)` - Hex sayı gönder (ör: 0xDEADBEEF)
-- `uart_putdec(int32_t)` - Decimal sayı gönder (ör: 12345)
+- `uart_init()` — initialize UART
+- `uart_putc(char)` — send one character
+- `uart_puts(const char*)` — send a string
+- `uart_puthex(uint32_t)` — send hex (e.g. 0xDEADBEEF)
+- `uart_putdec(int32_t)` — send decimal (e.g. 12345)
 
 ---
 
-## 🎮 Örnek Testler
+## Example Tests
 
-### "Merhaba Dünya"
+### "Hello World"
 ```c
 int main(void) {
     uart_init();
-    uart_puts("Merhaba Dunya!\n");
+    uart_puts("Hello World!\n");
     while (1);
     return 0;
 }
 ```
 
-### Döngü Testi
+### Loop Test
 ```c
 int main(void) {
     uart_init();
@@ -153,12 +153,12 @@ int main(void) {
 }
 ```
 
-### Hafıza Adresi Göster
+### Show Memory Address
 ```c
 int main(void) {
     uart_init();
     uint32_t val = 0x12345678;
-    uart_puts("Adres: ");
+    uart_puts("Address: ");
     uart_puthex((uint32_t)&val);
     uart_puts(" = ");
     uart_puthex(val);
@@ -168,7 +168,7 @@ int main(void) {
 }
 ```
 
-### Timer Oku
+### Read Timer
 ```c
 int main(void) {
     uart_init();
@@ -187,23 +187,23 @@ int main(void) {
 
 ---
 
-## 🔧 Hardware Adresleri
+## Hardware Addresses
 
 ### UART Registers (0x20000000+)
 ```
 0x20000000  UART_CTRL      (Control: [31:16] baud_div, [1] rx_en, [0] tx_en)
 0x20000004  UART_STATUS    (Status: tx_full, rx_full, tx_empty, rx_empty)
-0x20000008  UART_RDATA     (RX Data - okuma)
-0x2000000c  UART_WDATA     (TX Data - yazma)
+0x20000008  UART_RDATA     (RX data — read)
+0x2000000c  UART_WDATA     (TX data — write)
 ```
 
 ### Timer (0x30000000+)
 ```
-0x30000000  TIMER_LOW      (64-bit timer alt 32-bit)
-0x30000004  TIMER_HIGH     (64-bit timer üst 32-bit)
+0x30000000  TIMER_LOW      (64-bit timer, low 32 bits)
+0x30000004  TIMER_HIGH     (64-bit timer, high 32 bits)
 ```
 
-### CPU Özellikleri
+### CPU Characteristics
 ```
 ISA:        RV32IMC_Zicsr
 Clock:      50 MHz
@@ -212,19 +212,18 @@ UART Baud:  115200 bps
 
 ---
 
-## 📂 Dosya Yapısı
+## Directory Layout
 
 ```
 level-v/
 ├── sim/test/custom/
-│   ├── uart_hello_test.c    # Örnek test
-│   ├── README.md             # Detaylı rehber
-│   └── (kendi testleriniz)
+│   ├── uart_hello_test.c    # Sample test
+│   ├── README.md             # Detailed guide
+│   └── (your tests)
 ├── script/shell/
-│   ├── build_custom_test.sh  # Build scripti
-│   └── uart_test_quickstart.sh # Quick start
-├── script/makefiles/
-│   └── custom_test.mk        # Makefile entegrasyon
+│   ├── build_level_custom_c_test.sh  # Build script
+│   └── guide_level_uart_custom_test.sh # Quick start
+├── makefile                  # Includes custom_test targets
 └── build/tests/custom/
     ├── my_test.elf           # Executable
     ├── my_test.mem           # Verilog memory
@@ -235,48 +234,48 @@ level-v/
 
 ---
 
-## 🐛 Sorun Giderme
+## Troubleshooting
 
-| Problem | Çözüm |
-|---------|--------|
-| **UART çıktısı boş** | uart_init() çağrıldığını kontrol et; MAX_CYCLES artır |
-| **"gcc not found"** | RISC-V toolchain kurulu mu? `which riscv32-unknown-elf-gcc` |
-| **Derleme hatası** | -nostartfiles bayrağını kaldırmayı dene veya startup kodu ekle |
-| **Simülasyon çöktü** | MAX_CYCLES değerini azalt; register adresleri doğru mu? |
-
----
-
-## 💾 Simülasyon Çıktıları
-
-Her test çalıştırıldığında oluşturulan dosyalar:
-
-- **uart_output.log** - UART TX çıktısı
-- **build/tests/custom/sim.log** - Simülasyon log'u
-- **build/tests/custom/compile.log** - Derleme log'u
+| Problem | Solution |
+|---------|----------|
+| **Empty UART output** | Ensure `uart_init()` is called; increase MAX_CYCLES |
+| **"gcc not found"** | Is the RISC-V toolchain installed? `which riscv32-unknown-elf-gcc` |
+| **Compile error** | Try removing `-nostartfiles` or add startup code |
+| **Simulation hang** | Lower MAX_CYCLES; verify register addresses |
 
 ---
 
-## 📚 Referanslar
+## Simulation Outputs
 
-- Detaylı rehber: `sim/test/custom/README.md`
-- UART register tanımları: `subrepo/coremark/ceresv/core_portme.h`
-- Linker script: `subrepo/coremark/ceresv/link.ld`
-- Mevcut CoreMark örneği: `subrepo/coremark/ceresv/core_portme.c`
+Each test run may produce:
 
----
-
-## ✨ Sonraki Adımlar
-
-1. Basit "Merhaba" testi yazıp çalıştır
-2. UART print debugging'i test et
-3. Loop ve karar yapıları deneyimle
-4. Timer okumalarını ekle
-5. Daha karmaşık işlemler yap
+- **uart_output.log** — UART TX output
+- **build/tests/custom/sim.log** — Simulation log
+- **build/tests/custom/compile.log** — Compile log
 
 ---
 
-**Son Güncelleme:** 2025-12-01  
-**Ceres-V Sürümü:** RV32IMC_Zicsr  
-**Status:** ✅ Hazır Kullanıma
+## References
 
-Sorularınız varsa, ilgili dosyaları kontrol edin veya build script'i çalıştırırken `-v` bayrağı (verbose) kullanın.
+- Detailed guide: `sim/test/custom/README.md`
+- UART register definitions: `subrepo/coremark/levelv/core_portme.h`
+- Linker script: `subrepo/coremark/levelv/link.ld`
+- CoreMark example: `subrepo/coremark/levelv/core_portme.c`
+
+---
+
+## Next Steps
+
+1. Write and run a simple hello test
+2. Try UART print debugging
+3. Experiment with loops and control flow
+4. Add timer reads
+5. Build more complex behavior
+
+---
+
+**Last updated:** 2025-12-01  
+**Level-V:** RV32IMC_Zicsr  
+**Status:** Ready to use
+
+If you have questions, check the relevant files or run the build script with the `-v` (verbose) flag.

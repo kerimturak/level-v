@@ -1,10 +1,10 @@
 /**
- * Fibonacci Test - Ceres-V RV32IMC_Zicsr
+ * Fibonacci Test - Level-V RV32IMC_Zicsr
  * 
  * Computes fibonacci sequence and prints results via UART
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 int main(void) {
     uart_init();

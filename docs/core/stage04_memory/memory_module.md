@@ -1,40 +1,40 @@
-# MEMORY Modülü - Teknik Döküman
+# MEMORY Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`memory.sv` modülü, RISC-V işlemcisinin **Memory Access Stage** (MEM) implementasyonudur. Load/Store instruction'ları için data cache (D-Cache) interface'ini yönetir, memory transaction tracking yapar ve load data alignment/sign-extension işlemlerini gerçekleştirir.
+`memory.sv` implements the RISC-V processor **Memory Access Stage** (MEM). It drives the data cache (D-Cache) interface for load/store instructions, tracks memory transactions, and performs load data alignment and sign/zero extension.
 
-## Sorumluluklar
+## Responsibilities
 
-1. **Data Cache Interface**: D-Cache'e read/write request'leri gönderir
-2. **Memory Transaction Tracking**: Aktif memory operation'ları takip eder
-3. **Load Data Alignment**: Byte/halfword/word alignment ve extraction
+1. **Data Cache Interface**: Issues read/write requests to the D-Cache
+2. **Memory Transaction Tracking**: Tracks active memory operations
+3. **Load Data Alignment**: Byte/halfword/word alignment and extraction
 4. **Sign/Zero Extension**: Load data sign/zero extension (LB/LBU, LH/LHU)
-5. **Uncached Access**: PMA (Physical Memory Attributes) ile uncached region detection
+5. **Uncached Access**: Uncached region detection via PMA (Physical Memory Attributes)
 6. **Cache Miss Handling**: D-Cache miss stall generation
 7. **FENCE.I Support**: Cache flush coordination
 
-## Port Tanımları
+## Port Definitions
 
 ### Clock & Control
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `stall_i` | stall_e | Pipeline stall sinyali |
-| `fe_flush_cache_i` | logic | Cache flush sinyali (FENCE.I) |
+| Port | Type | Description |
+|------|------|-------------|
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `stall_i` | stall_e | Pipeline stall signal |
+| `fe_flush_cache_i` | logic | Cache flush signal (FENCE.I) |
 
 ### Lower-Level Memory Interface (Wishbone)
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `lx_dres_i` | dlowX_res_t | Wishbone bus response (from memory) |
 | `lx_dreq_o` | dlowX_req_t | Wishbone bus request (to memory) |
 
 ### Pipeline Interface
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `me_data_req_i` | data_req_t | Memory stage data request (pipe3) |
 | `ex_data_req_i` | data_req_t | Execute stage data request (pipe2) |
@@ -42,7 +42,7 @@
 
 ### Stall Outputs
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `dmiss_stall_o` | logic | D-Cache miss stall |
 | `fencei_stall_o` | logic | FENCE.I dirty writeback stall |
@@ -608,21 +608,21 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
   mem_txn_active |-> !mem_req_fire);
 ```
 
-## İlgili Modüller
+## Related Modules
 
 1. **cache.sv**: Data cache implementation (8-way set associative)
 2. **pma.sv**: Physical memory attributes (cached/uncached detection)
 3. **execution.sv**: Provides load/store address and data
 4. **writeback.sv**: Receives load data
 
-## Gelecek İyileştirmeler
+## Future Improvements
 
 1. **Store Buffer**: Decouple stores from pipeline (reduce stall)
 2. **Hardware Prefetcher**: Predict and prefetch cache lines
 3. **Non-Blocking Cache**: Multiple outstanding misses
 4. **Write Coalescing**: Merge multiple stores to same cache line
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213 - Chapter 2 (Load/Store)
 2. "Computer Architecture: A Quantitative Approach" - Hennessy & Patterson, Appendix B (Memory Hierarchy)
@@ -630,6 +630,6 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** December 5, 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

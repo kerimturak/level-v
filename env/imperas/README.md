@@ -1,7 +1,7 @@
-# Imperas RISC-V Tests Environment for Ceres-V
+# Imperas RISC-V Tests Environment for Level-V
 
 This directory contains the target-specific configuration files for running
-Imperas RISC-V tests on the Ceres-V processor.
+Imperas RISC-V tests on the Level-V processor.
 
 ## Overview
 
@@ -11,7 +11,7 @@ They use the same test framework format (model_test.h + arch_test.h).
 
 ## Files
 
-- `model_test.h` - Target-specific macros for Ceres-V (RVMODEL_*)
+- `model_test.h` - Target-specific macros for Level-V (RVMODEL_*)
 - `link.ld` - Linker script for 0x80000000 entry point
 
 ## Supported Extensions

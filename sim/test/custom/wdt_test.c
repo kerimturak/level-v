@@ -1,5 +1,5 @@
 /*
- * Watchdog Timer (WDT) Test for Ceres-V RV32IMC
+ * Watchdog Timer (WDT) Test for Level-V RV32IMC
  * 
  * Tests Watchdog Timer functionality:
  * - Register access
@@ -8,7 +8,7 @@
  * - Refresh (kick) operation
  * - Early warning interrupt
  * 
- * Note: This peripheral is not yet connected in ceres_wrapper.sv
+ * Note: This peripheral is not yet connected in level_wrapper.sv
  *       Requires adding WDT instantiation and address decode (0x2000_8xxx)
  * Note: Be careful with reset enable - it will reset the system!
  */
@@ -30,7 +30,7 @@
 #define UART_CTRL_RX_EN       0x2
 #define UART_STATUS_TX_FULL   0x1
 
-/* WDT MMIO Map (base 0x2000_8000 per ceres_param.sv) */
+/* WDT MMIO Map (base 0x2000_8000 per level_param.sv) */
 #define WDT_BASE         0x20008000
 #define WDT_CTRL         (*(volatile uint32_t*)(WDT_BASE + 0x00))
 #define WDT_LOAD         (*(volatile uint32_t*)(WDT_BASE + 0x04))
@@ -305,7 +305,7 @@ int main(void)
     uart_init();
     
     uart_puts("\n========================================\n");
-    uart_puts("   Watchdog Test - Ceres-V RV32IMC\n");
+    uart_puts("   Watchdog Test - Level-V RV32IMC\n");
     uart_puts("========================================\n");
     
     test_wdt_registers();

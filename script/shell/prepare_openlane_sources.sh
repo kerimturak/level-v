@@ -2,12 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DESIGN_DIR="${ROOT_DIR}/asic/openlane/designs/ceres_wrapper"
+DESIGN_DIR="${ROOT_DIR}/asic/openlane/designs/level_wrapper"
 SRC_DIR="${DESIGN_DIR}/src"
 INC_DIR="${SRC_DIR}/include"
 MANIFEST="${DESIGN_DIR}/sources_manifest.txt"
 SV2V_IMAGE="${SV2V_IMAGE:-davidsiaw/sv2v:latest}"
-SV2V_OUT="${SRC_DIR}/ceres_wrapper_sv2v.v"
+SV2V_OUT="${SRC_DIR}/level_wrapper_sv2v.v"
 
 echo "[openlane:prep] Root      : ${ROOT_DIR}"
 echo "[openlane:prep] Design    : ${DESIGN_DIR}"
@@ -23,7 +23,7 @@ copy_glob() {
     done
 }
 
-copy_glob "${ROOT_DIR}/rtl/pkg/ceres_param.sv"
+copy_glob "${ROOT_DIR}/rtl/pkg/level_param.sv"
 copy_glob "${ROOT_DIR}/rtl/core/*.sv"
 copy_glob "${ROOT_DIR}/rtl/core/bus/*.sv"
 copy_glob "${ROOT_DIR}/rtl/core/pmp_pma/*.sv"
@@ -65,18 +65,18 @@ sv2v_convert() {
     local sv2v_def_args=()
     local sv2v_tmp_out="${SV2V_OUT}.sv2v_tmp.v"
     local d
-    for d in SYNTHESIS MINIMAL_SOC CERES_OPENLANE; do
+    for d in SYNTHESIS MINIMAL_SOC LEVEL_OPENLANE; do
         sv2v_def_args+=("-D" "${d}")
     done
 
     mapfile -t sv_files < <(find "${SRC_DIR}" -maxdepth 1 -type f \( -name '*.sv' -o -name '*.v' \) | sort)
     if [[ ${#sv_files[@]} -eq 0 ]]; then
-        echo "[openlane:prep] WARNING: sv2v için kaynak dosya bulunamadı"
+        echo "[openlane:prep] WARNING: no source files found for sv2v"
         return 1
     fi
 
     if ! command -v docker >/dev/null 2>&1; then
-        echo "[openlane:prep] WARNING: docker bulunamadı, sv2v adımı atlanıyor"
+        echo "[openlane:prep] WARNING: docker not found, skipping sv2v step"
         return 1
     fi
 
@@ -90,7 +90,7 @@ sv2v_convert() {
         -v "${SRC_DIR}:${SRC_DIR}" \
         -w "${SRC_DIR}" \
         "${SV2V_IMAGE}" \
-        sv2v -I "${SRC_DIR}" "${sv2v_def_args[@]}" --top ceres_wrapper --write "${sv2v_tmp_out}" "${sv_files[@]}"; then
+        sv2v -I "${SRC_DIR}" "${sv2v_def_args[@]}" --top level_wrapper --write "${sv2v_tmp_out}" "${sv_files[@]}"; then
         # -----------------------------------------------------------
         # Post-process: sv2v generates struct-type parameters with
         # default value 0.  Yosys evaluates module bodies with these
@@ -101,8 +101,8 @@ sv2v_convert() {
         # -----------------------------------------------------------
         echo "[openlane:prep] sv2v post-process: fixing struct-type parameter defaults"
         sed -i \
-            -e 's/\(parameter.*_t_ceres_param_XLEN\s*=\s*\)0;/\132;/g' \
-            -e 's/\(parameter.*_t_ceres_param_BLK_SIZE\s*=\s*\)0;/\1128;/g' \
+            -e 's/\(parameter.*_t_level_param_XLEN\s*=\s*\)0;/\132;/g' \
+            -e 's/\(parameter.*_t_level_param_BLK_SIZE\s*=\s*\)0;/\1128;/g' \
             "${sv2v_tmp_out}"
 
         mv -f "${sv2v_tmp_out}" "${SV2V_OUT}"

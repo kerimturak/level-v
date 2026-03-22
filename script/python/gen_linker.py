@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Linker Script Generator for Ceres-V
+Linker Script Generator for Level-V
 ====================================
-Memory map YAML dosyasından linker script oluşturur.
+Generates a linker script from a memory map YAML file.
 
-Kullanım:
+Usage:
     python3 gen_linker.py memory_map.yaml output.ld
     python3 gen_linker.py memory_map.yaml output.ld --header output.h
 """
@@ -17,8 +17,8 @@ from pathlib import Path
 
 def parse_size(size_str):
     """
-    Boyut string'ini byte'a çevirir.
-    Örnek: "32K" -> 32768, "64M" -> 67108864
+    Convert a size string to bytes.
+    Example: "32K" -> 32768, "64M" -> 67108864
     """
     if isinstance(size_str, int):
         return size_str
@@ -38,19 +38,19 @@ def parse_size(size_str):
         if size_str.endswith(suffix):
             return int(size_str[:-len(suffix)]) * mult
     
-    # Hex veya decimal
+    # Hex or decimal
     if size_str.startswith('0X'):
         return int(size_str, 16)
     return int(size_str)
 
 
 def format_hex(value):
-    """Değeri hex formatında döndürür."""
+    """Return the value in hex format."""
     return f"0x{value:08X}"
 
 
 def format_size(size_bytes):
-    """Byte'ı okunabilir formata çevirir."""
+    """Convert bytes to a human-readable size string."""
     if size_bytes >= 1024 * 1024:
         return f"{size_bytes // (1024*1024)}M"
     elif size_bytes >= 1024:
@@ -59,9 +59,9 @@ def format_size(size_bytes):
 
 
 def generate_linker_script(config):
-    """YAML config'den linker script oluşturur."""
-    
-    # Memory bölgelerini parse et
+    """Build a linker script from YAML config."""
+
+    # Parse memory regions
     memory = config.get('memory', {})
     stack_config = config.get('stack', {})
     heap_config = config.get('heap', {})
@@ -81,8 +81,8 @@ def generate_linker_script(config):
     
     stack_size = parse_size(stack_config.get('size', '4K'))
     heap_size = parse_size(heap_config.get('size', '0'))
-    
-    # Linker script oluştur
+
+    # Build linker script
     ld_script = f'''/*
  * Auto-generated Linker Script for {processor.get('name', 'RISC-V')}
  * ISA: {processor.get('isa', 'RV32I')}
@@ -189,7 +189,7 @@ ASSERT(_end <= {format_hex(ram_origin + ram_length)}, "RAM overflow - program to
 
 
 def generate_header_file(config):
-    """YAML config'den C header dosyası oluşturur."""
+    """Build a C header file from YAML config."""
     
     processor = config.get('processor', {})
     clock = config.get('clock', {})
@@ -233,7 +233,7 @@ def generate_header_file(config):
 
 '''
     
-    # Peripheral tanımları
+    # Peripheral definitions
     for periph_name, periph in peripherals.items():
         base = periph.get('base', 0)
         header += f'''/* ============================================================ */
@@ -242,7 +242,7 @@ def generate_header_file(config):
 #define {periph_name.upper()}_BASE         {format_hex(base)}
 
 '''
-        # Register tanımları
+        # Register definitions
         registers = periph.get('registers', {})
         for reg_name, reg in registers.items():
             offset = reg.get('offset', 0)
@@ -251,7 +251,7 @@ def generate_header_file(config):
             header += f'#define {macro_name:20} (*(volatile uint32_t*)({format_hex(base + offset)}))  /* {desc} */\n'
         header += '\n'
     
-    # UART status bit tanımları
+    # UART status bit definitions
     if 'uart' in peripherals:
         header += '''/* UART Status Register Bits */
 #define UART_STATUS_TX_FULL  (1 << 0)
@@ -282,7 +282,7 @@ def main():
     
     args = parser.parse_args()
     
-    # YAML dosyasını oku
+    # Read YAML file
     input_path = Path(args.input)
     if not input_path.exists():
         print(f"Error: Input file not found: {args.input}", file=sys.stderr)
@@ -294,8 +294,8 @@ def main():
     if args.verbose:
         print(f"Loaded config from: {args.input}")
         print(f"Processor: {config.get('processor', {}).get('name', 'Unknown')}")
-    
-    # Linker script oluştur
+
+    # Generate linker script
     ld_script = generate_linker_script(config)
     
     output_path = Path(args.output)
@@ -306,7 +306,7 @@ def main():
     
     print(f"Generated: {args.output}")
     
-    # Header dosyası oluştur (opsiyonel)
+    # Optional header file
     if args.header:
         header = generate_header_file(config)
         header_path = Path(args.header)

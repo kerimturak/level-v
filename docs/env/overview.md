@@ -1,8 +1,8 @@
-# Environment (env/) - Teknik Dokümantasyon
+# Environment (env/) — Technical Documentation
 
-## İçindekiler
+## Table of Contents
 
-1. [Genel Bakış](#genel-bakış)
+1. [General Overview](#general-overview)
 2. [Common Environment](#common-environment)
 3. [riscv-test Environment](#riscv-test-environment)
 4. [riscv-arch-test Environment](#riscv-arch-test-environment)
@@ -16,30 +16,30 @@
 
 ---
 
-## Genel Bakış
+## General Overview
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 env/
-├── common/              # Ortak runtime dosyaları
+├── common/              # Shared runtime files
 │   ├── crt.S            # C runtime startup
 │   ├── syscalls.c       # System call stubs
 │   ├── test.ld          # Generic linker script
 │   └── util.h           # Utility macros
 ├── riscv-test/          # riscv-tests environment
-│   └── ceres/
+│   └── level/
 │       ├── link.ld
 │       └── riscv_test.h
 ├── riscv-arch-test/     # riscv-arch-test environment
-│   └── ceres/
+│   └── level/
 │       ├── link.ld
 │       └── model_test.h
 ├── imperas/             # Imperas tests environment
 │   ├── link.ld
 │   └── model_test.h
 ├── coremark/            # CoreMark benchmark
-│   └── ceresv/
+│   └── levelv/
 │       ├── core_portme.c
 │       ├── core_portme.h
 │       ├── core_portme.mak
@@ -68,9 +68,9 @@ env/
     └── rvfi_wrapper.sv
 ```
 
-### Environment Yapısı
+### Environment Structure
 
-Her test environment şunları içerir:
+Each test environment contains:
 
 ```
 env/<suite>/
@@ -84,9 +84,9 @@ env/<suite>/
 
 ## Common Environment
 
-**Dizin:** `env/common/`
+**Directory:** `env/common/`
 
-Tüm test'lerin ortak kullandığı runtime dosyaları.
+Runtime files shared by all tests.
 
 ### crt.S - C Runtime Startup
 
@@ -201,9 +201,9 @@ void _exit(int status) {
 
 ## riscv-test Environment
 
-**Dizin:** `env/riscv-test/ceres/`
+**Directory:** `env/riscv-test/level/`
 
-riscv-tests ISA compliance testleri için environment.
+Environment for riscv-tests ISA compliance tests.
 
 ### riscv_test.h
 
@@ -217,7 +217,7 @@ riscv-tests ISA compliance testleri için environment.
 // RV32IMC Configuration Macros
 // ═══════════════════════════════════════════════════════════════
 
-// RV32IMC için minimal init
+// Minimal init for RV32IMC
 #define RVTEST_RV32U   \
   .macro init;         \
   .endm
@@ -284,7 +284,7 @@ fromhost: .dword 0;
 #endif
 ```
 
-### Test Pass/Fail Mekanizması
+### Test Pass/Fail Mechanism
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -319,9 +319,9 @@ fromhost: .dword 0;
 
 ## riscv-arch-test Environment
 
-**Dizin:** `env/riscv-arch-test/ceres/`
+**Directory:** `env/riscv-arch-test/level/`
 
-RISC-V Architecture Test için environment.
+Environment for the RISC-V Architecture Test.
 
 ### model_test.h
 
@@ -374,9 +374,9 @@ fromhost: .dword 0;                                                 \
 
 ## Imperas Environment
 
-**Dizin:** `env/imperas/`
+**Directory:** `env/imperas/`
 
-Imperas riscv-tests extended suite için environment.
+Environment for the Imperas riscv-tests extended suite.
 
 ### model_test.h
 
@@ -442,14 +442,14 @@ halt_loop:                                                          \
 
 ## CoreMark Environment
 
-**Dizin:** `env/coremark/ceresv/`
+**Directory:** `env/coremark/levelv/`
 
-EEMBC CoreMark benchmark için Ceres-V port.
+Level-V port for the EEMBC CoreMark benchmark.
 
-### Dosya Listesi
+### File List
 
-| Dosya | Açıklama |
-|-------|----------|
+| File | Description |
+|------|-------------|
 | `core_portme.c` | Platform-specific implementations |
 | `core_portme.h` | Platform configuration |
 | `core_portme.mak` | Build configuration |
@@ -466,7 +466,7 @@ EEMBC CoreMark benchmark için Ceres-V port.
 #define CORE_PORTME_H
 
 // ═══════════════════════════════════════════════════════════════
-// Ceres-V Hardware Configuration
+// Level-V Hardware Configuration
 // ═══════════════════════════════════════════════════════════════
 
 #define CPU_CLK          50000000   /* 50 MHz */
@@ -525,7 +525,7 @@ typedef ee_u32       CORETIMETYPE;
 #endif
 ```
 
-### core_portme.c (özet)
+### core_portme.c (summary)
 
 ```c
 #include "coremark.h"
@@ -570,14 +570,14 @@ secs_ret time_in_secs(CORE_TICKS ticks) {
 
 ## Dhrystone Environment
 
-**Dizin:** `env/dhrystone/`
+**Directory:** `env/dhrystone/`
 
-Dhrystone benchmark için environment.
+Environment for the Dhrystone benchmark.
 
-### Dosya Listesi
+### File List
 
-| Dosya | Açıklama |
-|-------|----------|
+| File | Description |
+|------|-------------|
 | `dhry.h` | Dhrystone header |
 | `dhry_1.c` | Dhrystone part 1 |
 | `dhry_2.c` | Dhrystone part 2 |
@@ -589,9 +589,9 @@ Dhrystone benchmark için environment.
 
 ## Embench Environment
 
-**Dizin:** `env/embench/`
+**Directory:** `env/embench/`
 
-Embench-IoT benchmark suite için environment.
+Environment for the Embench-IoT benchmark suite.
 
 ### boardsupport.c
 
@@ -626,9 +626,9 @@ void stop_trigger(void) {
 
 ## Torture Environment
 
-**Dizin:** `env/torture/`
+**Directory:** `env/torture/`
 
-Random instruction torture testleri için minimal environment.
+Minimal environment for random instruction torture tests.
 
 ### crt0.S
 
@@ -659,9 +659,9 @@ _start:
 
 ## RISCV-DV Environment
 
-**Dizin:** `env/riscv-dv/`
+**Directory:** `env/riscv-dv/`
 
-RISCV-DV generated random testleri için environment.
+Environment for RISCV-DV generated random tests.
 
 ### link.ld
 
@@ -685,14 +685,14 @@ SECTIONS {
 
 ## RISCV-Formal Environment
 
-**Dizin:** `env/riscv-formal/`
+**Directory:** `env/riscv-formal/`
 
-Formal verification için RVFI wrapper.
+RVFI wrapper for formal verification.
 
 ### rvfi_wrapper.sv
 
 ```systemverilog
-/* RISC-V Formal Interface (RVFI) Wrapper for Ceres-V */
+/* RISC-V Formal Interface (RVFI) Wrapper for Level-V */
 
 `default_nettype none
 
@@ -749,23 +749,23 @@ endmodule
 
 ---
 
-## Memory Map Özeti
+## Memory Map Summary
 
-Tüm environment'lar aşağıdaki memory map'i kullanır:
+All environments use the following memory map:
 
-| Adres | Boyut | Bölge |
-|-------|-------|-------|
+| Address | Size | Region |
+|---------|------|--------|
 | 0x8000_0000 | 32-128KB | RAM (Code + Data + Stack) |
 | 0x2000_0000 | 64KB | Peripherals |
 | 0x3000_0000 | 64KB | CLINT (Timer) |
 
 ---
 
-## Özet
+## Summary
 
-Environment dizini:
+The `env/` directory contains:
 
-1. **common/**: Ortak runtime (crt.S, syscalls.c, linker)
+1. **common/**: Shared runtime (crt.S, syscalls.c, linker)
 2. **riscv-test/**: ISA compliance macros
 3. **riscv-arch-test/**: Architecture test macros
 4. **imperas/**: Extended test macros

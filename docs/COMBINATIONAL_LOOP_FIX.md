@@ -6,9 +6,9 @@ Verilator was reporting circular combinational logic warnings (UNOPTFLAT) in the
 
 ```
 %Warning-UNOPTFLAT: Signal unoptimizable: Circular combinational logic:
-  - ceres_wrapper.i_soc.i_fetch.i_pma.uncached_o
-  - ceres_wrapper.i_soc.i_fetch.i_pma.grand_o
-  - ceres_wrapper.i_soc.i_fetch.__Vcellinp__i_gshare_bp__fetch_valid_i
+  - level_wrapper.i_soc.i_fetch.i_pma.uncached_o
+  - level_wrapper.i_soc.i_fetch.i_pma.grand_o
+  - level_wrapper.i_soc.i_fetch.__Vcellinp__i_gshare_bp__fetch_valid_i
 ```
 
 ### Root Cause
@@ -171,7 +171,7 @@ make clean_verilator_nuclear
 - Original Issue: Circular combinational logic in fetch stage
 - Fixed Files:
   - `rtl/core/stage01_fetch/fetch.sv`
-  - `script/makefiles/sim/verilator.mk`
+  - root `makefile` (Verilator section)
 
 ## Lessons Learned
 

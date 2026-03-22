@@ -1,4 +1,4 @@
-# CERES RISC-V Troubleshooting Guide
+# Level RISC-V Troubleshooting Guide
 
 ## Common Build Issues
 
@@ -124,7 +124,7 @@ VERILATOR_PROFILE=debug make verilate
 
 **Symptoms:**
 ```
-undefined reference to `Vceres_wrapper::eval()'
+undefined reference to `Vlevel_wrapper::eval()'
 ```
 
 **Cause:**
@@ -143,7 +143,7 @@ make verilate
 
 **Symptoms:**
 ```
-Assertion failed: (signal != nullptr), function eval, file Vceres_wrapper.cpp
+Assertion failed: (signal != nullptr), function eval, file Vlevel_wrapper.cpp
 ```
 
 **Cause:**

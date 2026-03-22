@@ -34,7 +34,7 @@ Description:
 `timescale 1ns / 1ps
 
 module gpio
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int GPIO_WIDTH = 32
 ) (
@@ -108,7 +108,8 @@ module gpio
   end
 
   // Synchronized input value
-  wire  [GPIO_WIDTH-1:0] gpio_in = gpio_sync2_q;
+  logic [GPIO_WIDTH-1:0] gpio_in;
+  assign gpio_in = gpio_sync2_q;
 
   // ============================================================================
   // Edge Detection

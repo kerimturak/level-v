@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-CERES RISC-V — Debug Logger for Python Tools
+Level RISC-V — Debug Logger for Python Tools
 
-Tüm Python tool'ları için ortak debug logging altyapısı.
-Her çalışmada detaylı debug log dosyası oluşturur.
+Common debug logging infrastructure for all Python tools.
+Creates a detailed debug log file on each run.
 
-Kullanım:
+Usage:
     from debug_logger import DebugLogger
     
     logger = DebugLogger("verilator", log_dir)
@@ -29,13 +29,13 @@ from typing import Any, Dict, List, Optional, Union
 # ═══════════════════════════════════════════════════════════════════════════
 class DebugLogger:
     """
-    Debug log oluşturucu.
-    
-    Her çalışmada:
-    - Tüm parametreleri kaydeder
-    - Hangi config'den ne alındığını gösterir
-    - Komutların tam halini loglar
-    - Hata durumlarını detaylı kaydeder
+    Debug log builder.
+
+    On each run:
+    - Records all parameters
+    - Shows what came from which config
+    - Logs full command lines
+    - Records error conditions in detail
     """
     
     def __init__(
@@ -47,23 +47,23 @@ class DebugLogger:
     ):
         """
         Args:
-            tool_name: Araç adı (verilator, modelsim, vb.)
-            log_dir: Log dizini (None ise geçici dizin kullanılır)
-            enabled: Debug logging aktif mi
-            console_echo: Console'a da yazdır
+            tool_name: Tool name (verilator, modelsim, etc.)
+            log_dir: Log directory (None uses a temporary directory)
+            enabled: Whether debug logging is enabled
+            console_echo: Also echo to the console
         """
         self.tool_name = tool_name
         self.enabled = enabled
         self.console_echo = console_echo
         self.start_time = datetime.now()
         
-        # Log dizini
+        # Log directory
         if log_dir:
             self.log_dir = Path(log_dir)
         else:
-            self.log_dir = Path("/tmp") / f"ceres_{tool_name}_debug"
+            self.log_dir = Path("/tmp") / f"level_{tool_name}_debug"
         
-        # Log içeriği
+        # Log contents
         self.lines: List[str] = []
         self.sections: List[Dict[str, Any]] = []
         self.current_section: Optional[Dict[str, Any]] = None
@@ -78,11 +78,11 @@ class DebugLogger:
             "env": self._get_relevant_env(),
         }
         
-        # Başlangıç banner'ı
+        # Startup banner
         self._write_header()
     
     def _get_relevant_env(self) -> Dict[str, str]:
-        """İlgili ortam değişkenlerini al."""
+        """Get relevant environment variables."""
         relevant_vars = [
             "PATH", "LD_LIBRARY_PATH", "VERILATOR_ROOT",
             "MODEL_TECH", "MTI_HOME", "LM_LICENSE_FILE",
@@ -91,9 +91,9 @@ class DebugLogger:
         return {k: os.environ.get(k, "") for k in relevant_vars if os.environ.get(k)}
     
     def _write_header(self) -> None:
-        """Log başlığını yaz."""
+        """Write log header."""
         self._log("=" * 80)
-        self._log(f"  CERES RISC-V — {self.tool_name.upper()} Debug Log")
+        self._log(f"  Level RISC-V — {self.tool_name.upper()} Debug Log")
         self._log("=" * 80)
         self._log(f"  Started: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         self._log(f"  CWD:     {os.getcwd()}")
@@ -102,7 +102,7 @@ class DebugLogger:
         self._log("")
     
     def _log(self, line: str) -> None:
-        """Satır ekle."""
+        """Append a line."""
         if not self.enabled:
             return
         self.lines.append(line)
@@ -113,7 +113,7 @@ class DebugLogger:
     # Section Management
     # ═══════════════════════════════════════════════════════════════════════
     def section(self, name: str) -> None:
-        """Yeni bölüm başlat."""
+        """Start a new section."""
         if self.current_section:
             self.sections.append(self.current_section)
         
@@ -141,18 +141,18 @@ class DebugLogger:
         note: str = ""
     ) -> None:
         """
-        Parametre logla.
-        
+        Log a parameter.
+
         Args:
-            name: Parametre adı
-            value: Parametre değeri
-            source: Kaynak (cli, json, default, env, computed)
-            note: Ek not
+            name: Parameter name
+            value: Parameter value
+            source: Source (cli, json, default, env, computed)
+            note: Optional note
         """
         if not self.enabled:
             return
         
-        # Değeri string'e çevir
+        # Convert value to string
         if isinstance(value, Path):
             value_str = str(value)
         elif isinstance(value, (list, dict)):
@@ -184,7 +184,7 @@ class DebugLogger:
         
         self._log(line)
         
-        # Section'a ekle
+        # Add to current section
         if self.current_section:
             self.current_section["params"][name] = {
                 "value": value,
@@ -198,7 +198,7 @@ class DebugLogger:
         source: str = "unknown",
         prefix: str = ""
     ) -> None:
-        """Dict'ten tüm parametreleri logla."""
+        """Log all parameters from a dict."""
         for key, value in params.items():
             full_key = f"{prefix}.{key}" if prefix else key
             self.param(full_key, value, source)
@@ -209,7 +209,7 @@ class DebugLogger:
         source: str = "unknown",
         prefix: str = ""
     ) -> None:
-        """Dataclass'tan tüm alanları logla."""
+        """Log all fields from a dataclass."""
         if hasattr(obj, "__dataclass_fields__"):
             for field_name in obj.__dataclass_fields__:
                 value = getattr(obj, field_name)
@@ -226,12 +226,12 @@ class DebugLogger:
         cwd: Optional[Path] = None
     ) -> None:
         """
-        Çalıştırılacak komutu logla.
-        
+        Log the command to run.
+
         Args:
-            cmd: Komut (string veya liste)
-            description: Açıklama
-            cwd: Çalışma dizini
+            cmd: Command (string or list)
+            description: Description
+            cwd: Working directory
         """
         if not self.enabled:
             return
@@ -261,32 +261,32 @@ class DebugLogger:
     # Notes and Warnings
     # ═══════════════════════════════════════════════════════════════════════
     def note(self, message: str) -> None:
-        """Not ekle."""
+        """Add a note."""
         self._log(f"  📝 {message}")
         if self.current_section:
             self.current_section["notes"].append(message)
     
     def warning(self, message: str) -> None:
-        """Uyarı ekle."""
+        """Add a warning."""
         self._log(f"  ⚠️  WARNING: {message}")
         if self.current_section:
             self.current_section["notes"].append(f"[WARN] {message}")
     
     def error(self, message: str) -> None:
-        """Hata ekle."""
+        """Add an error."""
         self._log(f"  ❌ ERROR: {message}")
         if self.current_section:
             self.current_section["notes"].append(f"[ERROR] {message}")
     
     def success(self, message: str) -> None:
-        """Başarı mesajı ekle."""
+        """Add a success message."""
         self._log(f"  ✅ {message}")
     
     # ═══════════════════════════════════════════════════════════════════════
     # File Operations
     # ═══════════════════════════════════════════════════════════════════════
     def file_check(self, path: Path, description: str = "") -> bool:
-        """Dosya varlığını kontrol et ve logla."""
+        """Check file existence and log."""
         exists = path.exists()
         status = "✓" if exists else "✗"
         size = ""
@@ -304,14 +304,14 @@ class DebugLogger:
         return exists
     
     def file_list(self, directory: Path, pattern: str = "*") -> List[Path]:
-        """Dizin içeriğini logla."""
+        """Log directory listing."""
         if not directory.exists():
             self._log(f"  Directory not found: {directory}")
             return []
         
         files = sorted(directory.glob(pattern))
         self._log(f"  📁 {directory}/ ({len(files)} files matching '{pattern}')")
-        for f in files[:10]:  # İlk 10
+        for f in files[:10]:  # First 10
             self.file_check(f)
         if len(files) > 10:
             self._log(f"  ... and {len(files) - 10} more files")
@@ -329,11 +329,11 @@ class DebugLogger:
         final_value: Any
     ) -> None:
         """
-        Config kaynağını detaylı göster.
-        
-        Hangi değerin nereden geldiğini açıkça gösterir.
+        Show config source in detail.
+
+        Makes clear where each value came from.
         """
-        # Kaynağı belirle
+        # Determine source
         if cli_value is not None and cli_value != default_value:
             source = "cli"
             chosen = cli_value
@@ -344,7 +344,7 @@ class DebugLogger:
             source = "default"
             chosen = default_value
         
-        # Override kontrolü
+        # Override check
         if final_value != chosen:
             source = "override"
         
@@ -364,7 +364,7 @@ class DebugLogger:
         message: str = "",
         details: Optional[Dict[str, Any]] = None
     ) -> None:
-        """Sonucu logla."""
+        """Log the outcome."""
         end_time = datetime.now()
         elapsed = (end_time - self.start_time).total_seconds()
         
@@ -386,7 +386,7 @@ class DebugLogger:
         
         self._log("=" * 80)
         
-        # Metadata güncelle
+        # Update metadata
         self.metadata["end_time"] = end_time.isoformat()
         self.metadata["elapsed_seconds"] = elapsed
         self.metadata["success"] = success
@@ -394,19 +394,19 @@ class DebugLogger:
     
     def save(self) -> Optional[Path]:
         """
-        Debug log'u kaydet.
-        
+        Save the debug log.
+
         Returns:
-            Kaydedilen log dosyasının yolu veya None
+            Path to the saved log file, or None
         """
         if not self.enabled:
             return None
         
-        # Son section'ı ekle
+        # Append final open section
         if self.current_section:
             self.sections.append(self.current_section)
         
-        # Dizin oluştur
+        # Create directory
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
         # Text log
@@ -426,7 +426,7 @@ class DebugLogger:
         with open(json_file, "w") as f:
             json.dump(json_data, f, indent=2, default=str)
         
-        # Ayrıca sabit isimli son log (kolay erişim için)
+        # Also write fixed-name "latest" copies for easy access
         latest_log = self.log_dir / f"debug_{self.tool_name}_latest.log"
         latest_json = self.log_dir / f"debug_{self.tool_name}_latest.json"
         
@@ -458,18 +458,18 @@ def create_logger(
     debug_enabled: bool = True
 ) -> DebugLogger:
     """
-    Debug logger oluştur.
-    
-    DEBUG ortam değişkeni veya --debug flag'i ile kontrol edilir.
+    Create a debug logger.
+
+    Controlled by DEBUG environment variable or --debug flag.
     """
-    # Debug modunu kontrol et
-    enabled = debug_enabled or os.environ.get("CERES_DEBUG", "0") == "1"
+    # Determine debug mode
+    enabled = debug_enabled or os.environ.get("LEVEL_DEBUG", "0") == "1"
     
     return DebugLogger(
         tool_name=tool_name,
         log_dir=log_dir,
         enabled=enabled,
-        console_echo=os.environ.get("CERES_DEBUG_ECHO", "0") == "1"
+        console_echo=os.environ.get("LEVEL_DEBUG_ECHO", "0") == "1"
     )
 
 

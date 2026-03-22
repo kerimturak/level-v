@@ -1,10 +1,10 @@
 /**
- * Arithmetic Test - Ceres-V RV32IMC_Zicsr
+ * Arithmetic Test - Level-V RV32IMC_Zicsr
  * 
  * Tests arithmetic operations: add, sub, mul, div
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 int main(void) {
     uart_init();

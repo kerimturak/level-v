@@ -7,9 +7,9 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module control_unit
-  import ceres_param::*;
+  import level_param::*;
 (
     input  inst_t       inst_i,
     input  instr_type_e instr_type_i,
@@ -36,28 +36,28 @@ module control_unit
     end
 
 
-    // CSR instruction mı?
+    // CSR instruction?
     instr_is_csr = (instr_type_i == CSR_RW) || (instr_type_i == CSR_RWI) || (instr_type_i == CSR_RS) || (instr_type_i == CSR_RSI) || (instr_type_i == CSR_RC) || (instr_type_i == CSR_RCI);
-    // CSR adresi core tarafından destekleniyor mu?
+    // Is CSR address supported by the core?
     csr_supported = is_supported_csr(inst_i[31:20]);
-    // Yazma niyeti var mı?
-    // CSR read-only mı? (CSR address bits [11:10] == 2'b11 means read-only)
+    // Write intent?
+    // CSR read-only? (CSR address bits [11:10] == 2'b11 means read-only)
     csr_read_only = (inst_i[31:30] == 2'b11);
     csr_write_intent =
        (instr_type_i == CSR_RW)  ||
        (instr_type_i == CSR_RWI) ||
        ((instr_type_i == CSR_RS  || instr_type_i == CSR_RC)  && inst_i.r1_addr != 5'd0) ||
        ((instr_type_i == CSR_RSI || instr_type_i == CSR_RCI) && inst_i[19:15] != 5'd0);
-    // Exception type hesaplama
+    // Compute exception type
     ctrl_o.exc_type = NO_EXCEPTION;
-    // Önce shift illegal kontrolü
+    // Check illegal shift first
     if (illegal_shift) begin
       ctrl_o.exc_type = ILLEGAL_INSTRUCTION;
     end else if (instr_is_csr && !csr_supported) begin
-      // cycle/cycleh/instret alias (C00/C02/C80/C82) burada yakalanacak
+      // cycle/cycleh/instret aliases (C00/C02/C80/C82) caught here
       ctrl_o.exc_type = ILLEGAL_INSTRUCTION;
     end else if (instr_is_csr && csr_read_only && csr_write_intent) begin
-      // Read-only CSR'ye yazma girişimi illegal instruction
+      // Write attempt to read-only CSR is illegal instruction
       ctrl_o.exc_type = ILLEGAL_INSTRUCTION;
     end
 
@@ -246,7 +246,7 @@ module control_unit
             ctrl_o.rf_rw_en     = (inst_i.rd_addr != 0);
             ctrl_o.csr_or_data  = 1'b1;
             ctrl_o.rd_csr       = (inst_i.rd_addr != 0);  // CSR -> rd
-            ctrl_o.wr_csr       = 1'b1;  // her zaman write
+            ctrl_o.wr_csr       = 1'b1;  // always write
             ctrl_o.csr_idx      = inst_i[31:20];
             ctrl_o.imm_sel      = NO_IMM;
             ctrl_o.alu_in2_sel  = 1'b0;  // rs1
@@ -260,7 +260,7 @@ module control_unit
             ctrl_o.rf_rw_en     = (inst_i.rd_addr != 0);
             ctrl_o.csr_or_data  = 1'b1;
             ctrl_o.rd_csr       = 1'b1;
-            ctrl_o.wr_csr       = (inst_i.r1_addr != 0);  // rs1 != x0 ise write
+            ctrl_o.wr_csr       = (inst_i.r1_addr != 0);  // write if rs1 != x0
             ctrl_o.csr_idx      = inst_i[31:20];
             ctrl_o.imm_sel      = NO_IMM;
             ctrl_o.alu_in2_sel  = 1'b0;  // rs1
@@ -274,7 +274,7 @@ module control_unit
             ctrl_o.rf_rw_en     = (inst_i.rd_addr != 0);
             ctrl_o.csr_or_data  = 1'b1;
             ctrl_o.rd_csr       = (inst_i.rd_addr != 0);
-            ctrl_o.wr_csr       = 1'b1;  // her zaman write
+            ctrl_o.wr_csr       = 1'b1;  // always write
             ctrl_o.csr_idx      = inst_i[31:20];
             ctrl_o.imm_sel      = CSR_IMM;
             ctrl_o.alu_in2_sel  = 1'b1;  // zimm
@@ -301,7 +301,7 @@ module control_unit
             ctrl_o.rf_rw_en     = 1'b0;
             ctrl_o.wr_csr       = 1'b0;
             ctrl_o.rd_csr       = 1'b0;
-            ctrl_o.csr_idx      = 12'h000;  // CSR alanı geçersiz
+            ctrl_o.csr_idx      = 12'h000;  // CSR index invalid
             ctrl_o.csr_or_data  = 1'b0;
             ctrl_o.imm_sel      = NO_IMM;
             ctrl_o.alu_in2_sel  = 1'b0;

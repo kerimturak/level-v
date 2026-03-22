@@ -37,7 +37,7 @@ Description:
 `timescale 1ns / 1ps
 
 module plic
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_SOURCES  = 32,  // Number of interrupt sources (including reserved 0)
     parameter int NUM_PRIORITY = 8    // Number of priority levels (3 bits)

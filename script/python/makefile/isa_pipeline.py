@@ -28,12 +28,12 @@ ADDR_RE  = re.compile(r"^([0-9a-fA-F]+)(?=(:|\s+<))")
 
 def extract_pass_fail(dump_file: Path):
     """
-    Dump dosyasından PASS / FAIL adreslerini çıkar.
+    Extract PASS / FAIL addresses from a dump file.
 
-    Öncelik:
-      1) Açıkça tanımlı <pass> / <fail> label'ları
-      2) Sadece <write_tohost> varsa → PASS = write_tohost, FAIL = PASS + 0x1000
-      3) Hiçbiri yoksa → son görülen adres PASS, FAIL = PASS + 0x1000
+    Priority:
+      1) Explicit <pass> / <fail> labels
+      2) If only <write_tohost> exists → PASS = write_tohost, FAIL = PASS + 0x1000
+      3) If neither → last seen address is PASS, FAIL = PASS + 0x1000
     """
     pass_address      = None
     fail_address      = None
@@ -64,33 +64,33 @@ def extract_pass_fail(dump_file: Path):
                 write_tohost_addr = int(m_host.group(1), 16)
                 continue
 
-            # 4) Genel adres (fallback için)
+            # 4) Generic address (for fallback)
             m_addr = ADDR_RE.match(line)
             if m_addr:
                 last_address = int(m_addr.group(1), 16)
 
-    # --- Öncelik 1: PASS / FAIL label'ları varsa her zaman bunları kullan ---
+    # --- Priority 1: if PASS / FAIL labels exist, always use them ---
     if pass_address is not None or fail_address is not None:
-        # Sadece birisi varsa, diğerini relative olarak tahmin et
+        # If only one exists, estimate the other relative to it
         if pass_address is None and fail_address is not None:
             pass_address = fail_address - 0x1000
         if fail_address is None and pass_address is not None:
             fail_address = pass_address + 0x1000
         return pass_address, fail_address
 
-    # --- Öncelik 2: Sadece write_tohost varsa ---
+    # --- Priority 2: only write_tohost ---
     if write_tohost_addr is not None:
         pass_address = write_tohost_addr
         fail_address = pass_address + 0x1000
         return pass_address, fail_address
 
-    # --- Öncelik 3: Hiçbiri yoksa, son adres üzerinden tahmin ---
+    # --- Priority 3: none of the above; guess from last address ---
     if last_address is not None:
         pass_address = last_address
         fail_address = pass_address + 0x1000
         return pass_address, fail_address
 
-    # Dump tamamen bozuksa:
+    # Dump is unusable:
     raise RuntimeError(f"No addresses found in dump: {dump_file}")
 
 
@@ -115,10 +115,9 @@ def copy_if_newer(src, dst):
         print(f"  ↪ Skipped (up-to-date): {os.path.basename(src)}")
 
 
-def process_test_group(name, src_dir, ceres_root):
-    base_build = os.path.join(ceres_root, "build")
+def process_test_group(name, src_dir, level_root):
+    base_build = os.path.join(level_root, "build")
     group_root = os.path.join(base_build, f"tests/{name}")
-    temp_root  = os.path.join(base_build, f"temp/{name}")
     logs_root  = os.path.join(base_build, "logs")
 
     elf_dst  = os.path.join(group_root, "elf")
@@ -127,14 +126,11 @@ def process_test_group(name, src_dir, ceres_root):
     mem_dst  = os.path.join(group_root, "mem")
     addr_dst = os.path.join(group_root, "pass_fail_addr")
 
-    temp_elf  = os.path.join(temp_root, "elf")
-    temp_dump = os.path.join(temp_root, "dump")
-
-    hex_to_mem  = os.path.join(ceres_root, "script/python/makefile/hex_to_mem.py")
+    hex_to_mem  = os.path.join(level_root, "script/python/makefile/hex_to_mem.py")
     objcopy = shutil.which("riscv32-unknown-elf-objcopy") or "riscv32-unknown-elf-objcopy"
     python  = shutil.which("python3")
 
-    for d in [elf_dst, dump_dst, hex_dst, mem_dst, addr_dst, temp_elf, temp_dump, logs_root]:
+    for d in [elf_dst, dump_dst, hex_dst, mem_dst, addr_dst, logs_root]:
         os.makedirs(d, exist_ok=True)
 
     print(f"\n🚀 Importing test group: {name}")
@@ -166,13 +162,6 @@ def process_test_group(name, src_dir, ceres_root):
         for f in glob.glob(os.path.join(src_dir, "*.dump")):
             dst = normalize_name(os.path.basename(f))
             copy_if_newer(f, os.path.join(dump_dst, dst))
-
-    # Backup to temp/
-    print(f"\n🧰 Backing up tests → temp/{name} ...")
-    for f in glob.glob(os.path.join(elf_dst, "*")):
-        copy_if_newer(f, os.path.join(temp_elf, os.path.basename(f)))
-    for f in glob.glob(os.path.join(dump_dst, "*")):
-        copy_if_newer(f, os.path.join(temp_dump, os.path.basename(f)))
 
     # Convert ELF → HEX → MEM
     print(f"\n🔧 Converting ELF → HEX → MEM + extracting PASS/FAIL ...\n")
@@ -208,7 +197,6 @@ def process_test_group(name, src_dir, ceres_root):
     print(f"   HEX  → {hex_dst}")
     print(f"   MEM  → {mem_dst}")
     print(f"   ADDR → {addr_dst}")
-    print(f"   TEMP → {temp_root}")
 
 
 # =============================================================================
@@ -217,22 +205,22 @@ def process_test_group(name, src_dir, ceres_root):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--isa-dir",  required=False, help="riscv-tests/isa dizini")
-    ap.add_argument("--bench-dir", required=False, help="riscv-tests/benchmarks dizini")
-    ap.add_argument("--ceres-root", required=True, help="Ceres-RISCV root")
+    ap.add_argument("--isa-dir",  required=False, help="riscv-tests/isa directory")
+    ap.add_argument("--bench-dir", required=False, help="riscv-tests/benchmarks directory")
+    ap.add_argument("--level-root", required=True, help="Level RISC-V repository root")
     args = ap.parse_args()
 
-    ceres_root = os.path.abspath(args.ceres_root)
+    level_root = os.path.abspath(args.level_root)
 
     if not args.isa_dir and not args.bench_dir:
         print("❌ ERROR: Must provide --isa-dir or --bench-dir")
         sys.exit(1)
 
     if args.isa_dir:
-        process_test_group("riscv-tests", os.path.abspath(args.isa_dir), ceres_root)
+        process_test_group("riscv-tests", os.path.abspath(args.isa_dir), level_root)
 
     if args.bench_dir:
-        process_test_group("riscv-benchmarks", os.path.abspath(args.bench_dir), ceres_root)
+        process_test_group("riscv-benchmarks", os.path.abspath(args.bench_dir), level_root)
 
 
 if __name__ == "__main__":

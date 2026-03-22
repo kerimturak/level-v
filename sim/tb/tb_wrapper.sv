@@ -40,7 +40,7 @@ module tb_wrapper;
   logic [ 7:0] ext_irq_i;
   logic [ 3:0] status_led_o;
 
-    ceres_wrapper ceres_wrapper (
+    level_wrapper level_wrapper (
       .clk_i          (clk_i),
       .rst_ni         (rst_ni),
       .uart0_tx_o     (uart0_tx_o),

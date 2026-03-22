@@ -14,13 +14,13 @@
 module tb_dcache_selfcheck;
 
   // Import parameter package
-  import ceres_param::*;
+  import level_param::*;
 
   // Parameters
   parameter IS_ICACHE = 0;  // 0 = DCache, 1 = ICache
   parameter CACHE_SIZE = 1024;
-  localparam BLK_SIZE = ceres_param::BLK_SIZE;
-  localparam XLEN = ceres_param::XLEN;
+  localparam BLK_SIZE = level_param::BLK_SIZE;
+  localparam XLEN = level_param::XLEN;
   parameter NUM_WAY = 4;
   parameter NUM_RANDOM_ITERATIONS = 100;  // Number of random test iterations
 

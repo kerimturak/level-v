@@ -7,7 +7,7 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 ================================================================================
-CERES RISC-V — Physical Memory Attributes (PMA)
+Level RISC-V — Physical Memory Attributes (PMA)
 ================================================================================
 Description:
   Defines memory regions and their attributes for the memory subsystem.
@@ -39,10 +39,10 @@ Memory Map:
 ================================================================================
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 module pma
-  import ceres_param::*;
+  import level_param::*;
 (
     input logic [XLEN-1:0] addr_i,
     output logic uncached_o,

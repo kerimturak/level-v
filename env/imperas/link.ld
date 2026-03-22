@@ -1,10 +1,10 @@
-/* RISC-V Imperas Test Linker Script for Ceres Processor */
-/* Ceres-V RV32IMC_Zicsr Processor - Optimized Compact Layout */
+/* RISC-V Imperas Test Linker Script for level Processor */
+/* level-V RV32IMC_Zicsr Processor - Optimized Compact Layout */
 
 OUTPUT_ARCH("riscv")
 ENTRY(rvtest_entry_point)
 
-/* Memory Layout for Ceres */
+/* Memory Layout for level */
 MEMORY
 {
     RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 2M

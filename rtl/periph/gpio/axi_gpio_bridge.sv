@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 AXI-Lite to Simple Bus Bridge for Xilinx GPIO IP
 ================================================================================
 Description:
-  This module bridges CERES SoC's simple memory-mapped interface to AXI-Lite,
+  This module bridges Level SoC's simple memory-mapped interface to AXI-Lite,
   allowing connection to Xilinx AXI GPIO IP core.
 
   Xilinx AXI GPIO IP has the following register map:
@@ -39,7 +39,7 @@ module axi_gpio_bridge #(
     input logic rst_ni,
 
     // =========================================================================
-    // Simple Bus Interface (from CERES SoC)
+    // Simple Bus Interface (from Level SoC)
     // =========================================================================
     input  logic                          stb_i,       // Strobe/valid
     input  logic [C_S_AXI_ADDR_WIDTH-3:0] adr_i,       // Word address
@@ -105,7 +105,8 @@ module axi_gpio_bridge #(
   assign is_write = we_i;
 
   // Convert word address to byte address
-  wire [C_S_AXI_ADDR_WIDTH-1:0] byte_addr = {adr_i, 2'b00};
+  logic [C_S_AXI_ADDR_WIDTH-1:0] byte_addr;
+  assign byte_addr = {adr_i, 2'b00};
 
   // ===========================================================================
   // State Machine Logic

@@ -1,8 +1,8 @@
-# REGISTER FILE Modülü - Teknik Döküman
+# Register File Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`reg_file.sv` modülü, RISC-V işlemcisinin 32x32-bit genel amaçlı register dosyasıdır (General Purpose Registers - GPRs). Dual-port asenkron read ve single-port senkron write desteği sağlar. x0 register'ı hardwired zero olarak implement edilmiştir.
+The `reg_file.sv` module is the core’s 32×32-bit general-purpose register file (GPRs). It provides dual-port asynchronous reads and a single synchronous write port. `x0` is hardwired to zero.
 
 ## RISC-V Register Conventions
 
@@ -23,25 +23,25 @@
 | x18-x27 | s2-s11 | Saved registers | Callee |
 | x28-x31 | t3-t6 | Temporaries | Caller |
 
-**Not:** ABI name'ler assembler'da kullanılır, hardware'de sadece x0-x31 index'leri önemlidir.
+**Note:** ABI names are for software; hardware only sees indices `x0`–`x31`.
 
-## Port Tanımları
+## Port definitions
 
-### Giriş Portları
+### Input ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
-| `clk_i` | logic | Sistem clock'u (senkron write için) |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `rw_en_i` | logic | Write enable (writeback stage'den) |
+| `clk_i` | logic | System clock (synchronous writes) |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `rw_en_i` | logic | Write enable (from writeback) |
 | `r1_addr_i` | [4:0] | Source register 1 address (rs1) |
 | `r2_addr_i` | [4:0] | Source register 2 address (rs2) |
-| `waddr_i` | [4:0] | Destination register address (rd, writeback'ten) |
-| `wdata_i` | [XLEN-1:0] | Write data (writeback'ten) |
+| `waddr_i` | [4:0] | Destination register (`rd`, from writeback) |
+| `wdata_i` | [XLEN-1:0] | Write data (from writeback) |
 
-### Çıkış Portları
+### Output ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `r1_data_o` | [XLEN-1:0] | Source register 1 data |
 | `r2_data_o` | [XLEN-1:0] | Source register 2 data |
@@ -54,14 +54,14 @@
 logic [XLEN-1:0] registers[31:0];  // 32 registers, x0-x31
 ```
 
-**Boyut:**
+**Size:**
 - 32 registers × 32 bits = 1024 bits = 128 bytes
 
-**FPGA Implementation:**
-- Distributed RAM: LUT'lar kullanılarak implement edilir
-- Block RAM: BRAM primitive'leri kullanılır (daha büyük register file'lar için)
+**FPGA mapping:**
+- Distributed RAM: implemented from LUTs  
+- Block RAM: BRAM primitives (common for larger register files)  
 
-### Asenkron Read Logic
+### Asynchronous read logic
 
 ```systemverilog
 always_comb begin : register_read
@@ -70,37 +70,37 @@ always_comb begin : register_read
 end
 ```
 
-**Özellikler:**
-- **Combinational Read**: Aynı cycle'da address → data
-- **Dual-Port**: İki register aynı anda okunabilir (rs1, rs2)
-- **No Latency**: Address geldiği cycle'da data hazır
+**Properties:**
+- **Combinational read:** address valid in cycle *N* → data valid in cycle *N*  
+- **Dual read ports:** `rs1` and `rs2` in parallel  
+- **No read latency:** data is a pure combinational function of address  
 
-**x0 Special Case:**
-- x0 her zaman 0 okur (register array'de 0 tutulur)
-- Reset'te tüm register'lar sıfırlanır, x0 da sıfır kalır
+**`x0` special case:**
+- Reads always see 0 (array slot 0 is kept at zero)  
+- After reset all entries are cleared, including `x0`  
 
-### Senkron Write Logic
+### Synchronous write logic
 
 ```systemverilog
 always_ff @(posedge clk_i) begin : register_write
   if (!rst_ni) begin
-    registers <= '{default: 0};  // Reset: tüm register'lar sıfır
+    registers <= '{default: 0};  // Reset: clear all GPRs
   end else if (rw_en_i == 1'b1 && waddr_i != 5'b0) begin
     registers[waddr_i] <= wdata_i;
   end
 end
 ```
 
-**Özellikler:**
-- **Senkron Write**: Clock rising edge'de write
-- **x0 Write Protection**: `waddr_i != 5'b0` kontrolü ile x0'a yazma engellenir
-- **Single-Port**: Bir cycle'da sadece bir register yazılabilir
+**Properties:**
+- **Synchronous write:** updates on the clock rising edge  
+- **`x0` write protection:** writes are suppressed when `waddr_i == 0`  
+- **Single write port:** one register per cycle  
 
 **Timing:**
 ```
 Cycle N:   waddr_i=5, wdata_i=100, rw_en_i=1
-Cycle N+1: registers[5] = 100 (write tamamlandı)
-           r1_addr_i=5 → r1_data_o=100 (aynı cycle'da okunabilir)
+Cycle N+1: registers[5] = 100 (write committed)
+           r1_addr_i=5 → r1_data_o=100 (combinational read in same cycle)
 ```
 
 ## Register File Access Patterns
@@ -117,21 +117,21 @@ Cycle N+1: sub x6, x5, x7    # DE: Read x5, x7
 - **Read Port 1**: x5 (rs1 for sub)
 - **Read Port 2**: x7 (rs2 for sub)
 
-**Hazard:** Read-after-write (RAW) hazard
-- x5 henüz yazılmadı (senkron write, cycle sonunda olur)
-- Read ise combinational (cycle başında)
-- **Çözüm:** Data forwarding (decode modülünde)
+**Hazard:** read-after-write (RAW)  
+- `x5` is not updated until the write clock edge (end of WB in the prior instruction)  
+- Decode’s read is combinational (start of cycle)  
+- **Fix:** bypass / forwarding in `decode`  
 
 ### Pattern 2: Independent Operations
 
 ```assembly
 Cycle N:   add x5, x3, x4    # WB: Write x5
-Cycle N+1: or x6, x10, x11   # DE: Read x10, x11 (x5 değil)
+Cycle N+1: or x6, x10, x11   # DE: read x10, x11 (not x5)
 ```
 
 **No Hazard:**
 - Write x5, read x10/x11 → No conflict
-- Forwarding gerekmez
+- No forwarding required  
 
 ### Pattern 3: x0 Read
 
@@ -141,7 +141,7 @@ Cycle N: add x5, x0, x4     # x0 + x4 → x5
 
 **Register File:**
 - `r1_addr_i = 0` → `r1_data_o = registers[0] = 0`
-- x0 her zaman 0 döner
+- `x0` always reads as 0  
 
 ### Pattern 4: x0 Write (Ignored)
 
@@ -151,8 +151,8 @@ Cycle N: add x0, x3, x4     # x3 + x4 → x0 (NOP equivalent)
 
 **Register File:**
 - `waddr_i = 0`, `rw_en_i = 1`
-- `waddr_i != 5'b0` koşulu false → Write ignored
-- x0 değişmeden 0 kalır
+- `waddr_i != 5'b0` is false → write dropped  
+- `x0` stays 0  
 
 ## Timing Characteristics
 
@@ -208,16 +208,16 @@ Cycle N+4: FE: next    DE: next   EX: next   MEM: sub   WB: add (x5 written)
 
 **Cycle N+2 (sub in Decode):**
 - `r1_addr_i = 5` → `r1_data_o = registers[5]` (old value!)
-- add henüz writeback'e ulaşmadı
+- `add` has not reached writeback yet  
 
-**Çözüm: Data Forwarding (decode.sv)**
+**Solution: Data Forwarding (decode.sv)**
 ```systemverilog
 // decode.sv
 r1_data_o = fwd_a_i ? wb_data_i : r1_data;
 ```
 
 - Hazard unit: `(WB.rd == DE.rs1) && WB.rf_rw_en` → `fwd_a_i = 1`
-- `r1_data_o = wb_data_i` (add'in sonucu)
+- `r1_data_o = wb_data_i` (the `add` result)  
 
 ## Reset Behavior
 
@@ -227,31 +227,30 @@ if (!rst_ni) begin
 end
 ```
 
-**Reset'te:**
-- Tüm 32 register sıfırlanır
-- x0 = 0 (zaten hardwired)
-- x1-x31 = 0 (başlangıç değeri)
+**On reset:**
+- All 32 architectural registers are cleared  
+- `x0` = 0 (hardwired)  
+- `x1`–`x31` = 0 (typical power-on choice)  
 
-**RISC-V Convention:**
-- Reset'te sadece PC belirlenir (RESET_VECTOR)
-- Register'ların reset değeri RISC-V spec'inde tanımsızdır (implementation-defined)
-- Tipik olarak tümü sıfır (deterministic behavior için)
+**RISC-V note:**
+- Only the boot PC is mandated (`RESET_VECTOR`); GPR reset values are **implementation-defined**  
+- All-zero is common for deterministic bring-up  
 
 ## Synthesis Considerations
 
 ### Distributed RAM vs Block RAM
 
 **Distributed RAM (LUT-based):**
-- **Avantaj:** Asenkron read, low latency
-- **Dezavantaj:** LUT resource tüketimi (32x32-bit = 1024 LUT bit)
-- **Kullanım:** Xilinx: LUT RAM, Intel: MLAB
+- **Pros:** asynchronous read, lowest latency  
+- **Cons:** burns LUTs (32×32 ≈ 1024 LUT bits of storage)  
+- **Typical:** Xilinx LUTRAM, Intel MLAB  
 
 **Block RAM (BRAM):**
-- **Avantaj:** Dedicated resource, LUT tasarrufu
-- **Dezavantaj:** Senkron read (1 cycle latency ekler)
-- **Kullanım:** Daha büyük register file'lar için (örn. RV64, 64 register)
+- **Pros:** dedicated macro, frees LUTs  
+- **Cons:** usually synchronous read → +1 cycle read latency unless you pipeline around it  
+- **Typical:** wide or deep register files (e.g. RV64, 64 regs)  
 
-**RV32I için Önerilen:** Distributed RAM (asenkron read gerekli)
+**For RV32I:** prefer distributed/async style if decode must read combinationally in one cycle.  
 
 ### FPGA Optimization
 
@@ -259,7 +258,7 @@ end
 (* ram_style = "distributed" *) logic [XLEN-1:0] registers[31:0];
 ```
 
-**Veya:**
+**Or:**
 ```systemverilog
 (* ram_style = "block" *) logic [XLEN-1:0] registers[31:0];
 ```
@@ -267,7 +266,7 @@ end
 **Xilinx Vivado:**
 - `distributed`: LUT RAM
 - `block`: BRAM
-- `auto`: Synthesis tool karar verir
+- `auto`: let the tool choose  
 
 ## Debugging & Verification
 
@@ -302,19 +301,19 @@ Signal Monitoring:
 ### Assertions
 
 ```systemverilog
-// x0 her zaman 0 olmalı
+// x0 must remain zero in the array
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   registers[0] == 32'h0);
 
-// Write enable olmadan register değişmemeli
+// Registers must be stable when writes are disabled
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   !rw_en_i |=> $stable(registers));
 
-// x0'a yazma ignore edilmeli
+// Writes to x0 must be dropped (x0 stays 0)
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (rw_en_i && (waddr_i == 5'b0)) |=> (registers[0] == 32'h0));
 
-// Read adresi değiştiğinde data güncellenmeli (combinational)
+// Read data must track address (combinational read model)
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   r1_data_o == registers[r1_addr_i]);
 ```
@@ -391,20 +390,20 @@ initial begin
 end
 ```
 
-## İlgili Modüller
+## Related modules
 
-1. **decode.sv**: Register file'ı kullanır (read port'ları)
-2. **writeback.sv**: Register file'a write yapar
-3. **hazard_unit.sv**: RAW hazard detection ve forwarding control
+1. **decode.sv:** drives read ports  
+2. **writeback.sv:** drives the write port  
+3. **hazard_unit.sv:** RAW detection and forward mux selects  
 
-## Gelecek İyileştirmeler
+## Future improvements
 
-1. **Register Renaming**: Out-of-order execution desteği
-2. **Multi-Port**: Superscalar (2+ instruction/cycle)
-3. **ECC Protection**: Soft-error detection/correction
-4. **Power Gating**: Unused register'ları clock-gate et
+1. **Register renaming:** enable out-of-order execution  
+2. **More read/write ports:** superscalar issue width > 1  
+3. **ECC:** soft-error protection on the array  
+4. **Power gating:** clock-gate unused banks  
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213 - Chapter 2 (RV32I Base Integer Instruction Set)
 2. RISC-V Calling Convention - ABI Specification
@@ -412,6 +411,6 @@ end
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** 5 December 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

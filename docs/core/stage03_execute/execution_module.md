@@ -1,33 +1,33 @@
-# EXECUTION Modülü - Teknik Döküman
+# EXECUTION Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`execution.sv` modülü, RISC-V işlemcisinin **Execute Stage** üst seviye wrapper'ıdır. ALU, CSR register file, data forwarding, branch resolution ve exception detection işlemlerini koordine eder. Pipeline'ın üçüncü stage'idir.
+`execution.sv` is the **Execute Stage** top-level wrapper for the RISC-V processor. It coordinates the ALU, CSR register file, data forwarding, branch resolution, and exception detection. It is the third stage of the pipeline.
 
-## Sorumluluklar
+## Responsibilities
 
-1. **ALU Operations**: Aritmetik/mantıksal işlemler, karşılaştırmalar, shift
+1. **ALU Operations**: Arithmetic/logical operations, comparisons, shifts
 2. **M Extension**: Multiply/Divide operations (RV32M)
 3. **CSR Operations**: Control and Status Register read/write
-4. **Data Forwarding**: ALU ve writeback'ten forwarding
+4. **Data Forwarding**: Forwarding from the ALU and writeback
 5. **Branch Resolution**: Branch condition evaluation
 6. **PC Target Calculation**: Jump/branch target address
 7. **Exception Detection**: Instruction misalignment, breakpoint
 8. **Trap Handling**: Hardware interrupt integration
 
-## Port Tanımları
+## Port Definitions
 
 ### Clock & Control
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `stall_i` | stall_e | Pipeline stall sinyali |
+| Port | Type | Description |
+|------|------|-------------|
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `stall_i` | stall_e | Pipeline stall signal |
 
 ### Data Forwarding
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `fwd_a_i` | [1:0] | Operand A forward select (00=reg, 01=WB, 10=EX) |
 | `fwd_b_i` | [1:0] | Operand B forward select |
@@ -38,7 +38,7 @@
 
 ### ALU Control
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `alu_in1_sel_i` | [1:0] | ALU operand A select (data_a/pc_incr/pc) |
 | `alu_in2_sel_i` | logic | ALU operand B select (imm/data_b) |
@@ -46,7 +46,7 @@
 
 ### PC Calculation
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `pc_i` | [XLEN-1:0] | Current PC |
 | `pc_incr_i` | [XLEN-1:0] | PC + 4 (or PC + 2 for compressed) |
@@ -57,7 +57,7 @@
 
 ### CSR Interface
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `rd_csr_i` | logic | CSR read enable |
 | `wr_csr_i` | logic | CSR write enable |
@@ -66,7 +66,7 @@
 
 ### Trap & Interrupt
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `trap_active_i` | logic | Trap active (exception/interrupt) |
 | `de_trap_active_i` | logic | Decode stage trap active |
@@ -81,7 +81,7 @@
 
 ### Output
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `write_data_o` | [XLEN-1:0] | Store data (rs2 with forwarding) |
 | `alu_result_o` | [XLEN-1:0] | ALU/CSR result for writeback |
@@ -91,7 +91,7 @@
 | `tdata2_o` | [XLEN-1:0] | Debug trigger data 2 |
 | `tcontrol_o` | [XLEN-1:0] | Debug trigger control |
 
-## İç Yapı
+## Internal Structure
 
 ### Data Forwarding Logic
 
@@ -518,7 +518,7 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
   (fwd_a_i != 2'b00) |-> (data_a != r1_data_i));
 ```
 
-## İlgili Modüller
+## Related Modules
 
 1. **alu.sv**: ALU operations, M extension
 2. **cs_reg_file.sv**: CSR register file
@@ -526,14 +526,14 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 4. **memory.sv**: Receives ALU result, store data
 5. **hazard_unit.sv**: Generates forwarding control
 
-## Gelecek İyileştirmeler
+## Future Improvements
 
 1. **Pipelined Multiply/Divide**: Reduce stall cycles
 2. **Branch Target Buffer (BTB)**: Zero-cycle branch resolution
 3. **Early Branch Resolution**: Decode stage branch resolution
 4. **CSR Bypass Network**: Reduce CSR read latency
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213 - Chapter 2 (Base Instruction Set)
 2. RISC-V Privileged ISA Specification v1.12 - Chapter 3 (Machine-Level ISA)
@@ -541,6 +541,6 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** December 5, 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

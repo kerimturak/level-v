@@ -1,53 +1,53 @@
-# GPIO Controller - Teknik Dokümantasyon
+# GPIO Controller — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [Register Map](#register-map)
-4. [Atomic İşlemler](#atomic-işlemler)
-5. [Interrupt Sistemi](#interrupt-sistemi)
-6. [Giriş Senkronizasyonu](#giriş-senkronizasyonu)
+4. [Atomic Operations](#atomic-operations)
+5. [Interrupt System](#interrupt-system)
+6. [Input Synchronization](#input-synchronization)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`gpio` modülü, **32-bit bidirectional GPIO** controller'ı ile pin yönü kontrolü, atomic işlemler ve edge-triggered interrupt desteği sağlar.
+The `gpio` module implements a **32-bit bidirectional GPIO** controller with per-pin direction control, atomic operations, and edge-triggered interrupt support.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/periph/gpio/gpio.sv
 ```
 
-### Özellikler
+### Features
 
 - 32-bit bidirectional GPIO
-- Per-pin yön kontrolü
-- Atomic set/clear/toggle işlemleri
-- Pull-up/pull-down konfigürasyonu
+- Per-pin direction control
+- Atomic set/clear/toggle operations
+- Pull-up/pull-down configuration
 - Interrupt on change (rising/falling/both edges)
 - 2-stage metastability synchronizer
 - Edge detection
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Parametreler
+### Parameters
 
 ```systemverilog
 module gpio
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int GPIO_WIDTH = 32
 )
 ```
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 (
@@ -78,7 +78,7 @@ module gpio
 
 ## Register Map
 
-| Offset | Register | R/W | Açıklama |
+| Offset | Register | R/W | Description |
 |--------|----------|-----|----------|
 | 0x00 | GPIO_DIR | RW | Direction (0=input, 1=output) |
 | 0x04 | GPIO_OUT | RW | Output data register |
@@ -93,7 +93,7 @@ module gpio
 | 0x28 | GPIO_IBE | RW | Interrupt both edges |
 | 0x2C | GPIO_IEV | RW | Interrupt event (edge select) |
 
-### Register Adresleri
+### Register Addresses
 
 ```systemverilog
 localparam logic [3:0] ADDR_DIR = 4'h0;
@@ -112,7 +112,7 @@ localparam logic [3:0] ADDR_IEV = 4'hB;
 
 ---
 
-## Atomic İşlemler
+## Atomic Operations
 
 ### Atomic Set
 
@@ -152,14 +152,14 @@ end
 
 ---
 
-## Interrupt Sistemi
+## Interrupt System
 
 ### Edge Detection
 
 ```systemverilog
-// 2-stage synchronizer sonrası edge detection
-assign rising_edge  = gpio_in & ~gpio_prev_q;   // 0→1 geçişi
-assign falling_edge = ~gpio_in & gpio_prev_q;   // 1→0 geçişi
+// Edge detection after 2-stage synchronizer
+assign rising_edge  = gpio_in & ~gpio_prev_q;   // 0→1 transition
+assign falling_edge = ~gpio_in & gpio_prev_q;   // 1→0 transition
 assign any_edge     = rising_edge | falling_edge;
 ```
 
@@ -203,7 +203,7 @@ end
 
 ---
 
-## Giriş Senkronizasyonu
+## Input Synchronization
 
 ### 2-Stage Synchronizer
 
@@ -250,7 +250,7 @@ gpio_prev_q  ──────────────┬───
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### C Header
 
@@ -306,7 +306,7 @@ void gpio_irq_handler(void) {
 
 ---
 
-## Timing Diyagramı
+## Timing Diagram
 
 ### Edge Detection & Interrupt
 
@@ -335,9 +335,9 @@ irq_o                       ┌───────────────
 
 ---
 
-## Özet
+## Summary
 
-`gpio` modülü:
+The `gpio` module provides:
 
 1. **32-bit I/O**: Bidirectional GPIO pins
 2. **Direction**: Per-pin input/output control

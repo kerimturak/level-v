@@ -1,7 +1,7 @@
 /**
- * UART Hello Test - Ceres-V RV32IMC_Zicsr
+ * UART Hello Test - Level-V RV32IMC_Zicsr
  * 
- * Simple test program that writes "Hello from Ceres!" via UART
+ * Simple test program that writes "Hello from Level!" via UART
  * Demonstrates basic UART initialization and character transmission
  */
 
@@ -9,7 +9,7 @@
 #include <string.h>
 
 /* ========================================================================
- * Hardware Definitions (Same as ceres.h)
+ * Hardware Definitions (same conventions as platform headers)
  * ======================================================================== */
 #define CPU_CLK          50000000   /* 50 MHz */
 #define BAUD_RATE        115200
@@ -128,8 +128,8 @@ int main(void)
     /* Send welcome message */
     uart_puts("\n");
     uart_puts("========================================\n");
-    uart_puts("  Ceres-V UART Test Program\n");
-    uart_puts("  Hello from Ceres!\n");
+    uart_puts("  Level-V UART Test Program\n");
+    uart_puts("  Hello from Level!\n");
     uart_puts("========================================\n");
     uart_puts("\n");
     

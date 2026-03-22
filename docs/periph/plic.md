@@ -1,29 +1,29 @@
-# PLIC (Platform-Level Interrupt Controller) - Teknik Dokümantasyon
+# PLIC (Platform-Level Interrupt Controller) — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [Register Map](#register-map)
-4. [Interrupt Akışı](#interrupt-akışı)
+4. [Interrupt Flow](#interrupt-flow)
 5. [Priority Arbitration](#priority-arbitration)
-6. [Claim/Complete Mekanizması](#claimcomplete-mekanizması)
+6. [Claim/Complete Mechanism](#claimcomplete-mechanism)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`plic` modülü, **RISC-V compliant Platform-Level Interrupt Controller** olarak external interrupt'ları yönetir. 32 interrupt source ve 8 priority level destekler.
+The `plic` module implements a **RISC-V–compliant Platform-Level Interrupt Controller** that manages external interrupts. It supports 32 interrupt sources and 8 priority levels.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/periph/plic/plic.sv
 ```
 
-### Özellikler
+### Features
 
 - 32 interrupt source (source 0 reserved)
 - 8 priority level (0=disabled, 7=highest)
@@ -35,20 +35,20 @@ rtl/periph/plic/plic.sv
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Parametreler
+### Parameters
 
 ```systemverilog
 module plic
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_SOURCES  = 32,   // Including reserved 0
     parameter int NUM_PRIORITY = 8     // Priority levels (3 bits)
 )
 ```
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 (
@@ -110,7 +110,7 @@ localparam logic [9:0] ADDR_CLAIM         = 10'h204;  // 0x204
 
 ---
 
-## Interrupt Akışı
+## Interrupt Flow
 
 ### Edge Detection
 
@@ -225,7 +225,7 @@ assign irq_o = irq_valid;
 
 ---
 
-## Claim/Complete Mekanizması
+## Claim/Complete Mechanism
 
 ### Claim (Read)
 
@@ -277,7 +277,7 @@ end
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### C Header
 
@@ -351,7 +351,7 @@ void critical_section_exit(void) {
 
 ---
 
-## Timing Diyagramı
+## Timing Diagram
 
 ### Interrupt Lifecycle
 
@@ -380,9 +380,9 @@ claimed[5]                                 ┌───────────�
 
 ---
 
-## Özet
+## Summary
 
-`plic` modülü:
+The `plic` module provides:
 
 1. **32 Sources**: External interrupt inputs
 2. **8 Priorities**: 0=disabled, 7=highest

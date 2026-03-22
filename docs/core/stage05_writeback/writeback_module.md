@@ -1,29 +1,29 @@
-# WRITEBACK Modülü - Teknik Döküman
+# WRITEBACK Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`writeback.sv` modülü, RISC-V işlemcisinin **Write-Back Stage** (WB) implementasyonudur. Pipeline'ın son stage'idir ve instruction sonuçlarını register file'a yazar. Bu modül, data source selection (ALU/Memory/PC) ve register file write enable kontrolünü yapar.
+`writeback.sv` implements the RISC-V processor **Write-Back Stage** (WB). It is the final pipeline stage and writes instruction results to the register file. This module performs data source selection (ALU/memory/PC) and register file write-enable control.
 
-## Sorumluluklar
+## Responsibilities
 
-1. **Data Source Selection**: ALU result, memory data veya PC+4 arasında seçim
-2. **Register File Write Control**: Stall ve flush durumlarında write enable kontrolü
-3. **Commit Trace**: Instruction retirement tracking (debug/verification için)
+1. **Data Source Selection**: Select among ALU result, memory data, or PC+4
+2. **Register File Write Control**: Write-enable control under stall and flush
+3. **Commit Trace**: Instruction retirement tracking (for debug/verification)
 
-## Port Tanımları
+## Port Definitions
 
 ### Clock & Control
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `stall_i` | stall_e | Pipeline stall sinyali |
+| Port | Type | Description |
+|------|------|-------------|
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `stall_i` | stall_e | Pipeline stall signal |
 | `fe_flush_cache_i` | logic | Cache flush (FENCE.I, branch mispredict) |
 
 ### Data Inputs
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `pc_i` | [XLEN-1:0] | Program counter |
 | `pc_incr_i` | [XLEN-1:0] | PC + 4 (or PC + 2 for compressed) |
@@ -34,7 +34,7 @@
 
 ### Outputs
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `wb_data_o` | [XLEN-1:0] | Write-back data (to register file) |
 | `rf_rw_en_o` | logic | Actual register file write enable |
@@ -259,7 +259,7 @@ end
 ### Purpose
 
 **Generate Spike-compatible commit log for verification:**
-- Compare CERES execution with Spike (RISC-V golden model)
+- Compare Level execution with Spike (RISC-V golden model)
 - Detect RTL bugs by comparing register/CSR updates
 
 ### Trace Format
@@ -501,7 +501,7 @@ ecall              # Exception (trap)
 - Ecall traps, subsequent instructions flushed
 - WB stage not affected by later exceptions
 
-## İlgili Modüller
+## Related Modules
 
 1. **register_file.sv**: Receives wb_data_o and rf_rw_en_o
 2. **decode.sv**: Uses wb_data_o for data forwarding
@@ -509,13 +509,13 @@ ecall              # Exception (trap)
 4. **memory.sv**: Provides read_data_i (load data)
 5. **execution.sv**: Provides alu_result_i and pc_incr_i
 
-## Gelecek İyileştirmeler
+## Future Improvements
 
 1. **Register File Bypassing**: Reduce forwarding latency
 2. **Write Buffer**: Decouple writeback from pipeline
 3. **Out-of-Order Completion**: Allow later instructions to commit before earlier loads
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213 - Chapter 2 (Base Integer Instruction Set)
 2. "Computer Organization and Design: RISC-V Edition" - Patterson & Hennessy, Chapter 4 (The Processor)
@@ -523,6 +523,6 @@ ecall              # Exception (trap)
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** December 5, 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

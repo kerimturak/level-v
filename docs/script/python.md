@@ -1,8 +1,8 @@
-# Python Scripts - Teknik Dokümantasyon
+# Python Scripts — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
+1. [Overview](#overview)
 2. [Converter Scripts](#converter-scripts)
 3. [Generator Scripts](#generator-scripts)
 4. [Analysis Scripts](#analysis-scripts)
@@ -10,14 +10,14 @@
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 script/python/
-├── requirements.txt        # Python bağımlılıkları
-├── requirements-dev.txt    # Geliştirme bağımlılıkları
+├── requirements.txt        # Python dependencies
+├── requirements-dev.txt    # Development dependencies
 │
 ├── elf_to_mem.py          # ELF/binary → .mem converter
 ├── gen_linker.py          # Linker script generator
@@ -26,30 +26,30 @@ script/python/
 ├── convert_dump_to_elf_hex.py  # Dump converter
 │
 ├── torture_gen.py         # Torture test generator
-├── simple_torture_gen.py  # Basit torture generator
+├── simple_torture_gen.py  # Simple torture generator
 ├── multiply.py            # Multiplier test generator
 ├── riscv_dv_gen.py        # RISCV-DV generator
-├── riscv_dv_config.py     # RISCV-DV konfigürasyon
+├── riscv_dv_config.py     # RISCV-DV configuration
 │
-├── compare_bp_stats.py    # Branch predictor analizi
+├── compare_bp_stats.py    # Branch predictor analysis
 ├── slang_lint.py          # Slang linter wrapper
 ├── download_pdfs.py       # PDF downloader utility
 │
-├── fpga/                  # FPGA araçları
+├── fpga/                  # FPGA tools
 │
-├── makefile/              # Makefile için Python helpers
+├── makefile/              # Python helpers for Make
 │   ├── isa_pipeline.py    # ISA test import pipeline
 │   ├── arch_pipeline.py   # Arch test import pipeline
 │   ├── elf_to_mem.py      # ELF → MEM converter
 │   ├── hex_to_mem.py      # HEX → MEM converter
-│   ├── compare_logs.py    # Log karşılaştırma
+│   ├── compare_logs.py    # Log comparison
 │   ├── generate_test_dashboard.py  # Test dashboard
 │   └── html_diff_generator.py      # HTML diff
 │
-└── tests/                 # Python test scriptleri
+└── tests/                 # Python test scripts
 ```
 
-### Bağımlılıklar
+### Dependencies
 
 ```txt
 # requirements.txt
@@ -70,13 +70,13 @@ black>=23.0          # Code formatting
 
 ### elf_to_mem.py - ELF/Binary Converter
 
-**Dosya:** `script/python/elf_to_mem.py`
+**File:** `script/python/elf_to_mem.py`
 
-#### Amaç
+#### Purpose
 
-ELF veya binary dosyalarını `.mem` formatına çevirir. RAM initialization için `$readmemh` ile uyumlu hex lines üretir.
+Converts ELF or binary files to `.mem` format. Produces hex lines compatible with RAM initialization via `$readmemh`.
 
-#### Kullanım
+#### Usage
 
 ```bash
 # Binary → .mem
@@ -94,12 +94,12 @@ python3 elf_to_mem.py \
     --word-order high-to-low
 ```
 
-#### Parametreler
+#### Parameters
 
-| Parametre | Default | Açıklama |
-|-----------|---------|----------|
-| `--in` | (required) | Input binary dosyası |
-| `--out` | (required) | Output .mem dosyası |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--in` | (required) | Input binary file |
+| `--out` | (required) | Output .mem file |
 | `--addr` | 0x80000000 | Base address (informational) |
 | `--block-bytes` | 16 | Bytes per .mem line (128-bit block) |
 | `--word-size` | 4 | Word size in bytes |
@@ -107,7 +107,7 @@ python3 elf_to_mem.py \
 | `--word-order` | high-to-low | Word print order in block |
 | `--pad` | 0x00 | Pad byte value |
 
-#### Çıktı Formatı
+#### Output Format
 
 ```
 # Input: 16 bytes = 4 words (32-bit each)
@@ -120,7 +120,7 @@ python3 elf_to_mem.py \
 12345678abcdef00112233445566778
 ```
 
-#### Kod Yapısı
+#### Code Structure
 
 ```python
 def main():
@@ -165,13 +165,13 @@ def main():
 
 ### gen_linker.py - Linker Script Generator
 
-**Dosya:** `script/python/gen_linker.py`
+**File:** `script/python/gen_linker.py`
 
-#### Amaç
+#### Purpose
 
-YAML memory map dosyasından GCC linker script ve C header dosyası üretir.
+Generates a GCC linker script and C header from a YAML memory map file.
 
-#### Kullanım
+#### Usage
 
 ```bash
 # Basic usage
@@ -181,12 +181,12 @@ python3 gen_linker.py memory_map.yaml output.ld
 python3 gen_linker.py memory_map.yaml output.ld --header memory_map.h
 ```
 
-#### Memory Map YAML Formatı
+#### Memory Map YAML Format
 
 ```yaml
 # memory_map.yaml
 processor:
-  name: "Ceres-V"
+  name: "Level-V"
   isa: "RV32IMC_Zicsr"
 
 memory:
@@ -208,11 +208,11 @@ heap:
 entry: "_start"
 ```
 
-#### Üretilen Linker Script
+#### Generated Linker Script
 
 ```ld
 /*
- * Auto-generated Linker Script for Ceres-V
+ * Auto-generated Linker Script for Level-V
  * ISA: RV32IMC_Zicsr
  * 
  * Memory Layout:
@@ -241,7 +241,7 @@ SECTIONS
 }
 ```
 
-#### Üretilen C Header
+#### Generated C Header
 
 ```c
 /* Auto-generated memory map header */
@@ -262,19 +262,19 @@ SECTIONS
 
 ### hex2mem_32to128.py - HEX Format Converter
 
-**Dosya:** `script/python/hex2mem_32to128.py`
+**File:** `script/python/hex2mem_32to128.py`
 
-#### Amaç
+#### Purpose
 
-32-bit hex dosyalarını 128-bit block formatına çevirir.
+Converts 32-bit hex files to 128-bit block format.
 
-#### Kullanım
+#### Usage
 
 ```bash
 python3 hex2mem_32to128.py input.hex output.mem
 ```
 
-#### Dönüşüm
+#### Conversion
 
 ```
 # Input (32-bit per line):
@@ -293,13 +293,13 @@ ABCDEF00
 
 ### torture_gen.py - Torture Test Generator
 
-**Dosya:** `script/python/torture_gen.py`
+**File:** `script/python/torture_gen.py`
 
-#### Amaç
+#### Purpose
 
-Random ama valid RISC-V instruction sequences üretir. Processor stress testing için kullanılır.
+Generates random but valid RISC-V instruction sequences for processor stress testing.
 
-#### Kullanım
+#### Usage
 
 ```bash
 python3 torture_gen.py \
@@ -309,9 +309,9 @@ python3 torture_gen.py \
     --output torture_test.S
 ```
 
-#### Parametreler
+#### Parameters
 
-| Parametre | Default | Açıklama |
+| Parameter | Default | Description |
 |-----------|---------|----------|
 | `--seed` | random | Random seed (deterministic results) |
 | `--max-instructions` | 1000 | Maximum instruction count |
@@ -361,7 +361,7 @@ class RegisterFile:
         return random.choice(self.usable)
 ```
 
-#### Üretilen Test Örneği
+#### Generated Test Example
 
 ```asm
 # Auto-generated torture test
@@ -392,13 +392,13 @@ _data:
 
 ### riscv_dv_gen.py - RISCV-DV Generator
 
-**Dosya:** `script/python/riscv_dv_gen.py`
+**File:** `script/python/riscv_dv_gen.py`
 
-#### Amaç
+#### Purpose
 
-RISCV-DV framework ile random test generation. Comprehensive verification için.
+Random test generation with the RISCV-DV framework for comprehensive verification.
 
-#### Kullanım
+#### Usage
 
 ```bash
 python3 riscv_dv_gen.py \
@@ -414,13 +414,13 @@ python3 riscv_dv_gen.py \
 
 ### compare_bp_stats.py - Branch Predictor Analysis
 
-**Dosya:** `script/python/compare_bp_stats.py`
+**File:** `script/python/compare_bp_stats.py`
 
-#### Amaç
+#### Purpose
 
-Branch predictor istatistiklerini analiz eder. Farklı konfigürasyonları karşılaştırır.
+Analyzes branch predictor statistics and compares different configurations.
 
-#### Kullanım
+#### Usage
 
 ```bash
 python3 compare_bp_stats.py \
@@ -429,7 +429,7 @@ python3 compare_bp_stats.py \
     --output comparison.html
 ```
 
-#### İstatistikler
+#### Statistics
 
 - Total branches
 - Correctly predicted
@@ -442,13 +442,13 @@ python3 compare_bp_stats.py \
 
 ### slang_lint.py - Slang Linter Wrapper
 
-**Dosya:** `script/python/slang_lint.py`
+**File:** `script/python/slang_lint.py`
 
-#### Amaç
+#### Purpose
 
-Slang (pyslang) SystemVerilog linter wrapper. Makefile integration için.
+Slang (pyslang) SystemVerilog linter wrapper for Makefile integration.
 
-#### Kullanım
+#### Usage
 
 ```bash
 python3 slang_lint.py rtl/core/*.sv rtl/pkg/*.sv
@@ -456,12 +456,12 @@ python3 slang_lint.py rtl/core/*.sv rtl/pkg/*.sv
 # With options
 python3 slang_lint.py \
     --include rtl/include \
-    --top ceres_wrapper \
+    --top level_wrapper \
     --report results/lint/slang.json \
     rtl/**/*.sv
 ```
 
-#### Kod Yapısı
+#### Code Structure
 
 ```python
 import pyslang
@@ -493,40 +493,40 @@ def lint_files(files, includes, top_module):
 
 ### isa_pipeline.py - ISA Test Import
 
-**Dosya:** `script/python/makefile/isa_pipeline.py`
+**File:** `script/python/makefile/isa_pipeline.py`
 
-#### Amaç
+#### Purpose
 
-riscv-tests suite'den ISA testlerini import eder. ELF → MEM/HEX/DUMP dönüşümü yapar.
+Imports ISA tests from the riscv-tests suite. Performs ELF → MEM/HEX/DUMP conversion.
 
-#### Kullanım
+#### Usage
 
 ```bash
 python3 isa_pipeline.py \
     --isa-dir subrepo/riscv-tests/isa \
-    --ceres-root /path/to/ceres
+    --level-root /path/to/level-v
 ```
 
-#### Pipeline Adımları
+#### Pipeline Steps
 
-1. ELF dosyalarını bul
-2. objcopy ile binary'e çevir
-3. elf_to_mem.py ile .mem oluştur
-4. objdump ile .dump oluştur
-5. Pass/fail address'lerini çıkar
-6. Sonuçları build/tests/riscv-tests/ altına kopyala
+1. Locate ELF files
+2. Convert to binary with objcopy
+3. Build `.mem` with elf_to_mem.py
+4. Build `.dump` with objdump
+5. Extract pass/fail addresses
+6. Copy results under `build/tests/riscv-tests/`
 
 ---
 
-### compare_logs.py - Log Karşılaştırma
+### compare_logs.py — Log Comparison
 
-**Dosya:** `script/python/makefile/compare_logs.py`
+**File:** `script/python/makefile/compare_logs.py`
 
-#### Amaç
+#### Purpose
 
-RTL commit log ile Spike commit log'unu karşılaştırır. Test pass/fail kararı verir.
+Compares the RTL commit log with the Spike commit log to determine pass/fail.
 
-#### Kullanım
+#### Usage
 
 ```bash
 python3 compare_logs.py \
@@ -534,14 +534,14 @@ python3 compare_logs.py \
     results/logs/spike/test/commit.log
 ```
 
-#### Karşılaştırma Kriterleri
+#### Comparison Criteria
 
 - PC values
 - Instruction opcodes
 - Register write-back values
 - Memory store values
 
-#### Çıktı
+#### Output
 
 ```
 [COMPARE] Comparing RTL log with Spike log...
@@ -559,13 +559,13 @@ python3 compare_logs.py \
 
 ### generate_test_dashboard.py - HTML Dashboard
 
-**Dosya:** `script/python/makefile/generate_test_dashboard.py`
+**File:** `script/python/makefile/generate_test_dashboard.py`
 
-#### Amaç
+#### Purpose
 
-Test sonuçlarından HTML dashboard oluşturur.
+Builds an HTML dashboard from test results.
 
-#### Kullanım
+#### Usage
 
 ```bash
 python3 generate_test_dashboard.py \
@@ -573,7 +573,7 @@ python3 generate_test_dashboard.py \
     --output results/reports/dashboard.html
 ```
 
-#### Dashboard İçeriği
+#### Dashboard Contents
 
 - Test suite summary (pass/fail counts)
 - Per-test results table
@@ -583,14 +583,14 @@ python3 generate_test_dashboard.py \
 
 ---
 
-## Özet
+## Summary
 
 Python scripts:
 
-1. **Converters**: ELF/HEX/BIN → .mem dönüşümleri
+1. **Converters**: ELF/HEX/BIN → `.mem` conversion
 2. **Generators**: Linker script, torture test, RISCV-DV
 3. **Analysis**: Branch predictor stats, log comparison
 4. **Linting**: Slang wrapper
 5. **Makefile Helpers**: ISA import, log compare, dashboard
-6. **Modular Design**: Her script tek bir işe odaklı
-7. **CLI Interface**: argparse ile consistent interface
+6. **Modular Design**: Each script focuses on one job
+7. **CLI Interface**: Consistent interface via argparse

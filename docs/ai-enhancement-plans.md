@@ -1,10 +1,10 @@
-# 🧠 Ceres RISC-V İşlemci - AI/ML İyileştirme Planları
+# 🧠 Level RISC-V processor — AI/ML improvement plans
 
-Bu doküman, Ceres RISC-V işlemcisine eklenebilecek yapay zeka ve makine öğrenmesi tabanlı iyileştirmeleri açıklamaktadır.
+This document describes artificial intelligence and machine learning based improvements that can be added to the Level RISC-V processor.
 
 ---
 
-## 📋 İçindekiler
+## 📋 Table of contents
 
 1. [Neural Branch Predictor (GShare + Perceptron)](#1-neural-branch-predictor)
 2. [Neural Cache Prefetcher](#2-neural-cache-prefetcher)
@@ -17,10 +17,10 @@ Bu doküman, Ceres RISC-V işlemcisine eklenebilecek yapay zeka ve makine öğre
 
 ## 1. Neural Branch Predictor
 
-### 1.1 Mevcut Durum
-- **Dosya**: `rtl/core/stage01_fetch/gshare_bp.sv`
-- **Mevcut Algoritma**: Tournament Predictor (GShare + Bimodal + Loop Predictor)
-- **Bileşenler**:
+### 1.1 Current state
+- **File**: `rtl/core/stage01_fetch/gshare_bp.sv`
+- **Current algorithm**: Tournament predictor (GShare + bimodal + loop predictor)
+- **Components**:
   - GHR (Global History Register)
   - PHT (Pattern History Table) - 2-bit saturating counter
   - BTB (Branch Target Buffer)
@@ -28,7 +28,7 @@ Bu doküman, Ceres RISC-V işlemcisine eklenebilecek yapay zeka ve makine öğre
   - Loop Predictor
   - IBTC (Indirect Branch Target Cache)
 
-### 1.2 Önerilen İyileştirme: Perceptron Branch Predictor
+### 1.2 Proposed improvement: perceptron branch predictor
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -56,14 +56,14 @@ Bu doküman, Ceres RISC-V işlemcisine eklenebilecek yapay zeka ve makine öğre
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.3 Tasarım Detayları
+### 1.3 Design details
 
 ```systemverilog
-// Perceptron Branch Predictor Modülü
+// Perceptron branch predictor module
 module perceptron_bp #(
-    parameter HISTORY_LEN = 32,        // Global history uzunluğu
-    parameter TABLE_SIZE  = 256,       // Perceptron tablo boyutu
-    parameter WEIGHT_BITS = 8          // Ağırlık bit genişliği
+    parameter HISTORY_LEN = 32,        // Global history length
+    parameter TABLE_SIZE  = 256,       // Perceptron table size
+    parameter WEIGHT_BITS = 8          // Weight bit width
 )(
     input  logic                     clk_i,
     input  logic                     rst_ni,
@@ -131,26 +131,26 @@ module perceptron_bp #(
 endmodule
 ```
 
-### 1.4 Entegrasyon Planı
-1. `gshare_bp.sv` içine perceptron modülünü ekle
-2. Tournament predictor'a üçüncü seçenek olarak entegre et
-3. Meta-predictor ile GShare/Bimodal/Perceptron arasında seçim yap
+### 1.4 Integration plan
+1. Add the perceptron module inside `gshare_bp.sv`
+2. Integrate it as a third option in the tournament predictor
+3. Use a meta-predictor to choose among GShare, bimodal, and perceptron
 
-### 1.5 Beklenen Kazanç
-- **Misprediction Rate**: %5-15 azalma
-- **Alan Maliyeti**: ~2KB SRAM (256 entry × 33 weight × 8-bit)
-- **Gecikme**: 1 cycle (paralel dot product ile)
+### 1.5 Expected benefit
+- **Misprediction rate**: 5–15% reduction
+- **Area cost**: ~2KB SRAM (256 entries × 33 weights × 8-bit)
+- **Latency**: 1 cycle (with parallel dot product)
 
 ---
 
 ## 2. Neural Cache Prefetcher
 
-### 2.1 Mevcut Durum
-- **Dosya**: `rtl/core/mmu/cache.sv`
-- **Mevcut Prefetch**: Yok
-- **Cache Yapısı**: N-way set associative, PLRU replacement
+### 2.1 Current state
+- **File**: `rtl/core/mmu/cache.sv`
+- **Current prefetch**: None
+- **Cache organization**: N-way set associative, PLRU replacement
 
-### 2.2 Önerilen İyileştirme: Perceptron-based Prefetcher
+### 2.2 Proposed improvement: perceptron-based prefetcher
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -188,26 +188,26 @@ endmodule
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 Tasarım Detayları
+### 2.3 Design details
 
 ```systemverilog
 module neural_prefetcher #(
-    parameter HISTORY_DEPTH = 16,      // Erişim geçmişi derinliği
-    parameter TABLE_SIZE    = 64,      // PC-indexed tablo boyutu
-    parameter DELTA_BITS    = 12,      // Delta (adres farkı) bit genişliği
-    parameter WEIGHT_BITS   = 6,       // Ağırlık bit genişliği
-    parameter NUM_DELTAS    = 4        // Tahmin edilecek delta sayısı
+    parameter HISTORY_DEPTH = 16,      // Access history depth
+    parameter TABLE_SIZE    = 64,      // PC-indexed table size
+    parameter DELTA_BITS    = 12,      // Delta (address difference) bit width
+    parameter WEIGHT_BITS   = 6,       // Weight bit width
+    parameter NUM_DELTAS    = 4        // Number of deltas to predict
 )(
     input  logic                 clk_i,
     input  logic                 rst_ni,
     
-    // Cache erişim bilgisi
+    // Cache access information
     input  logic                 access_valid_i,
     input  logic [XLEN-1:0]      access_pc_i,
     input  logic [XLEN-1:0]      access_addr_i,
     input  logic                 cache_hit_i,
     
-    // Prefetch çıkışı
+    // Prefetch outputs
     output logic                 prefetch_valid_o,
     output logic [XLEN-1:0]      prefetch_addr_o,
     output logic [1:0]           prefetch_confidence_o
@@ -288,26 +288,26 @@ module neural_prefetcher #(
 endmodule
 ```
 
-### 2.4 Entegrasyon Noktaları
-1. `cache.sv` modülüne prefetch interface ekle
-2. `memory.sv` ile prefetch queue koordinasyonu
-3. Prefetch buffer (ayrı küçük buffer veya cache way)
+### 2.4 Integration points
+1. Add a prefetch interface to the `cache.sv` module
+2. Coordinate prefetch queue with `memory.sv`
+3. Prefetch buffer (separate small buffer or cache way)
 
-### 2.5 Beklenen Kazanım
-- **Cache Hit Rate**: %10-25 artış
-- **Memory Latency**: Ortalama %15-30 azalma
-- **Alan Maliyeti**: ~1KB (64 entry × 16 history × 6-bit weight)
+### 2.5 Expected benefit
+- **Cache hit rate**: 10–25% increase
+- **Memory latency**: ~15–30% average reduction
+- **Area cost**: ~1KB (64 entries × 16 history × 6-bit weight)
 
 ---
 
 ## 3. Learned Cache Replacement Policy
 
-### 3.1 Mevcut Durum
-- **Algoritma**: PLRU (Pseudo Least Recently Used)
-- **Dosya**: `rtl/core/mmu/cache.sv`
-- **Fonksiyonlar**: `update_node()`, `compute_evict_way()`
+### 3.1 Current state
+- **Algorithm**: PLRU (pseudo least recently used)
+- **File**: `rtl/core/mmu/cache.sv`
+- **Functions**: `update_node()`, `compute_evict_way()`
 
-### 3.2 Önerilen İyileştirme: Hawkeye-inspired Learned Replacement
+### 3.2 Proposed improvement: Hawkeye-inspired learned replacement
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -335,7 +335,7 @@ endmodule
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 Tasarım Detayları
+### 3.3 Design details
 
 ```systemverilog
 module learned_replacement #(
@@ -425,24 +425,24 @@ module learned_replacement #(
 endmodule
 ```
 
-### 3.4 Entegrasyon Planı
-1. `cache.sv` içindeki `compute_evict_way()` fonksiyonunu değiştir
-2. PLRU yerine learned replacement kullan
-3. Hybrid mod: düşük confidence'ta PLRU'ya fallback
+### 3.4 Integration plan
+1. Change `compute_evict_way()` in `cache.sv`
+2. Use learned replacement instead of PLRU
+3. Hybrid mode: fall back to PLRU when confidence is low
 
-### 3.5 Beklenen Kazanım
-- **Hit Rate**: %5-12 artış (workload'a bağlı)
-- **Streaming Access**: Büyük iyileşme (scan-resistant)
+### 3.5 Expected benefit
+- **Hit rate**: 5–12% increase (workload-dependent)
+- **Streaming access**: Large improvement (more scan-resistant)
 
 ---
 
 ## 4. Load/Store Stride Predictor
 
-### 4.1 Mevcut Durum
-- **Dosya**: `rtl/core/stage04_memory/memory.sv`
-- **Stride Detection**: Yok
+### 4.1 Current state
+- **File**: `rtl/core/stage04_memory/memory.sv`
+- **Stride detection**: None
 
-### 4.2 Önerilen İyileştirme: Neural Stride Predictor
+### 4.2 Proposed improvement: neural stride predictor
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -479,7 +479,7 @@ endmodule
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.3 Tasarım Detayları
+### 4.3 Design details
 
 ```systemverilog
 module stride_predictor #(
@@ -503,10 +503,10 @@ module stride_predictor #(
 );
 
     typedef enum logic [1:0] {
-        INIT,       // İlk erişim
-        TRAINING,   // Stride öğreniliyor
-        STEADY,     // Stride sabit, tahmin yapılıyor
-        NO_STRIDE   // Düzensiz pattern
+        INIT,       // First access
+        TRAINING,   // Learning stride
+        STEADY,     // Stable stride, predicting
+        NO_STRIDE   // Irregular pattern
     } state_e;
     
     typedef struct packed {
@@ -586,20 +586,20 @@ module stride_predictor #(
 endmodule
 ```
 
-### 4.4 Beklenen Kazanım
-- **Array traversal**: Çok yüksek hit rate
-- **Linked list**: Düşük (pointer chasing)
-- **Matrix ops**: Stride pattern ile %80+ prefetch accuracy
+### 4.4 Expected benefit
+- **Array traversal**: Very high hit rate
+- **Linked list**: Low (pointer chasing)
+- **Matrix ops**: 80%+ prefetch accuracy with stride patterns
 
 ---
 
 ## 5. Hazard Prediction Unit
 
-### 5.1 Mevcut Durum
-- **Dosya**: `rtl/core/hazard_unit.sv`
-- **Mevcut**: Reactive forwarding ve stall
+### 5.1 Current state
+- **File**: `rtl/core/hazard_unit.sv`
+- **Current behavior**: Reactive forwarding and stalls
 
-### 5.2 Önerilen İyileştirme: Predictive Hazard Detection
+### 5.2 Proposed improvement: predictive hazard detection
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -636,7 +636,7 @@ endmodule
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.3 Kullanım Alanları
+### 5.3 Use cases
 - Load-use hazard prediction
 - Long-latency operation detection (div/mul)
 - Memory stall prediction
@@ -645,10 +645,10 @@ endmodule
 
 ## 6. Workload-Aware Power Management
 
-### 6.1 Mevcut Durum
-- Dinamik güç yönetimi yok
+### 6.1 Current state
+- No dynamic power management
 
-### 6.2 Önerilen İyileştirme: Neural DVFS Controller
+### 6.2 Proposed improvement: neural DVFS controller
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -690,7 +690,7 @@ endmodule
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 Tasarım Detayları
+### 6.3 Design details
 
 ```systemverilog
 module neural_power_manager #(
@@ -759,43 +759,43 @@ endmodule
 
 ---
 
-## 📊 Karşılaştırma Tablosu
+## 📊 Comparison table
 
-| Özellik | Alan Maliyeti | Tasarım Karmaşıklığı | Beklenen Kazanım | Öncelik |
-|---------|---------------|---------------------|------------------|---------|
-| Neural Branch Predictor | ~2KB | Orta | %5-15 misprediction↓ | ⭐⭐⭐⭐ |
-| Neural Cache Prefetcher | ~1KB | Orta | %10-25 hit rate↑ | ⭐⭐⭐⭐⭐ |
-| Learned Replacement | ~0.5KB | Düşük | %5-12 hit rate↑ | ⭐⭐⭐ |
-| Stride Predictor | ~0.5KB | Düşük | Array ops için yüksek | ⭐⭐⭐ |
-| Hazard Prediction | ~0.25KB | Orta | %5-10 stall↓ | ⭐⭐ |
-| Power Management | ~0.5KB | Yüksek | %20-40 güç↓ | ⭐⭐⭐ |
+| Feature | Area cost | Design complexity | Expected benefit | Priority |
+|---------|-----------|-------------------|------------------|----------|
+| Neural branch predictor | ~2KB | Medium | 5–15% misprediction↓ | ⭐⭐⭐⭐ |
+| Neural cache prefetcher | ~1KB | Medium | 10–25% hit rate↑ | ⭐⭐⭐⭐⭐ |
+| Learned replacement | ~0.5KB | Low | 5–12% hit rate↑ | ⭐⭐⭐ |
+| Stride predictor | ~0.5KB | Low | High for array workloads | ⭐⭐⭐ |
+| Hazard prediction | ~0.25KB | Medium | 5–10% stall↓ | ⭐⭐ |
+| Power management | ~0.5KB | High | 20–40% power↓ | ⭐⭐⭐ |
 
 ---
 
-## 🚀 Uygulama Yol Haritası
+## 🚀 Implementation roadmap
 
-### Faz 1: Temel Altyapı (1-2 hafta)
-1. Performance counter'ları ekle (IPC, cache miss, branch miss)
-2. Training data toplama mekanizması
+### Phase 1: Core infrastructure (1–2 weeks)
+1. Add performance counters (IPC, cache miss, branch miss)
+2. Mechanism to collect training data
 
-### Faz 2: İlk AI Modülü (2-3 hafta)
-1. Neural Cache Prefetcher implementasyonu
-2. Stride predictor ile hybrid yaklaşım
-3. Benchmark testleri
+### Phase 2: First AI module (2–3 weeks)
+1. Neural cache prefetcher implementation
+2. Hybrid approach with stride predictor
+3. Benchmark tests
 
-### Faz 3: Branch Predictor Upgrade (2-3 hafta)
-1. Perceptron predictor modülü
-2. Tournament predictor entegrasyonu
-3. A/B test altyapısı
+### Phase 3: Branch predictor upgrade (2–3 weeks)
+1. Perceptron predictor module
+2. Tournament predictor integration
+3. A/B test infrastructure
 
-### Faz 4: Gelişmiş Özellikler (3-4 hafta)
+### Phase 4: Advanced features (3–4 weeks)
 1. Learned cache replacement
 2. Power management
 3. Full system integration
 
 ---
 
-## 📚 Referanslar
+## 📚 References
 
 1. **Perceptron Branch Predictor**: Jiménez & Lin, "Dynamic Branch Prediction with Perceptrons", HPCA 2001
 2. **Hawkeye Cache**: Jain & Lin, "Back to the Future: Leveraging Belady's Algorithm for Improved Cache Replacement", ISCA 2016
@@ -804,5 +804,5 @@ endmodule
 
 ---
 
-*Bu doküman Ceres RISC-V işlemcisi için AI/ML iyileştirme planlarını içermektedir.*
-*Son güncelleme: Aralık 2025*
+*This document contains AI/ML improvement plans for the Level RISC-V processor.*  
+*Last updated: December 2025*

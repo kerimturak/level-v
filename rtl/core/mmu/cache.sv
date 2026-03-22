@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 /* verilator lint_off VARHIDDEN */
 module cache
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter      IS_ICACHE   = 1,                      // When 1, behave like an icache; when 0, behave like a dcache.
     parameter type cache_req_t = logic,
@@ -19,8 +19,8 @@ module cache
     parameter type lowX_res_t  = logic,
     parameter type lowX_req_t  = logic,
     parameter      CACHE_SIZE  = 1024,
-    parameter      BLK_SIZE    = ceres_param::BLK_SIZE,
-    parameter      XLEN        = ceres_param::XLEN,
+    parameter      BLK_SIZE    = level_param::BLK_SIZE,
+    parameter      XLEN        = level_param::XLEN,
     parameter      NUM_WAY     = 4
 ) (
     input  logic       clk_i,
@@ -402,7 +402,8 @@ module cache
       else flush_i_prev <= flush_i;
     end
 
-    wire fi_start = flush_i && !flush_i_prev && (fi_state_q == FI_IDLE);
+    logic fi_start;
+    assign fi_start = flush_i && !flush_i_prev && (fi_state_q == FI_IDLE);
 
     // One-hot encoding of current way
     always_comb begin
@@ -723,7 +724,7 @@ module cache
     end
   end
 
-  // Fonksiyon: PLRU node güncellemesi
+  // Function: PLRU node update
   function automatic [NUM_WAY-2:0] update_node(input logic [NUM_WAY-2:0] node_in, input logic [NUM_WAY-1:0] hit_vec);
     logic [NUM_WAY-2:0] node_tmp;
     int unsigned idx_base, shift;
@@ -733,7 +734,7 @@ module cache
         for (int unsigned lvl = 0; lvl < $clog2(NUM_WAY); lvl++) begin
           idx_base = (2 ** lvl) - 1;
           shift = $clog2(NUM_WAY) - lvl;
-          // Güncelleme: ilgili bit tersleniyor
+          // Update: flip the corresponding bit
           node_tmp[idx_base+(i>>shift)] = ((i >> (shift - 1)) & 1) == 0;
         end
       end
@@ -741,7 +742,7 @@ module cache
     return node_tmp;
   endfunction
 
-  // Fonksiyon: PLRU evict_way belirleme
+  // Function: compute PLRU evict_way
   function automatic [NUM_WAY-1:0] compute_evict_way(input logic [NUM_WAY-2:0] node_in);
     logic [NUM_WAY-1:0] way;
     int unsigned idx_base, shift;

@@ -1,57 +1,57 @@
-# FETCH Modülü - Teknik Döküman
+# Fetch Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`fetch.sv` modülü, RISC-V işlemci çekirdeğinin ilk aşamasıdır (Stage 01). Program Counter (PC) yönetiminden, instruction cache'e erişimden, dallanma tahminlerinden ve exception tespitinden sorumludur. Bu modül, pipelined bir mimaride instruction akışını başlatır ve downstream aşamalarına (decode, execute, vb.) instruction sağlar.
+The `fetch.sv` module is the first stage of the RISC-V processor core (stage 01). It handles program counter (PC) management, instruction cache access, branch prediction, and exception detection. In a pipelined design it starts the instruction stream and supplies instructions to downstream stages (decode, execute, and so on).
 
-## Temel Sorumluluklar
+## Main responsibilities
 
-1. **Program Counter (PC) Yönetimi**: Sequential, branch, jump ve exception durumlarında PC'nin doğru güncellenmesi
-2. **Instruction Fetch**: Instruction cache üzerinden instruction'ların alınması
-3. **Branch Prediction**: GSHARE algoritması ile dallanma tahmini
-4. **Misaligned Instruction Handling**: Align buffer ile hizasız instruction'ların işlenmesi
-5. **Exception Detection**: Parametrik önceliğe sahip exception tespiti
-6. **Compressed Instruction Support**: RV32C (16-bit) instruction'ların decode edilmesi
+1. **Program counter (PC) management:** Correct PC updates for sequential flow, branches, jumps, and exceptions  
+2. **Instruction fetch:** Fetching instructions through the instruction cache  
+3. **Branch prediction:** Branch prediction using the GSHARE algorithm  
+4. **Misaligned instruction handling:** Handling misaligned instructions via the align buffer  
+5. **Exception detection:** Exception detection with configurable priority  
+6. **Compressed instruction support:** Decoding RV32C (16-bit) instructions  
 
-## Port Tanımları
+## Port definitions
 
-### Giriş Portları
+### Input ports
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `stall_i` | stall_e | Pipeline stall sinyali (NO_STALL/STALL enum) |
-| `flush_i` | logic | Pipeline flush sinyali (misprediction/exception durumunda) |
-| `flush_pc_i` | [XLEN-1:0] | Flush durumunda yeni PC değeri |
-| `lx_ires_i` | ilowX_res_t | Lower-level memory hierarchy'den instruction response |
-| `pc_target_i` | [XLEN-1:0] | Execute aşamasından gelen gerçek branch/jump hedefi |
-| `ex_mtvec_i` | [XLEN-1:0] | Machine trap vector (exception handler adresi) |
-| `trap_active_i` | logic | Trap handler aktif mi? |
-| `misa_c_i` | logic | C extension (compressed instructions) etkin mi? |
+| Port | Type | Description |
+|------|------|-------------|
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `stall_i` | stall_e | Pipeline stall signal (NO_STALL / stall enum) |
+| `flush_i` | logic | Pipeline flush (misprediction / exception) |
+| `flush_pc_i` | [XLEN-1:0] | New PC value on flush |
+| `lx_ires_i` | ilowX_res_t | Instruction response from lower-level memory |
+| `pc_target_i` | [XLEN-1:0] | Resolved branch/jump target from execute |
+| `ex_mtvec_i` | [XLEN-1:0] | Machine trap vector (exception handler address) |
+| `trap_active_i` | logic | Trap handler active? |
+| `misa_c_i` | logic | C extension (compressed instructions) enabled? |
 | `tdata1_i` | [XLEN-1:0] | Trigger data 1 (debug breakpoint config) |
 | `tdata2_i` | [XLEN-1:0] | Trigger data 2 (breakpoint address) |
-| `tcontrol_i` | [XLEN-1:0] | Trigger control (mte bit[3] trigger'ları aktive eder) |
-| `spec_hit_i` | logic | Branch prediction doğru mu? (1=doğru, 0=misprediction) |
-| `de_info_i` | pipe_info_t | Decode aşamasından pipeline info |
-| `ex_info_i` | pipe_info_t | Execute aşamasından pipeline info |
+| `tcontrol_i` | [XLEN-1:0] | Trigger control (mte bit[3] enables triggers) |
+| `spec_hit_i` | logic | Branch prediction correct? (1 = correct, 0 = misprediction) |
+| `de_info_i` | pipe_info_t | Pipeline info from decode |
+| `ex_info_i` | pipe_info_t | Pipeline info from execute |
 
-### Çıkış Portları
+### Output ports
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `spec_o` | predict_info_t | Prediction bilgisi (tahmin edilen PC, taken/not-taken) |
-| `lx_ireq_o` | ilowX_req_t | Lower-level memory hierarchy'ye instruction request |
-| `pc_o` | [XLEN-1:0] | Mevcut program counter |
-| `pc_incr_o` | [XLEN-1:0] | Sequential PC (pc+2 veya pc+4) |
-| `inst_o` | [XLEN-1:0] | Fetch edilen instruction (decode'a gönderilir) |
-| `imiss_stall_o` | logic | Instruction cache miss stall sinyali |
-| `exc_type_o` | exc_type_e | Tespit edilen exception tipi |
-| `instr_type_o` | instr_type_e | Instruction tipi (decode yardımcı) |
+| Port | Type | Description |
+|------|------|-------------|
+| `spec_o` | predict_info_t | Prediction info (predicted PC, taken / not-taken) |
+| `lx_ireq_o` | ilowX_req_t | Instruction request to lower-level memory |
+| `pc_o` | [XLEN-1:0] | Current program counter |
+| `pc_incr_o` | [XLEN-1:0] | Sequential PC (pc+2 or pc+4) |
+| `inst_o` | [XLEN-1:0] | Fetched instruction (to decode) |
+| `imiss_stall_o` | logic | Instruction cache miss stall |
+| `exc_type_o` | exc_type_e | Detected exception type |
+| `instr_type_o` | instr_type_e | Instruction type (decode helper) |
 
-## Mimari Bloklar
+## Architectural blocks
 
-### 1. Program Counter (PC) Register
+### 1. Program counter (PC) register
 
 ```systemverilog
 always_ff @(posedge clk_i) begin
@@ -63,61 +63,61 @@ always_ff @(posedge clk_i) begin
 end
 ```
 
-**Özellikler:**
-- Reset durumunda `RESET_VECTOR` adresine atanır (parametrik, genelde `0x80000000`)
-- `pc_en` aktif olduğunda `pc_next` değeri yazılır
-- Stall durumunda PC güncellenmez (statik kalır)
+**Behavior:**
+- On reset, PC loads `RESET_VECTOR` (parameterized, typically `0x80000000`)
+- When `pc_en` is asserted, `pc_next` is captured
+- While stalled, the PC does not change
 
-### 2. PC Next Logic (Öncelik Sırası)
+### 2. PC next logic (priority order)
 
-PC'nin bir sonraki değerinin belirlenmesinde aşağıdaki öncelik sırası uygulanır:
+The next PC is chosen in this priority order:
 
 ```
-1. flush_i         → flush_pc_i        (En yüksek öncelik - pipeline flush)
-2. trap_active_i   → ex_mtvec_i        (Exception handler)
-3. !spec_hit_i     → pc_target_i       (Misprediction recovery)
-4. spec_o.taken    → spec_o.pc         (Branch prediction taken)
-5. Default         → pc_incr_o         (Sequential fetch - PC+2/+4)
+1. flush_i         → flush_pc_i        (highest — pipeline flush)
+2. trap_active_i   → ex_mtvec_i        (exception handler)
+3. !spec_hit_i     → pc_target_i       (misprediction recovery)
+4. spec_o.taken    → spec_o.pc         (predicted taken branch)
+5. Default         → pc_incr_o         (sequential — PC+2/+4)
 ```
 
-**Detaylı Açıklama:**
-- **Flush**: Decode/Execute aşamalarından gelen flush sinyali (örn. fence.i)
-- **Trap**: Exception/interrupt oluştuğunda trap handler'a (mtvec) atlanır
-- **Misprediction**: Execute aşamasında branch prediction yanlışsa düzeltme yapılır
-- **Branch Taken**: Prediction taken ise tahmin edilen adrese atla
-- **Sequential**: Normal durum, bir sonraki instruction'ı fetch et
+**Details:**
+- **Flush:** Flush from decode/execute (e.g. FENCE.I)
+- **Trap:** On exception/interrupt, jump to trap handler (`mtvec`)
+- **Misprediction:** Correct wrong branch prediction in execute
+- **Branch taken:** If prediction says taken, use predicted target
+- **Sequential:** Default — fetch the next instruction
 
-### 3. PC Increment Calculation
+### 3. PC increment calculation
 
 ```systemverilog
 pc_incr_o = (buff_res.valid && is_comp) ? (pc_o + 32'd2) : (pc_o + 32'd4);
 ```
 
-- **Compressed Instruction** (16-bit, C extension): PC + 2
-- **Normal Instruction** (32-bit): PC + 4
-- Compressed instruction tespiti `compressed_decoder` modülünden gelir
+- **Compressed** (16-bit, C extension): PC + 2  
+- **32-bit instruction:** PC + 4  
+- Compressed vs uncompressed comes from `compressed_decoder`
 
-### 4. Fetch Valid Logic
+### 4. Fetch valid logic
 
-Instruction fetch'in geçerliliği aşağıdaki durumlarda belirlenir:
+Fetch validity is derived as follows:
 
 ```systemverilog
 if (flush_i) 
-  fetch_valid = 1'b0;  // Flush sırasında fetch geçersiz
+  fetch_valid = 1'b0;  // Invalid during flush
 else if (spec_hit_i)
-  fetch_valid = !trap_active_i;  // Speculation doğruysa trap kontrolü
+  fetch_valid = !trap_active_i;  // If speculation correct, apply trap check
 else
-  fetch_valid = !trap_active_i;  // Speculation yanlışsa execute exception kontrolü
+  fetch_valid = !trap_active_i;  // If speculation wrong, same trap gating
 ```
 
-**Mantık:**
-- **Flush sırasında**: Hiçbir instruction geçerli değil
-- **Speculation hit**: Normal exception kontrolü
-- **Speculation miss**: Execute aşamasındaki exception'lar dışında fetch geçerli (çünkü pipeline zaten flush edilecek)
+**Logic:**
+- **During flush:** No instruction is valid
+- **Speculation hit:** Normal exception rules
+- **Speculation miss:** Fetch may still be valid except where execute exceptions dominate (pipeline will flush)
 
-### 5. Exception Detection & Parametric Priority
+### 5. Exception detection and parametric priority
 
-RISC-V Privileged Specification Section 3.1.15'e uygun parametrik öncelik sistemi:
+Parametric priority per RISC-V Privileged Specification section 3.1.15:
 
 ```systemverilog
 // Exception detection flags
@@ -129,58 +129,57 @@ has_ebreak             = fetch_valid && (instr_type_o == ebreak);
 has_ecall              = fetch_valid && (instr_type_o == ecall);
 ```
 
-**Öncelik Sırası** (ceres_param.sv'den yapılandırılabilir):
-1. **BREAKPOINT** (Hardware debug breakpoint): `EXC_PRIORITY_DEBUG_BREAKPOINT`
-2. **INSTR_MISALIGNED** (Hizasız PC): `EXC_PRIORITY_INSTR_MISALIGNED`
-3. **INSTR_ACCESS_FAULT** (PMA ihlali): `EXC_PRIORITY_INSTR_ACCESS_FAULT`
+**Priority order** (configurable in `level_param.sv`):
+1. **BREAKPOINT** (hardware debug): `EXC_PRIORITY_DEBUG_BREAKPOINT`
+2. **INSTR_MISALIGNED** (misaligned PC): `EXC_PRIORITY_INSTR_MISALIGNED`
+3. **INSTR_ACCESS_FAULT** (PMA violation): `EXC_PRIORITY_INSTR_ACCESS_FAULT`
 4. **ILLEGAL_INSTRUCTION**: `EXC_PRIORITY_ILLEGAL`
-5. **EBREAK** (Breakpoint instruction): `EXC_PRIORITY_EBREAK`
-6. **ECALL** (Environment call): `EXC_PRIORITY_ECALL`
+5. **EBREAK**: `EXC_PRIORITY_EBREAK`
+6. **ECALL**: `EXC_PRIORITY_ECALL`
 
-**Parametrik Kontrol:**
-- Her exception tipi için `ceres_param.sv` içinde öncelik seviyesi tanımlanır
-- `check_exc_priority()` fonksiyonu ile etkinlik kontrolü yapılır
-- Bu sayede RISC-V specification'ın farklı versiyonlarına uyum sağlanabilir
+**Parametric control:**
+- Each exception type has a priority level in `level_param.sv`
+- `check_exc_priority()` gates which exceptions are active
+- Allows tuning to different RISC-V privileged spec interpretations
 
-### 6. Instruction Cache Miss Handling
+### 6. Instruction cache miss handling
 
 ```systemverilog
 imiss_stall_o = (buff_req.valid && !buff_res.valid);
 ```
 
-**Stall Durumu:**
-- Align buffer'a geçerli bir istek yapılmış ancak henüz cevap gelmemiş
-- Bu durumda pipeline stall edilir (hazard_unit tarafından)
-- Ready-valid handshake tam kurulmamış (align_buffer request'i registerlemiyor)
+**Stall:**
+- Valid request to the align buffer but no response yet
+- Pipeline stalls (via `hazard_unit`)
+- Ready/valid is not fully registered on the align-buffer request path
 
-**TODO Notu:** Kodda belirtildiği üzere, gelecekte tam handshake protokolü uygulanabilir
+**TODO:** A full handshake protocol may be added later (as noted in code)
 
-### 7. Buffer to Cache Request Gating
+### 7. Buffer-to-cache request gating
 
-Align buffer'dan gelen sürekli valid sinyali, icache'e tek cycle'lık handshake'e dönüştürülür:
+The align buffer may hold `valid` high across cycles; this is gated to a single-cycle I-cache handshake:
 
 ```systemverilog
 icache_req.valid = abuff_icache_req.valid && !buf_lookup_ack;
 
 always_ff @(posedge clk_i) begin
   if (buff_lowX_res.valid) 
-    buf_lookup_ack <= 1'b0;  // Response geldi, yeni request'e izin ver
+    buf_lookup_ack <= 1'b0;  // Response arrived; allow new request
   else if (buff_res.waiting_second && buf_lookup_ack)
-    buf_lookup_ack <= 1'b0;  // Double miss: ikinci request için clear et
+    buf_lookup_ack <= 1'b0;  // Double miss: clear for second request
   else if (icache_req.valid && buff_lowX_res.ready && !buf_lookup_ack)
-    buf_lookup_ack <= 1'b1;  // Request kabul edildi, ack set et
+    buf_lookup_ack <= 1'b1;  // Request accepted; set ack
 end
 ```
 
-**Amaç:**
-- Align buffer cache miss sırasında valid=1 tutar
-- Bu sürekli valid, icache'e her cycle yeni request göndermemeli
-- `buf_lookup_ack` flag'i ile request zaten gönderilmişse suppress edilir
-- Response geldiğinde veya double miss durumunda flag temizlenir
+**Purpose:**
+- On miss, the align buffer keeps `valid` asserted
+- That must not issue a new I-cache request every cycle
+- `buf_lookup_ack` suppresses repeats until the response clears it (including double-miss cases)
 
-## Alt Modüller
+## Submodules
 
-### 1. PMA (Physical Memory Attributes)
+### 1. PMA (physical memory attributes)
 
 ```systemverilog
 pma i_pma (
@@ -191,13 +190,13 @@ pma i_pma (
 );
 ```
 
-**İşlev:**
-- PC adresinin bellek özelliklerini belirler
-- **uncached**: Instruction cache'lenmeyecek mi? (MMIO bölgesi)
-- **grand**: Erişim izni var mı? (yoksa INSTR_ACCESS_FAULT)
-- **memregion**: Bellek bölgesi tipi (henüz kullanılmıyor)
+**Role:**
+- Classifies the PC for memory attributes
+- **uncached:** bypass I-cache (e.g. MMIO)
+- **grand:** access allowed (if not, `INSTR_ACCESS_FAULT`)
+- **memregion:** region type (reserved for future use)
 
-### 2. GSHARE Branch Predictor
+### 2. GSHARE branch predictor
 
 ```systemverilog
 gshare_bp i_gshare_bp (
@@ -216,14 +215,14 @@ gshare_bp i_gshare_bp (
 );
 ```
 
-**İşlev:**
-- Dallanma tahmini (branch prediction) yapar
-- GSHARE algoritması: Global History Register (GHR) ⊕ PC → Pattern History Table (PHT)
-- RAS (Return Address Stack) ile return instruction'ları tahmin eder
-- BTB (Branch Target Buffer) ile branch hedef adreslerini cache'ler
-- Detaylı açıklama için `gshare_bp_module.md` dökümanına bakınız
+**Role:**
+- Performs branch prediction
+- GSHARE: GHR ⊕ PC indexes the PHT
+- RAS predicts returns
+- BTB caches branch targets
+- See `gshare_bp_module.md` for detail
 
-### 3. Align Buffer
+### 3. Align buffer
 
 ```systemverilog
 align_buffer i_align_buffer (
@@ -237,14 +236,14 @@ align_buffer i_align_buffer (
 );
 ```
 
-**İşlev:**
-- Instruction cache'ten gelen 128-bit cache line'ları 32-bit instruction'lara hizalar
-- Misaligned access desteği (instruction cache line boundary'sini geçen instruction'lar)
-- Double miss handling (iki farklı cache line'dan fetch gerektiğinde)
-- Even/Odd bank mimarisi ile 16-bit parcel'lar şeklinde organize edilir
-- Detaylı açıklama için `align_buffer_module.md` dökümanına bakınız
+**Role:**
+- Aligns 128-bit I-cache lines into 32-bit instructions
+- Supports misaligned fetches spanning a line boundary
+- Handles double miss (two lines)
+- Even/odd banks organize 16-bit parcels
+- See `align_buffer_module.md` for detail
 
-### 4. Instruction Cache
+### 4. Instruction cache
 
 ```systemverilog
 cache #(
@@ -269,13 +268,13 @@ cache #(
 );
 ```
 
-**İşlev:**
-- Instruction'ları cache'ler (set-associative veya direct-mapped)
-- Cache miss durumunda lower-level memory'den (L2/Memory) fetch yapar
-- Parametrik: boyut, way sayısı, block size
-- `fencei_stall_o` instruction cache için her zaman 0 (data cache'te kullanılır)
+**Role:**
+- Caches instructions (set-associative or direct-mapped)
+- On miss, fetches from lower level (L2 / memory)
+- Parameterized size, associativity, block size
+- `fencei_stall_o` is tied low for I-cache (used on D-cache)
 
-### 5. Compressed Decoder
+### 5. Compressed decoder
 
 ```systemverilog
 compressed_decoder i_compressed_decoder (
@@ -286,12 +285,12 @@ compressed_decoder i_compressed_decoder (
 );
 ```
 
-**İşlev:**
-- 16-bit compressed instruction'ları (RV32C) 32-bit normal instruction'lara decode eder
-- C0, C1, C2 quadrant'larını işler
-- Illegal compressed instruction tespiti yapar
-- RISC-V C extension specification'a tam uyumlu
-- Detaylı açıklama için `compressed_decoder_module.md` dökümanına bakınız
+**Role:**
+- Expands 16-bit RV32C encodings to 32-bit instructions
+- Handles C0, C1, C2 quadrants
+- Flags illegal compressed encodings
+- Matches the RISC-V C extension spec
+- See `compressed_decoder_module.md` for detail
 
 ## Timing Diagram
 
@@ -330,20 +329,20 @@ Cycle M: Misprediction Case
 
 ## Performance Considerations
 
-### 1. Cache Miss Handling
-- **Single-cycle hit**: Align buffer + ICache hit → inst_o geçerli aynı cycle
-- **Multi-cycle miss**: ICache'ten lower-level memory'ye istek, cevap gelene kadar stall
-- **Double miss** (misaligned, boundary cross): İki cache line fetch gerekir, alignment buffer bunu handle eder
+### 1. Cache miss handling
+- **Single-cycle hit:** align buffer + I-cache hit → `inst_o` valid same cycle  
+- **Multi-cycle miss:** request to lower memory; stall until response  
+- **Double miss** (misaligned / straddle): two lines; align buffer sequences them  
 
-### 2. Branch Prediction Impact
-- **Correct prediction**: Pipeline akışı kesintisiz
-- **Misprediction**: 3-4 cycle penalty (flush + re-fetch)
-- GSHARE prediction accuracy: ~85-95% (kod tipine göre)
+### 2. Branch prediction impact
+- **Correct:** steady pipeline  
+- **Mispredict:** ~3–4 cycle penalty (flush + refetch)  
+- GSHARE accuracy: ~85–95% (workload-dependent)  
 
-### 3. Compressed Instruction Benefit
-- **Code density**: %25-30 daha küçük binary boyutu
-- **Performance**: PC increment bazen +2 (compressed), bazen +4
-- **Decode latency**: Aynı cycle (combinational decoder)
+### 3. Compressed instructions
+- **Code density:** ~25–30% smaller binaries  
+- **Performance:** PC step +2 or +4  
+- **Decode:** combinational, same cycle  
 
 ## Exception Handling Flow
 
@@ -352,7 +351,7 @@ Cycle M: Misprediction Case
    ↓
 2. exc_type_o signal → Pipeline
    ↓
-3. Propagate to Execute (Writeback'e kadar)
+3. Propagate through the pipeline (toward writeback)
    ↓
 4. Writeback: trap_active_i = 1
    ↓
@@ -361,10 +360,10 @@ Cycle M: Misprediction Case
 6. Trap Handler Execution
 ```
 
-**Önemli Noktalar:**
-- Exception'lar fetch'te tespit edilir ama commit edilmez (writeback'te commit)
-- Speculation miss durumunda fetch exception'ları flush edilir
-- Trap handler PC'si `mtvec` CSR'den gelir (vectored veya direct mode)
+**Notes:**
+- Exceptions are detected in fetch but committed in writeback
+- On speculation miss, fetch-side exceptions may be flushed
+- Trap entry PC comes from `mtvec` (vectored or direct mode)
 
 ## Debug & Verification
 
@@ -384,66 +383,66 @@ Cycle M: Misprediction Case
 `endif
 ```
 
-**Amaç:**
-- Simülasyonda/doğrulamada her instruction'ı trace etmek
-- Compressed/normal instruction ayrımı
-- Valid cycle'larda aktif
+**Purpose:**
+- Trace each committed instruction in simulation/verification
+- Distinguish compressed vs uncompressed
+- Active when the fetch is valid
 
-### Assertions (Önerilen)
+### Suggested assertions
 
 ```systemverilog
-// PC alignment kontrolü (C extension varsa 2-byte, yoksa 4-byte)
+// PC alignment (2-byte if C, else 4-byte)
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   misa_c_i |-> pc_o[0] == 1'b0 else pc_o[1:0] == 2'b00);
 
-// Flush sırasında fetch valid olmamalı
+// No valid fetch during flush
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   flush_i |-> !fetch_valid);
 
-// Misprediction sırasında PC düzeltmesi yapılmalı
+// PC must correct after misprediction
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   !spec_hit_i && (ex_info_i.bjtype != NO_BJ) |=> pc_o == $past(pc_target_i));
 ```
 
-## Parametre Yapılandırması
+## Parameter configuration
 
 ### RESET_VECTOR
 ```systemverilog
-parameter RESET_VECTOR = ceres_param::RESET_VECTOR
+parameter RESET_VECTOR = level_param::RESET_VECTOR
 ```
 - Default: `0x80000000`
-- RISC-V convention: machine mode reset vector
-- SoC'ye göre değiştirilebilir
+- RISC-V convention: machine-mode reset vector
+- SoC-specific overrides possible
 
-### Cache Parameters (indirect - ceres_param.sv)
-- `IC_CAPACITY`: Instruction cache boyutu (örn. 16 KB)
-- `IC_WAY`: Way sayısı (1=direct-mapped, 2/4/8=set-associative)
-- `BLK_SIZE`: Cache line boyutu (genelde 128 bit = 16 byte)
+### Cache parameters (via `level_param.sv`)
+- `IC_CAPACITY`: I-cache size (e.g. 16 KB)
+- `IC_WAY`: associativity (1 = direct-mapped; 2/4/8 = set-associative)
+- `BLK_SIZE`: line size (often 128 bits = 16 bytes)
 
-### Predictor Parameters (indirect - ceres_param.sv)
-- `GHR_SIZE`: Global History Register boyutu (örn. 8-bit)
-- `PHT_SIZE`: Pattern History Table entry sayısı (örn. 256)
-- `BTB_SIZE`: Branch Target Buffer entry sayısı (örn. 128)
-- `RAS_SIZE`: Return Address Stack derinliği (örn. 8)
+### Predictor parameters (via `level_param.sv`)
+- `GHR_SIZE`: global history width (e.g. 8)
+- `PHT_SIZE`: PHT entries (e.g. 256)
+- `BTB_SIZE`: BTB entries (e.g. 128)
+- `RAS_SIZE`: RAS depth (e.g. 8)
 
-## İlgili Modüller
+## Related modules
 
-1. **align_buffer.sv**: Instruction hizalama ve misaligned access handling
-2. **gshare_bp.sv**: Dallanma tahmini ve BTB yönetimi
-3. **compressed_decoder.sv**: RV32C instruction decode
-4. **ras.sv**: Return address stack (function call/return prediction)
-5. **cache.sv**: Generic cache implementation (instruction/data cache için ortak)
-6. **pma.sv**: Physical memory attributes checker
+1. **align_buffer.sv** — alignment and misaligned fetch  
+2. **gshare_bp.sv** — branch prediction and BTB  
+3. **compressed_decoder.sv** — RV32C decode  
+4. **ras.sv** — return-address stack  
+5. **cache.sv** — shared cache wrapper (I/D)  
+6. **pma.sv** — physical memory attributes  
 
-## Gelecek İyileştirmeler (TODO)
+## Future improvements (TODO)
 
-1. **Full Handshake Protocol**: Align buffer request'i registerlayarak ready-valid handshake'i tam kurulabilir
-2. **Prefetcher**: Sequential access pattern'leri tespit edip proactive fetch
-3. **Multiple Outstanding Requests**: Cache miss sırasında diğer instruction'ları fetch etmeye devam et
-4. **Fusion Support**: Sık kullanılan instruction pair'lerini tek micro-op olarak işle
-5. **Advanced Prediction**: Perceptron-based veya TAGE predictor entegrasyonu
+1. **Full handshake:** register align-buffer requests for strict ready/valid  
+2. **Prefetcher:** detect sequential PC and prefetch ahead  
+3. **Multiple outstanding misses:** overlap refills  
+4. **Fusion:** fuse hot instruction pairs into one micro-op  
+5. **Advanced predictors:** perceptron or TAGE  
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213
 2. RISC-V Privileged Specification v1.12
@@ -453,6 +452,6 @@ parameter RESET_VECTOR = ceres_param::RESET_VECTOR
 
 ---
 
-**Son Güncelleme:** 4 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** 4 December 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

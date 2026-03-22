@@ -1,5 +1,5 @@
 /**
- * I2C Master Test - Ceres-V RV32IMC_Zicsr
+ * I2C Master Test - Level-V RV32IMC_Zicsr
  * 
  * Test program that verifies I2C master functionality.
  * The testbench provides a simple I2C slave (EEPROM-like) for testing.
@@ -546,7 +546,7 @@ int main(void)
     
     uart_puts("\n");
     uart_puts("========================================\n");
-    uart_puts("   I2C Master Test - Ceres-V RV32IMC\n");
+    uart_puts("   I2C Master Test - Level-V RV32IMC\n");
     uart_puts("========================================\n");
     
     /* Run all tests */

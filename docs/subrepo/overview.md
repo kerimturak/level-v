@@ -1,8 +1,8 @@
-# Subrepo - Teknik Dokümantasyon
+# Subrepo — Technical Documentation
 
-## İçindekiler
+## Table of Contents
 
-1. [Genel Bakış](#genel-bakış)
+1. [General Overview](#general-overview)
 2. [riscv-tests](#riscv-tests)
 3. [riscv-arch-test](#riscv-arch-test)
 4. [imperas-riscv-tests](#imperas-riscv-tests)
@@ -13,9 +13,9 @@
 
 ---
 
-## Genel Bakış
+## General Overview
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 subrepo/
@@ -28,9 +28,9 @@ subrepo/
 └── riscv-formal/          # RISC-V Formal Verification
 ```
 
-### Test Suite Karşılaştırması
+### Test Suite Comparison
 
-| Suite | Amaç | Test Sayısı | Kaynak |
+| Suite | Purpose | Test Count | Source |
 |-------|------|-------------|--------|
 | riscv-tests | ISA compliance | ~100+ | RISC-V Foundation |
 | riscv-arch-test | Architecture compliance | ~200+ | RISC-V International |
@@ -40,16 +40,16 @@ subrepo/
 | riscv-dv | Random testing | Generated | Google |
 | riscv-formal | Formal verification | N/A | Claire Wolf |
 
-### Git Submodule Yönetimi
+### Git Submodule Management
 
 ```bash
-# Submodule'leri clone etme
+# Clone submodules
 git submodule update --init --recursive
 
-# Belirli submodule'ü güncelleme
+# Update a specific submodule
 git submodule update --remote subrepo/riscv-tests
 
-# Tüm submodule'leri güncelleme
+# Update all submodules
 git submodule update --remote --merge
 ```
 
@@ -57,14 +57,14 @@ git submodule update --remote --merge
 
 ## riscv-tests
 
-**Dizin:** `subrepo/riscv-tests/`
-**Kaynak:** https://github.com/riscv-software-src/riscv-tests
+**Directory:** `subrepo/riscv-tests/`
+**Source:** https://github.com/riscv-software-src/riscv-tests
 
-### Amaç
+### Purpose
 
-RISC-V Foundation tarafından sağlanan resmi ISA compliance testleri. Her instruction için unit test içerir.
+Official ISA compliance tests from the RISC-V Foundation. Includes unit tests for each instruction.
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 riscv-tests/
@@ -98,21 +98,21 @@ riscv-tests/
 └── debug/             # Debug module tests
 ```
 
-### Test İsimlendirme
+### Test Naming
 
 ```
 rv32<ext>-<env>-<test>
 
-Örnek: rv32ui-p-add
+Example: rv32ui-p-add
   - rv32: RV32 architecture
   - ui: User Integer extension
   - p: Physical memory environment
   - add: ADD instruction test
 ```
 
-### Extension Kodları
+### Extension Codes
 
-| Kod | Açıklama |
+| Code | Description |
 |-----|----------|
 | `ui` | User Integer (base) |
 | `um` | User Multiply |
@@ -123,13 +123,13 @@ rv32<ext>-<env>-<test>
 | `mi` | Machine Integer |
 | `si` | Supervisor Integer |
 
-### Kullanım
+### Usage
 
 ```bash
-# Tüm ISA testlerini çalıştır
+# Run all ISA tests
 make isa
 
-# Tek test çalıştır
+# Run a single test
 make t T=rv32ui-p-add
 
 # RV32I testleri
@@ -143,14 +143,14 @@ make isa_rv32m
 
 ## riscv-arch-test
 
-**Dizin:** `subrepo/riscv-arch-test/`
-**Kaynak:** https://github.com/riscv-non-isa/riscv-arch-test
+**Directory:** `subrepo/riscv-arch-test/`
+**Source:** https://github.com/riscv-non-isa/riscv-arch-test
 
-### Amaç
+### Purpose
 
-RISC-V International tarafından yönetilen resmi architecture compliance test suite. riscv-tests'ten daha kapsamlı ve güncel.
+Official architecture compliance test suite maintained by RISC-V International. Broader and more up to date than riscv-tests.
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 riscv-arch-test/
@@ -168,23 +168,23 @@ riscv-arch-test/
 │   │   └── Zifencei/       # Fence.I tests
 │   └── rv64i_m/            # RV64 tests
 ├── riscv-target/           # Target configurations
-│   └── ceres/              # Ceres target (custom)
+│   └── level/              # Level target (custom)
 └── doc/                    # Documentation
 ```
 
-### Test İsimlendirme
+### Test Naming
 
 ```
 <instruction>-<variant>.S
 
-Örnek: add-01.S
+Example: add-01.S
   - add: ADD instruction
   - 01: Test variant 1
 ```
 
 ### Reference Signatures
 
-Her test bir "signature" üretir ve golden reference ile karşılaştırılır:
+Each test produces a "signature" that is compared against a golden reference:
 
 ```
 test output → signature → compare → golden reference
@@ -192,13 +192,13 @@ test output → signature → compare → golden reference
                                     PASS/FAIL
 ```
 
-### Kullanım
+### Usage
 
 ```bash
-# Tüm arch testlerini çalıştır
+# Run all arch tests
 make arch
 
-# Tek test
+# Single test
 make run T=add-01 TEST_TYPE=arch
 
 # I extension testleri
@@ -212,14 +212,14 @@ make arch_m
 
 ## imperas-riscv-tests
 
-**Dizin:** `subrepo/imperas-riscv-tests/`
-**Kaynak:** https://github.com/riscv-ovpsim/imperas-riscv-tests
+**Directory:** `subrepo/imperas-riscv-tests/`
+**Source:** https://github.com/riscv-ovpsim/imperas-riscv-tests
 
-### Amaç
+### Purpose
 
-Imperas tarafından sağlanan genişletilmiş test suite. Corner case'ler ve edge condition'lar için daha kapsamlı testler.
+Extended test suite from Imperas. More thorough tests for corner cases and edge conditions.
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 imperas-riscv-tests/
@@ -239,20 +239,20 @@ imperas-riscv-tests/
 └── riscv-ovpsim/           # Imperas OVP simulator
 ```
 
-### Test Özellikleri
+### Test Characteristics
 
-- riscv-arch-test'e benzer format
-- Daha fazla edge case coverage
-- Exception/interrupt testleri
-- PMP testleri
+- Similar format to riscv-arch-test
+- More edge-case coverage
+- Exception/interrupt tests
+- PMP tests
 
-### Kullanım
+### Usage
 
 ```bash
-# Tüm Imperas testlerini çalıştır
+# Run all Imperas tests
 make imperas
 
-# Tek test
+# Single test
 make ti T=I-ADD-01
 
 # M extension
@@ -263,14 +263,14 @@ make imperas_m
 
 ## CoreMark
 
-**Dizin:** `subrepo/coremark/`
-**Kaynak:** https://github.com/eembc/coremark
+**Directory:** `subrepo/coremark/`
+**Source:** https://github.com/eembc/coremark
 
-### Amaç
+### Purpose
 
-EEMBC tarafından geliştirilen endüstri standardı CPU benchmark. CoreMark/MHz performans metriği verir.
+Industry-standard CPU benchmark from EEMBC. Reports CoreMark/MHz performance.
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 coremark/
@@ -283,38 +283,38 @@ coremark/
 └── barebones/           # Baremetal port template
 ```
 
-### Benchmark İçeriği
+### Benchmark Content
 
-| Test | Açıklama |
+| Test | Description |
 |------|----------|
 | List Processing | Linked list operations |
 | Matrix Processing | Matrix multiplication |
 | State Machine | Finite state machine |
 | CRC Calculation | CRC-16 calculation |
 
-### Performans Metrikleri
+### Performance Metrics
 
 ```
 CoreMark Score = Iterations / Time(seconds)
 CoreMark/MHz = CoreMark Score / CPU_MHz
 
-Örnek: 50 CoreMark @ 50MHz = 1.0 CoreMark/MHz
+Example: 50 CoreMark @ 50MHz = 1.0 CoreMark/MHz
 ```
 
-### Kullanım
+### Usage
 
 ```bash
-# CoreMark build ve run
-make cm
+# CoreMark build and run (Verilator)
+make run_coremark
 
-# Sadece run (rebuild atla)
-make cm_run
+# Simulation only (if .mem exists); if needed first: make coremark
+make run_verilator TEST_NAME=coremark TEST_CONFIG=coremark MEM_FILE=build/tests/coremark/coremark.mem NO_ADDR=1
 
-# Verbose mode
-make cm LOG_UART=1 SIM_UART_MONITOR=1
+# Extra parameters (example)
+make run_coremark SIM_FAST=1 TRACE=0 MAX_CYCLES=10000000
 ```
 
-### Sonuç Örneği
+### Sample Output
 
 ```
 2K performance run parameters for coremark.
@@ -330,14 +330,14 @@ CoreMark/MHz     : 1.00
 
 ## Embench-IoT
 
-**Dizin:** `subrepo/embench-iot/`
-**Kaynak:** https://github.com/embench/embench-iot
+**Directory:** `subrepo/embench-iot/`
+**Source:** https://github.com/embench/embench-iot
 
-### Amaç
+### Purpose
 
-Gömülü sistemler için modern benchmark suite. Gerçek dünya embedded uygulamalarını temsil eder.
+Modern benchmark suite for embedded systems. Represents real-world embedded workloads.
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 embench-iot/
@@ -369,9 +369,9 @@ embench-iot/
 └── doc/                # Documentation
 ```
 
-### Benchmark Listesi
+### Benchmark List
 
-| Benchmark | Açıklama | Kategori |
+| Benchmark | Description | Category |
 |-----------|----------|----------|
 | aha-mont64 | Montgomery multiplication | Crypto |
 | crc32 | CRC-32 calculation | Data |
@@ -396,7 +396,7 @@ embench-iot/
 | ud | Undefined behavior | General |
 | wikisort | Sorting algorithm | Sort |
 
-### Kullanım
+### Usage
 
 ```bash
 # Build Embench
@@ -413,14 +413,14 @@ make embench_single B=crc32
 
 ## RISCV-DV
 
-**Dizin:** `subrepo/riscv-dv/`
-**Kaynak:** https://github.com/chipsalliance/riscv-dv
+**Directory:** `subrepo/riscv-dv/`
+**Source:** https://github.com/chipsalliance/riscv-dv
 
-### Amaç
+### Purpose
 
-Google tarafından geliştirilen constrained random instruction generator. Otomatik test üretimi ve coverage analizi.
+Constrained random instruction generator developed by Google. Automatic test generation and coverage analysis.
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 riscv-dv/
@@ -439,7 +439,7 @@ riscv-dv/
 └── pygen/                 # Python generator
 ```
 
-### Özellikler
+### Features
 
 - Constrained random instruction generation
 - Configurable instruction mix
@@ -447,9 +447,9 @@ riscv-dv/
 - Interrupt injection
 - Memory pattern generation
 
-### Test Tipleri
+### Test Types
 
-| Tip | Açıklama |
+| Type | Description |
 |-----|----------|
 | riscv_arithmetic_basic_test | Basic arithmetic |
 | riscv_rand_instr_test | Random instructions |
@@ -457,7 +457,7 @@ riscv-dv/
 | riscv_loop_test | Loop patterns |
 | riscv_mmu_stress_test | MMU stress |
 
-### Kullanım
+### Usage
 
 ```bash
 # Generate tests
@@ -474,14 +474,14 @@ make riscv_dv_gen TYPE=riscv_rand_instr_test
 
 ## RISCV-Formal
 
-**Dizin:** `subrepo/riscv-formal/`
-**Kaynak:** https://github.com/SymbioticEDA/riscv-formal
+**Directory:** `subrepo/riscv-formal/`
+**Source:** https://github.com/SymbioticEDA/riscv-formal
 
-### Amaç
+### Purpose
 
-Claire Wolf tarafından geliştirilen formal verification framework. RVFI (RISC-V Formal Interface) kullanarak matematiksel doğrulama.
+Formal verification framework developed by Claire Wolf. Mathematical verification using the RVFI (RISC-V Formal Interface).
 
-### Dizin Yapısı
+### Directory Layout
 
 ```
 riscv-formal/
@@ -533,7 +533,7 @@ output [31:0] rvfi_mem_wdata
 
 ### Verification Checks
 
-| Check | Açıklama |
+| Check | Description |
 |-------|----------|
 | insn_check | Instruction correctness |
 | pc_check | PC update correctness |
@@ -541,7 +541,7 @@ output [31:0] rvfi_mem_wdata
 | mem_check | Memory access correctness |
 | liveness | No deadlock |
 
-### Kullanım
+### Usage
 
 ```bash
 # Run formal verification
@@ -595,7 +595,7 @@ make formal_prove
    └── make imperas      # Edge case coverage
 
 4. Performance
-   └── make cm           # CoreMark benchmark
+   └── make run_coremark # CoreMark benchmark
 
 5. Stress Testing
    └── make riscv_dv     # Random testing
@@ -606,9 +606,9 @@ make formal_prove
 
 ---
 
-## Özet
+## Summary
 
-Subrepo dizini:
+The `subrepo/` directory contains:
 
 1. **riscv-tests**: Official ISA tests, quick sanity check
 2. **riscv-arch-test**: Architecture compliance, certification
@@ -618,4 +618,4 @@ Subrepo dizini:
 6. **riscv-dv**: Random test generation, coverage
 7. **riscv-formal**: Mathematical verification
 
-Her suite farklı amaçlara hizmet eder ve kapsamlı verification için birlikte kullanılmalıdır.
+Each suite serves different goals and should be used together for thorough verification.

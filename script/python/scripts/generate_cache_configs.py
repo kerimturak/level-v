@@ -82,7 +82,7 @@ def write_log_file(configs, filename='cache_configs.log'):
     with open(filename, 'w') as f:
         # Header
         f.write('='*100 + '\n')
-        f.write('CERES RISC-V CACHE CONFIGURATION REFERENCE\n')
+        f.write('Level RISC-V CACHE CONFIGURATION REFERENCE\n')
         f.write('='*100 + '\n')
         f.write(f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
         f.write(f'Total valid configurations: {len(configs)}\n')

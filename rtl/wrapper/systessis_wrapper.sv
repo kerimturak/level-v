@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module systessis_wrapper
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int unsigned CLK_FREQ_HZ = CPU_CLK,
     parameter int unsigned BAUD_RATE   = 115200
@@ -75,10 +75,10 @@ module systessis_wrapper
 `endif
 
   // Instantiate the real wrapper
-  ceres_wrapper #(
+  level_wrapper #(
       .CLK_FREQ_HZ(CLK_FREQ_HZ),
       .BAUD_RATE  (BAUD_RATE)
-  ) u_ceres_wrapper (
+  ) u_level_wrapper (
       .clk_i (clk_out1),
       .rst_ni(rst_ni),
 

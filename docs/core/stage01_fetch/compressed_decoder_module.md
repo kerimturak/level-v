@@ -1,22 +1,22 @@
-# COMPRESSED DECODER Modülü - Teknik Döküman
+# Compressed Decoder Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`compressed_decoder.sv` modülü, RISC-V C Extension (RV32C) specification'a uygun olarak 16-bit compressed instruction'ları 32-bit standart RISC-V instruction'lara decode eder. Modül tamamen combinational logic ile çalışır ve illegal instruction detection yapar.
+The `compressed_decoder.sv` module decodes 16-bit RV32C compressed instructions into 32-bit standard RISC-V instructions per the C extension spec. It is fully combinational and flags illegal encodings.
 
-## RISC-V C Extension Özellikleri
+## RISC-V C extension highlights
 
-### Avantajları
-- **Code Density**: %25-30 daha küçük binary boyutu
-- **Performance**: Daha az instruction fetch (cache efficiency)
-- **Backward Compatibility**: Normal 32-bit instruction'larla mix edilebilir
+### Benefits
+- **Code density:** ~25–30% smaller binaries  
+- **Performance:** Fewer instruction fetches (better cache efficiency)
+- **Backward compatibility:** Can be mixed with normal 32-bit instructions
 
 ### Compressed Instruction Format
 
-16-bit compressed instruction'lar 4 quadrant'a ayrılır:
+16-bit compressed opcodes fall into four quadrants:
 
 ```
-Instruction[1:0] | Quadrant | Açıklama
+Instruction[1:0] | Quadrant | Description
 -----------------|----------|----------
      2'b00       |    C0    | Load/Store, Stack operations
      2'b01       |    C1    | Control flow, ALU immediate
@@ -24,19 +24,19 @@ Instruction[1:0] | Quadrant | Açıklama
      2'b11       |    --    | Normal 32-bit instruction (not compressed)
 ```
 
-## Port Tanımları
+## Port definitions
 
-| Port | Yön | Tip | Açıklama |
+| Port | Direction | Type | Description |
 |------|-----|-----|----------|
-| `instr_i` | Input | [31:0] | Giriş instruction (16-bit compressed veya 32-bit normal) |
-| `instr_o` | Output | [31:0] | Çıkış instruction (her zaman 32-bit decoded) |
-| `is_compressed_o` | Output | logic | Giriş compressed instruction mıydı? (1=compressed, 0=normal) |
-| `illegal_instr_o` | Output | logic | Illegal instruction tespit edildi mi? |
+| `instr_i` | Input | [31:0] | Input instruction (16-bit compressed or 32-bit normal) |
+| `instr_o` | Output | [31:0] | Output instruction (always 32-bit decoded) |
+| `is_compressed_o` | Output | logic | Was input compressed? (1=compressed, 0=normal) |
+| `illegal_instr_o` | Output | logic | Illegal instruction detected? |
 
-**Not:** 
-- 16-bit compressed instruction'lar `instr_i[15:0]` içinde gelir
-- `instr_i[31:16]` compressed instruction'lar için don't care
-- Normal 32-bit instruction'lar doğrudan `instr_o` ya aktarılır
+**Note:** 
+- Compressed 16-bit encodings use `instr_i[15:0]`  
+- `instr_i[31:16]` is don't-care for compressed inputs  
+- Normal 32-bit instructions pass through to `instr_o`  
 
 ## Instruction Decode Flow
 
@@ -93,7 +93,7 @@ rs2_prime = {2'b01, instr_i[4:2]};
 
 **Compressed Register Mapping:**
 - 3-bit encoded → 5-bit actual
-- Sadece x8-x15 erişilebilir (register window)
+- Only x8–x15 are reachable (compressed register window)  
 - x8 = s0/fp, x9 = s1, ..., x15 = a5
 
 ## Immediate Extraction Functions
@@ -231,7 +231,7 @@ endfunction
 
 ### C0 Quadrant (opcode[1:0] = 2'b00)
 
-| funct3 | Instruction | Expansion | Açıklama |
+| funct3 | Instruction | Expansion | Description |
 |--------|-------------|-----------|----------|
 | 3'b000 | C.ADDI4SPN | `addi rd', x2, nzuimm` | Stack pointer offset add |
 | 3'b010 | C.LW | `lw rd', offset(rs1')` | Load word |
@@ -242,7 +242,7 @@ endfunction
 - `C.ADDI4SPN`: nzuimm = 0 (reserved)
 - `funct3 ∉ {000, 010, 110}`: Illegal
 
-**Örnek:**
+**Example:**
 ```
 C.LW x10, 8(x9)  [Compressed]
 → lw x10, 8(x9)  [Expanded]
@@ -253,7 +253,7 @@ Binary (C format): 0x4588
 
 ### C1 Quadrant (opcode[1:0] = 2'b01)
 
-| funct3 | Instruction | Expansion | Açıklama |
+| funct3 | Instruction | Expansion | Description |
 |--------|-------------|-----------|----------|
 | 3'b000 | C.ADDI / C.NOP | `addi rd, rd, imm` | Add immediate |
 | 3'b001 | C.JAL (RV32C) | `jal x1, offset` | Jump and link |
@@ -308,7 +308,7 @@ endcase
 
 ### C2 Quadrant (opcode[1:0] = 2'b10)
 
-| funct3 | Instruction | Expansion | Açıklama |
+| funct3 | Instruction | Expansion | Description |
 |--------|-------------|-----------|----------|
 | 3'b000 | C.SLLI | `slli rd, rd, shamt` | Shift left logical immediate |
 | 3'b010 | C.LWSP | `lw rd, offset(x2)` | Load word from stack |
@@ -385,7 +385,7 @@ assign is_compressed_o = (quadrant != 2'b11);
 
 ### Reserved Encodings
 
-| Instruction | Condition | Açıklama |
+| Instruction | Condition | Description |
 |-------------|-----------|----------|
 | C.ADDI4SPN | nzuimm = 0 | Reserved (no-op equivalent illegal) |
 | C.ADDI16SP | nzimm = 0 | Reserved |
@@ -410,7 +410,7 @@ if (instr_i[12])  // shamt[5] = 1
 
 ### HINT Instructions
 
-HINT instruction'lar encoding space'te yer kaplar ama işlemsel olarak NOP gibi davranır (illegal değil):
+HINTs occupy encoding space but behave like NOPs at execute (they are not illegal):
 
 - C.NOP (rd = x0)
 - C.LI (rd = x0)
@@ -420,14 +420,14 @@ HINT instruction'lar encoding space'te yer kaplar ama işlemsel olarak NOP gibi 
 - C.MV (rd = x0)
 - C.ADD (rd = x0)
 
-**Decoder Behavior:** HINT'ler legal kabul edilir (`illegal_instr_o = 0`), execution'da NOP muamelesi görürler.
+**Decoder behavior:** HINTs decode as legal (`illegal_instr_o = 0`) and execute as NOPs.
 
-## Timing & Synthesis
+## Timing and synthesis
 
 ### Critical Paths
 
 1. **Immediate Extraction:** 
-   - Bit shuffling ve sign extension
+   - Bit shuffling and sign extension
    - Combinational, ~2-3 logic levels
 
 2. **Quadrant Decode:**
@@ -438,15 +438,15 @@ HINT instruction'lar encoding space'te yer kaplar ama işlemsel olarak NOP gibi 
    - 4-way mux (quadrant select)
    - ~2 logic levels
 
-**Total Combinational Delay:** ~7-9 logic levels (tipik olarak tek cycle içinde tamamlanabilir)
+**Total combinational delay:** ~7–9 logic levels (fits one cycle in typical timing)
 
 ### Area Optimization
 
-- **Function Sharing:** Immediate extraction function'ları reuse edilir
-- **Case Optimization:** Synthesis tool'lar case statement'ları parallel logic'e optimize eder
+- **Function sharing:** Reuse immediate-extraction helpers where possible  
+- **Case optimization:** Synthesis maps large cases to parallel logic  
 - **Illegal Detection:** AND/OR tree, minimal overhead
 
-## Verification Strategy
+## Verification strategy
 
 ### Test Vectors
 
@@ -479,19 +479,19 @@ illegal: 1
 
 ### Coverage Points
 
-- [ ] Tüm quadrant'lar (C0, C1, C2, non-compressed)
-- [ ] Her compressed instruction tipi
+- [ ] All quadrants (C0, C1, C2, non-compressed)  
+- [ ] Every compressed instruction type
 - [ ] Register encoding (compressed vs full)
 - [ ] Immediate range limits (min/max)
-- [ ] Illegal encoding'ler
-- [ ] HINT instruction'lar
+- [ ] Illegal encodings
+- [ ] HINT instructions
 - [ ] Edge cases (rd=x0, rs1=x0, imm=0)
 
 ## Performance Impact
 
 ### Code Density Improvement
 
-**Örnek Program (Fibonacci):**
+**Example Program (Fibonacci):**
 ```
 RV32I only:  240 bytes
 RV32IC:      180 bytes (25% reduction)
@@ -508,24 +508,16 @@ RV32IC:      180 bytes (25% reduction)
 - **Mixed (RV32IC):** Average 3 bytes/instruction → ~1.33 inst/fetch (theoretical)
 
 **Cache Efficiency:**
-- Daha fazla instruction aynı cache line'da
-- Instruction cache miss rate azalır (~10-15%)
+- More instructions per cache line  
+- Lower I-cache miss rate (~10–15%)  
 
 ## Debugging
 
 ### Common Issues
 
-1. **Sign Extension Hatası:**
-   - Immediate bit shuffling sırasında sign bit yanlış yerleştirilmesi
-   - **Test:** Negative immediate'li instruction'lar
-
-2. **Register Mapping Hatası:**
-   - Compressed register encoding (x8-x15) yanlış decode
-   - **Test:** All compressed register combinations
-
-3. **Illegal Detection Eksikliği:**
-   - Reserved encoding'ler yakalanmıyor
-   - **Test:** All reserved instruction patterns
+1. **Sign extension bugs:** Wrong sign-bit placement when shuffling immediates — test negative immediates  
+2. **Register mapping bugs:** Wrong x8–x15 decode — test all compressed register combos  
+3. **Illegal detection gaps:** Reserved patterns not flagged — test all reserved encodings  
 
 ### Waveform Analysis
 
@@ -538,13 +530,13 @@ Signal Monitoring:
 - illegal_instr_o   : Illegal flag
 ```
 
-## İlgili Modüller
+## Related modules
 
-1. **fetch.sv**: Compressed decoder'ı kullanarak instruction'ları decode eder
-2. **decode.sv**: Decode edilen 32-bit instruction'ı işler
-3. **align_buffer.sv**: 16-bit parcel'ları fetch eder (compressed support için)
+1. **fetch.sv:** Instantiates the compressed decoder  
+2. **decode.sv:** Works on the expanded 32-bit instruction  
+3. **align_buffer.sv:** Supplies 16-bit parcels for compressed fetch  
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213 - Chapter 16: "C" Standard Extension
 2. RISC-V Compressed Instruction Encoding Table
@@ -553,6 +545,6 @@ Signal Monitoring:
 
 ---
 
-**Son Güncelleme:** 4 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** 4 December 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

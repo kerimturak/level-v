@@ -23,16 +23,16 @@ Description:
 `timescale 1ns / 1ps
 
 module wrapper_ram
-  import ceres_param::*;
+  import level_param::*;
 #(
     // Memory Configuration
     parameter int unsigned CACHE_LINE_WIDTH = BLK_SIZE,
     parameter int unsigned RAM_DEPTH        = 32768,     // Total words (32-bit)
 
     // Programming Configuration
-    parameter int unsigned                              CPU_CLK          = ceres_param::CPU_CLK,
-    parameter int unsigned                              PROG_BAUD_RATE   = ceres_param::PROG_BAUD_RATE,
-    parameter logic        [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = ceres_param::PROGRAM_SEQUENCE
+    parameter int unsigned                              CPU_CLK          = level_param::CPU_CLK,
+    parameter int unsigned                              PROG_BAUD_RATE   = level_param::PROG_BAUD_RATE,
+    parameter logic        [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = level_param::PROGRAM_SEQUENCE
 ) (
     input logic clk_i,
     input logic rst_ni,
@@ -62,7 +62,7 @@ module wrapper_ram
   // ==========================================================================
   // Memory Array - Single Wide BRAM (fallback)
   // ==========================================================================
-`ifndef CERES_OPENLANE
+`ifndef LEVEL_OPENLANE
   (* ram_style = "block" *) logic [CACHE_LINE_WIDTH-1:0] ram [LINE_DEPTH-1:0];
 `endif
 
@@ -72,7 +72,7 @@ module wrapper_ram
   logic [$clog2(LINE_DEPTH)-1:0] line_addr;
   logic [  CACHE_LINE_WIDTH-1:0] rdata_q;
 
-`ifdef CERES_OPENLANE
+`ifdef LEVEL_OPENLANE
   logic [CACHE_LINE_WIDTH-1:0] sram_rdata_line;
   logic [                31:0] sram_bank_rdata [0:WORDS_PER_LINE-1];
   logic [                 3:0] sram_bank_wmask [0:WORDS_PER_LINE-1];
@@ -95,7 +95,7 @@ module wrapper_ram
   // ==========================================================================
   // Memory Initialization
   // ==========================================================================
-`ifndef CERES_OPENLANE
+`ifndef LEVEL_OPENLANE
   localparam int INIT_FILE_LEN = 256;
   reg     [8*INIT_FILE_LEN-1:0] init_file = {INIT_FILE_LEN{8'h00}};
   integer                       fd = 0;
@@ -128,7 +128,7 @@ module wrapper_ram
     end
 `else
     // During synthesis, initialize RAM to zero (no external mem file dependency)
-`ifndef CERES_OPENLANE
+`ifndef LEVEL_OPENLANE
     $readmemh("/home/kerim/level-v/coremark_128.mem", ram);
 `else
     for (int i = 0; i < LINE_DEPTH; i++) begin
@@ -171,7 +171,7 @@ module wrapper_ram
   // ==========================================================================
   // RAM Read/Write Logic
   // ==========================================================================
-`ifdef CERES_OPENLANE
+`ifdef LEVEL_OPENLANE
   if ((WORDS_PER_LINE == 4) && (LINE_DEPTH <= 256)) begin : g_sram_main_mem
     logic [7:0] sram_wr_addr;
     logic [7:0] sram_rd_addr;

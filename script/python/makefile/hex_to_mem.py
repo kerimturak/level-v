@@ -15,12 +15,12 @@ import sys
 
 def parse_objcopy_hex_bytes(path):
     """
-    Verilog HEX dosyasını byte-level memory haritasına çevirir.
-    
+    Convert a Verilog HEX file to a byte-level memory map.
+
     Returns:
         mem_bytes: {offset: byte_value} dictionary
-        base_addr: İlk görülen adres
-        max_addr: En yüksek görülen adres
+        base_addr: First address seen
+        max_addr: Highest address seen
     """
     mem_bytes = {}
     current_addr = None
@@ -33,7 +33,7 @@ def parse_objcopy_hex_bytes(path):
             if not line:
                 continue
 
-            # Adres satırı
+            # Address line
             if line.startswith("@"):
                 current_addr = int(line[1:], 16)
                 if base_addr is None:
@@ -45,7 +45,7 @@ def parse_objcopy_hex_bytes(path):
             if current_addr is None:
                 continue
 
-            # Data satırı
+            # Data line
             parts = line.split()
             for p in parts:
                 if len(p) != 2:
@@ -69,7 +69,7 @@ def parse_objcopy_hex_bytes(path):
 
 def bytes_to_32bit_lines(mem_bytes, base_addr, max_addr, word_bytes=4):
     """
-    Byte-level memory haritasını 32-bit satırlar halinde döndürür.
+    Convert a byte-level memory map to 32-bit lines.
     
     Args:
         mem_bytes: {offset: byte_value}
@@ -83,19 +83,19 @@ def bytes_to_32bit_lines(mem_bytes, base_addr, max_addr, word_bytes=4):
     if not mem_bytes and max_addr == 0:
         raise ValueError("Empty memory map")
 
-    # Memory boyutunu hesapla
+    # Compute memory size
     memory_size = max_addr - base_addr + 1
-    
-    # 4-byte boundary'ye yuvarla
+
+    # Round up to 4-byte boundary
     num_words = (memory_size + word_bytes - 1) // word_bytes
     
     lines = []
 
-    # Her 4-byte word için
+    # For each 4-byte word
     for word_idx in range(num_words):
         word_offset = word_idx * word_bytes
 
-        # Little-endian: düşük adres = LSB
+        # Little-endian: low address = LSB
         b0 = mem_bytes.get(word_offset + 0, 0)
         b1 = mem_bytes.get(word_offset + 1, 0)
         b2 = mem_bytes.get(word_offset + 2, 0)
@@ -109,7 +109,7 @@ def bytes_to_32bit_lines(mem_bytes, base_addr, max_addr, word_bytes=4):
 
 def convert(input_hex, output_mem):
     """
-    HEX → 32-bit MEM dönüşümü
+    HEX → 32-bit MEM conversion.
     """
     mem_bytes, base_addr, max_addr = parse_objcopy_hex_bytes(input_hex)
     lines = bytes_to_32bit_lines(mem_bytes, base_addr, max_addr)

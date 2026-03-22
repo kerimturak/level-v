@@ -1,10 +1,10 @@
 /**
- * Memory Access Test - Ceres-V RV32IMC_Zicsr
+ * Memory Access Test - Level-V RV32IMC_Zicsr
  * 
  * Tests memory read/write patterns
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 int main(void) {
     uart_init();

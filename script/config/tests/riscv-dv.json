@@ -1,5 +1,4 @@
 {
-  "$schema": "./riscv-dv.schema.json",
   "name": "riscv-dv",
   "description": "RISC-V DV Random Test Generator",
   "version": "1.0",

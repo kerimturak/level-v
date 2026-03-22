@@ -1,14 +1,14 @@
-# DIVU_INT (Restoring Division) Modülü - Teknik Döküman
+# DIVU_INT (Restoring Division) Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`divu_int.sv` modülü, **restoring division algoritması** kullanarak 32÷32-bit unsigned division yapan sequential bir bölücüdür. Minimal alan kullanımı için tasarlanmıştır ve 32 cycle'da quotient ve remainder üretir.
+`divu_int.sv` is a sequential divider that performs 32÷32-bit unsigned division using the **restoring division algorithm**. It is designed for minimal area and produces quotient and remainder in 32 cycles.
 
-## Algoritma
+## Algorithm
 
 ### Restoring Division
 
-**Temel Prensip:**
+**Basic principle:**
 ```
 dividend = quotient × divisor + remainder
 A ÷ B = Q ... R  (A = Q×B + R)
@@ -16,18 +16,18 @@ A ÷ B = Q ... R  (A = Q×B + R)
 
 **Long Division (Binary):**
 1. Remainder = 0, Quotient = Dividend
-2. Her cycle:
+2. Each cycle:
    - Shift: {Remainder, Quotient} << 1
    - Trial subtraction: Remainder - Divisor
    - If result >= 0: Quotient[0] = 1, keep subtraction
    - If result < 0: Quotient[0] = 0, restore (add back divisor)
-3. 32 iteration sonra: Quotient = A ÷ B, Remainder = A % B
+3. After 32 iterations: Quotient = A ÷ B, Remainder = A % B
 
 ### Optimization: Non-Restoring
 
-Bu implementasyon **restoring** kullanır (negatif sonuç üzerine geri ekleme yapar).
+This implementation uses **restoring** division (adds back on a negative trial result).
 
-**Alternative:** Non-restoring division (restore gerektirmez, daha hızlı)
+**Alternative:** Non-restoring division (no restore step, somewhat faster)
 
 ### Example (8-bit)
 
@@ -65,30 +65,30 @@ Cycle 8: done
 Result: 15 ÷ 4 = 3 R 3  (15 = 3×4 + 3) ✓
 ```
 
-## Port Tanımları
+## Port Definitions
 
-### Giriş Portları
+### Input Ports
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `start_i` | logic | Başlat sinyali (1 cycle pulse) |
-| `dividend_i` | [WIDTH-1:0] | Bölünen (A) - unsigned |
-| `divisor_i` | [WIDTH-1:0] | Bölen (B) - unsigned |
+| Port | Type | Description |
+|------|------|-------------|
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `start_i` | logic | Start signal (1-cycle pulse) |
+| `dividend_i` | [WIDTH-1:0] | Dividend (A), unsigned |
+| `divisor_i` | [WIDTH-1:0] | Divisor (B), unsigned |
 
-### Çıkış Portları
+### Output Ports
 
-| Port | Tip | Açıklama |
-|------|-----|----------|
-| `quotient_o` | [WIDTH-1:0] | Bölüm (A ÷ B) |
-| `reminder_o` | [WIDTH-1:0] | Kalan (A % B) |
-| `busy_o` | logic | İşlem devam ediyor (1 = busy) |
-| `done_o` | logic | İşlem tamamlandı (1 cycle pulse) |
-| `valid_o` | logic | Sonuç geçerli (1 = valid) |
+| Port | Type | Description |
+|------|------|-------------|
+| `quotient_o` | [WIDTH-1:0] | Quotient (A ÷ B) |
+| `reminder_o` | [WIDTH-1:0] | Remainder (A % B) |
+| `busy_o` | logic | Operation in progress (1 = busy) |
+| `done_o` | logic | Operation complete (1-cycle pulse) |
+| `valid_o` | logic | Result valid (1 = valid) |
 | `dbz_o` | logic | Divide by zero (1 = zero divisor) |
 
-## İç Sinyaller
+## Internal Signals
 
 ```systemverilog
 logic [WIDTH-1:0] divisor_q;       // Divisor (registered)
@@ -538,13 +538,13 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 # No alternatives currently implemented
 ```
 
-## İlgili Modüller
+## Related Modules
 
 1. **alu.sv**: ALU wrapper, sign management, RISC-V semantics
 2. **execution.sv**: Pipeline integration
 3. **mul_int.sv**: Companion multiplier module
 
-## Referanslar
+## References
 
 1. "Computer Arithmetic: Algorithms and Hardware Designs" - Behrooz Parhami, Chapter 13 (Division)
 2. "Digital Arithmetic" - Ercegovac & Lang, Chapter 6 (Division)
@@ -553,6 +553,6 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** December 5, 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

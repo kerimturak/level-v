@@ -3,7 +3,7 @@
  * Tests mtime, mtimecmp, and msip registers
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 // CLINT register offsets (from base 0x3000_0000)
 #define CLINT_BASE        0x30000000

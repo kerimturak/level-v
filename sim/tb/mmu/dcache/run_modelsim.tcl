@@ -9,7 +9,7 @@ vlib work
 
 # Compile RTL files
 vlog +incdir+../../../../rtl/include +incdir+../../../../rtl/pkg \
-     ../../../../rtl/pkg/ceres_param.sv \
+     ../../../../rtl/pkg/level_param.sv \
      ../../../../rtl/ram/sp_bram.sv \
      ../../../../rtl/core/mmu/dcache.sv \
      ./tb_dcache_writeback.sv

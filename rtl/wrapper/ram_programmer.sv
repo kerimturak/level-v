@@ -11,7 +11,7 @@ Description:
   
   Receives a magic sequence via UART, then programs RAM with incoming data.
   Protocol:
-    1. Wait for magic sequence (e.g., "ceresTEST")
+    1. Wait for magic sequence (e.g., "LEVELTEST")
     2. Receive 4-byte word count (big-endian)
     3. Receive words (little-endian for RISC-V)
     4. Assert system reset when done
@@ -19,7 +19,7 @@ Description:
 `timescale 1ns / 1ps
 
 module ram_programmer
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int unsigned                    CLK_FREQ     = CPU_CLK,
     parameter int unsigned                    BAUD_RATE    = PROG_BAUD_RATE,

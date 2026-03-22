@@ -7,10 +7,10 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 module alu
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic               clk_i,
     input  logic               rst_ni,
@@ -28,7 +28,7 @@ module alu
 );
 
   // ------------------------------------------------------------
-  // ALU sonuçları
+  // ALU results
   // ------------------------------------------------------------
   typedef struct packed {
     logic [XLEN-1:0]   ADD;
@@ -55,7 +55,7 @@ module alu
   result_t              rslt;
 
   // ------------------------------------------------------------
-  // Ortak sinyaller
+  // Common signals
   // ------------------------------------------------------------
   logic    [  XLEN-1:0] abs_A;
   logic    [  XLEN-1:0] abs_B;
@@ -63,10 +63,10 @@ module alu
   logic                 mul_type;
   logic                 div_type;
 
-  // signed/unsigned için ayrı sign bitleri
-  logic                 mul_sign;  // çarpımın işareti
-  logic                 div_sign_quot;  // bölümün işareti (DIV)
-  logic                 div_sign_rem;  // kalanın işareti (REM)
+  // Separate sign bits for signed/unsigned paths
+  logic                 mul_sign;  // product sign
+  logic                 div_sign_quot;  // quotient sign (DIV)
+  logic                 div_sign_rem;  // remainder sign (REM)
 
   logic                 mul_start;
   logic                 div_start;
@@ -96,27 +96,27 @@ module alu
   logic                 div_done;
   logic                 div_dbz;
 
-  // sonrasında RISC-V kurallarına göre düzeltilmiş bölüm/kalan
+  // Quotient/remainder after RISC-V rule corrections
   logic    [  XLEN-1:0] div_quot_final;
   logic    [  XLEN-1:0] div_rem_final;
 
   // ------------------------------------------------------------
-  // Ortak abs ve type hesapları
+  // Common absolute-value and type computations
   // ------------------------------------------------------------
   always_comb begin
-    // Mutlak değerler (signed için)
+    // Absolute values (for signed ops)
     abs_A         = alu_a_i[XLEN-1] ? ~alu_a_i + 1'b1 : alu_a_i;
     abs_B         = alu_b_i[XLEN-1] ? ~alu_b_i + 1'b1 : alu_b_i;
 
     mul_type      = (op_sel_i inside {[OP_MUL : OP_MULHU]});
     div_type      = (op_sel_i inside {[OP_DIV : OP_REMU]});
 
-    // Varsayılanlar
+    // Defaults
     mul_sign      = 1'b0;
     div_sign_quot = 1'b0;
     div_sign_rem  = 1'b0;
 
-    // Varsayılan operandlar
+    // Default operands
     mul_op_A      = abs_A;
     mul_op_B      = abs_B;
     div_op_A      = abs_A;
@@ -137,11 +137,11 @@ module alu
         // rs1 signed, rs2 unsigned → sign = rs1[MSB]
         OP_MULHSU: begin
           mul_op_A = abs_A;  // |rs1|
-          mul_op_B = alu_b_i;  // rs2 zaten unsigned
+          mul_op_B = alu_b_i;  // rs2 is already unsigned
           mul_sign = alu_a_i[XLEN-1];
         end
 
-        // rs1, rs2 unsigned → sign yok
+        // rs1, rs2 unsigned — no sign
         OP_MULHU: begin
           mul_op_A = alu_a_i;
           mul_op_B = alu_b_i;
@@ -169,7 +169,7 @@ module alu
           div_sign_rem  = alu_a_i[XLEN-1];  // remainder sign = sign(rs1)
         end
 
-        // rs1, rs2 unsigned → sign yok
+        // rs1, rs2 unsigned — no sign
         OP_DIVU, OP_REMU: begin
           div_op_A      = alu_a_i;
           div_op_B      = alu_b_i;
@@ -186,19 +186,19 @@ module alu
       endcase
     end
 
-    // Başlatma sinyalleri
+    // Start signals
     mul_start = mul_type && !mul_busy && !(alu_stall_q);
     div_start = div_type && !div_busy && !(alu_stall_q & !div_dbz);
 
-    // ÇARPMA sign düzeltmesi (two's complement)
-    // unsigned_prod = |opA| * |opB| / veya unsigned*unsigned
+    // Multiply sign correction (two's complement)
+    // unsigned_prod = |opA| * |opB| or unsigned * unsigned
     product   = mul_sign ? -unsigned_prod : unsigned_prod;
 
-    // BÖLME sign düzeltmesi (two's complement) — sadece signed ops için
+    // Divide sign correction (two's complement) — signed ops only
     quotient  = div_sign_quot ? -unsigned_quo : unsigned_quo;
     remainder = div_sign_rem ? -unsigned_rem : unsigned_rem;
 
-    // Stall mantığı (senin mantığını koruyorum)
+    // Stall logic (preserves existing behavior)
     mul_stall = (mul_type && !mul_valid) || (mul_valid && mul_start);
     div_stall = (div_type && !div_valid) || (div_valid && div_start);
     div_stall &= !div_dbz;
@@ -317,14 +317,14 @@ module alu
 `endif
 
   // ------------------------------------------------------------
-  // RISC-V DIV/REM final düzeltmeleri (dbz + signed/unsigned)
+  // RISC-V DIV/REM final fixes (divide-by-zero + signed/unsigned)
   // ------------------------------------------------------------
   always_comb begin
     // QUOTIENT
     if (div_dbz) begin
       // DIV/DIVU by zero → quotient = -1 (0xFFFFFFFF)
       if (op_sel_i inside {OP_DIV, OP_DIVU}) div_quot_final = 32'hFFFF_FFFF;
-      else div_quot_final = unsigned_quo;  // undefined; çok önemli değil
+      else div_quot_final = unsigned_quo;  // undefined; not critical
     end else if (op_sel_i == OP_DIVU || op_sel_i == OP_REMU) begin
       // Unsigned ops
       div_quot_final = unsigned_quo;
@@ -340,12 +340,12 @@ module alu
     end else if (op_sel_i == OP_DIVU || op_sel_i == OP_REMU) begin
       div_rem_final = unsigned_rem;
     end else begin
-      div_rem_final = remainder;  // sign(rs1) ile düzeltilmiş
+      div_rem_final = remainder;  // corrected with sign(rs1)
     end
   end
 
   // ------------------------------------------------------------
-  // Normal ALU operasyonları + M sonuçları
+  // Normal ALU operations + M-extension results
   // ------------------------------------------------------------
   always_comb begin
     rslt.ADD    = alu_a_i + alu_b_i;
@@ -360,19 +360,19 @@ module alu
     rslt.SRA    = $signed(alu_a_i) >>> alu_b_i[4:0];
     rslt.LUI    = alu_b_i;
 
-    // MULTIPLY sonuçları
-    rslt.MUL    = product[31:0];  // low 32 bit
-    rslt.MULH   = product;  // signed×signed (üstten alınacak)
-    rslt.MULHSU = product;  // signed×unsigned
-    rslt.MULHU  = unsigned_prod;  // pure unsigned çarpım
+    // Multiply results
+    rslt.MUL    = product[31:0];  // low 32 bits
+    rslt.MULH   = product;  // signed × signed (upper half taken below)
+    rslt.MULHSU = product;  // signed × unsigned
+    rslt.MULHU  = unsigned_prod;  // pure unsigned product
 
-    // DIV/REM sonuçları
+    // Divide/remainder results
     rslt.DIV    = div_quot_final;
     rslt.DIVU   = div_dbz ? '1 : unsigned_quo;
     rslt.REM    = div_rem_final;
     rslt.REMU   = unsigned_rem;
 
-    // Sonuç mux
+    // Result mux
     unique case (op_sel_i)
       OP_ADD:  alu_o = rslt.ADD;
       OP_SUB:  alu_o = rslt.SUB;

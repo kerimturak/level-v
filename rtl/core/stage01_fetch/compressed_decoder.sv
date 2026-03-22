@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 `timescale 1ns / 1ps
 
 module compressed_decoder
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic [31:0] instr_i,
     output logic [31:0] instr_o,

@@ -1,16 +1,16 @@
-# OpenLane ASIC Akışı (SKY130)
+# OpenLane ASIC Flow (SKY130)
 
-Bu doküman CERES RV32IMC tasarımını açık kaynak araçlarla fiziksel serimden (PnR) geçirip GDS üretmek için eklenen akışı anlatır.
+This document describes the flow added to take the Level RV32IMC design through open-source physical implementation (PnR) to GDS using public tools.
 
-## Hedef
+## Goals
 
-- RTL: `ceres_wrapper`
-- Akış: OpenLane (Yosys + OpenROAD + Magic + Netgen)
+- RTL: `level_wrapper`
+- Flow: OpenLane (Yosys + OpenROAD + Magic + Netgen)
 - PDK: SKY130 (`sky130A`)
 
-## Eklenen Komutlar
+## Commands Added
 
-Repo kökünden:
+From the repository root:
 
 ```bash
 make asic_subrepos
@@ -21,7 +21,7 @@ make asic_report
 make asic_clean
 ```
 
-`asic_subrepos` komutu aşağıdaki repoları `subrepo/asic-tools/` altına alır:
+The `asic_subrepos` target fetches the following repositories under `subrepo/asic-tools/`:
 
 - `OpenLane`
 - `OpenROAD`
@@ -29,9 +29,9 @@ make asic_clean
 - `caravel_user_project`
 - `caravel`
 
-## Ortam Değişkenleri
+## Environment Variables
 
-İhtiyaç halinde:
+When needed:
 
 ```bash
 export OPENLANE_IMAGE=efabless/openlane:2023.09.07
@@ -41,76 +41,76 @@ export TAG=my_run_tag
 export OPENLANE_MODE=auto
 ```
 
-`OPENLANE_MODE` değerleri:
+`OPENLANE_MODE` values:
 
-- `auto`: Docker varsa Docker, yoksa local OpenLane (`subrepo/asic-tools/OpenLane`) dener
-- `docker`: sadece Docker
-- `local`: sadece local OpenLane
+- `auto`: Try Docker if available, otherwise local OpenLane (`subrepo/asic-tools/OpenLane`)
+- `docker`: Docker only
+- `local`: Local OpenLane only
 
-## Akış Adımları
+## Flow Steps
 
 1. `asic_setup`
-   - Docker erişimini kontrol eder
-   - OpenLane image’ını çeker
-   - `PDK_ROOT/PDK` varlığını doğrular
+   - Checks Docker access
+   - Pulls the OpenLane image
+   - Verifies `PDK_ROOT/PDK` exists
 
 2. `asic_prep`
-   - `rtl/` içinden OpenLane için kaynakları toplar
-   - FPGA/Vivado odaklı dosyaları hariç tutar (`xilinx_gpio_wrapper.sv`, `systessis_wrapper.sv`)
-   - `asic/openlane/designs/ceres_wrapper/src` altına kopyalar
-   - Docker varsa `davidsiaw/sv2v` ile `ceres_wrapper_sv2v.v` üretir (Yosys package/import parser limitleri için)
+   - Collects sources from `rtl/` for OpenLane
+   - Excludes FPGA/Vivado-oriented files (`xilinx_gpio_wrapper.sv`, `systessis_wrapper.sv`)
+   - Copies into `asic/openlane/designs/level_wrapper/src`
+   - If Docker is available, generates `level_wrapper_sv2v.v` with `davidsiaw/sv2v` (workaround for Yosys package/import parser limits)
 
 3. `asic_run`
-   - `flow.tcl` ile tam akışı çalıştırır
-   - Sonuçları `results/asic/openlane/ceres_wrapper/runs/<tag>` altına üretir
+   - Runs the full flow with `flow.tcl`
+   - Writes results under `results/asic/openlane/level_wrapper/runs/<tag>`
 
 4. `asic_report`
-   - En son koşudan temel çıktıları gösterir:
+   - Shows key outputs from the latest run:
      - `metrics.csv`
      - final GDS
      - final DEF
      - final gate-level netlist
 
-## Docker (Önerilen)
+## Docker (recommended)
 
-Ubuntu 22.04 için:
+On Ubuntu 22.04:
 
 ```bash
-chmod +x script/shell/install_docker_ubuntu.sh
-sudo bash script/shell/install_docker_ubuntu.sh
+chmod +x script/shell/setup_docker_engine_ubuntu.sh
+sudo bash script/shell/setup_docker_engine_ubuntu.sh
 newgrp docker
 docker run --rm hello-world
 ```
 
-Ardından OpenLane'i Docker modunda çalıştır:
+Then run OpenLane in Docker mode:
 
 ```bash
 OPENLANE_MODE=docker make asic_setup
 OPENLANE_MODE=docker make asic_run
 ```
 
-## Tasarım Konfigürasyonu
+## Design Configuration
 
-Ana dosyalar:
+Main files:
 
-- `asic/openlane/designs/ceres_wrapper/config.tcl`
-- `asic/openlane/designs/ceres_wrapper/constraint.sdc`
-- `asic/openlane/designs/ceres_wrapper/pin_order.cfg`
+- `asic/openlane/designs/level_wrapper/config.tcl`
+- `asic/openlane/designs/level_wrapper/constraint.sdc`
+- `asic/openlane/designs/level_wrapper/pin_order.cfg`
 
-Başlangıç saat tanımı:
+Initial clock definition:
 
 - `clk_i`
 - `20 ns` (`50 MHz`)
 
-Pilot GDS için varsayılan sentez tanımları:
+Default synthesis defines for a first GDS pass:
 
 - `SYNTHESIS`
 - `MINIMAL_SOC`
 
-Bu sayede cache/bpredictor daha küçük konfig ile başlar; ilk hedef akışı sona kadar geçirmek olur.
+This starts cache/branch predictor in a smaller configuration; the first goal is to complete the flow end-to-end.
 
-## Önemli Notlar
+## Important Notes
 
-- Tapeout hedefi için **0 DRC** ve **0 LVS mismatch** şartını hedefle.
-- İlk denemelerde `asic_run` sonrası raporları inceleyip `FP_CORE_UTIL`, `PL_TARGET_DENSITY`, `CLOCK_PERIOD` parametrelerini iteratif ayarla.
-- Daha güvenli tapeout için post-layout gate-level simülasyon ve SDF doğrulaması ekle.
+- For tapeout, aim for **0 DRC** violations and **0 LVS mismatches**.
+- On early runs, inspect `asic_report` output and tune `FP_CORE_UTIL`, `PL_TARGET_DENSITY`, and `CLOCK_PERIOD` iteratively.
+- For safer tapeout, add post-layout gate-level simulation and SDF validation.

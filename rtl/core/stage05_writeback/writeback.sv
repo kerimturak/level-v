@@ -1,4 +1,4 @@
-// ceres RISC-V Processor
+// Level RISC-V Processor
 // Copyright (c) 2024 Kerim TURAK
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 // and associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -15,16 +15,16 @@
 //                 --                                                         //
 //                                                                            //
 // Design Name:    stage5_writeback                                           //
-// Project Name:   ceres                                                      //
+// Project Name:   level                                                      //
 // Language:       SystemVerilog                                              //
 //                                                                            //
 // Description:    stage5_writeback                                           //
 ////////////////////////////////////////////////////////////////////////////////
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module writeback
-  import ceres_param::*;
+  import level_param::*;
 (
 `ifdef COMMIT_TRACER
     input  fe_tracer_info_t            fe_tracer_i,
@@ -46,6 +46,7 @@ module writeback
     input  logic                       clk_i,
     input  logic                       rst_ni,
     input  stall_e                     stall_i,
+    input  logic                       downstream_stall_i,
     input  logic            [     1:0] data_sel_i,
     input  logic            [XLEN-1:0] pc_incr_i,
     input  logic            [XLEN-1:0] alu_result_i,
@@ -57,7 +58,7 @@ module writeback
 );
 
   always_comb begin
-    rf_rw_en_o = rf_rw_en_i && !fe_flush_cache_i && !(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
+    rf_rw_en_o = rf_rw_en_i && !fe_flush_cache_i && !downstream_stall_i;
     wb_data_o  = data_sel_i[1] ? pc_incr_i : (data_sel_i[0] ? read_data_i : alu_result_i);
   end
 

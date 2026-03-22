@@ -1,8 +1,8 @@
 # Peripherals
 
-CERES RISC-V işlemcisinin peripheral modülleri.
+Peripheral modules for the Level RISC-V processor.
 
-## Genel Bakış
+## Overview
 
 ```
 rtl/periph/
@@ -20,8 +20,8 @@ rtl/periph/
 
 ## Memory Map
 
-| Peripheral | Base Address | Size | Açıklama |
-|------------|--------------|------|----------|
+| Peripheral | Base Address | Size | Description |
+|------------|--------------|------|-------------|
 | UART0 | 0x2000_0000 | 4KB | Primary UART |
 | UART1 | 0x2000_1000 | 4KB | Secondary UART |
 | SPI0 | 0x2000_2000 | 4KB | SPI Controller |
@@ -34,14 +34,15 @@ rtl/periph/
 | DMA | 0x2000_9000 | 4KB | DMA Controller |
 | VGA | 0x2000_D000 | 4KB | VGA Controller |
 
-## Modül Listesi
+## Module List
 
-| Modül | Dosya | Açıklama |
-|-------|-------|----------|
+| Module | File | Description |
+|--------|------|-------------|
 | [UART](uart.md) | `uart/` | Serial communication |
 | [SPI](spi.md) | `spi/` | SPI master/slave |
 | [I2C](i2c.md) | `i2c/` | I2C master |
 | [GPIO](gpio.md) | `gpio/` | General purpose I/O |
+| [GPIO (AXI / Xilinx)](gpio_axi_integration.md) | `gpio/` | `axi_gpio`, bridge, `xilinx_gpio_wrapper` |
 | [Timer](timer.md) | `timer/` | Timer/counter |
 | [PLIC](plic.md) | `plic/` | Interrupt controller |
 | [PWM](pwm.md) | `pwm/` | Pulse width modulation |
@@ -51,8 +52,8 @@ rtl/periph/
 
 ## Interrupt Mapping
 
-| IRQ | Peripheral | Açıklama |
-|-----|------------|----------|
+| IRQ | Peripheral | Description |
+|-----|------------|-------------|
 | 1 | UART0 | UART0 interrupt |
 | 2 | UART1 | UART1 interrupt |
 | 3 | SPI0 | SPI interrupt |

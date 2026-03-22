@@ -1,100 +1,100 @@
-# CERES RISC-V Dokümantasyon
+# Level RISC-V documentation
 
-!!! info "GitHub Repository"
-    **Kaynak Kod**: [github.com/kerimturak/level-v](https://github.com/kerimturak/level-v)  
-    **Dokümantasyon**: [kerimturak.github.io/level-v](https://kerimturak.github.io/level-v/)
+!!! info "GitHub repository"
+    **Source code**: [github.com/kerimturak/level-v](https://github.com/kerimturak/level-v)  
+    **Documentation**: [kerimturak.github.io/level-v](https://kerimturak.github.io/level-v/)
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch:{ .lg .middle } __Hızlı Başlangıç__
+-   :material-rocket-launch:{ .lg .middle } __Quick start__
 
     ---
 
-    Projeyi kurun ve ilk simülasyonunuzu çalıştırın
+    Set up the project and run your first simulation
 
-    [:octicons-arrow-right-24: Başlangıç Rehberi](getting-started.md)
+    [:octicons-arrow-right-24: Getting started guide](getting-started.md)
 
--   :material-cpu-64-bit:{ .lg .middle } __Mimari__
-
-    ---
-
-    5 aşamalı pipeline, branch predictor, cache sistemi
-
-    [:octicons-arrow-right-24: Mimari Detayları](architecture.md)
-
--   :material-chip:{ .lg .middle } __Core Modülleri__
+-   :material-cpu-64-bit:{ .lg .middle } __Architecture__
 
     ---
 
-    CPU, Fetch, Decode, Execute, Memory, Writeback
+    Five-stage pipeline, branch predictor, cache subsystem
 
-    [:octicons-arrow-right-24: Core Dokümantasyonu](core/index.md)
+    [:octicons-arrow-right-24: Architecture details](architecture.md)
 
--   :material-memory:{ .lg .middle } __Peripheral Modülleri__
+-   :material-chip:{ .lg .middle } __Core modules__
 
     ---
 
-    UART, SPI, I2C, GPIO, Timer, PWM, DMA, VGA
+    CPU, fetch, decode, execute, memory, writeback
 
-    [:octicons-arrow-right-24: Peripheral Dokümantasyonu](periph/index.md)
+    [:octicons-arrow-right-24: Core documentation](core/index.md)
+
+-   :material-memory:{ .lg .middle } __Peripheral modules__
+
+    ---
+
+    UART, SPI, I2C, GPIO, timer, PWM, DMA, VGA
+
+    [:octicons-arrow-right-24: Peripheral documentation](periph/index.md)
 
 </div>
 
 ---
 
-## 🎯 Proje Özellikleri
+## Project highlights
 
-| Özellik | Değer |
+| Feature | Value |
 |---------|-------|
-| **ISA** | RV32IMC (Base Integer + Multiply + Compressed) |
-| **Pipeline** | 5-aşamalı (IF → ID → EX → MEM → WB) |
-| **Cache** | 8-way set associative, 8KB I-Cache, 8KB D-Cache |
-| **Branch Predictor** | GShare (512-entry PHT, 256-entry BTB, 16-deep RAS) |
+| **ISA** | RV32IMC (base integer + multiply + compressed) |
+| **Pipeline** | Five-stage (IF → ID → EX → MEM → WB) |
+| **Cache** | 8-way set-associative, 8 KB I-cache, 8 KB D-cache |
+| **Branch predictor** | GShare (512-entry PHT, 256-entry BTB, 16-deep RAS) |
 | **Bus** | Wishbone B4 pipelined |
-| **Clock** | 50 MHz hedef |
-| **Dil** | SystemVerilog (IEEE 1800-2017) |
+| **Clock** | 50 MHz target |
+| **Language** | SystemVerilog (IEEE 1800-2017) |
 
 ---
 
-## 📂 Dokümantasyon Yapısı
+## Documentation layout
 
 ```
 docs/
-├── index.md                   # Bu sayfa
-├── getting-started.md         # Kurulum rehberi
-├── architecture.md            # Mimari dokümantasyonu
-├── tools.md                   # Araç kurulumu
+├── index.md                   # This page
+├── getting-started.md         # Setup guide
+├── architecture.md            # Architecture
+├── tools.md                   # Tool setup
 │
-├── core/                      # Core modül dokümantasyonu
-│   ├── index.md               # Core genel bakış
-│   ├── cpu.md                 # CPU top-level
-│   ├── hazard-unit.md         # Hazard detection
+├── core/                      # Core module docs
+│   ├── index.md               # Core overview
+│   ├── cpu_module.md          # CPU top level
+│   ├── hazard_unit_module.md  # Hazard handling
 │   ├── stage01_fetch/         # Fetch stage
 │   ├── stage02_decode/        # Decode stage
 │   ├── stage03_execute/       # Execute stage
 │   ├── stage04_memory/        # Memory stage
 │   ├── stage05_writeback/     # Writeback stage
-│   ├── mmu/                   # Memory management
-│   └── pmp_pma/               # Physical memory protection
+│   ├── mmu/                   # Memory subsystem
+│   └── pmp_pma/               # Physical memory attributes
 │
-├── periph/                    # Peripheral dokümantasyonu
-│   ├── index.md               # Peripheral genel bakış
-│   ├── uart.md                # UART controller
-│   ├── spi.md                 # SPI master
-│   ├── i2c.md                 # I2C master
-│   ├── gpio.md                # GPIO controller
-│   ├── timer.md               # General purpose timer
-│   ├── plic.md                # Platform-level interrupt controller
-│   ├── pwm.md                 # PWM controller
-│   ├── dma.md                 # DMA controller
-│   ├── wdt.md                 # Watchdog timer
-│   └── vga.md                 # VGA controller
+├── periph/                    # Peripheral docs
+│   ├── index.md               # Peripheral overview
+│   ├── uart.md
+│   ├── spi.md
+│   ├── i2c.md
+│   ├── gpio.md
+│   ├── timer.md
+│   ├── plic.md
+│   ├── pwm.md
+│   ├── dma.md
+│   ├── wdt.md
+│   └── vga.md
 │
 ├── include/                   # Include files
 ├── pkg/                       # Packages
 ├── ram/                       # Memory modules
 ├── tracer/                    # Instruction tracer
-├── util/                      # Utility modules
+├── util/                      # Utilities
 ├── wrapper/                   # Top-level wrappers
 │
 ├── script/                    # Build system
@@ -104,36 +104,36 @@ docs/
 
 ---
 
-## 🚀 Hızlı Komutlar
+## Quick commands
 
 ```bash
-# Verilator ile derleme
+# Build with Verilator
 make verilate
 
-# Tek test çalıştırma
+# Run a single test
 make t T=rv32ui-p-add
 
 # CoreMark benchmark
-make cm SIM_UART_MONITOR=1
+make run_coremark SIM_UART_MONITOR=1
 
-# Tüm ISA testleri
+# Full ISA suite
 make isa
 
-# Lint kontrolü
+# Lint
 make lint
 ```
 
 ---
 
-## 📖 Referanslar
+## References
 
-- [RISC-V ISA Specification](https://riscv.org/technical/specifications/)
-- [Wishbone B4 Specification](https://cdn.opencores.org/downloads/wbspec_b4.pdf)
-- [Verilator Manual](https://verilator.org/guide/latest/)
+- [RISC-V ISA specifications](https://riscv.org/technical/specifications/)
+- [Wishbone B4 specification](https://cdn.opencores.org/downloads/wbspec_b4.pdf)
+- [Verilator manual](https://verilator.org/guide/latest/)
 
 ---
 
-## 📞 İletişim
+## Contact
 
 - **GitHub**: [kerimturak/level-v](https://github.com/kerimturak/level-v)
-- **Issues**: [GitHub Issues](https://github.com/kerimturak/level-v/issues)
+- **Issues**: [GitHub issues](https://github.com/kerimturak/level-v/issues)

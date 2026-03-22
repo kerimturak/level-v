@@ -1,5 +1,5 @@
 /* ============================================================
- * Ceres-V Linker Script for Embench Benchmarks
+ * level-V Linker Script for Embench Benchmarks
  * ============================================================
  * Memory layout for RV32IMC processor
  */

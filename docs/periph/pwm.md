@@ -1,57 +1,57 @@
-# PWM Controller - Teknik Dokümantasyon
+# PWM Controller — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [Register Map](#register-map)
-4. [Counter ve Prescaler](#counter-ve-prescaler)
-5. [PWM Modları](#pwm-modları)
+4. [Counter and Prescaler](#counter-and-prescaler)
+5. [PWM Modes](#pwm-modes)
 6. [Dead-Time Generator](#dead-time-generator)
 7. [Fault Protection](#fault-protection)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`pwm` modülü, **8 bağımsız PWM kanalı** ile motor kontrolü, LED dimming ve güç elektroniği uygulamaları için gelişmiş özellikler sunar.
+The `pwm` module provides **eight independent PWM channels** with advanced features for motor control, LED dimming, and power-electronics applications.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/periph/pwm/pwm.sv
 ```
 
-### Özellikler
+### Features
 
-- 8 bağımsız PWM kanalı
-- 16-bit çözünürlük
-- Common veya individual period kontrolü
+- Eight independent PWM channels
+- 16-bit resolution
+- Common or individual period control
 - Dead-time generator (complementary outputs)
 - Phase offset per channel
-- Center-aligned veya edge-aligned modlar
-- Programlanabilir polarity
+- Center-aligned or edge-aligned modes
+- Programmable polarity
 - Fault input for emergency shutdown
 - DMA request capability
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Parametreler
+### Parameters
 
 ```systemverilog
 module pwm
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter int NUM_CHANNELS = 8,
     parameter int PWM_WIDTH    = 16
 )
 ```
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 (
@@ -90,8 +90,8 @@ module pwm
 
 ### Global Registers
 
-| Offset | Register | Açıklama |
-|--------|----------|----------|
+| Offset | Register | Description |
+|--------|----------|-------------|
 | 0x00 | GCR | Global Control Register |
 | 0x04 | PERIOD | Global period value |
 | 0x08 | PSC | Prescaler divider |
@@ -103,7 +103,7 @@ module pwm
 
 ### Per-Channel Registers (0x10 bytes each, starting at 0x40)
 
-| Offset | Register | Açıklama |
+| Offset | Register | Description |
 |--------|----------|----------|
 | 0x40 + N*0x10 | CCR | Channel Control Register |
 | 0x44 + N*0x10 | DUTY | Duty cycle value |
@@ -140,7 +140,7 @@ module pwm
 
 ---
 
-## Counter ve Prescaler
+## Counter and Prescaler
 
 ### Prescaler
 
@@ -173,7 +173,7 @@ Example (50 MHz clock):
 
 ---
 
-## PWM Modları
+## PWM Modes
 
 ### Edge-Aligned Mode (CNTMODE=0)
 
@@ -317,7 +317,7 @@ Example (50 MHz clock):
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### C Header
 
@@ -404,9 +404,9 @@ void pwm_set_motor_duty(int16_t duty) {
 
 ---
 
-## Özet
+## Summary
 
-`pwm` modülü:
+The `pwm` module provides:
 
 1. **8 Channels**: Independent PWM outputs
 2. **16-bit Resolution**: Fine duty control

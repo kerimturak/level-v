@@ -1,11 +1,11 @@
 # ============================================================
-# CERES RISC-V — Continuous Integration Pipeline
+# Level RISC-V — Continuous Integration Pipeline
 # ============================================================
 # Triggers on push and pull requests to main branch
 # Runs ISA tests, Architecture tests, and generates reports
 # ============================================================
 
-name: CERES CI
+name: LEVEL CI
 
 on:
   # push:
@@ -345,7 +345,7 @@ jobs:
     steps:
       - name: Check test results
         run: |
-          echo "## CERES RISC-V Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "## Level RISC-V Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY

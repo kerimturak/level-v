@@ -1,5 +1,5 @@
 /**
- * SPI Loopback Test - Ceres-V RV32IMC_Zicsr
+ * SPI Loopback Test - Level-V RV32IMC_Zicsr
  * 
  * Test program that verifies SPI master functionality using loopback
  * Connect MOSI to MISO externally for this test, or the testbench
@@ -334,7 +334,7 @@ void main(void)
     
     uart_puts("\n");
     uart_puts("========================================\n");
-    uart_puts("  Ceres-V SPI Test Program\n");
+    uart_puts("  Level-V SPI Test Program\n");
     uart_puts("========================================\n");
     
     /* Run tests */

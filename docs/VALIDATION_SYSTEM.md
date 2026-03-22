@@ -1,64 +1,64 @@
-# 🔍 CERES RISC-V Validation System
+# 🔍 Level RISC-V Validation System
 
-## 📋 Genel Bakış
+## 📋 Overview
 
-Test validation sistemini **3 katmana** ayırdık:
+We split the test validation system into **3 layers**:
 
 ```
 ┌─────────────────────────────────────────┐
 │ Layer 1: RTL Simulation                │
 │ ├─ verilator_runner.py                 │
-│ └─ Sonuç: SIMULATION_COMPLETED/CRASHED │
+│ └─ Result: SIMULATION_COMPLETED/CRASHED │
 └─────────────────────────────────────────┘
               ↓
 ┌─────────────────────────────────────────┐
 │ Layer 2: Validation                    │
-│ ├─ Makefile.spike (Spike çalıştır)    │
-│ ├─ validation_runner.py (Orkestra)    │
-│ └─ Sonuç: VALIDATED_PASS/FAIL          │
+│ ├─ Makefile.spike (run Spike)          │
+│ ├─ validation_runner.py (orchestrator) │
+│ └─ Result: VALIDATED_PASS/FAIL         │
 └─────────────────────────────────────────┘
               ↓
 ┌─────────────────────────────────────────┐
 │ Layer 3: Test Management               │
-│ ├─ test_manager.py (Koordinasyon)     │
-│ └─ Final: PASS/FAIL + Debug Report     │
+│ ├─ test_manager.py (coordination)      │
+│ └─ Final: PASS/FAIL + debug report     │
 └─────────────────────────────────────────┘
 ```
 
 ---
 
-## 🎯 Sorumluluk Ayrımı
+## 🎯 Separation of responsibilities
 
-### 1️⃣ **RTL Simülasyon** (`verilator_runner.py`)
+### 1️⃣ **RTL simulation** (`verilator_runner.py`)
 
-**Sorumluluk:** Sadece simülasyonu çalıştırmak
-**Başarı Kriteri:** Crash olmadan bitmek
+**Responsibility:** Run simulation only  
+**Success criterion:** Finish without crashing
 
 ```python
 # verilator_runner.py
 if exit_code == 0:
-    print("✓ Simülasyon Başarılı")  # ← Doğru: Crash olmadı
+    print("✓ Simulation successful")  # ← Correct: no crash
     return 0
 else:
-    print("✗ Simülasyon Çöktü")
+    print("✗ Simulation crashed")
     return 1
 ```
 
-**Sonuç Mesajları:**
-- ✅ `SIMULATION_COMPLETED` - Simülasyon crash olmadan bitti
-- ❌ `SIMULATION_CRASHED` - Simülasyon crash oldu
+**Result messages:**
+- ✅ `SIMULATION_COMPLETED` — simulation finished without crashing
+- ❌ `SIMULATION_CRASHED` — simulation crashed
 
-**ÖNEMLİ:** Bu katman **test pass/fail** kararı **VERMEMELİ**!
+**IMPORTANT:** This layer must **NOT** decide **test pass/fail**!
 
 ---
 
 ### 2️⃣ **Validation** (`Makefile.spike` + `validation_runner.py`)
 
-**Sorumluluk:** RTL çıktısını Spike ile karşılaştırmak
-**Başarı Kriteri:** RTL commit log == Spike commit log
+**Responsibility:** Compare RTL output with Spike  
+**Success criterion:** RTL commit log == Spike commit log
 
 ```bash
-# Makefile.spike kullanımı
+# Makefile.spike usage
 make -f Makefile.spike run-spike \
     TEST_NAME=rv32ui-p-add \
     LOG_DIR=build/log/verilator/rv32ui-p-add
@@ -70,12 +70,12 @@ make -f Makefile.spike compare \
 ```
 
 ```python
-# validation_runner.py kullanımı
+# validation_runner.py usage
 python3 script/python/validation_runner.py \
     --test-name rv32ui-p-add \
     --log-dir build/log/verilator/rv32ui-p-add
 
-# Sonuç:
+# Result:
 {
   "status": "VALIDATED_PASS",
   "rtl_instructions": 2900,
@@ -85,55 +85,55 @@ python3 script/python/validation_runner.py \
 }
 ```
 
-**Sonuç Durumları:**
-- ✅ `VALIDATED_PASS` - Loglar tam eşleşti
-- ❌ `VALIDATED_FAIL` - Loglar farklı
-- ⚠️ `SPIKE_FAILED` - Spike çalıştırılamadı
-- ⚠️ `RTL_LOG_MISSING` - RTL log yok
-- ⚠️ `SPIKE_SKIPPED` - Validation atlandı
+**Result states:**
+- ✅ `VALIDATED_PASS` — logs match exactly
+- ❌ `VALIDATED_FAIL` — logs differ
+- ⚠️ `SPIKE_FAILED` — Spike could not be run
+- ⚠️ `RTL_LOG_MISSING` — no RTL log
+- ⚠️ `SPIKE_SKIPPED` — validation skipped
 
 ---
 
-### 3️⃣ **Test Manager** (`test_manager.py`)
+### 3️⃣ **Test manager** (`test_manager.py`)
 
-**Sorumluluk:** Tüm pipeline'ı koordine etmek
-**Final Karar:** Pass/Fail + Debug Report
+**Responsibility:** Coordinate the full pipeline  
+**Final decision:** Pass/fail + debug report
 
 ```python
 # test_manager.py workflow
-1. RTL simülasyonu çalıştır → verilator_runner.py
-2. Eğer simulation_completed:
-     a. Validation çalıştır → validation_runner.py
-     b. Validation sonucuna göre PASS/FAIL
-3. Debug raporu oluştur
-4. Kullanıcıya sonucu bildir
+1. Run RTL simulation → verilator_runner.py
+2. If simulation_completed:
+     a. Run validation → validation_runner.py
+     b. PASS/FAIL based on validation result
+3. Build debug report
+4. Report result to the user
 ```
 
-**Final Sonuçlar:**
-- ✅ `TEST_PASSED` - Simülasyon + Validation başarılı
-- ❌ `TEST_FAILED` - Validation başarısız (loglar eşleşmedi)
-- ❌ `SIMULATION_CRASHED` - Simülasyon crash oldu
-- ⚠️ `VALIDATION_SKIPPED` - Validation yapılmadı (benchmark mode)
+**Final outcomes:**
+- ✅ `TEST_PASSED` — simulation + validation succeeded
+- ❌ `TEST_FAILED` — validation failed (logs did not match)
+- ❌ `SIMULATION_CRASHED` — simulation crashed
+- ⚠️ `VALIDATION_SKIPPED` — validation not run (benchmark mode)
 
 ---
 
-## 📁 Yeni Dosyalar
+## 📁 New files
 
 ### 1. `Makefile.spike`
 **Standalone Spike Makefile**
 
-Özellikler:
-- Bağımsız Spike çalıştırma
-- Log karşılaştırma
+Features:
+- Run Spike standalone
+- Compare logs
 - Auto-detect test type
 - Minimal dependencies
 
-Kullanım:
+Usage:
 ```bash
-# Spike çalıştır
+# Run Spike
 make -f Makefile.spike run-spike TEST_NAME=rv32ui-p-add LOG_DIR=build/log/test
 
-# Logları karşılaştır
+# Compare logs
 make -f Makefile.spike compare \
     TEST_NAME=rv32ui-p-add \
     RTL_LOG=build/log/test/commit_trace.log \
@@ -148,28 +148,28 @@ make -f Makefile.spike validate \
 ```
 
 ### 2. `script/python/validation_runner.py`
-**Validation orkestra aracı**
+**Validation orchestration tool**
 
-Özellikler:
-- Spike + Compare tek komutta
+Features:
+- Spike + compare in one command
 - Metrics extraction
 - JSON output
 - Error handling
 
-Kullanım:
+Usage:
 ```bash
-# Basit kullanım
+# Simple usage
 python3 script/python/validation_runner.py \
     --test-name rv32ui-p-add \
     --log-dir build/log/verilator/rv32ui-p-add
 
-# Spike atla (sadece karşılaştır)
+# Skip Spike (compare only)
 python3 script/python/validation_runner.py \
     --test-name rv32ui-p-add \
     --log-dir build/log/verilator/rv32ui-p-add \
     --skip-spike
 
-# JSON çıktı
+# JSON output
 python3 script/python/validation_runner.py \
     --test-name rv32ui-p-add \
     --log-dir build/log/verilator/rv32ui-p-add \
@@ -178,47 +178,47 @@ python3 script/python/validation_runner.py \
 
 ---
 
-## 🔄 Tam Workflow
+## 🔄 Full workflow
 
-### Senaryo 1: Tam Validation
+### Scenario 1: Full validation
 
 ```bash
-# 1. RTL Simulation
+# 1. RTL simulation
 make -f Makefile.verilator run TEST_NAME=rv32ui-p-add
-# → Sonuç: build/log/verilator/rv32ui-p-add/commit_trace.log
+# → Result: build/log/verilator/rv32ui-p-add/commit_trace.log
 
 # 2. Validation
 python3 script/python/validation_runner.py \
     --test-name rv32ui-p-add \
     --log-dir build/log/verilator/rv32ui-p-add
-# → Spike çalışır, logları karşılaştırır
+# → Spike runs, logs are compared
 
-# 3. Sonuç
-# ✅ VALIDATED_PASS - Test geçti
-# ❌ VALIDATED_FAIL - Test başarısız
+# 3. Outcome
+# ✅ VALIDATED_PASS — test passed
+# ❌ VALIDATED_FAIL — test failed
 ```
 
-### Senaryo 2: Benchmark (Validation Yok)
+### Scenario 2: Benchmark (no validation)
 
 ```bash
-# Benchmark testlerde validation atlanır
+# Benchmark tests skip validation
 make -f Makefile.verilator test-run TEST_NAME=coremark
-# → Sadece simülasyon
-# → Sonuç: SIMULATION_COMPLETED (validation yok)
+# → Simulation only
+# → Result: SIMULATION_COMPLETED (no validation)
 ```
 
-### Senaryo 3: Manuel Validation
+### Scenario 3: Manual validation
 
 ```bash
-# Önce RTL
+# RTL first
 make -f Makefile.verilator run TEST_NAME=rv32ui-p-add
 
-# Sonra Spike (ayrı)
+# Then Spike (separate)
 make -f Makefile.spike run-spike \
     TEST_NAME=rv32ui-p-add \
     LOG_DIR=build/log/verilator/rv32ui-p-add
 
-# Sonra Compare (ayrı)
+# Then compare (separate)
 make -f Makefile.spike compare \
     TEST_NAME=rv32ui-p-add \
     RTL_LOG=build/log/verilator/rv32ui-p-add/commit_trace.log \
@@ -227,9 +227,9 @@ make -f Makefile.spike compare \
 
 ---
 
-## 📊 Validation Sonuç Formatı
+## 📊 Validation result format
 
-### JSON Output
+### JSON output
 
 ```json
 {
@@ -257,7 +257,7 @@ make -f Makefile.spike compare \
 }
 ```
 
-### Başarısız Test Örneği
+### Failed test example
 
 ```json
 {
@@ -278,45 +278,45 @@ make -f Makefile.spike compare \
 
 ---
 
-## 🎯 Avantajlar
+## 🎯 Benefits
 
-### ✅ Sorumluluk Ayrımı
-- Her katman kendi işini yapar
-- RTL simülasyonu validation'dan bağımsız
-- Validation RTL'den bağımsız
+### ✅ Separation of concerns
+- Each layer does one job
+- RTL simulation is independent of validation
+- Validation is independent of RTL
 
-### ✅ Modüler Yapı
-- Spike'ı standalone çalıştırabilirsiniz
-- Validation'ı tekrar çalıştırabilirsiniz
-- Test manager olmadan da kullanılabilir
+### ✅ Modular structure
+- You can run Spike standalone
+- You can re-run validation
+- Usable without the test manager
 
-### ✅ Debug-Friendly
-- Her adım ayrı log üretir
-- JSON çıktılar parse edilebilir
-- Hata ayıklama kolay
+### ✅ Debug-friendly
+- Each step produces its own logs
+- JSON outputs are easy to parse
+- Easier troubleshooting
 
-### ✅ Geriye Dönük Uyumlu
-- Eski `make run` hala çalışır
-- Mevcut test workflow'ları korunur
-- Yeni özellikler optional
+### ✅ Backward compatible
+- Legacy `make run` still works
+- Existing test workflows preserved
+- New features are optional
 
 ---
 
-## 🔧 Gelecek İyileştirmeler
+## 🔧 Future improvements
 
-### 1. Test Manager Entegrasyonu
+### 1. Test manager integration
 ```python
-# test_manager.py'de
+# In test_manager.py
 def run_test_with_validation(test_name):
-    # 1. RTL simülasyon
+    # 1. RTL simulation
     rtl_result = run_rtl_simulation(test_name)
 
-    # 2. Eğer simulation başarılı
+    # 2. If simulation succeeded
     if rtl_result.status == "COMPLETED":
-        # 3. Validation çalıştır
+        # 3. Run validation
         validation = run_validation(test_name)
 
-        # 4. Final karar
+        # 4. Final decision
         if validation.passed:
             return "TEST_PASSED"
         else:
@@ -325,13 +325,13 @@ def run_test_with_validation(test_name):
         return "SIMULATION_CRASHED"
 ```
 
-### 2. Debug Raporu Genişletme
+### 2. Richer debug report
 ```json
 {
   "result": {
-    "simulation": "COMPLETED",  # RTL simülasyon durumu
-    "validation": "FAILED",     # Validation durumu
-    "final_status": "FAILED"    # Final karar
+    "simulation": "COMPLETED",  # RTL simulation status
+    "validation": "FAILED",     # Validation status
+    "final_status": "FAILED"    # Final decision
   },
   "validation_details": {
     "rtl_instructions": 2900,
@@ -346,7 +346,7 @@ def run_test_with_validation(test_name):
 }
 ```
 
-### 3. Auto-Enable Validation
+### 3. Auto-enable validation
 ```json
 // test_registry.json
 {
@@ -359,7 +359,7 @@ def run_test_with_validation(test_name):
     },
     "benchmarks": {
       "validation": {
-        "enabled": false  // Benchmark'lerde validation yok
+        "enabled": false  // No validation for benchmarks
       }
     }
   }
@@ -368,30 +368,30 @@ def run_test_with_validation(test_name):
 
 ---
 
-## 📞 Kullanım Örnekleri
+## 📞 Usage examples
 
-### Örnek 1: Quick Test + Validation
+### Example 1: Quick test + validation
 
 ```bash
-# Test çalıştır (RTL only)
+# Run test (RTL only)
 make -f Makefile.verilator run TEST_NAME=rv32ui-p-add
 
-# Validation ekle
+# Add validation
 python3 script/python/validation_runner.py \
     --test-name rv32ui-p-add \
     --log-dir build/log/verilator/rv32ui-p-add
 ```
 
-### Örnek 2: Sadece Validation (RTL zaten çalıştı)
+### Example 2: Validation only (RTL already ran)
 
 ```bash
-# RTL çalıştı, sadece validation yap
+# RTL already ran; run validation only
 python3 script/python/validation_runner.py \
     --test-name rv32ui-p-add \
     --log-dir build/log/verilator/rv32ui-p-add
 ```
 
-### Örnek 3: Spike Parametreleri Özelleştir
+### Example 3: Customize Spike parameters
 
 ```bash
 python3 script/python/validation_runner.py \
@@ -401,7 +401,7 @@ python3 script/python/validation_runner.py \
     --spike-pc 0x80000000
 ```
 
-### Örnek 4: Resync Mode (Farklılıkları Otla)
+### Example 4: Resync mode (consume differences)
 
 ```bash
 python3 script/python/validation_runner.py \
@@ -412,28 +412,28 @@ python3 script/python/validation_runner.py \
 
 ---
 
-## ✅ Özet
+## ✅ Summary
 
-| Katman | Sorumluluk | Başarı Kriteri | Çıktı |
-|--------|------------|----------------|-------|
-| **RTL Sim** | Simülasyon çalıştır | Crash olma | `COMPLETED`/`CRASHED` |
-| **Validation** | Spike + Compare | RTL == Spike | `VALIDATED_PASS`/`FAIL` |
-| **Test Manager** | Orkestra + Karar | Full pipeline | `TEST_PASSED`/`FAILED` |
+| Layer | Responsibility | Success criterion | Output |
+|--------|----------------|-------------------|--------|
+| **RTL sim** | Run simulation | No crash | `COMPLETED`/`CRASHED` |
+| **Validation** | Spike + compare | RTL == Spike | `VALIDATED_PASS`/`FAIL` |
+| **Test manager** | Orchestrate + decide | Full pipeline | `TEST_PASSED`/`FAILED` |
 
-**Altın Kural:** Her katman sadece kendi sorumluluğunda karar verir!
+**Golden rule:** Each layer decides only within its own responsibility!
 
 ---
 
-## 🎉 Sonuç
+## 🎉 Conclusion
 
-Artık:
-- ✅ RTL simülasyonu validation'dan ayrı
-- ✅ Spike standalone çalışabilir
-- ✅ Validation tekrar çalıştırılabilir
-- ✅ Test pass/fail kriteri net
-- ✅ Debug-friendly yapı
-- ✅ Modüler ve genişletilebilir
+You now have:
+- ✅ RTL simulation separate from validation
+- ✅ Spike can run standalone
+- ✅ Validation can be re-run
+- ✅ Clear test pass/fail criteria
+- ✅ Debug-friendly structure
+- ✅ Modular and extensible
 
-**Test sonucu artık doğru:**
-- Simülasyon çalıştı ≠ Test geçti
-- RTL == Spike → Test geçti ✅
+**Test results are now meaningful:**
+- Simulation ran ≠ test passed
+- RTL == Spike → test passed ✅

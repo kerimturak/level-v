@@ -10,16 +10,17 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 
 /* verilator lint_off VARHIDDEN */
 module icache
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter type cache_req_t = logic,
     parameter type cache_res_t = logic,
     parameter type lowX_res_t  = logic,
     parameter type lowX_req_t  = logic,
     parameter      CACHE_SIZE  = 1024,
-    parameter      BLK_SIZE    = ceres_param::BLK_SIZE,
-    parameter      XLEN        = ceres_param::XLEN,
-    parameter      NUM_WAY     = 4
+    parameter      BLK_SIZE    = level_param::BLK_SIZE,
+    parameter      XLEN        = level_param::XLEN,
+    parameter      NUM_WAY     = 4,
+    parameter bit  ENABLE_ICACHE_PREFETCH = 1'b0
 ) (
     input  logic       clk_i,
     input  logic       rst_ni,
@@ -27,7 +28,13 @@ module icache
     input  cache_req_t cache_req_i,
     output cache_res_t cache_res_o,
     input  lowX_res_t  lowX_res_i,
-    output lowX_req_t  lowX_req_o
+    output lowX_req_t  lowX_req_o,
+    input  logic            prefetch_valid_i,
+    input  logic [XLEN-1:0] prefetch_addr_i,
+    input  logic            prefetch_uncached_i,
+    input  logic            prefetch_grand_i,
+    output logic            prefetch_ready_o,
+    output logic            prefetch_ack_o
 );
 
   // COMMON SIGNALS & Parameters
@@ -54,6 +61,17 @@ module icache
   logic       [  NUM_WAY-1:0] cache_wr_way;
   logic                       cache_wr_en;
   logic                       lookup_ack;
+  logic                       rsp_is_prefetch_q;
+  logic [XLEN-1:0]          pf_addr_q;
+  logic                       pf_uncached_q;
+
+  wire [IDX_WIDTH-1:0] pf_wr_idx = pf_addr_q[IDX_WIDTH+BOFFSET-1:BOFFSET];
+
+  wire issue_dem = !lookup_ack && cache_miss;
+  wire issue_pf  = ENABLE_ICACHE_PREFETCH && !lookup_ack && prefetch_valid_i && !cache_miss && !flush_i
+      && prefetch_grand_i && !prefetch_uncached_i;
+  wire demand_fill = !flush && lowX_res_i.valid && !rsp_is_prefetch_q && !cache_req_q.uncached && lookup_ack;
+  wire pf_fill       = ENABLE_ICACHE_PREFETCH && !flush && lowX_res_i.valid && rsp_is_prefetch_q && !pf_uncached_q;
 
   // Shared memory structures
   typedef struct packed {
@@ -202,9 +220,10 @@ module icache
     cache_hit = cache_req_q.valid && !flush && (|(cache_valid_vec & cache_hit_vec));
 
     rd_idx = cache_req_q.valid ? cache_req_q.addr[IDX_WIDTH+BOFFSET-1:BOFFSET] : cache_req_i.addr[IDX_WIDTH+BOFFSET-1:BOFFSET];
-    wr_idx = flush ? flush_index : (cache_miss ? cache_req_q.addr[IDX_WIDTH+BOFFSET-1:BOFFSET] : rd_idx);
+    wr_idx = flush ? flush_index
+        : (pf_fill ? pf_wr_idx : (cache_miss ? cache_req_q.addr[IDX_WIDTH+BOFFSET-1:BOFFSET] : rd_idx));
 
-    cache_wr_en = (cache_miss && lowX_res_i.valid && !cache_req_q.uncached) || flush;
+    cache_wr_en = demand_fill || pf_fill || flush;
     cache_idx = cache_wr_en ? wr_idx : rd_idx;
 
     cache_wr_way = cache_hit ? cache_hit_vec : evict_way;
@@ -218,7 +237,9 @@ module icache
 
     tsram.way   = '0;
     tsram.idx   = cache_idx;
-    tsram.wtag  = flush ? '0 : {1'b1, cache_req_q.addr[XLEN-1 : IDX_WIDTH+BOFFSET]};
+    tsram.wtag  = flush ? '0
+        : (pf_fill ? {1'b1, pf_addr_q[XLEN-1 : IDX_WIDTH+BOFFSET]}
+           : {1'b1, cache_req_q.addr[XLEN-1 : IDX_WIDTH+BOFFSET]});
     for (int i = 0; i < NUM_WAY; i++) tsram.way[i] = flush ? '1 : cache_wr_way[i] && cache_wr_en;
 
     dsram.way   = '0;
@@ -229,10 +250,10 @@ module icache
 
   // I-Cache response logic
   always_comb begin
-    lowX_req_o.valid    = !lookup_ack && cache_miss;
+    lowX_req_o.valid    = issue_dem || issue_pf;
     lowX_req_o.ready    = !flush;
-    lowX_req_o.addr     = cache_req_q.addr;
-    lowX_req_o.uncached = cache_req_q.uncached;
+    lowX_req_o.addr     = issue_dem ? cache_req_q.addr : prefetch_addr_i;
+    lowX_req_o.uncached = issue_dem ? cache_req_q.uncached : 1'b0;
     cache_res_o.miss    = cache_miss;
     cache_res_o.valid   = cache_req_i.ready && (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid));
     cache_res_o.ready   = (!cache_miss || lowX_res_i.valid) && !flush;
@@ -247,6 +268,26 @@ module icache
       lookup_ack <= lowX_res_i.valid ? !lowX_req_o.ready : (!lookup_ack ? lowX_req_o.valid && lowX_res_i.ready : lookup_ack);
     end
   end
+
+  // Prefetch: latch address/attrs at memory handshake; track response target
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      rsp_is_prefetch_q <= 1'b0;
+      pf_addr_q         <= '0;
+      pf_uncached_q     <= 1'b0;
+    end else begin
+      if (lowX_res_i.valid) rsp_is_prefetch_q <= 1'b0;
+      else if (lowX_req_o.valid && lowX_res_i.ready) rsp_is_prefetch_q <= issue_pf;
+
+      if (ENABLE_ICACHE_PREFETCH && issue_pf && lowX_res_i.ready) begin
+        pf_addr_q     <= prefetch_addr_i;
+        pf_uncached_q <= prefetch_uncached_i;
+      end
+    end
+  end
+
+  assign prefetch_ready_o = ENABLE_ICACHE_PREFETCH && !flush_i && !lookup_ack && !cache_miss;
+  assign prefetch_ack_o   = ENABLE_ICACHE_PREFETCH && issue_pf && lowX_req_o.valid && lowX_res_i.ready;
 
   // PLRU update function
   function automatic [NUM_WAY-2:0] update_node(input logic [NUM_WAY-2:0] node_in, input logic [NUM_WAY-1:0] hit_vec);

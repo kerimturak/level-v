@@ -7,7 +7,7 @@ INC_DIR = $(RTL_DIR)/include
 VLOG_FLAGS = +incdir+$(INC_DIR) +incdir+$(PKG_DIR)
 
 RTL_FILES = \
-	$(PKG_DIR)/ceres_param.sv \
+	$(PKG_DIR)/level_param.sv \
 	$(RTL_DIR)/ram/sp_bram.sv \
 	$(RTL_DIR)/core/mmu/dcache.sv
 

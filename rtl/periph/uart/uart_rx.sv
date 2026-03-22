@@ -8,10 +8,10 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
 module uart_rx
-  import ceres_param::*;
+  import level_param::*;
 #(
-    parameter DATA_WIDTH = ceres_param::UART_DATA_WIDTH,
-    parameter FIFO_DEPTH = ceres_param::UART_RX_FIFO_DEPTH
+    parameter DATA_WIDTH = level_param::UART_DATA_WIDTH,
+    parameter FIFO_DEPTH = level_param::UART_RX_FIFO_DEPTH
 ) (
     input  logic        clk_i,
     input  logic        rst_ni,

@@ -1,5 +1,5 @@
 /*
- * DMA Controller Test for Ceres-V RV32IMC
+ * DMA Controller Test for Level-V RV32IMC
  * 
  * Tests DMA functionality:
  * - Register access (CCR, CNDTR, CPAR, CMAR)
@@ -9,7 +9,7 @@
  * 
  * DMA has 4 independent channels
  * 
- * Note: This peripheral is not yet connected in ceres_wrapper.sv
+ * Note: This peripheral is not yet connected in level_wrapper.sv
  *       Requires adding DMA instantiation and address decode (0x2000_9xxx)
  */
 
@@ -30,7 +30,7 @@
 #define UART_CTRL_RX_EN       0x2
 #define UART_STATUS_TX_FULL   0x1
 
-/* DMA MMIO Map (base 0x2000_9000 per ceres_param.sv) */
+/* DMA MMIO Map (base 0x2000_9000 per level_param.sv) */
 #define DMA_BASE         0x20009000
 
 /* Per-channel registers (0x20 bytes per channel) */
@@ -416,7 +416,7 @@ int main(void)
     uart_init();
     
     uart_puts("\n========================================\n");
-    uart_puts("   DMA Test - Ceres-V RV32IMC\n");
+    uart_puts("   DMA Test - Level-V RV32IMC\n");
     uart_puts("========================================\n");
     uart_puts("  4 channels, configurable burst\n");
     

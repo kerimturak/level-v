@@ -1,12 +1,12 @@
 ##################################################################################
-#                     CERES RISC-V — Hazard & Forwarding Debug                  #
+#                     Level RISC-V — Hazard & Forwarding Debug                  #
 ##################################################################################
 # Focused on: Data hazards, RAW dependencies, forwarding paths
 ##################################################################################
 
 ################## Hierarchy Paths ##################
 set TB        "sim:/tb_wrapper"
-set WRAPPER   "$TB/ceres_wrapper"
+set WRAPPER   "$TB/level_wrapper"
 set SOC       "$WRAPPER/i_soc"
 set DECODE    "$SOC/i_decode"
 set EXECUTE   "$SOC/i_execution"
@@ -163,5 +163,5 @@ run 10000ns
 wave zoom full
 
 puts "═══════════════════════════════════════════════════════════════════"
-puts "  CERES Hazard & Forwarding Debug Waveform Loaded!"
+puts "  Level Hazard & Forwarding Debug Waveform Loaded!"
 puts "═══════════════════════════════════════════════════════════════════"

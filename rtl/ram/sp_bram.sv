@@ -2,18 +2,18 @@
 // https://docs.xilinx.com/r/en-US/ug901-vivado-synthesis/Creating-Pipeline-Example-1-8K-x-72
 `timescale 1ns / 1ps
 module sp_bram #(
-    parameter DATA_WIDTH = 32,   // Veri genişliği
-    parameter NUM_SETS   = 1024  // Set sayısı
+    parameter DATA_WIDTH = 32,   // Data width
+    parameter NUM_SETS   = 1024  // Number of entries (sets)
 ) (
-    input  logic                        clk,      // Clock sinyali
+    input  logic                        clk,      // Clock
     input  logic                        chip_en,
-    input  logic [$clog2(NUM_SETS)-1:0] addr,     // Adres sinyali
-    input  logic                        wr_en,    // Yazma işlemi enable sinyali
-    input  logic [      DATA_WIDTH-1:0] wr_data,  // Yazılacak veri
-    output logic [      DATA_WIDTH-1:0] rd_data   // Okunan veri
+    input  logic [$clog2(NUM_SETS)-1:0] addr,     // Address
+    input  logic                        wr_en,    // Write enable
+    input  logic [      DATA_WIDTH-1:0] wr_data,  // Write data
+    output logic [      DATA_WIDTH-1:0] rd_data   // Read data
 );
 
-`ifdef CERES_OPENLANE
+`ifdef LEVEL_OPENLANE
   localparam int BANK_WIDTH = 32;
   localparam int BANK_COUNT = (DATA_WIDTH + BANK_WIDTH - 1) / BANK_WIDTH;
   localparam int PADDED_WIDTH = BANK_COUNT * BANK_WIDTH;

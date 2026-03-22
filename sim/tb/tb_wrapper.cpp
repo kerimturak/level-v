@@ -1,4 +1,4 @@
-#include "Vceres_wrapper.h"
+#include "Vlevel_wrapper.h"
 #include "verilated.h"
 
 #if defined(VM_TRACE_FST)
@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
 #endif
 
     // Instantiate DUT
-    Vceres_wrapper* top = new Vceres_wrapper{contextp};
+    Vlevel_wrapper* top = new Vlevel_wrapper{contextp};
 
 #if defined(VM_TRACE_FST)
     VerilatedFstC* tfp = new VerilatedFstC;

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-CERES RISC-V — Verilator Configuration Manager
+Level RISC-V — Verilator Configuration Manager
 
-JSON konfigürasyon dosyasını okur, doğrular ve Python dict'e dönüştürür.
-Schema validation, profile merging ve uyarı sistemi içerir.
+Reads the JSON configuration file, validates it, and converts it to a Python dict.
+Includes schema validation, profile merging, and a warning system.
 
-Kullanım:
+Usage:
     from verilator_config import load_config, VerilatorConfig
     
     config = load_config(profile="debug")
@@ -43,7 +43,7 @@ class Color:
 
 
 def supports_color() -> bool:
-    """Terminal renk desteğini kontrol et."""
+    """Check whether the terminal supports color."""
     if not sys.stdout.isatty():
         return False
     if os.environ.get("NO_COLOR"):
@@ -145,7 +145,7 @@ class SimulationConfig:
     seed: str = "auto"
     
     def get_threads(self) -> int:
-        """Thread sayısını hesapla."""
+        """Resolve thread count."""
         if self.threads == "auto":
             import multiprocessing
             return multiprocessing.cpu_count()
@@ -160,7 +160,7 @@ class BuildConfig:
     cpp_standard: str = "c++17"
     
     def get_jobs(self) -> int:
-        """Job sayısını hesapla."""
+        """Resolve job count."""
         if self.jobs == "auto":
             import multiprocessing
             return multiprocessing.cpu_count()
@@ -178,7 +178,7 @@ class TraceConfig:
     underscore: bool = False
     
     def get_flags(self) -> List[str]:
-        """Trace flag'lerini döndür."""
+        """Return trace flags."""
         if not self.enabled:
             return []
         
@@ -211,7 +211,7 @@ class CoverageConfig:
     user: bool = False
     
     def get_flags(self) -> List[str]:
-        """Coverage flag'lerini döndür."""
+        """Return coverage flags."""
         if not self.enabled:
             return []
         
@@ -236,7 +236,7 @@ class OptimizationConfig:
     x_initial: str = "fast"
     
     def get_flags(self) -> List[str]:
-        """Optimization flag'lerini döndür."""
+        """Return optimization flags."""
         return [
             f"--output-split {self.output_split}",
             f"--output-split-cfuncs {self.output_split_cfuncs}",
@@ -255,7 +255,7 @@ class FeaturesConfig:
     debug_check: bool = False
     
     def get_flags(self) -> List[str]:
-        """Feature flag'lerini döndür."""
+        """Return feature flags."""
         flags = []
         if self.vpi:
             flags.append("--vpi")
@@ -279,7 +279,7 @@ class LoggingConfig:
     uart_log: bool = True
     
     def get_defines(self) -> List[str]:
-        """SV define'ları döndür."""
+        """Return SystemVerilog +define strings."""
         defines = []
         if self.fast_sim:
             defines.append("+define+SIM_FAST")
@@ -308,7 +308,7 @@ class WarningsConfig:
     unoptflat: bool = False
     
     def get_flags(self) -> List[str]:
-        """Warning suppression flag'lerini döndür."""
+        """Return warning-suppression flags."""
         flags = []
         if not self.fatal:
             flags.append("--Wno-fatal")
@@ -327,7 +327,7 @@ class WarningsConfig:
 
 @dataclass
 class VerilatorConfig:
-    """Ana konfigürasyon sınıfı."""
+    """Root configuration object."""
     simulation: SimulationConfig = field(default_factory=SimulationConfig)
     build: BuildConfig = field(default_factory=BuildConfig)
     trace: TraceConfig = field(default_factory=TraceConfig)
@@ -337,7 +337,7 @@ class VerilatorConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     warnings: WarningsConfig = field(default_factory=WarningsConfig)
     
-    # Meta bilgiler
+    # Metadata
     config_file: Optional[Path] = None
     local_config_file: Optional[Path] = None
     profile_name: Optional[str] = None
@@ -348,7 +348,7 @@ class VerilatorConfig:
 # Config Validation
 # ═══════════════════════════════════════════════════════════════════════════
 class ConfigValidator:
-    """Konfigürasyon doğrulayıcı."""
+    """Configuration validator."""
     
     def __init__(self, schema: dict):
         self.schema = schema
@@ -356,8 +356,8 @@ class ConfigValidator:
         self.errors: List[str] = []
     
     def validate(self, data: dict, path: str = "") -> bool:
-        """Konfigürasyonu doğrula ve bilinmeyen key'ler için uyarı üret."""
-        # Özel key'leri atla
+        """Validate configuration and warn on unknown keys."""
+        # Skip special keys
         skip_keys = {"$schema", "_comment", "_description", "profiles"}
         
         for key in data:
@@ -367,19 +367,19 @@ class ConfigValidator:
             full_path = f"{path}.{key}" if path else key
             
             if key not in self.schema:
-                self.warnings.append(f"Bilinmeyen parametre: '{full_path}'")
+                self.warnings.append(f"Unknown parameter: '{full_path}'")
             elif isinstance(data[key], dict) and isinstance(self.schema.get(key), dict):
-                # Alt key'ler için bir sonraki seviye schema
+                # Nested schema for sub-keys
                 if "type" in self.schema[key]:
-                    # Bu bir leaf node, dict beklenmiyordu
-                    self.warnings.append(f"'{full_path}' için dict değil skaler değer bekleniyor")
+                    # Leaf node: expected scalar, got dict
+                    self.warnings.append(f"'{full_path}': expected scalar, not dict")
                 else:
                     self.validate(data[key], self.schema[key], full_path)
         
         return len(self.errors) == 0
     
     def validate(self, data: dict, schema: dict = None, path: str = "") -> bool:
-        """Konfigürasyonu doğrula."""
+        """Validate configuration (flat unknown-key scan)."""
         if schema is None:
             schema = self.schema
         
@@ -392,7 +392,7 @@ class ConfigValidator:
             full_path = f"{path}.{key}" if path else key
             
             if key not in schema:
-                self.warnings.append(f"Bilinmeyen parametre: '{full_path}'")
+                self.warnings.append(f"Unknown parameter: '{full_path}'")
             elif isinstance(data[key], dict):
                 if isinstance(schema.get(key), dict) and "type" not in schema[key]:
                     self.validate(data[key], schema[key], full_path)
@@ -404,7 +404,7 @@ class ConfigValidator:
 # Config Loading
 # ═══════════════════════════════════════════════════════════════════════════
 def deep_merge(base: dict, override: dict) -> dict:
-    """İki dict'i derin merge et."""
+    """Deep-merge two dicts."""
     result = copy.deepcopy(base)
     
     for key, value in override.items():
@@ -417,16 +417,16 @@ def deep_merge(base: dict, override: dict) -> dict:
 
 
 def apply_profile(data: dict, profile_name: str) -> dict:
-    """Profil ayarlarını uygula."""
+    """Apply a named profile overlay."""
     profiles = data.get("profiles", {})
     
     if profile_name not in profiles:
         available = ", ".join(profiles.keys())
-        raise ValueError(f"Profil bulunamadı: '{profile_name}'. Mevcut: {available}")
+        raise ValueError(f"Profile not found: '{profile_name}'. Available: {available}")
     
     profile = profiles[profile_name]
     
-    # Profili base config'e merge et
+    # Merge profile into base config
     result = copy.deepcopy(data)
     for section, values in profile.items():
         if section.startswith("_"):
@@ -440,7 +440,7 @@ def apply_profile(data: dict, profile_name: str) -> dict:
 
 
 def dict_to_config(data: dict) -> VerilatorConfig:
-    """Dict'i VerilatorConfig'e dönüştür."""
+    """Convert a dict to VerilatorConfig."""
     config = VerilatorConfig()
     
     if "simulation" in data:
@@ -535,18 +535,18 @@ def load_config(
     strict: bool = False,
 ) -> VerilatorConfig:
     """
-    Konfigürasyonu yükle.
-    
+    Load configuration.
+
     Args:
-        config_path: Ana config dosyası
-        local_path: Lokal override dosyası
-        profile: Uygulanacak profil
-        strict: Uyarıları hata olarak ele al
-    
+        config_path: Main config file
+        local_path: Local override file
+        profile: Profile name to apply
+        strict: Treat warnings as errors
+
     Returns:
-        VerilatorConfig nesnesi
+        VerilatorConfig instance
     """
-    # Varsayılan path
+    # Default path
     if config_path is None:
         script_dir = Path(__file__).parent.parent.parent
         config_path = script_dir / "config" / "verilator.json"
@@ -554,14 +554,14 @@ def load_config(
     config_path = Path(config_path)
     
     if not config_path.exists():
-        warn(f"Config dosyası bulunamadı: {config_path}")
+        warn(f"Config file not found: {config_path}")
         return VerilatorConfig()
     
-    # Ana config'i oku
+    # Read main config
     with open(config_path) as f:
         data = json.load(f)
     
-    # Lokal override varsa merge et
+    # Merge local override if present
     if local_path is None:
         local_path = config_path.parent / "verilator.local.json"
     
@@ -570,11 +570,11 @@ def load_config(
             local_data = json.load(f)
         data = deep_merge(data, local_data)
     
-    # Profil uygula
+    # Apply profile
     if profile:
         try:
             data = apply_profile(data, profile)
-            info(f"Profil uygulandı: {profile}")
+            info(f"Applied profile: {profile}")
         except ValueError as e:
             error(str(e))
             if strict:
@@ -588,10 +588,10 @@ def load_config(
         warn(w)
     
     if strict and validator.warnings:
-        error("Strict modda uyarılar hata olarak değerlendiriliyor.")
+        error("Strict mode: warnings are treated as errors.")
         sys.exit(1)
     
-    # Config nesnesine dönüştür
+    # Build config object
     config = dict_to_config(data)
     config.config_file = config_path
     config.local_config_file = local_path if local_path.exists() else None
@@ -605,29 +605,29 @@ def load_config(
 # Config Summary
 # ═══════════════════════════════════════════════════════════════════════════
 def _kv(key: str, value: Any, indent: int = 4) -> None:
-    """Key-value çifti yazdır."""
+    """Print a key-value line."""
     spaces = " " * indent
     key_fmt = f"{Color.DIM}{key}:{Color.RESET}"
     print(f"{spaces}{key_fmt:20} {value}")
 
 def _section(title: str) -> None:
-    """Section başlığı yazdır."""
+    """Print a section heading."""
     print(f"\n  {Color.BOLD}{Color.WHITE}▸ {title}{Color.RESET}")
 
 def _bool_str(val: bool) -> str:
-    """Boolean değeri renkli string'e çevir."""
+    """Format a boolean with color."""
     if val:
         return f"{Color.GREEN}Yes{Color.RESET}"
     return f"{Color.DIM}No{Color.RESET}"
 
 def print_config_summary(config: VerilatorConfig) -> None:
-    """Konfigürasyon özetini yazdır."""
+    """Print configuration summary."""
     print()
     print(f"{Color.CYAN}{'═' * 60}{Color.RESET}")
-    print(f"{Color.CYAN}  Verilator Konfigürasyon Özeti{Color.RESET}")
+    print(f"{Color.CYAN}  Verilator configuration summary{Color.RESET}")
     print(f"{Color.CYAN}{'═' * 60}{Color.RESET}")
     
-    # Kaynak bilgisi
+    # Source info
     if config.config_file or config.profile_name:
         print()
         if config.config_file:
@@ -635,7 +635,7 @@ def print_config_summary(config: VerilatorConfig) -> None:
         if config.local_config_file:
             _kv("Local", config.local_config_file)
         if config.profile_name:
-            _kv("Profil", f"{Color.CYAN}{config.profile_name}{Color.RESET}")
+            _kv("Profile", f"{Color.CYAN}{config.profile_name}{Color.RESET}")
     
     _section("Simulation")
     _kv("Max Cycles", f"{config.simulation.max_cycles:,}")
@@ -671,14 +671,14 @@ def print_config_summary(config: VerilatorConfig) -> None:
     _kv("Commit Trace", _bool_str(config.logging.commit_trace))
     _kv("BP Log", _bool_str(config.logging.bp_log))
     
-    # Uyarılar
+    # Warnings
     if config.config_warnings:
         print()
-        print(f"  {Color.YELLOW}⚠ {len(config.config_warnings)} uyarı{Color.RESET}")
+        print(f"  {Color.YELLOW}⚠ {len(config.config_warnings)} warning(s){Color.RESET}")
         for w in config.config_warnings[:3]:
             print(f"    {Color.DIM}• {w}{Color.RESET}")
         if len(config.config_warnings) > 3:
-            print(f"    {Color.DIM}... ve {len(config.config_warnings) - 3} uyarı daha{Color.RESET}")
+            print(f"    {Color.DIM}... and {len(config.config_warnings) - 3} more{Color.RESET}")
     
     print(f"\n{Color.CYAN}{'═' * 60}{Color.RESET}\n")
 
@@ -691,64 +691,64 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="CERES RISC-V Verilator Configuration Manager",
+        description="Level RISC-V Verilator Configuration Manager",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     
     parser.add_argument(
         "--config", "-c",
         type=Path,
-        help="Ana konfigürasyon dosyası"
+        help="Main configuration file"
     )
     
     parser.add_argument(
         "--local", "-l",
         type=Path,
-        help="Lokal override dosyası"
+        help="Local override file"
     )
     
     parser.add_argument(
         "--profile", "-p",
-        help="Uygulanacak profil (fast, debug, coverage, benchmark)"
+        help="Profile to apply (fast, debug, coverage, benchmark)"
     )
     
     parser.add_argument(
         "--strict", "-s",
         action="store_true",
-        help="Uyarıları hata olarak ele al"
+        help="Treat warnings as errors"
     )
     
     parser.add_argument(
         "--quiet", "-q",
         action="store_true",
-        help="Sadece hataları göster"
+        help="Show errors only"
     )
     
     parser.add_argument(
         "--no-color",
         action="store_true",
-        help="Renkleri devre dışı bırak"
+        help="Disable colors"
     )
     
     parser.add_argument(
         "--validate",
         action="store_true",
-        help="Sadece doğrula, özet gösterme"
+        help="Validate only; do not print summary"
     )
     
     parser.add_argument(
         "--show-flags",
         action="store_true",
-        help="Verilator flag'lerini göster"
+        help="Print Verilator flags"
     )
     
     args = parser.parse_args()
     
-    # Renk desteği
+    # Color support
     if args.no_color or not supports_color():
         Color.disable()
     
-    # Config yükle
+    # Load config
     config = load_config(
         config_path=args.config,
         local_path=args.local,
@@ -758,12 +758,12 @@ def main():
     
     if args.validate:
         if config.config_warnings:
-            print(f"{Color.YELLOW}Uyarılar:{Color.RESET}")
+            print(f"{Color.YELLOW}Warnings:{Color.RESET}")
             for w in config.config_warnings:
                 print(f"  • {w}")
             return 1 if args.strict else 0
         else:
-            print(f"{Color.GREEN}✓ Konfigürasyon geçerli{Color.RESET}")
+            print(f"{Color.GREEN}✓ Configuration is valid{Color.RESET}")
             return 0
     
     if args.show_flags:

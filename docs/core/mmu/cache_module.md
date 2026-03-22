@@ -1,40 +1,40 @@
-# Cache Modülü - Teknik Dokümantasyon
+# Cache Module — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
-3. [Önbellek Mimarisi](#önbellek-mimarisi)
-4. [PLRU Eviction Algoritması](#plru-eviction-algoritması)
-5. [I-Cache Davranışı](#i-cache-davranışı)
-6. [D-Cache Davranışı](#d-cache-davranışı)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
+3. [Cache Architecture](#cache-architecture)
+4. [PLRU Eviction Algorithm](#plru-eviction-algorithm)
+5. [I-Cache Behavior](#i-cache-behavior)
+6. [D-Cache Behavior](#d-cache-behavior)
 7. [FENCE.I Dirty Writeback](#fencei-dirty-writeback)
-8. [Bellek Yapıları](#bellek-yapıları)
-9. [Zamanlama Diyagramları](#zamanlama-diyagramları)
-10. [Performans Analizi](#performans-analizi)
-11. [Doğrulama ve Test](#doğrulama-ve-test)
+8. [Memory Structures](#memory-structures)
+9. [Timing Diagrams](#timing-diagrams)
+10. [Performance Analysis](#performance-analysis)
+11. [Verification and Testing](#verification-and-testing)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`cache` modülü, CERES RISC-V işlemcisi için **parametrik**, **set-associative** önbellek uygulamasıdır. Tek bir modül hem **I-Cache** (Instruction Cache) hem de **D-Cache** (Data Cache) olarak konfigüre edilebilir.
+The `cache` module is a **parametric**, **set-associative** cache implementation for the Level RISC-V processor. A single module instance can be configured as either an **I-Cache** (instruction cache) or a **D-Cache** (data cache).
 
-### Temel Özellikler
+### Key Features
 
-| Özellik | Değer |
+| Feature | Value |
 |---------|-------|
-| **Associativity** | Parametrik (varsayılan 8-way) |
-| **Kapasite** | Parametrik (varsayılan 8KB) |
-| **Blok Boyutu** | 128-bit (4 x 32-bit word) |
-| **Eviction Policy** | Pseudo-LRU (Tree-based PLRU) |
-| **Write Policy** | Write-back, Write-allocate (D-Cache) |
-| **Unified/Split** | Split (ayrı I-Cache ve D-Cache) |
-| **FENCE.I Desteği** | Dirty writeback state machine |
+| **Associativity** | Parametric (default 8-way) |
+| **Capacity** | Parametric (default 8KB) |
+| **Block Size** | 128-bit (4 × 32-bit words) |
+| **Eviction Policy** | Pseudo-LRU (tree-based PLRU) |
+| **Write Policy** | Write-back, write-allocate (D-Cache) |
+| **Unified/Split** | Split (separate I-Cache and D-Cache) |
+| **FENCE.I Support** | Dirty writeback state machine |
 
-### Cache Blok Diyagramı
+### Cache Block Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -79,61 +79,61 @@
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 module cache
-  import ceres_param::*;
+  import level_param::*;
 #(
     parameter      IS_ICACHE   = 1,           // 1: I-Cache, 0: D-Cache
-    parameter type cache_req_t = logic,       // Cache istek tipi
-    parameter type cache_res_t = logic,       // Cache yanıt tipi
-    parameter type lowX_res_t  = logic,       // Alt seviye yanıt tipi
-    parameter type lowX_req_t  = logic,       // Alt seviye istek tipi
-    parameter      CACHE_SIZE  = 1024,        // Cache boyutu (byte)
-    parameter      BLK_SIZE    = ceres_param::BLK_SIZE, // Blok boyutu (bit)
-    parameter      XLEN        = ceres_param::XLEN,     // Veri genişliği
+    parameter type cache_req_t = logic,       // Cache request type
+    parameter type cache_res_t = logic,       // Cache response type
+    parameter type lowX_res_t  = logic,       // Lower-level response type
+    parameter type lowX_req_t  = logic,       // Lower-level request type
+    parameter      CACHE_SIZE  = 1024,        // Cache size (bytes)
+    parameter      BLK_SIZE    = level_param::BLK_SIZE, // Block size (bits)
+    parameter      XLEN        = level_param::XLEN,     // Data width
     parameter      NUM_WAY     = 4            // Associativity
 ) (
-    input  logic       clk_i,          // Sistem saati
-    input  logic       rst_ni,         // Aktif-düşük reset
-    input  logic       flush_i,        // Cache flush sinyali
-    input  cache_req_t cache_req_i,    // Cache isteği
-    output cache_res_t cache_res_o,    // Cache yanıtı
-    input  lowX_res_t  lowX_res_i,     // Alt seviye yanıtı
-    output lowX_req_t  lowX_req_o,     // Alt seviye isteği
-    output logic       fencei_stall_o  // FENCE.I stall sinyali
+    input  logic       clk_i,          // System clock
+    input  logic       rst_ni,         // Active-low reset
+    input  logic       flush_i,        // Cache flush signal
+    input  cache_req_t cache_req_i,    // Cache request
+    output cache_res_t cache_res_o,    // Cache response
+    input  lowX_res_t  lowX_res_i,     // Lower-level (memory) response
+    output lowX_req_t  lowX_req_o,     // Lower-level (memory) request
+    output logic       fencei_stall_o  // FENCE.I stall signal
 );
 ```
 
-### Port Açıklamaları
+### Port Descriptions
 
-| Port | Yön | Genişlik | Açıklama |
-|------|-----|----------|----------|
-| `clk_i` | Giriş | 1 bit | Sistem saati |
-| `rst_ni` | Giriş | 1 bit | Aktif-düşük asenkron reset |
-| `flush_i` | Giriş | 1 bit | Cache flush tetikleyici (FENCE.I) |
-| `cache_req_i` | Giriş | Struct | Cache erişim isteği |
-| `cache_res_o` | Çıkış | Struct | Cache yanıtı |
-| `lowX_res_i` | Giriş | Struct | Bellek yanıtı |
-| `lowX_req_o` | Çıkış | Struct | Bellek isteği |
-| `fencei_stall_o` | Çıkış | 1 bit | FENCE.I dirty writeback stall |
+| Port | Direction | Width | Description |
+|------|-----------|-------|-------------|
+| `clk_i` | Input | 1 bit | System clock |
+| `rst_ni` | Input | 1 bit | Active-low asynchronous reset |
+| `flush_i` | Input | 1 bit | Cache flush trigger (FENCE.I) |
+| `cache_req_i` | Input | Struct | Cache access request |
+| `cache_res_o` | Output | Struct | Cache response |
+| `lowX_res_i` | Input | Struct | Memory response |
+| `lowX_req_o` | Output | Struct | Memory request |
+| `fencei_stall_o` | Output | 1 bit | FENCE.I dirty writeback stall |
 
-### Yerel Parametreler
+### Local Parameters
 
 ```systemverilog
-localparam NUM_SET    = (CACHE_SIZE / BLK_SIZE) / NUM_WAY;  // Set sayısı
-localparam IDX_WIDTH  = $clog2(NUM_SET);                     // Index bit genişliği
-localparam BOFFSET    = $clog2(BLK_SIZE / 8);                // Blok offset bit
-localparam WOFFSET    = $clog2(BLK_SIZE / 32);               // Word offset bit
-localparam TAG_SIZE   = XLEN - IDX_WIDTH - BOFFSET;          // Tag bit genişliği
+localparam NUM_SET    = (CACHE_SIZE / BLK_SIZE) / NUM_WAY;  // Number of sets
+localparam IDX_WIDTH  = $clog2(NUM_SET);                     // Index bit width
+localparam BOFFSET    = $clog2(BLK_SIZE / 8);                // Block offset bits
+localparam WOFFSET    = $clog2(BLK_SIZE / 32);               // Word offset bits
+localparam TAG_SIZE   = XLEN - IDX_WIDTH - BOFFSET;          // Tag bit width
 ```
 
-### Varsayılan Konfigürasyon (8KB, 8-way)
+### Default Configuration (8KB, 8-way)
 
-| Parametre | Değer | Hesaplama |
+| Parameter | Value | Calculation |
 |-----------|-------|-----------|
 | CACHE_SIZE | 8192 byte | 8KB |
 | BLK_SIZE | 128 bit | 16 byte cache line |
@@ -145,12 +145,12 @@ localparam TAG_SIZE   = XLEN - IDX_WIDTH - BOFFSET;          // Tag bit genişli
 
 ---
 
-## Önbellek Mimarisi
+## Cache Architecture
 
-### Adres Çözümleme
+### Address Decoding
 
 ```
-32-bit Adres Yapısı:
+32-bit address layout:
 ┌─────────────────────────────────────────────────────────────────┐
 │  31        31-IDX_WIDTH   IDX_WIDTH+BOFFSET-1   BOFFSET-1    0  │
 │  ┌──────────────────────┬────────────────────┬───────────────┐  │
@@ -159,13 +159,13 @@ localparam TAG_SIZE   = XLEN - IDX_WIDTH - BOFFSET;          // Tag bit genişli
 │  └──────────────────────┴────────────────────┴───────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 
-Örnek: Adres 0x8000_1234
+Example: address 0x8000_1234
 - TAG:    0x200004  (bits [31:10])
 - INDEX:  0x12      (bits [9:4])
 - OFFSET: 0x4       (bits [3:0])
 ```
 
-### Set-Associative Yapısı
+### Set-Associative Organization
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -192,7 +192,7 @@ localparam TAG_SIZE   = XLEN - IDX_WIDTH - BOFFSET;          // Tag bit genişli
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Cache Line Yapısı
+### Cache Line Layout
 
 ```
 128-bit Cache Line (4 x 32-bit words):
@@ -207,15 +207,15 @@ localparam TAG_SIZE   = XLEN - IDX_WIDTH - BOFFSET;          // Tag bit genişli
 
 ---
 
-## PLRU Eviction Algoritması
+## PLRU Eviction Algorithm
 
 ### Tree-based Pseudo-LRU
 
-PLRU (Pseudo Least Recently Used), tam LRU'nun donanım maliyetini azaltmak için kullanılan bir yaklaşımdır. 8-way cache için 7 bitlik bir tree yapısı kullanılır.
+PLRU (Pseudo Least Recently Used) approximates LRU at lower hardware cost. An 8-way cache uses a 7-bit tree structure.
 
 ```
-                    PLRU Tree Yapısı (8-way için)
-                    ─────────────────────────────
+                    PLRU tree (8-way)
+                    ─────────────────
                     
                            [0]
                           /    \
@@ -228,15 +228,15 @@ PLRU (Pseudo Least Recently Used), tam LRU'nun donanım maliyetini azaltmak içi
                / \     / \    / \     / \
               W0  W1  W2  W3 W4  W5  W6  W7
 
-    Node değeri:
-    - 0 = Sol tarafa git (LRU sol tarafta)
-    - 1 = Sağ tarafa git (LRU sağ tarafta)
+    Node value:
+    - 0 = go left (LRU candidate on the left)
+    - 1 = go right (LRU candidate on the right)
     
-    Erişim sonrası:
-    - Erişilen way'e giden path'teki tüm node'lar ters yöne işaret eder
+    After an access:
+    - All nodes on the path to the accessed way flip to the opposite direction
 ```
 
-### PLRU Node Güncelleme Fonksiyonu
+### PLRU Node Update Function
 
 ```systemverilog
 function automatic [NUM_WAY-2:0] update_node(
@@ -252,7 +252,7 @@ function automatic [NUM_WAY-2:0] update_node(
             for (int unsigned lvl = 0; lvl < $clog2(NUM_WAY); lvl++) begin
                 idx_base = (2 ** lvl) - 1;
                 shift = $clog2(NUM_WAY) - lvl;
-                // Erişilen way'e giden path'i ters yöne çevir
+                // Flip path to accessed way to opposite direction
                 node_tmp[idx_base + (i >> shift)] = ((i >> (shift - 1)) & 1) == 0;
             end
         end
@@ -261,7 +261,7 @@ function automatic [NUM_WAY-2:0] update_node(
 endfunction
 ```
 
-### PLRU Evict Way Hesaplama
+### PLRU Evict-Way Computation
 
 ```systemverilog
 function automatic [NUM_WAY-1:0] compute_evict_way(
@@ -276,7 +276,7 @@ function automatic [NUM_WAY-1:0] compute_evict_way(
         for (int unsigned lvl = 0; lvl < $clog2(NUM_WAY); lvl++) begin
             idx_base = (2 ** lvl) - 1;
             shift = $clog2(NUM_WAY) - lvl;
-            // Tree'yi takip ederek LRU way'i bul
+            // Follow tree to find LRU way
             if (((i >> (shift - 1)) & 32'b1) == 32'b1) 
                 en &= node_in[idx_base + (i >> shift)];
             else 
@@ -288,60 +288,60 @@ function automatic [NUM_WAY-1:0] compute_evict_way(
 endfunction
 ```
 
-### PLRU Örneği
+### PLRU Example
 
 ```
-Başlangıç: node = 7'b0000000 (tüm yönler sol)
-           Evict Way = Way 0
+Initial: node = 7'b0000000 (all directions left)
+         Evict way = way 0
 
-Way 5'e erişim:
-- Path: Root(0) → Sağ(2) → Sol(5) → Way 5
-- Güncelleme: node[0]=0, node[2]=0, node[5]=1
-- Yeni node = 7'b0100000
-- Yeni Evict Way = Way 0 (hala)
+Access way 5:
+- Path: Root(0) → Right(2) → Left(5) → way 5
+- Update: node[0]=0, node[2]=0, node[5]=1
+- New node = 7'b0100000
+- New evict way = way 0 (unchanged)
 
-Way 0'a erişim:
-- Path: Root(0) → Sol(1) → Sol(3) → Way 0
-- Güncelleme: node[0]=1, node[1]=1, node[3]=1
-- Yeni node = 7'b0101011
-- Yeni Evict Way = Way 4
+Access way 0:
+- Path: Root(0) → Left(1) → Left(3) → way 0
+- Update: node[0]=1, node[1]=1, node[3]=1
+- New node = 7'b0101011
+- New evict way = way 4
 ```
 
 ---
 
-## I-Cache Davranışı
+## I-Cache Behavior
 
-### I-Cache Özellikleri
+### I-Cache Features
 
-| Özellik | Değer |
+| Feature | Value |
 |---------|-------|
 | IS_ICACHE | 1 |
-| Write Desteği | Hayır (read-only) |
-| Dirty Bit | Yok |
-| Writeback | Yok |
-| FENCE.I Stall | Her zaman 0 |
+| Write support | No (read-only) |
+| Dirty bit | None |
+| Writeback | None |
+| FENCE.I stall | Always 0 |
 
-### I-Cache Mantığı
+### I-Cache Logic
 
 ```systemverilog
 if (IS_ICACHE) begin : icache_impl
-    // I-Cache'de dirty writeback yok
+    // No dirty writeback in I-Cache
     assign fencei_stall_o = 1'b0;
 
     always_comb begin
-        // Node array güncelleme (hit veya refill durumunda)
+        // Node array update (on hit or refill)
         nsram.rw_en = cache_wr_en || cache_hit;
         nsram.wnode = flush ? '0 : updated_node;
         nsram.idx   = cache_idx;
 
-        // Tag array güncelleme (miss + refill durumunda)
+        // Tag array update (on miss + refill)
         tsram.way   = '0;
         tsram.idx   = cache_idx;
         tsram.wtag  = flush ? '0 : {1'b1, cache_req_q.addr[XLEN-1:IDX_WIDTH+BOFFSET]};
         for (int i = 0; i < NUM_WAY; i++) 
             tsram.way[i] = flush ? '1 : cache_wr_way[i] && cache_wr_en;
 
-        // Data array güncelleme (refill durumunda)
+        // Data array update (on refill)
         dsram.way   = '0;
         dsram.idx   = cache_idx;
         dsram.wdata = lowX_res_i.blk;
@@ -349,7 +349,7 @@ if (IS_ICACHE) begin : icache_impl
             dsram.way[i] = cache_wr_way[i] && cache_wr_en;
     end
 
-    // LowX arayüzü ve cache yanıtı
+    // LowX interface and cache response
     always_comb begin
         lowX_req_o.valid    = !lookup_ack && cache_miss;
         lowX_req_o.ready    = !flush;
@@ -365,7 +365,7 @@ if (IS_ICACHE) begin : icache_impl
 end
 ```
 
-### I-Cache Hit/Miss Akışı
+### I-Cache Hit/Miss Flow
 
 ```
 I-Cache Hit (1 cycle):
@@ -380,29 +380,29 @@ I-Cache Miss (~10 cycles):
 │ (addr) │    │ Miss!  │    │   Fetch     │    │  Cache │    │ Return │
 └────────┘    └────────┘    └─────────────┘    └────────┘    └────────┘
                                   ↑
-                           ~10 cycle gecikme
+                           ~10 cycle latency
 ```
 
 ---
 
-## D-Cache Davranışı
+## D-Cache Behavior
 
-### D-Cache Özellikleri
+### D-Cache Features
 
-| Özellik | Değer |
+| Feature | Value |
 |---------|-------|
 | IS_ICACHE | 0 |
-| Write Desteği | Evet (read/write) |
-| Write Policy | Write-back, Write-allocate |
-| Dirty Bit | Evet (per-way) |
-| Writeback | Eviction ve FENCE.I'da |
-| FENCE.I Stall | Dirty line varsa aktif |
+| Write support | Yes (read/write) |
+| Write policy | Write-back, write-allocate |
+| Dirty bit | Yes (per way) |
+| Writeback | On eviction and FENCE.I |
+| FENCE.I stall | Active when dirty lines exist |
 
 ### D-Cache Dirty Array
 
 ```systemverilog
-// Register-tabanlı dirty array (SRAM değil)
-// FENCE.I için tek cycle'da tüm dirty bitlerine erişim gerekli
+// Register-based dirty array (not SRAM)
+// FENCE.I needs visibility of all dirty bits in a single cycle
 logic [NUM_WAY-1:0] dirty_reg[NUM_SET];
 
 always_ff @(posedge clk_i) begin
@@ -418,7 +418,7 @@ always_ff @(posedge clk_i) begin
     end
 end
 
-// Kombinasyonel okuma (anında erişim)
+// Combinational read (immediate visibility)
 always_comb begin
     for (int w = 0; w < NUM_WAY; w++) begin
         drsram.rdirty[w] = dirty_reg[drsram.idx][w];
@@ -426,10 +426,10 @@ always_comb begin
 end
 ```
 
-### D-Cache Write İşlemi
+### D-Cache Write Operation
 
 ```systemverilog
-// Veri maskeleme (byte/halfword/word write)
+// Data masking (byte/halfword/word write)
 always_comb begin
     mask_data   = cache_hit ? cache_select_data : lowX_res_i.data;
     data_wr_pre = mask_data;
@@ -443,13 +443,13 @@ always_comb begin
 end
 ```
 
-### D-Cache Writeback Mantığı
+### D-Cache Writeback Logic
 
 ```systemverilog
-// Eviction durumunda dirty line writeback
+// Dirty line writeback on eviction
 write_back = cache_miss && (|(drsram.rdirty & evict_way & cache_valid_vec));
 
-// Writeback adresi ve verisi
+// Writeback address and data
 always_comb begin
     evict_tag  = '0;
     evict_data = '0;
@@ -468,22 +468,22 @@ end
 
 ### FENCE.I State Machine
 
-FENCE.I komutu çalıştığında D-Cache'deki tüm dirty line'lar belleğe yazılmalıdır. Bu işlem bir state machine ile yönetilir.
+When a FENCE.I executes, all dirty lines in the D-Cache must be written to memory. A state machine performs this.
 
 ```systemverilog
 typedef enum logic [2:0] {
-    FI_IDLE,            // Normal işlem
-    FI_SCAN,            // Set'leri tara
-    FI_CHECK_WAY,       // Her way'i kontrol et
-    FI_WRITEBACK_REQ,   // Writeback isteği gönder
-    FI_WRITEBACK_WAIT,  // Writeback tamamlanmasını bekle
-    FI_MARK_CLEAN,      // Line'ı temiz işaretle
-    FI_NEXT_WAY,        // Sonraki way'e geç
-    FI_DONE             // Writeback tamamlandı
+    FI_IDLE,            // Normal operation
+    FI_SCAN,            // Scan sets
+    FI_CHECK_WAY,       // Check each way
+    FI_WRITEBACK_REQ,   // Issue writeback request
+    FI_WRITEBACK_WAIT,  // Wait for writeback to complete
+    FI_MARK_CLEAN,      // Mark line clean
+    FI_NEXT_WAY,        // Advance to next way
+    FI_DONE             // Writeback complete
 } fencei_state_e;
 ```
 
-### FENCE.I Akış Diyagramı
+### FENCE.I Flow Diagram
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
@@ -552,7 +552,7 @@ typedef enum logic [2:0] {
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### FENCE.I State Machine Kodu
+### FENCE.I State Machine Code
 
 ```systemverilog
 always_comb begin
@@ -575,7 +575,7 @@ always_comb begin
 
         FI_SCAN: begin
             fi_active  = 1'b1;
-            fi_state_d = FI_CHECK_WAY;  // BRAM latency için bekle
+            fi_state_d = FI_CHECK_WAY;  // Wait for BRAM latency
         end
 
         FI_CHECK_WAY: begin
@@ -626,7 +626,7 @@ always_comb begin
         end
 
         FI_DONE: begin
-            fi_active = 1'b0;  // Stall serbest bırak
+            fi_active = 1'b0;  // Release stall
             if (!flush_i) begin
                 fi_state_d = FI_IDLE;
             end
@@ -637,24 +637,24 @@ end
 assign fencei_stall_o = fi_active;
 ```
 
-### FENCE.I Önemli Notlar
+### FENCE.I Notes
 
-1. **Tag Invalidation Yok**: FENCE.I sadece dirty writeback yapar, cache line'ları invalidate etmez
-2. **Stall Süresi**: Dirty line sayısına bağlı (worst case: NUM_SET × NUM_WAY × memory_latency)
-3. **Pipeline Etkisi**: `fencei_stall_o` aktifken tüm pipeline durur
+1. **No tag invalidation**: FENCE.I only performs dirty writeback; it does not invalidate cache lines.
+2. **Stall duration**: Depends on the number of dirty lines (worst case: NUM_SET × NUM_WAY × memory_latency).
+3. **Pipeline impact**: While `fencei_stall_o` is active, the whole pipeline stalls.
 
 ---
 
-## Bellek Yapıları
+## Memory Structures
 
 ### Tag Array
 
 ```systemverilog
 typedef struct packed {
     logic [IDX_WIDTH-1:0]           idx;    // Index
-    logic [NUM_WAY-1:0]             way;    // Way seçimi
-    logic [TAG_SIZE:0]              wtag;   // Yazılacak tag + valid
-    logic [NUM_WAY-1:0][TAG_SIZE:0] rtag;   // Okunan tag'ler
+    logic [NUM_WAY-1:0]             way;    // Way select
+    logic [TAG_SIZE:0]              wtag;   // Tag + valid to write
+    logic [NUM_WAY-1:0][TAG_SIZE:0] rtag;   // Read tags
 } tsram_t;
 ```
 
@@ -663,9 +663,9 @@ typedef struct packed {
 ```systemverilog
 typedef struct packed {
     logic [IDX_WIDTH-1:0]             idx;    // Index
-    logic [NUM_WAY-1:0]               way;    // Way seçimi
-    logic [BLK_SIZE-1:0]              wdata;  // Yazılacak veri
-    logic [NUM_WAY-1:0][BLK_SIZE-1:0] rdata;  // Okunan veriler
+    logic [NUM_WAY-1:0]               way;    // Way select
+    logic [BLK_SIZE-1:0]              wdata;  // Write data
+    logic [NUM_WAY-1:0][BLK_SIZE-1:0] rdata;  // Read data
 } dsram_t;
 ```
 
@@ -675,8 +675,8 @@ typedef struct packed {
 typedef struct packed {
     logic [IDX_WIDTH-1:0] idx;    // Index
     logic                 rw_en;  // R/W enable
-    logic [NUM_WAY-2:0]   wnode;  // Yazılacak PLRU state
-    logic [NUM_WAY-2:0]   rnode;  // Okunan PLRU state
+    logic [NUM_WAY-2:0]   wnode;  // PLRU state to write
+    logic [NUM_WAY-2:0]   rnode;  // Read PLRU state
 } nsram_t;
 ```
 
@@ -685,16 +685,16 @@ typedef struct packed {
 ```systemverilog
 typedef struct packed {
     logic [IDX_WIDTH-1:0] idx;      // Index
-    logic [NUM_WAY-1:0]   way;      // Way seçimi
+    logic [NUM_WAY-1:0]   way;      // Way select
     logic                 rw_en;    // R/W enable
-    logic                 wdirty;   // Yazılacak dirty bit
-    logic [NUM_WAY-1:0]   rdirty;   // Okunan dirty bit'ler
+    logic                 wdirty;   // Dirty bit to write
+    logic [NUM_WAY-1:0]   rdirty;   // Read dirty bits
 } drsram_t;
 ```
 
 ---
 
-## Zamanlama Diyagramları
+## Timing Diagrams
 
 ### Cache Hit (1 Cycle)
 
@@ -776,91 +776,91 @@ state   IDLE│SCAN│CHK│WB_REQ│WB_WAIT│MARK│NEXT│...│DONE│
 
 ---
 
-## Performans Analizi
+## Performance Analysis
 
 ### Cache Hit Rate
 
-| Workload | Tipik I-Cache Hit Rate | Tipik D-Cache Hit Rate |
+| Workload | Typical I-Cache Hit Rate | Typical D-Cache Hit Rate |
 |----------|------------------------|------------------------|
 | Coremark | >95% | >90% |
 | Dhrystone | >98% | >95% |
 | General | >90% | >85% |
 
-### Gecikme Analizi
+### Latency Analysis
 
-| İşlem | Gecikme (cycle) | Açıklama |
-|-------|-----------------|----------|
-| Cache Hit | 1 | Tek cycle okuma |
-| Cache Miss (clean) | ~10 | Memory latency |
-| Cache Miss (dirty) | ~20 | Writeback + Refill |
-| FENCE.I (best) | 2 | Dirty line yok |
-| FENCE.I (worst) | NUM_SET × NUM_WAY × 10 | Tüm line'lar dirty |
+| Operation | Latency (cycles) | Description |
+|-----------|------------------|-------------|
+| Cache hit | 1 | Single-cycle read |
+| Cache miss (clean) | ~10 | Memory latency |
+| Cache miss (dirty) | ~20 | Writeback + refill |
+| FENCE.I (best) | 2 | No dirty lines |
+| FENCE.I (worst) | NUM_SET × NUM_WAY × 10 | All lines dirty |
 
-### Alan Kullanımı (8KB, 8-way)
+### Area (8KB, 8-way)
 
-| Bileşen | Boyut | Hesaplama |
-|---------|-------|-----------|
-| Data Array | 8KB × 8 way = 64Kb | BLK_SIZE × NUM_SET × NUM_WAY |
-| Tag Array | (22+1) × 64 × 8 = 11776 bit | (TAG_SIZE+1) × NUM_SET × NUM_WAY |
-| Node Array | 7 × 64 = 448 bit | (NUM_WAY-1) × NUM_SET |
-| Dirty Array | 8 × 64 = 512 bit | NUM_WAY × NUM_SET |
-| **Toplam** | ~76KB | Data + Tag + Node + Dirty |
+| Component | Size | Calculation |
+|-----------|------|-------------|
+| Data array | 8KB × 8 way = 64Kb | BLK_SIZE × NUM_SET × NUM_WAY |
+| Tag array | (22+1) × 64 × 8 = 11776 bit | (TAG_SIZE+1) × NUM_SET × NUM_WAY |
+| Node array | 7 × 64 = 448 bit | (NUM_WAY-1) × NUM_SET |
+| Dirty array | 8 × 64 = 512 bit | NUM_WAY × NUM_SET |
+| **Total** | ~76KB | Data + tag + node + dirty |
 
 ---
 
-## Doğrulama ve Test
+## Verification and Testing
 
-### Assertion'lar
+### Assertions
 
 ```systemverilog
-// Hit ve miss aynı anda olamaz
+// Hit and miss cannot both be active
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     !(cache_hit && cache_miss)
 ) else $error("Hit and miss cannot be active simultaneously");
 
-// PLRU evict way one-hot olmalı
+// PLRU evict way must be one-hot
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     $onehot(evict_way)
 ) else $error("Evict way must be one-hot encoded");
 
-// D-Cache: FENCE.I sırasında normal erişim kapalı
+// D-Cache: normal access disabled during FENCE.I
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     fi_active |-> !cache_res_o.valid
 ) else $error("Cache should not respond during FENCE.I");
 
-// Miss durumunda lowX request aktif olmalı
+// lowX request must be active on miss
 assert property (@(posedge clk_i) disable iff (!rst_ni)
     (cache_miss && !lookup_ack) |-> lowX_req_o.valid
 ) else $error("Memory request should be active on cache miss");
 ```
 
-### Test Senaryoları
+### Test Scenarios
 
-1. **Basic Hit/Miss**
-   - Aynı adrese ardışık erişim (hit)
-   - Farklı set'lere erişim (cold miss)
-   - Aynı set'e 9 farklı adres (capacity miss)
+1. **Basic hit/miss**
+   - Back-to-back access to the same address (hit)
+   - Access to different sets (cold miss)
+   - Nine distinct addresses in the same set (capacity miss)
 
-2. **PLRU Eviction**
-   - 8 way'i sırayla doldur
-   - 9. erişimde PLRU eviction doğrula
-   - Erişim paterni sonrası evict way kontrolü
+2. **PLRU eviction**
+   - Fill all eight ways in order
+   - On the 9th access, verify PLRU eviction
+   - After an access pattern, check evict way
 
-3. **D-Cache Write-back**
+3. **D-Cache write-back**
    - Write miss → allocate → write
-   - Eviction sırasında dirty writeback
+   - Dirty writeback during eviction
    - Clean line eviction (no writeback)
 
 4. **FENCE.I**
-   - Dirty line yok → hızlı tamamlanma
-   - Tek dirty line → writeback
-   - Tüm line'lar dirty → full writeback
+   - No dirty lines → fast completion
+   - Single dirty line → writeback
+   - All lines dirty → full writeback
 
-5. **Uncached Access**
-   - Peripheral adresleri (uncached)
-   - RAM adresleri (cached)
+5. **Uncached access**
+   - Peripheral addresses (uncached)
+   - RAM addresses (cached)
 
-### Coverage Noktaları
+### Coverage Points
 
 ```systemverilog
 covergroup cache_cg @(posedge clk_i);
@@ -892,15 +892,15 @@ endgroup
 
 ---
 
-## Özet
+## Summary
 
-`cache` modülü, CERES RISC-V işlemcisi için kritik bir performans bileşenidir:
+The `cache` module is a key performance component for the Level RISC-V processor:
 
-1. **Parametrik Tasarım**: Kapasite, associativity ve blok boyutu ayarlanabilir
-2. **Unified Modül**: Tek modül I-Cache ve D-Cache olarak kullanılabilir
-3. **PLRU Eviction**: Düşük maliyetli, etkili eviction policy
-4. **Write-back Policy**: D-Cache için minimum bellek trafiği
-5. **FENCE.I Desteği**: Dirty writeback state machine
-6. **Uncached Bypass**: Peripheral erişimleri için cache bypass
+1. **Parametric design**: Capacity, associativity, and block size are configurable.
+2. **Single module**: One RTL block serves as either I-Cache or D-Cache.
+3. **PLRU eviction**: Low-cost, effective replacement policy.
+4. **Write-back policy**: Minimizes memory traffic for the D-Cache.
+5. **FENCE.I support**: Dirty writeback state machine.
+6. **Uncached bypass**: Cache bypass for peripheral accesses.
 
-Bu tasarım, tipik embedded workload'lar için >90% hit rate sağlarken, FPGA kaynak kullanımını optimize eder.
+This design targets >90% hit rate on typical embedded workloads while optimizing FPGA resource use.

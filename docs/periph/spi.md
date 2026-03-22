@@ -1,29 +1,29 @@
-# SPI Master Controller - Teknik Dokümantasyon
+# SPI Master Controller — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [Register Map](#register-map)
-4. [SPI Modları](#spi-modları)
+4. [SPI Modes](#spi-modes)
 5. [State Machine](#state-machine)
-6. [FIFO Yapısı](#fifo-yapısı)
+6. [FIFO Structure](#fifo-structure)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`spi_master` modülü, **8-bit SPI Master** controller olarak FIFO buffers ve 4 SPI mod desteği sağlar.
+The `spi_master` module implements an **8-bit SPI master** controller with FIFO buffers and support for all four SPI modes.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/periph/spi/spi_master.sv
 ```
 
-### Özellikler
+### Features
 
 - 8-bit data width
 - 8-byte TX/RX FIFO buffers
@@ -34,13 +34,13 @@ rtl/periph/spi/spi_master.sv
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 module spi_master
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic clk_i,
     input  logic rst_ni,
@@ -73,7 +73,7 @@ module spi_master
 │   │           │──── SCK ────────────────────►│           │              │
 │   │           │                              │           │              │
 │   │           │──── MOSI ───────────────────►│           │              │
-│   │  CERES    │                              │  Device   │              │
+│   │  Level    │                              │  Device   │              │
 │   │           │◄─── MISO ────────────────────│           │              │
 │   │           │                              │           │              │
 │   │           │──── CS_N ───────────────────►│           │              │
@@ -91,7 +91,7 @@ module spi_master
 
 ## Register Map
 
-| Offset | Register | Açıklama |
+| Offset | Register | Description |
 |--------|----------|----------|
 | 0x00 | CTRL | Control register |
 | 0x04 | STATUS | Status register (read-only) |
@@ -123,9 +123,9 @@ module spi_master
 
 ---
 
-## SPI Modları
+## SPI Modes
 
-### CPOL ve CPHA Kombinasyonları
+### CPOL and CPHA Combinations
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -255,7 +255,7 @@ end
 
 ---
 
-## FIFO Yapısı
+## FIFO Structure
 
 ### TX/RX FIFO
 
@@ -293,7 +293,7 @@ wbit_fifo #(
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### C Header
 
@@ -400,7 +400,7 @@ void flash_read(uint32_t addr, uint8_t *buf, int len) {
 
 ---
 
-## Timing Diyagramı
+## Timing Diagram
 
 ### SPI Transfer (Mode 0)
 
@@ -424,9 +424,9 @@ miso_i     ──────────┤D7 ├───┤D6 ├───┤
 
 ---
 
-## Özet
+## Summary
 
-`spi_master` modülü:
+The `spi_master` module provides:
 
 1. **8-bit Data**: Standard SPI width
 2. **4 Modes**: All CPOL/CPHA combinations

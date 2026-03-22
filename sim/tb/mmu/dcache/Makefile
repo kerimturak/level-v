@@ -20,7 +20,7 @@ TB_CPP := $(TB_DIR)/tb_main.cpp
 
 # RTL sources needed for cache
 RTL_SOURCES := \
-	$(RTL_DIR)/pkg/ceres_param.sv \
+	$(RTL_DIR)/pkg/level_param.sv \
 	$(RTL_DIR)/core/mmu/cache.sv \
 	$(RTL_DIR)/ram/sp_bram.sv
 

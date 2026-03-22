@@ -10,9 +10,9 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 `timescale 1ns / 1ps
 /* verilator lint_off VARHIDDEN */
 module ras
-  import ceres_param::*;
+  import level_param::*;
 #(
-    parameter RAS_SIZE = ceres_param::RAS_SIZE
+    parameter RAS_SIZE = level_param::RAS_SIZE
 ) (
     input  logic            clk_i,
     input  logic            rst_ni,
@@ -66,7 +66,7 @@ module ras
           ras[i].valid <= ras[i-1].valid;
         end
         ras[0].data  <= restore_i.data;
-        ras[0].valid <= 1;  // pipeline bu gilgiiyi vermeki sanırım
+        ras[0].valid <= 1;  // pipeline supplies this (restore) information
       end else if (req_valid_i) begin
         case (ras_op)
           PUSH: begin

@@ -7,9 +7,9 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module decode
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic                   clk_i,
     input  logic                   rst_ni,
@@ -34,7 +34,7 @@ module decode
   always_comb begin
     r1_data_o  = fwd_a_i ? wb_data_i : r1_data;
     r2_data_o  = fwd_b_i ? wb_data_i : r2_data;
-    // İlk exception oluşturan pcye göre decode daki exception
+    // Decode-stage exception type from control (first-exception PC semantics)
     exc_type_o = ctrl_o.exc_type;
   end
 

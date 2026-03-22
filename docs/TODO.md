@@ -1,1 +1,1 @@
-run test dosyasında spike çalıştırmak için ayrı komuşt var onuda spike makefile'ından çağırsın
+The run-test flow has a separate command for running Spike; that path should invoke it from the Spike Makefile as well.

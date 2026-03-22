@@ -1,6 +1,5 @@
 {
-  "$schema": "./modelsim.schema.json",
-  "_comment": "CERES RISC-V ModelSim/Questa Simulation Configuration",
+  "_comment": "Level RISC-V ModelSim/Questa Simulation Configuration",
 
   "simulation": {
     "time_resolution": "ns",
@@ -14,14 +13,6 @@
     "mfcu": true,
     "svinputport": "relaxed",
     "incremental": false
-  },
-
-  "lint": {
-    "enabled": true,
-    "mode": "default",
-    "pedantic": false,
-    "style_checks": true,
-    "width_checks": true
   },
 
   "debug": {
@@ -80,18 +71,12 @@
   "profiles": {
     "fast": {
       "_description": "Maximum speed, minimal checking",
-      "lint": { "enabled": false },
       "debug": { "acc": "" },
       "simulation": { "quiet": true }
     },
     "debug": {
       "_description": "Full debugging with all features",
-      "lint": { "enabled": true, "mode": "full" },
       "debug": { "acc": "npr", "fsmdebug": true, "classdebug": true, "assertdebug": true }
-    },
-    "lint_only": {
-      "_description": "Lint checking without simulation",
-      "lint": { "enabled": true, "mode": "full", "pedantic": true, "style_checks": true }
     },
     "coverage": {
       "_description": "Coverage collection mode",

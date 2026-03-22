@@ -1,5 +1,5 @@
 /* ============================================================
- * Ceres-V Linker Script for Embench - 32KB Memory
+ * level-V Linker Script for Embench - 32KB Memory
  * Embench benchmarks are small embedded apps
  * ============================================================
  */

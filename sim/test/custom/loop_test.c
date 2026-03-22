@@ -1,11 +1,11 @@
 /**
- * Loop Test - Ceres-V RV32IMC_Zicsr
+ * Loop Test - Level-V RV32IMC_Zicsr
  * 
  * Tests loop execution and branch prediction
  * Loops with different patterns
  */
 
-#include "ceres_test.h"
+#include "level_test.h"
 
 int main(void) {
     uart_init();

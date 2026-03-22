@@ -27,8 +27,8 @@ Description:
 */
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
-import ceres_param::*;
+`include "level_defines.svh"
+import level_param::*;
 
 module wb_clint_slave (
     input logic clk_i,
@@ -44,7 +44,7 @@ module wb_clint_slave (
 );
 
   // ============================================================================
-  // CLINT Register Offsets (from ceres_param)
+  // CLINT Register Offsets (from level_param)
   // ============================================================================
   localparam CLINT_MSIP = CLINT_MSIP_OFF;
   localparam CLINT_MTIMECMP_LO = CLINT_MTIMECMP_OFF;

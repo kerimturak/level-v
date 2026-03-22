@@ -7,10 +7,10 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 module cs_reg_file
-  import ceres_param::*;
+  import level_param::*;
 (
     input logic   clk_i,
     input logic   rst_ni,
@@ -112,7 +112,7 @@ module cs_reg_file
   // MISA CONFIGURATION (RV32IMC)
   // ============================================================================
   
-  localparam misa_ext_t CERES_MISA = '{
+  localparam misa_ext_t LEVEL_MISA = '{
       MXL      : 2'b01,  // RV32
       RESERVED : '0,
       Z : 1'b0,  // bit25
@@ -263,7 +263,7 @@ module cs_reg_file
 
   always_comb begin
     misa_c_o = misa.C;
-    // mtvec write bypass (benchmark için)
+    // mtvec write bypass (for benchmarks)
     mtvec_o  = (csr_idx_i == 12'h305 && wr_en_i && de_trap_active_i) ? csr_wdata_i : mtvec;
     // mepc output with alignment mask (Spike-compatible)
     // Clear low bits based on current MISA.C: bit[0] always, bit[1] if C disabled
@@ -312,7 +312,7 @@ module cs_reg_file
     if (!rst_ni) begin
       // Reset all CSRs
       mstatus   <= '{mie: 1'b0, mpie: 1'b0, mpp: 2'b11};  // M-mode only: start in M-mode
-      misa      <= CERES_MISA;
+      misa      <= LEVEL_MISA;
       mie       <= '0;
       mtvec     <= '0;
       // Note: mip is now combinational - driven by hardware interrupt sources
@@ -455,8 +455,8 @@ module cs_reg_file
               tdata2_reg[1] <= csr_wdata_i;
           end
           TCONTROL: tcontrol_reg <= csr_wdata_i;  // Trigger control (writable)
-          PMPCFG0:  pmpcfg0  <= csr_wdata_i;  // şimdilik düz RW
-          PMPADDR0: pmpaddr0 <= csr_wdata_i;  // şimdilik düz RW
+          PMPCFG0:  pmpcfg0  <= csr_wdata_i;  // plain read/write for now
+          PMPADDR0: pmpaddr0 <= csr_wdata_i;  // plain read/write for now
           default: ;  // Unsupported CSR: ignore write
         endcase
       end

@@ -1,34 +1,34 @@
-# DECODE Modülü - Teknik Döküman
+# Decode Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`decode.sv` modülü, RISC-V işlemcisinin ikinci pipeline aşamasıdır (Stage 02). Fetch aşamasından gelen instruction'ı decode eder, register file'dan operand'ları okur, control signal'leri üretir ve immediate değerleri genişletir. Ayrıca data forwarding mekanizması ile hazard'ları önler.
+The `decode.sv` module is the second pipeline stage of the RISC-V processor (stage 02). It decodes the instruction from fetch, reads operands from the register file, generates control signals, and extends immediates. Data forwarding from writeback avoids some hazards.
 
-## Temel Sorumluluklar
+## Main responsibilities
 
-1. **Instruction Decode**: Control unit ile instruction'ın tipini ve kontrol sinyallerini belirler
-2. **Register File Access**: Source register'lardan (rs1, rs2) değerleri okur
-3. **Immediate Generation**: Instruction formatına göre immediate değeri genişletir (sign/zero extension)
-4. **Data Forwarding**: Writeback aşamasından gelen verileri forward eder (hazard prevention)
-5. **Exception Propagation**: Fetch aşamasından gelen exception'ları propagate eder
+1. **Instruction decode:** With the control unit, determines instruction type and control signals  
+2. **Register file access:** Reads source registers (rs1, rs2)  
+3. **Immediate generation:** Extends immediates per instruction format (sign/zero extension)  
+4. **Data forwarding:** Forwards data from writeback when needed (hazard prevention)  
+5. **Exception propagation:** Propagates exceptions raised in fetch  
 
-## Port Tanımları
+## Port definitions
 
-### Giriş Portları
+### Input ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `inst_i` | inst_t | Fetch'ten gelen instruction (parsed format) |
-| `fwd_a_i` | logic | Operand A için forward enable (hazard unit'ten) |
-| `fwd_b_i` | logic | Operand B için forward enable (hazard unit'ten) |
-| `wb_data_i` | [XLEN-1:0] | Writeback aşamasından forward edilecek data |
-| `rd_addr_i` | [4:0] | Writeback destination register address |
-| `rf_rw_en_i` | logic | Register file write enable (writeback'ten) |
-| `instr_type_i` | instr_type_e | Instruction tipi (fetch'ten) |
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `inst_i` | inst_t | Instruction from fetch (parsed) |
+| `fwd_a_i` | logic | Forward enable for operand A (from hazard unit) |
+| `fwd_b_i` | logic | Forward enable for operand B (from hazard unit) |
+| `wb_data_i` | [XLEN-1:0] | Data to forward from writeback |
+| `rd_addr_i` | [4:0] | Writeback destination register |
+| `rf_rw_en_i` | logic | Register file write enable (from writeback) |
+| `instr_type_i` | instr_type_e | Instruction type (from fetch) |
 
-**inst_t yapısı:**
+**`inst_t` layout:**
 ```systemverilog
 typedef struct packed {
   logic [6:0]  opcode;
@@ -40,17 +40,17 @@ typedef struct packed {
 } inst_t;
 ```
 
-### Çıkış Portları
+### Output ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
 | `r1_data_o` | [XLEN-1:0] | Source register 1 data (forwarded if needed) |
 | `r2_data_o` | [XLEN-1:0] | Source register 2 data (forwarded if needed) |
-| `ctrl_o` | ctrl_t | Control signal bundle (execute aşamasına) |
-| `imm_o` | [XLEN-1:0] | Sign/zero extended immediate değer |
+| `ctrl_o` | ctrl_t | Control bundle (to execute) |
+| `imm_o` | [XLEN-1:0] | Sign- or zero-extended immediate |
 | `exc_type_o` | exc_type_e | Exception type (propagated/generated) |
 
-**ctrl_t yapısı:**
+**`ctrl_t` layout:**
 ```systemverilog
 typedef struct packed {
   alu_ctrl_e   alu_ctrl;      // ALU operation type
@@ -72,7 +72,7 @@ typedef struct packed {
 } ctrl_t;
 ```
 
-## Mimari Bloklar
+## Architectural blocks
 
 ### 1. Data Forwarding Logic
 
@@ -83,23 +83,23 @@ always_comb begin
 end
 ```
 
-**Amaç:** RAW (Read-After-Write) hazard'larını önlemek
+**Purpose:** Avoid RAW (read-after-write) hazards.
 
-**Senaryo:**
+**Scenario:**
 ```assembly
-add x1, x2, x3   # Cycle N: x1'e write (writeback: Cycle N+3)
-sub x4, x1, x5   # Cycle N+1: x1'i read (decode stage)
+add x1, x2, x3   # Cycle N: write x1 (writeback: cycle N+3)
+sub x4, x1, x5   # Cycle N+1: read x1 (in decode)
 ```
 
 **Problem:** 
-- `sub` instruction'ı decode'da x1'i okuyor (Cycle N+1)
-- Ancak `add` instruction'ı x1'e henüz yazmadı (writeback Cycle N+3)
-- x1'in eski (stale) değeri okunur
+- `sub` reads x1 in decode (cycle N+1)
+- `add` has not yet written x1 (writeback at cycle N+3)
+- The register file would expose a stale x1
 
-**Çözüm:**
-- Hazard unit `fwd_a_i=1` yapar
-- `wb_data_i` (add'in sonucu) doğrudan `r1_data_o`'ya forward edilir
-- Pipeline stall gerekmez
+**Solution:**
+- Hazard unit asserts `fwd_a_i`
+- `wb_data_i` (`add`’s result) is muxed onto `r1_data_o`
+- No pipeline stall needed in this pattern
 
 ### 2. Control Unit Integration
 
@@ -111,10 +111,10 @@ control_unit i_control_unit (
 );
 ```
 
-**İşlev:**
-- Instruction type'a göre tüm control signal'leri üretir
-- ALU operation, memory access, register write, CSR access, branch/jump kontrolleri
-- Exception detection (illegal instruction, illegal shift, illegal CSR access)
+**Role:**
+- Drives all control signals from instruction type
+- ALU, memory, register write, CSR, branch/jump controls
+- Detects illegal instruction, illegal shift, illegal CSR access
 
 ### 3. Register File
 
@@ -132,11 +132,11 @@ reg_file i_reg_file (
 );
 ```
 
-**İşlev:**
-- 32x32-bit register array (x0-x31)
-- Dual-port asenkron read (r1_data, r2_data)
-- Single-port senkron write (writeback aşamasından)
-- x0 hardwired to zero (write ignored)
+**Role:**
+- 32×32-bit GPRs (x0–x31)
+- Dual-port asynchronous read (r1_data, r2_data)
+- Single-port synchronous write (from writeback)
+- x0 hardwired to zero (writes ignored)
 
 ### 4. Immediate Extension
 
@@ -148,10 +148,10 @@ extend i_extend (
 );
 ```
 
-**İşlev:**
-- Instruction formatına göre immediate bit'leri seçer ve genişletir
-- Sign extension (I, S, B, J) veya zero extension (U, CSR)
-- 7 farklı immediate format desteği
+**Role:**
+- Selects and extends immediate bits per format
+- Sign extension (I, S, B, J) or zero extension (U, CSR)
+- Seven immediate modes
 
 ## Instruction Decode Flow
 
@@ -228,9 +228,9 @@ exc_type_o = ctrl_o.exc_type;
 4. **CSR Read-Only Write**: Attempt to write to read-only CSR (bits [11:10] == 2'b11)
 
 **Propagation:**
-- Fetch stage exception'ları decode'dan propagate edilir
-- Decode'daki yeni exception'lar `ctrl_o.exc_type` ile execute'a iletilir
-- Exception commit writeback stage'de olur
+- Fetch-stage exceptions propagate through decode
+- New decode exceptions are sent to execute via `ctrl_o.exc_type`
+- Exception commit occurs in the writeback stage
 
 ## Timing Diagram
 
@@ -298,7 +298,7 @@ Cycle N+4:
   Decode: next
 ```
 
-**Not:** Bu örnekte forwarding Cycle N+4'te gerekli değil (sub zaten execute'a geçmiş)
+**Note:** In this example forwarding at cycle N+4 is unnecessary (`sub` has already left decode)
 
 ### Example 2: Writeback Forwarding
 
@@ -328,24 +328,24 @@ Hazard Unit:
 
 ### Register File Read Timing
 
-- **Asenkron read**: Aynı cycle'da decode ve read tamamlanır
-- **Combinational path**: inst_i.r1_addr → registers[r1_addr] → r1_data
-- **Critical path**: Register array read → forwarding mux → output
+- **Asynchronous read:** Decode and register read finish in the same cycle  
+- **Combinational path:** `inst_i.r1_addr` → `registers[r1_addr]` → `r1_data`  
+- **Critical path:** Register read → forwarding mux → output  
 
 **Optimization:**
-- Register file BRAM/distributed RAM ile implement edilebilir
-- Forwarding mux gecikme ekler (~2-3 logic levels)
+- Register file can use BRAM or distributed RAM  
+- Forwarding mux adds ~2–3 levels of delay  
 
 ### Forwarding Overhead
 
 - **Logic Overhead**: 2x 2:1 mux (r1_data, r2_data)
-- **Timing Impact**: ~1-2 ns (FPGA'da)
+- **Timing Impact**: ~1–2 ns (on an FPGA)
 - **Benefit**: Stall avoidance → Performance gain >> overhead
 
-**Örnek:**
+**Example:**
 - Load-use hazard without forwarding: 1 cycle stall
 - 20% load instruction → 20% potential stall
-- Forwarding ile stall oranı %5'e düşer → %15 performance gain
+- With forwarding, stall rate can drop toward ~5% → ~15% performance gain
 
 ## Instruction Format Decoding
 
@@ -356,7 +356,7 @@ Hazard Unit:
 | funct7  |  rs2  |  rs1  |f3  |  rd   |opcode |
 +---------+-------+-------+----+-------+-------+
 ```
-**Örnek:** `add x1, x2, x3` → `0x003100B3`
+**Example:** `add x1, x2, x3` → `0x003100B3`
 
 ### I-Type
 ```
@@ -365,7 +365,7 @@ Hazard Unit:
 |    imm[11:0] |  rs1  |f3  |  rd   |opcode |
 +--------------+-------+----+-------+-------+
 ```
-**Örnek:** `addi x1, x2, 12` → `0x00C10093`
+**Example:** `addi x1, x2, 12` → `0x00C10093`
 
 ### S-Type
 ```
@@ -374,7 +374,7 @@ Hazard Unit:
 |imm[11:5]|  rs2  |  rs1  |f3  |imm[4:0] |opcode |
 +---------+-------+-------+----+---------+-------+
 ```
-**Örnek:** `sw x3, 8(x2)` → `0x00312423`
+**Example:** `sw x3, 8(x2)` → `0x00312423`
 
 ### B-Type (Branch)
 ```
@@ -383,7 +383,7 @@ Hazard Unit:
 |12|11:5   |  rs2  |  rs1  |f3  |4:1 |11|opcode |
 +--+-------+-------+-------+----+----+--+-------+
 ```
-**Örnek:** `beq x1, x2, offset` → offset bit shuffling
+**Example:** `beq x1, x2, offset` → offset bit shuffling
 
 ### U-Type
 ```
@@ -392,7 +392,7 @@ Hazard Unit:
 |      imm[31:12]    |  rd   |opcode |
 +--------------------+-------+-------+
 ```
-**Örnek:** `lui x1, 0x12345` → `0x123450B7`
+**Example:** `lui x1, 0x12345` → `0x123450B7`
 
 ### J-Type (JAL)
 ```
@@ -401,7 +401,7 @@ Hazard Unit:
 |20|10:1      |11|19:12     |  rd   |opcode |
 +--+----------+--+----------+-------+-------+
 ```
-**Örnek:** `jal x1, offset` → offset bit shuffling
+**Example:** `jal x1, offset` → offset bit shuffling
 
 ## Control Signal Generation Examples
 
@@ -458,7 +458,7 @@ Control Signals:
 ### Signal Monitoring
 
 ```systemverilog
-// Decode stage'de monitor edilmesi gereken sinyaller:
+// Useful signals to watch in decode:
 - inst_i          // Input instruction
 - ctrl_o          // Control signal bundle
 - r1_data_o       // Operand A (forwarded)
@@ -468,42 +468,42 @@ Control Signals:
 - exc_type_o      // Exception type
 ```
 
-### Assertions (Önerilen)
+### Suggested assertions
 
 ```systemverilog
-// x0 her zaman 0 olmalı
+// x0 must always read as zero
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (inst_i.r1_addr == 5'b0) |-> (r1_data == 32'h0));
 
-// Forwarding aktif olduğunda wb_data kullanılmalı
+// When forwarding is on, wb_data must drive the operand
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   fwd_a_i |-> (r1_data_o == wb_data_i));
 
-// Register write enable olmadan forward edilmemeli
+// Forwarding requires a register write in WB
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   fwd_a_i |-> rf_rw_en_i);
 
-// Illegal instruction'da register write yapılmamalı
+// Illegal instruction must not assert register write
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (ctrl_o.exc_type == ILLEGAL_INSTRUCTION) |-> !ctrl_o.rf_rw_en);
 ```
 
-## İlgili Modüller
+## Related modules
 
-1. **control_unit.sv**: Control signal generation ve exception detection
-2. **reg_file.sv**: 32x32-bit register file implementation
-3. **extend.sv**: Immediate sign/zero extension
-4. **hazard_unit.sv**: Forwarding control (fetch.sv'de)
-5. **execute.sv**: Decode'dan gelen operand'ları işler
+1. **control_unit.sv:** Control signal generation and exception detection
+2. **reg_file.sv:** 32×32-bit register file  
+3. **extend.sv:** Immediate sign/zero extension  
+4. **hazard_unit.sv:** Forwarding control (driven from `fetch.sv`)  
+5. **execute.sv:** Consumes operands from decode
 
-## Gelecek İyileştirmeler
+## Future improvements
 
-1. **Multi-Cycle Instruction Support**: Division/Multiplication için iterative execution
-2. **Register Renaming**: Out-of-order execution desteği
-3. **Scoreboarding**: Daha gelişmiş hazard detection
+1. **Multi-cycle instructions:** Iterative divide/multiply execution  
+2. **Register renaming:** Out-of-order execution  
+3. **Scoreboarding:** Richer hazard tracking  
 4. **Dual-Issue Decode**: Superscalar architecture (2 instruction/cycle decode)
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification v20191213 - Instruction Formats
 2. "Computer Organization and Design: RISC-V Edition" - Patterson & Hennessy, Chapter 4 (Pipelining)
@@ -512,6 +512,6 @@ assert property (@(posedge clk_i) disable iff (!rst_ni)
 
 ---
 
-**Son Güncelleme:** 5 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** 5 December 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

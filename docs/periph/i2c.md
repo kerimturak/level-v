@@ -1,49 +1,49 @@
-# I2C Master Controller - Teknik Dokümantasyon
+# I2C Master Controller — Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Modül Arayüzü](#modül-arayüzü)
+1. [Overview](#overview)
+2. [Module Interface](#module-interface)
 3. [Register Map](#register-map)
-4. [I2C Protokolü](#i2c-protokolü)
+4. [I2C Protocol](#i2c-protocol)
 5. [State Machine](#state-machine)
-6. [FIFO Yapısı](#fifo-yapısı)
+6. [FIFO Structure](#fifo-structure)
 7. [Clock Stretching](#clock-stretching)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`i2c_master` modülü, **FIFO buffered I2C Master** controller olarak Standard (100kHz), Fast (400kHz) ve Fast+ (1MHz) modlarını destekler.
+The `i2c_master` module implements a **FIFO-buffered I2C master** controller supporting Standard (100 kHz), Fast (400 kHz), and Fast+ (1 MHz) modes.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/periph/i2c/i2c_master.sv
 ```
 
-### Özellikler
+### Features
 
 - Standard mode: 100 kHz
 - Fast mode: 400 kHz
 - Fast+ mode: 1 MHz
 - 8-byte TX/RX FIFO buffers
-- Clock stretching desteği
+- Clock stretching support
 - Auto-ACK capability
 - Arbitration loss detection
 - Open-drain output interface
 
 ---
 
-## Modül Arayüzü
+## Module Interface
 
-### Port Tanımları
+### Port Definitions
 
 ```systemverilog
 module i2c_master
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic clk_i,
     input  logic rst_ni,
@@ -91,7 +91,7 @@ module i2c_master
 
 ## Register Map
 
-| Offset | Register | Açıklama |
+| Offset | Register | Description |
 |--------|----------|----------|
 | 0x00 | CTRL | Control register |
 | 0x04 | STATUS | Status register (read-only) |
@@ -139,7 +139,7 @@ module i2c_master
 
 ---
 
-## I2C Protokolü
+## I2C Protocol
 
 ### Baud Rate Calculation
 
@@ -249,7 +249,7 @@ typedef enum logic [3:0] {
 
 ---
 
-## FIFO Yapısı
+## FIFO Structure
 
 ### TX FIFO
 
@@ -325,7 +325,7 @@ end
 
 ---
 
-## Kullanım Örneği
+## Usage Example
 
 ### C Header
 
@@ -410,9 +410,9 @@ int i2c_read_byte(uint8_t slave_addr, uint8_t reg, uint8_t *data) {
 
 ---
 
-## Özet
+## Summary
 
-`i2c_master` modülü:
+The `i2c_master` module provides:
 
 1. **3 Speed Modes**: 100k / 400k / 1M Hz
 2. **FIFO Buffers**: 8-byte TX/RX

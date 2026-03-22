@@ -1,42 +1,42 @@
-# CERES Defines - Teknik Dokümantasyon
+# Level Defines - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
+1. [Overview](#overview)
 2. [Feature Flags](#feature-flags)
-3. [Multiplier Implementasyonları](#multiplier-implementasyonları)
-4. [Trace ve Log Kontrolleri](#trace-ve-log-kontrolleri)
-5. [Simülasyon Kontrolleri](#simülasyon-kontrolleri)
-6. [Makefile Entegrasyonu](#makefile-entegrasyonu)
-7. [Kullanım Örnekleri](#kullanım-örnekleri)
+3. [Multiplier Implementations](#multiplier-implementations)
+4. [Trace and Log Controls](#trace-and-log-controls)
+5. [Simulation Controls](#simulation-controls)
+6. [Makefile Integration](#makefile-integration)
+7. [Usage Examples](#usage-examples)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`ceres_defines.svh` dosyası, CERES RISC-V işlemcisinin **compile-time konfigürasyonunu** sağlar. Bu header file, feature flag'ler, multiplier seçimi ve trace kontrolleri için merkezi tanımlar içerir.
+The `level_defines.svh` file provides **compile-time configuration** for the Level RISC-V core. This header provides central definitions for feature flags, multiplier selection, and trace controls.
 
-### Dosya Konumu
+### File Location
 
 ```
-rtl/include/ceres_defines.svh
+rtl/include/level_defines.svh
 ```
 
-### Include Yöntemi
+### Include Method
 
 ```systemverilog
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 ```
 
 ---
 
 ## Feature Flags
 
-### Multiplier Seçimi
+### Multiplier Selection
 
-Tek seferde sadece bir multiplier implementasyonu aktif olmalıdır:
+Only one multiplier implementation may be active at a time:
 
 ```systemverilog
 //------------------------------------------------------------------------------
@@ -54,24 +54,24 @@ Tek seferde sadece bir multiplier implementasyonu aktif olmalıdır:
 //`define FEAT_DSP_MUL
 ```
 
-### Multiplier Karşılaştırma
+### Multiplier Comparison
 
-| Implementasyon | Latency | Throughput | Area | Kullanım |
+| Implementation | Latency | Throughput | Area | Use case |
 |----------------|---------|------------|------|----------|
-| WALLACE_SINGLE | 1 cycle | 1/cycle | Yüksek | Performans |
-| WALLACE_MULTI | N cycle | 1/N cycle | Düşük | Alan opt. |
+| WALLACE_SINGLE | 1 cycle | 1/cycle | High | Performance |
+| WALLACE_MULTI | N cycle | 1/N cycle | Low | Area opt. |
 | DSP_MUL | 1-3 cycle | 1/cycle | DSP | FPGA |
 
 ---
 
-## Multiplier Implementasyonları
+## Multiplier Implementations
 
-### Wallace Single (Varsayılan)
+### Wallace Single (Default)
 
 ```systemverilog
 `define FEAT_WALLACE_SINGLE
 
-// Kullanım
+// Usage
 `ifdef FEAT_WALLACE_SINGLE
     // Single-cycle 32x32 Wallace tree
     wallace_mul_single u_mul (
@@ -82,18 +82,18 @@ Tek seferde sadece bir multiplier implementasyonu aktif olmalıdır:
 `endif
 ```
 
-**Özellikler:**
-- Tek cycle'da 32x32 çarpma
-- 64-bit sonuç
-- Yüksek alan tüketimi
-- Kritik yol uzunluğu
+**Features:**
+- 32x32 multiply in one cycle
+- 64-bit result
+- High area usage
+- Long critical path
 
 ### Wallace Multi
 
 ```systemverilog
 //`define FEAT_WALLACE_MULTI
 
-// Kullanım
+// Usage
 `ifdef FEAT_WALLACE_MULTI
     // Multi-cycle radix-4 Booth multiplier
     wallace_mul_multi u_mul (
@@ -108,17 +108,17 @@ Tek seferde sadece bir multiplier implementasyonu aktif olmalıdır:
 `endif
 ```
 
-**Özellikler:**
-- Multi-cycle çarpma (4-16 cycle)
-- Düşük alan tüketimi
-- Pipeline stall gerektirir
+**Features:**
+- Multi-cycle multiply (4-16 cycles)
+- Low area usage
+- Requires pipeline stalls
 
 ### DSP Multiplier
 
 ```systemverilog
 //`define FEAT_DSP_MUL
 
-// Kullanım
+// Usage
 `ifdef FEAT_DSP_MUL
     // FPGA DSP48 block multiplier
     dsp_mul u_mul (
@@ -130,19 +130,19 @@ Tek seferde sadece bir multiplier implementasyonu aktif olmalıdır:
 `endif
 ```
 
-**Özellikler:**
-- FPGA DSP bloğu kullanır
+**Features:**
+- Uses FPGA DSP block
 - 1-3 cycle latency (pipeline)
-- Düşük logic tüketimi
-- Vendor spesifik
+- Low logic usage
+- Vendor-specific
 
 ---
 
-## Trace ve Log Kontrolleri
+## Trace and Log Controls
 
-### Trace Flag'leri
+### Trace Flags
 
-Bu flag'ler normalde **comment halinde** tutulur ve **makefile üzerinden** aktive edilir:
+These flags are normally **commented out** and **enabled via the makefile**:
 
 ```systemverilog
 //------------------------------------------------------------------------------
@@ -159,23 +159,23 @@ Bu flag'ler normalde **comment halinde** tutulur ve **makefile üzerinden** akti
 // `define LOG_BP_VERBOSE    // Per-branch verbose logging
 ```
 
-### Flag Açıklamaları
+### Flag Descriptions
 
-| Flag | Açıklama | Çıktı |
+| Flag | Description | Output |
 |------|----------|-------|
-| `COMMIT_TRACER` | Pipeline register'larda trace bilgisi taşır | - |
-| `KONATA_TRACER` | Konata pipeline visualizer desteği | `pipeline.log` |
-| `LOG_COMMIT` | Spike ile karşılaştırılabilir commit trace | `commit.log` |
-| `LOG_RAM` | RAM yükleme mesajları | Konsol |
-| `LOG_UART` | UART TX çıktısı dosyaya log | `uart.log` |
-| `LOG_BP` | Branch predictor istatistikleri | Konsol |
-| `LOG_BP_VERBOSE` | Her branch için detaylı log | Konsol |
+| `COMMIT_TRACER` | Carries trace info in pipeline registers | - |
+| `KONATA_TRACER` | Konata pipeline visualizer support | `pipeline.log` |
+| `LOG_COMMIT` | Spike-comparable commit trace | `commit.log` |
+| `LOG_RAM` | RAM load messages | Console |
+| `LOG_UART` | UART TX output logged to file | `uart.log` |
+| `LOG_BP` | Branch predictor statistics | Console |
+| `LOG_BP_VERBOSE` | Verbose log per branch | Console |
 
 ---
 
-## Simülasyon Kontrolleri
+## Simulation Controls
 
-### Simülasyon Flag'leri
+### Simulation Flags
 
 ```systemverilog
 //------------------------------------------------------------------------------
@@ -188,12 +188,12 @@ Bu flag'ler normalde **comment halinde** tutulur ve **makefile üzerinden** akti
 // `define SIM_COVERAGE       // Enable coverage collection
 ```
 
-### SIM_FAST Modu
+### SIM_FAST Mode
 
 ```systemverilog
 `ifdef SIM_FAST
-    // Tüm log'lar devre dışı
-    // Maksimum simülasyon hızı
+    // All logs disabled
+    // Maximum simulation speed
 `else
     // Normal debug modunda
     `ifdef LOG_COMMIT
@@ -206,17 +206,17 @@ Bu flag'ler normalde **comment halinde** tutulur ve **makefile üzerinden** akti
 
 ```systemverilog
 `ifdef SIM_UART_MONITOR
-    // UART çıktısını izle
-    // "PASS" veya "FAIL" görünce simülasyonu durdur
-    // Benchmark sonuçlarını algıla
+    // Monitor UART output
+    // Stop simulation when PASS or FAIL is seen
+    // Detect benchmark results
 `endif
 ```
 
 ---
 
-## Makefile Entegrasyonu
+## Makefile Integration
 
-### Verilator Flag Geçişi
+### Passing Verilator Defines
 
 ```makefile
 # Trace kontrolleri
@@ -228,7 +228,7 @@ LOG_BP ?= 0
 LOG_BP_VERBOSE ?= 0
 KONATA_TRACER ?= 0
 
-# Verilator'a define geçir
+# Pass defines to Verilator
 VFLAGS_DEFINES :=
 ifeq ($(LOG_COMMIT),1)
     VFLAGS_DEFINES += +define+LOG_COMMIT
@@ -236,10 +236,10 @@ endif
 ifeq ($(KONATA_TRACER),1)
     VFLAGS_DEFINES += +define+KONATA_TRACER +define+COMMIT_TRACER
 endif
-# ... diğer flag'ler
+# ... other flags
 ```
 
-### Kullanım Örnekleri
+### Usage Examples
 
 ```bash
 # Sadece commit trace
@@ -249,24 +249,24 @@ make run T=rv32ui-p-add LOG_COMMIT=1
 make run T=rv32ui-p-add KONATA_TRACER=1 LOG_PIPELINE=1
 
 # Branch predictor stats
-make cm LOG_BP=1 SIM_UART_MONITOR=1
+make run_coremark LOG_BP=1 SIM_UART_MONITOR=1
 
-# Hızlı simülasyon
+# Fast simulation
 make run T=coremark SIM_FAST=1
 
-# Tüm log'lar
+# All logs
 make run T=test LOG_COMMIT=1 LOG_RAM=1 LOG_UART=1 LOG_BP=1
 ```
 
 ---
 
-## Kullanım Örnekleri
+## Usage Examples
 
 ### Conditional Compilation
 
 ```systemverilog
 module example
-  import ceres_param::*;
+  import level_param::*;
 (
     input logic clk_i,
     // ...
@@ -296,12 +296,12 @@ endmodule
 ### Guard Pattern
 
 ```systemverilog
-`ifndef CERES_DEFINES_SVH
-`define CERES_DEFINES_SVH
+`ifndef LEVEL_DEFINES_SVH
+`define LEVEL_DEFINES_SVH
 
-// Define içerikleri
+// Define contents
 
-`endif // CERES_DEFINES_SVH
+`endif // LEVEL_DEFINES_SVH
 ```
 
 ### Cross-Module Dependency
@@ -317,9 +317,9 @@ endmodule
 
 ---
 
-## Flag Bağımlılıkları
+## Flag Dependencies
 
-### İlişki Diyagramı
+### Relationship Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -362,20 +362,20 @@ endmodule
 
 ## Best Practices
 
-### 1. Multiplier Seçimi
+### 1. Multiplier Selection
 
 ```systemverilog
-// Sadece bir multiplier aktif olmalı
+// Only one multiplier implementation should be active
 `define FEAT_WALLACE_SINGLE
 //`define FEAT_WALLACE_MULTI  // Comment out
 //`define FEAT_DSP_MUL        // Comment out
 ```
 
-### 2. Trace Log'ları
+### 2. Trace Logs
 
 ```systemverilog
 // Normalde comment halinde
-// Makefile ile aktive et
+// Enable via Makefile
 //`define LOG_COMMIT
 
 // Makefile:
@@ -397,66 +397,66 @@ make isa MODE=test
 
 ---
 
-## Özet
+## Summary
 
-`ceres_defines.svh` dosyası:
+The `level_defines.svh` file:
 
 1. **Feature Selection**: Multiplier implementasyonu
 2. **Trace Control**: Commit, pipeline, UART logging
 3. **Simulation Modes**: Fast, coverage, UART monitor
-4. **Makefile Integration**: Runtime flag geçişi
+4. **Makefile Integration**: Runtime define passing
 5. **Conditional Compilation**: `ifdef/endif` pattern
 
-Bu header file, CERES RISC-V işlemcisinin farklı konfigürasyonlarını destekler.
-# Exception Priority - Teknik Dokümantasyon
+This header file supports different configurations of the Level RISC-V core.
+# Exception Priority - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [RISC-V Exception Modeli](#risc-v-exception-modeli)
-3. [Priority Konfigürasyonu](#priority-konfigürasyonu)
-4. [Exception Türleri](#exception-türleri)
+1. [Overview](#overview)
+2. [RISC-V Exception Model](#risc-v-exception-model)
+3. [Priority Configuration](#priority-configuration)
+4. [Exception Types](#exception-types)
 5. [Trap Handling](#trap-handling)
-6. [Pipeline Entegrasyonu](#pipeline-entegrasyonu)
-7. [Kullanım Örnekleri](#kullanım-örnekleri)
+6. [Pipeline Integration](#pipeline-integration)
+7. [Usage Examples](#usage-examples)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`exception_priority.svh` dosyası, RISC-V exception'larının **öncelik sırasını** tanımlar. Aynı cycle'da birden fazla exception oluştuğunda hangi exception'ın işleneceğini belirler.
+The `exception_priority.svh` file defines the **priority order** of RISC-V exceptions and selects which exception is handled when multiple exceptions occur in the same cycle.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/include/exception_priority.svh
 ```
 
-### Temel Konsept
+### Basic Concept
 
 ```
-Aynı anda birden fazla exception oluşabilir:
+Multiple exceptions can occur at the same time:
 - Instruction page fault (fetch)
 - Illegal instruction (decode)
 - Load/Store fault (memory)
 
-Priority sayısı düşük olan exception önce işlenir.
+The exception with the lowest priority number is taken first.
 ```
 
 ---
 
-## RISC-V Exception Modeli
+## RISC-V Exception Model
 
 ### Exception vs Interrupt
 
-| Tip | Özellik | Örnek |
+| Type | Property | Example |
 |-----|---------|-------|
-| **Exception** | Senkron, instruction kaynaklı | Illegal instruction |
-| **Interrupt** | Asenkron, dış kaynaklı | Timer interrupt |
+| **Exception** | Synchronous, instruction-related | Illegal instruction |
+| **Interrupt** | Asynchronous, external | Timer interrupt |
 
-### Exception Sınıfları
+### Exception Classes
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -503,11 +503,11 @@ Priority sayısı düşük olan exception önce işlenir.
 
 ---
 
-## Priority Konfigürasyonu
+## Priority Configuration
 
-### RISC-V Standart Priority
+### RISC-V Standard Priority
 
-RISC-V spesifikasyonu exception önceliklerini belirler:
+The RISC-V specification defines exception priorities:
 
 ```systemverilog
 // exception_priority.svh
@@ -543,13 +543,13 @@ localparam int PRIORITY_ECALL_M               = 10;
 `endif // EXCEPTION_PRIORITY_SVH
 ```
 
-### Priority Tablosu
+### Priority Table
 
-| Priority | Exception | Code | Açıklama |
+| Priority | Exception | Code | Description |
 |----------|-----------|------|----------|
-| 0 | Instruction Address Misaligned | 0 | En yüksek öncelik |
+| 0 | Instruction Address Misaligned | 0 | Highest priority |
 | 1 | Instruction Access Fault | 1 | I-Cache/Bus fault |
-| 2 | Illegal Instruction | 2 | Geçersiz opcode |
+| 2 | Illegal Instruction | 2 | Invalid opcode |
 | 3 | Breakpoint | 3 | EBREAK instruction |
 | 4 | Load Address Misaligned | 4 | Unaligned load |
 | 5 | Load Access Fault | 5 | D-Cache/Bus fault |
@@ -561,14 +561,14 @@ localparam int PRIORITY_ECALL_M               = 10;
 
 ---
 
-## Exception Türleri
+## Exception Types
 
 ### Instruction Address Misaligned
 
 ```systemverilog
 // Fetch stage'de kontrol
-// Compressed (RV32C) ile 2-byte aligned olabilir
-// Standard instructions 4-byte aligned olmalı
+// Compressed (RV32C) may be 2-byte aligned
+// Standard instructions must be 4-byte aligned
 
 logic instr_addr_misaligned;
 
@@ -649,8 +649,8 @@ assign store_access_fault = dcache_error && is_store;
 ### Exception Priority Resolver
 
 ```systemverilog
-// Aynı cycle'da birden fazla exception varsa
-// En yüksek öncelikli olanı seç
+// If multiple exceptions occur in the same cycle
+// Select the highest-priority one
 
 function automatic logic [3:0] resolve_exception_priority(
     input logic instr_addr_mis,
@@ -680,7 +680,7 @@ endfunction
 ### Trap Entry
 
 ```systemverilog
-// Exception oluştuğunda
+// When an exception occurs
 always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
         mepc   <= '0;
@@ -710,7 +710,7 @@ end
 
 ---
 
-## Pipeline Entegrasyonu
+## Pipeline Integration
 
 ### Exception Propagation
 
@@ -755,7 +755,7 @@ end
 
 ### Exception Register
 
-Pipeline stage'ler arasında exception bilgisi taşınır:
+Exception information is carried between pipeline stages:
 
 ```systemverilog
 typedef struct packed {
@@ -771,11 +771,11 @@ exception_t ex_exception_q, mem_exception_q;
 
 ### Precise Exception
 
-RISC-V precise exception gerektirir:
+RISC-V requires precise exceptions:
 
 ```systemverilog
-// Exception olan instruction'dan önceki tüm instruction'lar
-// commit edilmiş olmalı
+// All instructions before the faulting instruction
+// must have committed
 // Sonrakiler flush edilmeli
 
 always_comb begin
@@ -793,13 +793,13 @@ end
 
 ---
 
-## Kullanım Örnekleri
+## Usage Examples
 
 ### Exception Handler
 
 ```systemverilog
 module exception_handler
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic        clk_i,
     input  logic        rst_ni,
@@ -872,42 +872,42 @@ void test_store_access_fault() {
 
 ---
 
-## Özet
+## Summary
 
-`exception_priority.svh` dosyası:
+The `exception_priority.svh` file:
 
-1. **Priority Definition**: RISC-V exception öncelikleri
-2. **Exception Types**: 11 farklı exception tipi
-3. **Trap Handling**: CSR kayıtları (mepc, mcause, mtval)
-4. **Precise Exception**: Pipeline flush ve recovery
-5. **Configurable**: Parametre ile özelleştirilebilir
+1. **Priority Definition**: RISC-V exception priorities
+2. **Exception Types**: 11 distinct exception types
+3. **Trap Handling**: CSR registers (mepc, mcause, mtval)
+4. **Precise exception**: Pipeline flush and recovery
+5. **Configurable**: Customizable via parameters
 
-Bu dosya, CERES RISC-V işlemcisinin exception handling mekanizmasının temelini oluşturur.
-# Fetch Log - Teknik Dokümantasyon
+This file forms the basis of the Level RISC-V core exception-handling mechanism.
+# Fetch Log - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Log Formatı](#log-formatı)
-3. [Sinyaller](#sinyaller)
-4. [Kullanım](#kullanım)
-5. [Debug Senaryoları](#debug-senaryoları)
+1. [Overview](#overview)
+2. [Log Format](#log-format)
+3. [Signals](#signals)
+4. [Usage](#usage)
+5. [Debug Scenarios](#debug-scenarios)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`fetch_log.svh` dosyası, **Fetch stage** debug ve trace çıktıları için log formatlarını tanımlar. I-Cache erişimleri, branch prediction sonuçları ve pipeline stall'ları izlenebilir.
+The `fetch_log.svh` file defines log formats for **fetch stage** debug and trace output. I-cache accesses, branch prediction results, and pipeline stalls can be observed.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/include/fetch_log.svh
 ```
 
-### Aktivasyon
+### Activation
 
 ```bash
 # Makefile ile
@@ -919,9 +919,9 @@ make run T=test LOG_FETCH=1
 
 ---
 
-## Log Formatı
+## Log Format
 
-### Temel Log Yapısı
+### Basic Log Structure
 
 ```systemverilog
 `ifdef LOG_FETCH
@@ -940,7 +940,7 @@ make run T=test LOG_FETCH=1
 `endif
 ```
 
-### Örnek Çıktı
+### Sample Output
 
 ```
 [FETCH] PC=80000000 INSTR=00000297 I @ 1000
@@ -952,9 +952,9 @@ make run T=test LOG_FETCH=1
 
 ---
 
-## Sinyaller
+## Signals
 
-### İzlenen Sinyaller
+### Monitored Signals
 
 ```systemverilog
 // Fetch stage signals
@@ -975,7 +975,7 @@ logic        bp_taken;        // Predicted taken
 logic [31:0] bp_target;       // Predicted target
 ```
 
-### Log Seviyeleri
+### Log Levels
 
 ```systemverilog
 // Basic fetch log
@@ -993,15 +993,15 @@ logic [31:0] bp_target;       // Predicted target
 
 ---
 
-## Kullanım
+## Usage
 
-### Basit Fetch Log
+### Simple Fetch Log
 
 ```systemverilog
 `include "fetch_log.svh"
 
 module fetch_stage
-  import ceres_param::*;
+  import level_param::*;
 (
     input  logic        clk_i,
     // ...
@@ -1019,7 +1019,7 @@ module fetch_stage
 endmodule
 ```
 
-### Detaylı Fetch Log
+### Detailed Fetch Log
 
 ```systemverilog
 `ifdef LOG_FETCH_VERBOSE
@@ -1059,12 +1059,12 @@ endmodule
 
 ---
 
-## Debug Senaryoları
+## Debug Scenarios
 
 ### 1. I-Cache Miss Analizi
 
 ```systemverilog
-// Cache miss sayısını takip et
+// Track cache miss count
 `ifdef LOG_FETCH
     int icache_miss_count = 0;
     int icache_hit_count = 0;
@@ -1104,7 +1104,7 @@ endmodule
 `endif
 ```
 
-### 3. Pipeline Stall İzleme
+### 3. Pipeline Stall Monitoring
 
 ```systemverilog
 `ifdef LOG_FETCH
@@ -1130,69 +1130,69 @@ endmodule
 
 ---
 
-## İlgili Dosyalar
+## Related Files
 
-| Dosya | Açıklama |
+| File | Description |
 |-------|----------|
-| `rtl/core/stage01_fetch/` | Fetch stage modülleri |
-| `rtl/core/mmu/cache.sv` | I-Cache implementasyonu |
-| `writeback_log.svh` | Commit trace (karşılaştırma için) |
+| `rtl/core/stage01_fetch/` | Fetch stage modules |
+| `rtl/core/mmu/cache.sv` | I-cache implementation |
+| `writeback_log.svh` | Commit trace (for comparison) |
 
 ---
 
-## Özet
+## Summary
 
-`fetch_log.svh` dosyası:
+The `fetch_log.svh` file:
 
-1. **PC/Instruction Log**: Temel fetch izleme
-2. **Cache Analysis**: Hit/miss istatistikleri
-3. **Branch Debug**: Misprediction izleme
-4. **Stall Analysis**: Pipeline stall nedenleri
-5. **Conditional Compilation**: `ifdef` ile kontrol
+1. **PC/Instruction Log**: Basic fetch monitoring
+2. **Cache Analysis**: Hit/miss statistics
+3. **Branch Debug**: Misprediction monitoring
+4. **Stall Analysis**: Pipeline stall reasons
+5. **Conditional Compilation**: Control via `ifdef`
 
-Bu dosya, fetch stage debug ve performans analizi için kullanılır.
-# Writeback Log - Teknik Dokümantasyon
+This file is used for fetch-stage debug and performance analysis.
+# Writeback Log - Technical Documentation
 
-## İçindekiler
+## Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Spike Uyumlu Commit Trace](#spike-uyumlu-commit-trace)
-3. [Log Formatları](#log-formatları)
-4. [PASS/FAIL Algılama](#passfail-algılama)
+1. [Overview](#overview)
+2. [Spike-Compatible Commit Trace](#spike-compatible-commit-trace)
+3. [Log Formats](#log-formats)
+4. [PASS/FAIL Detection](#passfail-detection)
 5. [Konata Pipeline Trace](#konata-pipeline-trace)
 6. [CSR Trace](#csr-trace)
-7. [Kullanım ve Entegrasyon](#kullanım-ve-entegrasyon)
+7. [Usage and Integration](#usage-and-integration)
 
 ---
 
-## Genel Bakış
+## Overview
 
-### Amaç
+### Purpose
 
-`writeback_log.svh` dosyası, **Writeback stage** için kapsamlı trace ve log mekanizmalarını tanımlar. Özellikle **Spike simulator** ile karşılaştırılabilir commit trace formatı sağlar.
+The `writeback_log.svh` file defines comprehensive trace and logging for the **writeback stage**. In particular, it provides a commit trace format comparable to the **Spike** simulator.
 
-### Dosya Konumu
+### File Location
 
 ```
 rtl/include/writeback_log.svh
 ```
 
-### Temel Özellikler
+### Key Features
 
-| Özellik | Açıklama |
+| Feature | Description |
 |---------|----------|
 | **Spike Format** | `core 0: PC (INSTR) rd DATA` |
-| **PASS/FAIL** | Otomatik test sonucu algılama |
-| **Konata** | Pipeline visualizer desteği |
-| **CSR Trace** | CSR register değişiklikleri |
+| **PASS/FAIL** | Automatic test result detection |
+| **Konata** | Pipeline visualizer support |
+| **CSR Trace** | CSR register changes |
 
 ---
 
-## Spike Uyumlu Commit Trace
+## Spike-Compatible Commit Trace
 
-### Format Tanımı
+### Format Definition
 
-Spike simulator'ün commit trace formatı:
+Spike commit trace format:
 
 ```
 core   0: 0x80000000 (0x00000297) x5  0x80000000
@@ -1202,7 +1202,7 @@ core   0: 0x80000008 (0x30529073)
 
 **Format:** `core <hart_id>: 0x<PC> (0x<INSTR>) [x<rd> 0x<DATA>]`
 
-### Implementasyon
+### Implementation
 
 ```systemverilog
 `ifdef LOG_COMMIT
@@ -1229,24 +1229,24 @@ core   0: 0x80000008 (0x30529073)
 `endif
 ```
 
-### Spike Karşılaştırma
+### Spike Comparison
 
 ```bash
-# RTL simülasyonu
+# RTL simulation
 make run T=rv32ui-p-add LOG_COMMIT=1 > rtl_trace.log
 
-# Spike simülasyonu
+# Spike simulation
 spike --log-commits rv32ui-p-add > spike_trace.log
 
-# Karşılaştırma
+# Comparison
 diff rtl_trace.log spike_trace.log
 ```
 
 ---
 
-## Log Formatları
+## Log Formats
 
-### Temel Commit Log
+### Basic Commit Log
 
 ```systemverilog
 `ifdef LOG_COMMIT
@@ -1260,7 +1260,7 @@ diff rtl_trace.log spike_trace.log
 `endif
 ```
 
-### Genişletilmiş Log
+### Extended Log
 
 ```systemverilog
 `ifdef LOG_COMMIT_VERBOSE
@@ -1313,11 +1313,11 @@ diff rtl_trace.log spike_trace.log
 
 ---
 
-## PASS/FAIL Algılama
+## PASS/FAIL Detection
 
 ### RISC-V Test Signature
 
-RISC-V testleri sonucu `tohost` adresine yazarak bildirir:
+RISC-V tests report results by writing to `tohost`:
 
 ```systemverilog
 // Test result detection
@@ -1344,7 +1344,7 @@ localparam TOHOST_ADDR = 32'h8000_1000;  // Configurable
 `endif
 ```
 
-### Benchmark Sonucu Algılama
+### Benchmark Result Detection
 
 ```systemverilog
 `ifdef SIM_UART_MONITOR
@@ -1405,7 +1405,7 @@ end
 
 ### Konata Format
 
-Konata pipeline visualizer için özel trace format:
+Special trace format for the Konata pipeline visualizer:
 
 ```systemverilog
 `ifdef KONATA_TRACER
@@ -1460,9 +1460,9 @@ Konata pipeline visualizer için özel trace format:
 `endif
 ```
 
-### Konata Komutları
+### Konata Commands
 
-| Komut | Format | Açıklama |
+| Command | Format | Description |
 |-------|--------|----------|
 | I | `I id cycle 0` | Instruction issue |
 | S | `S id cycle stage` | Stage transition |
@@ -1543,9 +1543,9 @@ Konata pipeline visualizer için özel trace format:
 
 ---
 
-## Kullanım ve Entegrasyon
+## Usage and Integration
 
-### Makefile Entegrasyonu
+### Makefile Integration
 
 ```makefile
 # Log kontrolleri
@@ -1564,7 +1564,7 @@ ifeq ($(KONATA_TRACER),1)
 endif
 ```
 
-### Kullanım Örnekleri
+### Usage Examples
 
 ```bash
 # ISA test with commit trace
@@ -1577,24 +1577,24 @@ make run T=rv32ui-p-add KONATA_TRACER=1
 make run T=test LOG_COMMIT=1 LOG_CSR=1 LOG_MEM=1
 
 # Benchmark with UART monitoring
-make cm SIM_UART_MONITOR=1 LOG_COMMIT=1
+make run_coremark SIM_UART_MONITOR=1 LOG_COMMIT=1
 ```
 
-### Log Dosyaları
+### Log Files
 
-| Log | Dosya | İçerik |
+| Log | File | Content |
 |-----|-------|--------|
-| Commit | stdout/commit.log | Spike-uyumlu trace |
+| Commit | stdout/commit.log | Spike-compatible trace |
 | Pipeline | pipeline.log | Konata format |
-| UART | uart.log | UART çıktısı |
+| UART | uart.log | UART output |
 
 ---
 
-## Performans Etkisi
+## Performance Impact
 
 ### Log Overhead
 
-| Mode | Overhead | Kullanım |
+| Mode | Overhead | Use |
 |------|----------|----------|
 | No logging | 0% | Production |
 | LOG_COMMIT | ~5% | Debug |
@@ -1605,23 +1605,23 @@ make cm SIM_UART_MONITOR=1 LOG_COMMIT=1
 
 ```systemverilog
 `ifdef SIM_FAST
-    // Tüm log'lar devre dışı
-    // Maksimum simülasyon hızı
+    // All logs disabled
+    // Maximum simulation speed
 `else
-    // Normal log modları aktif
+    // Normal log modes enabled
 `endif
 ```
 
 ---
 
-## Özet
+## Summary
 
-`writeback_log.svh` dosyası:
+The `writeback_log.svh` file:
 
 1. **Spike Format**: `core 0: PC (INSTR) rd DATA`
-2. **PASS/FAIL**: tohost ve UART izleme
-3. **Konata**: Pipeline visualizer desteği
-4. **CSR Trace**: Register değişiklikleri
-5. **Configurable**: Makefile ile kontrol
+2. **PASS/FAIL**: tohost and UART monitoring
+3. **Konata**: Pipeline visualizer support
+4. **CSR Trace**: Register changes
+5. **Configurable**: Controlled via Makefile
 
-Bu dosya, CERES RISC-V işlemcisinin doğrulama ve debug altyapısının temelini oluşturur.
+This file forms the basis of the Level RISC-V core verification and debug infrastructure.

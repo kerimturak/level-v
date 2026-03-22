@@ -7,9 +7,9 @@ with or without fee, provided that the above notice appears in all copies.
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 */
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 module execution
-  import ceres_param::*;
+  import level_param::*;
 (
 `ifdef COMMIT_TRACER
     output logic        [XLEN-1:0] csr_wr_data_o,
@@ -33,7 +33,7 @@ module execution
     input  logic                   trap_active_i,
     input  logic                   de_trap_active_i,
     input  logic        [XLEN-1:0] trap_cause_i,
-    input  logic        [XLEN-1:0] trap_tval_i,             // faulting instruction / adres
+    input  logic        [XLEN-1:0] trap_tval_i,             // faulting instruction / address
     input  logic        [XLEN-1:0] trap_mepc_i,
     // Hardware interrupt inputs
     input  logic                   timer_irq_i,             // CLINT timer interrupt
@@ -82,8 +82,30 @@ module execution
   logic                   target_misaligned;
   assign misa_c_o = misa_c;
 
+  // Latch forwarded operands on the first heavy-stall cycle.  During
+  // subsequent stall cycles pipe3/pipe4 may drain (Phase 1a), which shifts
+  // the combinational forwarding MUX inputs.  Using latched values keeps
+  // all EX outputs (alu_result, pc_target, pc_sel, mem addr) stable while
+  // pipe2 is frozen.
+  logic [XLEN-1:0] data_a_q, data_b_q;
+  logic            fwd_latch_q;
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      fwd_latch_q <= 1'b0;
+    end else if (!(stall_i inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL})) begin
+      fwd_latch_q <= 1'b0;
+    end else if (!fwd_latch_q) begin
+      data_a_q    <= fwd_a_i[1] ? alu_result_i : (fwd_a_i[0] ? wb_data_i : r1_data_i);
+      data_b_q    <= fwd_b_i[1] ? alu_result_i : (fwd_b_i[0] ? wb_data_i : r2_data_i);
+      fwd_latch_q <= 1'b1;
+    end
+  end
+
   always_comb begin
-    data_a = fwd_a_i[1] ? alu_result_i : (fwd_a_i[0] ? wb_data_i : r1_data_i);
+    data_a = fwd_latch_q
+           ? data_a_q
+           : (fwd_a_i[1] ? alu_result_i : (fwd_a_i[0] ? wb_data_i : r1_data_i));
     case (alu_in1_sel_i)
       2'b00: operant_a = data_a;
       2'b01: operant_a = pc_incr_i;
@@ -91,11 +113,13 @@ module execution
       2'b11: operant_a = data_a;
     endcase
 
-    write_data_o = fwd_b_i[1] ? alu_result_i : (fwd_b_i[0] ? wb_data_i : r2_data_i);
+    write_data_o = fwd_latch_q
+                 ? data_b_q
+                 : (fwd_b_i[1] ? alu_result_i : (fwd_b_i[0] ? wb_data_i : r2_data_i));
     operant_b = alu_in2_sel_i ? imm_i : write_data_o;
     signed_imm = imm_i;
     /*
-    Eğer exception desteği yoksa burası
+    If exception support were disabled, this would be:
     pc_target_o = pc_sel_i == JALR ? (data_a + imm_i) & ~1 : pc_i + signed_imm;
     */
     pc_target_o = instr_type_i == mret ? mepc : pc_sel_i == JALR ? (data_a + imm_i) & ~1 : pc_i + signed_imm;
@@ -210,7 +234,7 @@ module execution
 `ifdef COMMIT_TRACER
   always_comb begin
     if (instr_type_i == mret) begin
-      // cs_reg_file içindeki pack_mstatus sonucu loglanmalı
+      // Log pack_mstatus result from cs_reg_file
       csr_wr_data_o        = 0;
       csr_wr_data_o[3]     = csr_rdata[3];
       csr_wr_data_o[7]     = csr_rdata[7];

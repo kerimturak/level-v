@@ -25,8 +25,8 @@ Description:
 */
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
-import ceres_param::*;
+`include "level_defines.svh"
+import level_param::*;
 
 module wb_interconnect #(
     parameter int NUM_SLAVES = 3

@@ -1,27 +1,27 @@
-# ALIGN BUFFER Modülü - Teknik Döküman
+# Align Buffer Module — Technical Documentation
 
-## Genel Bakış
+## Overview
 
-`align_buffer.sv` modülü, instruction cache'ten gelen 128-bit cache line'ları 32-bit RISC-V instruction'lara hizalar. Misaligned instruction access'leri (cache line boundary'sini geçen instruction'lar) handle eder ve compressed instruction desteği sağlar. Modül, even/odd bank mimarisi kullanarak 16-bit parcel'lar üzerinden işlem yapar.
+The `align_buffer.sv` module aligns 128-bit lines from the instruction cache into 32-bit RISC-V instructions. It handles misaligned accesses (instructions that cross a cache-line boundary), supports compressed code, and uses an even/odd bank organization over 16-bit parcels.
 
-## Temel Sorumluluklar
+## Main responsibilities
 
-1. **Instruction Alignment**: 128-bit cache line'dan 32-bit instruction extraction
-2. **Misaligned Access Handling**: Cache line boundary'sini geçen instruction'ları işler
-3. **Double Miss Management**: İki farklı cache line'a ihtiyaç duyulduğunda fetch orchestration
-4. **Parcel-Based Architecture**: Even/odd bank sistemi ile 16-bit parcel organization
-5. **Combinational Loop Prevention**: Verilator uyumluluğu için split_var directive'leri
+1. **Instruction alignment:** Extract 32-bit instructions from a 128-bit line  
+2. **Misaligned access:** Handle instructions that straddle a line boundary  
+3. **Double miss:** When two lines are needed, sequence fetches correctly  
+4. **Parcel-based architecture:** Even/odd banks over 16-bit parcels  
+5. **Combinational loop prevention:** `split_var` hints for Verilator  
 
-## Mimari Parametreler
+## Architectural parameters
 
-| Parametre | Default (ceres_param) | Açıklama |
+| Parameter | Default (level_param) | Description |
 |-----------|----------------------|----------|
-| `CACHE_SIZE` | ABUFF_SIZE | Align buffer cache boyutu (bit) |
-| `BLK_SIZE` | BLK_SIZE | Cache line boyutu (bit) - genelde 128 |
-| `XLEN` | 32 | Register genişliği |
-| `NUM_WAY` | ABUFF_WAY | Way sayısı (future expansion için) |
+| `CACHE_SIZE` | ABUFF_SIZE | Align-buffer cache size (bits) |
+| `BLK_SIZE` | BLK_SIZE | Cache line size (bits), typically 128 |
+| `XLEN` | 32 | Register width |
+| `NUM_WAY` | ABUFF_WAY | Number of ways (for future expansion) |
 
-### Türetilmiş Parametreler
+### Derived parameters
 
 ```systemverilog
 localparam NUM_SET = (CACHE_SIZE / (BLK_SIZE * NUM_WAY));
@@ -29,60 +29,60 @@ localparam IDX_WIDTH = $clog2(NUM_SET);
 localparam OFFSET_WIDTH = $clog2(BLK_SIZE / 8);
 localparam TAG_SIZE = XLEN - IDX_WIDTH - OFFSET_WIDTH;
 localparam NUM_WORDS = BLK_SIZE / 32;  // 128-bit line: 4 words
-localparam NUM_PARCELS = NUM_WORDS * 2;  // Her word 2 parcel (16-bit)
+localparam NUM_PARCELS = NUM_WORDS * 2;  // Each word is 2 parcels (16-bit)
 ```
 
-**Örnek (128-bit cache line):**
+**Example (128-bit cache line):**
 - `BLK_SIZE = 128 bit`
 - `NUM_WORDS = 4` (32-bit words)
 - `NUM_PARCELS = 8` (16-bit parcels)
 - `OFFSET_WIDTH = 4` (16 byte / 8 = 4 bit)
 
-## Port Tanımları
+## Port definitions
 
-### Giriş Portları
+### Input ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
-| `clk_i` | logic | Sistem clock'u |
-| `rst_ni` | logic | Aktif-düşük asenkron reset |
-| `flush_i` | logic | Pipeline flush sinyali |
-| `buff_req_i` | abuff_req_t | Fetch'ten gelen buffer request |
-| `lowX_res_i` | blowX_res_t | Lower-level cache/memory'den response |
+| `clk_i` | logic | System clock |
+| `rst_ni` | logic | Active-low asynchronous reset |
+| `flush_i` | logic | Pipeline flush |
+| `buff_req_i` | abuff_req_t | Buffer request from fetch |
+| `lowX_res_i` | blowX_res_t | Response from lower cache/memory |
 
-**abuff_req_t yapısı:**
+**`abuff_req_t` layout:**
 ```systemverilog
 typedef struct packed {
-  logic         valid;     // Request geçerli mi?
-  logic         ready;     // Buffer hazır mı?
-  logic [XLEN-1:0] addr;   // Fetch adresi
+  logic         valid;     // Request valid?
+  logic         ready;     // Buffer ready?
+  logic [XLEN-1:0] addr;   // Fetch address
   logic         uncached;  // Uncached access (MMIO)
 } abuff_req_t;
 ```
 
-### Çıkış Portları
+### Output ports
 
-| Port | Tip | Açıklama |
+| Port | Type | Description |
 |------|-----|----------|
-| `buff_res_o` | abuff_res_t | Fetch'e giden buffer response |
-| `lowX_req_o` | blowX_req_t | Lower-level cache/memory'ye request |
+| `buff_res_o` | abuff_res_t | Buffer response to fetch |
+| `lowX_req_o` | blowX_req_t | Request to lower-level cache/memory |
 
-**abuff_res_t yapısı:**
+**`abuff_res_t` layout:**
 ```systemverilog
 typedef struct packed {
-  logic         valid;          // Response geçerli mi?
-  logic         ready;          // Buffer sonraki request'e hazır mı?
-  logic         miss;           // Cache miss oluştu mu?
-  logic         waiting_second; // Double miss - ikinci response bekleniyor
-  logic [31:0]  blk;            // Hizalanmış 32-bit instruction
+  logic         valid;          // Response valid?
+  logic         ready;          // Buffer ready for next request?
+  logic         miss;           // Cache miss occurred?
+  logic         waiting_second; // Double miss: second beat pending
+  logic [31:0]  blk;            // Aligned 32-bit instruction
 } abuff_res_t;
 ```
 
-## Even/Odd Bank Mimarisi
+## Even/odd bank architecture
 
 ### Memory Layout
 
-128-bit cache line, 8 adet 16-bit parcel'a bölünür:
+A 128-bit cache line splits into eight 16-bit parcels:
 
 ```
 Cache Line (128-bit):
@@ -96,44 +96,44 @@ E (Even): Lower 16-bits of each word
 O (Odd):  Upper 16-bits of each word
 ```
 
-**Bank Organizasyonu:**
-- **Even Bank (ebram)**: E0, E1, E2, E3 (her word'ün alt 16-bit'i)
-- **Odd Bank (obram)**: O0, O1, O2, O3 (her word'ün üst 16-bit'i)
+**Bank organization:**
+- **Even bank (ebram):** E0–E3 (low 16 bits of each 32-bit word)  
+- **Odd bank (obram):** O0–O3 (high 16 bits of each word)  
 
-### Adres Mapping
+### Address mapping
 
 ```systemverilog
-Adres:      [TAG | INDEX | OFFSET]
+Address:      [TAG | INDEX | OFFSET]
             [31:IDX_WIDTH+OFFSET_WIDTH] [IDX_WIDTH+OFFSET_WIDTH-1:OFFSET_WIDTH] [OFFSET_WIDTH-1:0]
 
-Örnek (128-bit line, 64 set):
+Example (128-bit line, 64 sets):
   TAG:      [31:10]  (22-bit)
   INDEX:    [9:4]    (6-bit, 64 set)
   OFFSET:   [3:0]    (4-bit, 16 byte)
   
 OFFSET breakdown:
-  [3:2] -> word_sel  (4 word içinden seçim)
-  [1]   -> half_sel  (word içinde hangi half: 0=lower, 1=upper)
-  [0]   -> byte_sel  (16-bit parcel içinde hangi byte - kullanılmıyor)
+  [3:2] -> word_sel  (one of four words in the line)
+  [1]   -> half_sel  (half within word: 0=lower, 1=upper)
+  [0]   -> byte_sel  (unused here)
 ```
 
-## İşlem Akışı
+## Operation flow
 
 ### 1. Address Parsing
 
 ```systemverilog
-half_sel = buff_req_i.addr[1];        // Word içinde hangi half
-word_sel = buff_req_i.addr[OFFSET_WIDTH-1:2];  // Cache line içinde hangi word
+half_sel = buff_req_i.addr[1];        // Half within 32-bit word
+word_sel = buff_req_i.addr[OFFSET_WIDTH-1:2];  // Word within cache line
 unalign  = &{word_sel, half_sel};     // Cache line boundary cross?
 
 odd.rd_idx = buff_req_i.addr[IDX_WIDTH+OFFSET_WIDTH-1:OFFSET_WIDTH];
 {overflow, even.rd_idx} = odd.rd_idx + {{(IDX_WIDTH-1){1'b0}}, unalign};
 ```
 
-**Unalign Detection:**
-- `unalign = 1` olduğunda instruction cache line boundary'sini geçer
-- Örnek: addr[3:1] = `111` → word_sel=3, half_sel=1 → son parcel → unalign=1
-- Overflow oluşursa even bank'ın index'i bir sonraki cache line'ı işaret eder
+**Unaligned access detection:**
+- `unalign = 1` when the 32-bit instruction spans an I-cache line boundary  
+- Example: `addr[3:1] = 3'b111` → `word_sel=3`, `half_sel=1` (last halfword in line) → `unalign=1`  
+- On index overflow, the even bank’s index points at the *next* line  
 
 ### 2. Tag Comparison & Hit/Miss Detection
 
@@ -194,7 +194,7 @@ case (word_sel)
   2'd3: odd.deviceX_parcel = lowX_res_i.blk[127:112];
 endcase
 
-// Even bank: unalign durumunda ilk parcel, değilse odd ile aynı
+// Even bank: first parcel on split-line case, else same as odd halfword
 even.deviceX_parcel = unalign ? lowX_res_i.blk[15:0] : odd.deviceX_parcel;
 ```
 
@@ -207,7 +207,7 @@ even.deviceX_parcel = unalign ? lowX_res_i.blk[15:0] : odd.deviceX_parcel;
 Instruction: [addr: lower16] [addr+2: upper16]
 Output: {odd.parcel, even.parcel}
 
-Örnek: addr=0x80000000
+Example: `addr=0x80000000`
   even.parcel = E0 (cache[0x0:0x1])
   odd.parcel  = O0 (cache[0x2:0x3])
   inst = {O0, E0} = cache[0x0:0x3]
@@ -218,7 +218,7 @@ Output: {odd.parcel, even.parcel}
 Instruction: [addr: lower16] [addr+2: upper16 from next word]
 Output: {even.parcel, odd.parcel}
 
-Örnek: addr=0x80000002
+Example: `addr=0x80000002`
   odd.parcel  = O0 (cache[0x2:0x3])
   even.parcel = E1 (cache[0x4:0x5])
   inst = {E1, O0} = cache[0x2:0x5]
@@ -229,7 +229,7 @@ Output: {even.parcel, odd.parcel}
 Instruction spans two cache lines
 Output: {even.parcel(next_line), odd.parcel(current_line)}
 
-Örnek: addr=0x8000000E
+Example: `addr=0x8000000E`
   odd.parcel  = O3 (current line[0xE:0xF])
   even.parcel = E0 (next line[0x0:0x1])
   inst = {E0_next, O3_current}
@@ -237,10 +237,10 @@ Output: {even.parcel(next_line), odd.parcel(current_line)}
 
 ### 5. Double Miss State Machine
 
-**Problem:**
-Unaligned access durumunda iki cache line'a ihtiyaç duyulur. Her iki line de miss ise iki memory response gerekir. İlk response'dan sonra valid sinyali tetiklenmemeli (instruction henüz tamamlanmadı).
+**Problem:**  
+A split-line instruction needs two lines. If both miss, two refill responses are required. Do **not** assert `buff_res_o.valid` after only the first response—the 32-bit instruction is not complete yet.
 
-**Çözüm:**
+**Solution:**
 ```systemverilog
 // Ignore valid for one cycle after first response
 always_ff @(posedge clk_i) begin
@@ -279,11 +279,11 @@ buff_res_o.valid =
   (waiting_second_q && masked_valid);  // Double miss second response
 ```
 
-**Valid Conditions:**
-1. **Dual Hit**: Her iki bank da hit → instruction aynı cycle hazır
-2. **Single Miss (word-aligned)**: Tek memory response yeterli
-3. **Single Miss (half-word, partial hit)**: Bir bank hit, diğeri miss → tek response
-4. **Double Miss**: İki response gerekli, ikinci response geldiğinde valid
+**When `buff_res_o.valid` is asserted:**
+1. **Dual hit:** both banks hit → instruction ready same cycle  
+2. **Single miss (word-aligned):** one refill completes the instruction  
+3. **Single miss (halfword straddle, partial hit):** one bank hit, one miss → one refill  
+4. **Double miss:** two refills; valid only after the second completes  
 
 ## Request Generation Logic
 
@@ -323,15 +323,15 @@ logic miss_state /*verilator split_var*/;
 logic word_sel /*verilator split_var*/;
 ```
 
-**Amaç:**
-- Verilator'ın 2-state simulation'ında combinational loop detection'ı iyileştirme
-- Even/odd struct'ları arasındaki circular dependency'yi kırmak
-- `UNOPTFLAT` warning'lerini önlemek
+**Purpose:**
+- Improve combinational-loop detection in Verilator’s 2-state simulation  
+- Break apparent circular dependencies between even/odd `bank_t` structs  
+- Reduce `UNOPTFLAT` noise  
 
-**Detaylı Açıklama:**
-- `docs/verilator/bugs/002_combinational_loop_instruction_corruption.md` dökümanına bakınız
-- Circular logic olmadan Verilator signal evaluation order hatasına düşebilir
-- Split_var, struct member'ları ayrı variable'lar gibi treat eder
+**Details:**
+- See `docs/verilator/bugs/002_combinational_loop_instruction_corruption.md`  
+- Without `split_var`, Verilator can mis-order evaluation and report false combinational loops  
+- `split_var` treats each struct field more like an independent variable for scheduling  
 
 ## Timing Analysis
 
@@ -342,14 +342,14 @@ logic word_sel /*verilator split_var*/;
    buff_req_i.addr → tag_ram read → tag compare → hit/miss detection → output mux
    ```
    - Combinational path, single cycle
-   - Tag RAM read genelde asenkron (BRAM primitive kullanımında dikkat)
+   - Tag RAM is usually a combinational read of a registered address (watch BRAM inference)  
 
 2. **Parcel Selection Path:**
    ```
    word_sel/half_sel → bank select → parcel mux → instruction assembly
    ```
-   - Multiplexer cascade'i, timing critical olabilir
-   - Case statement ile optimize edilmiş
+   - Mux tree can be timing-critical  
+   - Large `case` trees map cleanly in synthesis  
 
 3. **Double Miss FSM Path:**
    ```
@@ -360,7 +360,7 @@ logic word_sel /*verilator split_var*/;
 
 ### Performance Metrics
 
-| Durum | Latency | Throughput |
+| Case | Latency | Throughput |
 |-------|---------|------------|
 | **Dual Hit** | 1 cycle | 1 inst/cycle |
 | **Single Miss (aligned)** | N+1 cycles | 1 inst/N cycles |
@@ -371,19 +371,19 @@ logic word_sel /*verilator split_var*/;
 
 ## Exception Handling
 
-Align buffer'ın kendi exception'ı yoktur, ancak fetch modülü tarafından üretilen exception'ları propagate eder:
+The align buffer does not originate exceptions; it passes through faults raised by fetch:
 
-- **Instruction Access Fault**: PMA modülünden gelen `grand=0` → fetch modülü handle eder
-- **Instruction Misaligned**: PC alignment check → fetch modülü handle eder
-- **Uncached Access**: `buff_req_i.uncached=1` durumunda cache bypass
+- **Instruction access fault:** PMA `grand_o=0` (execute not granted) — handled in fetch  
+- **Instruction misaligned:** PC alignment rules — handled in fetch  
+- **Uncached access:** `buff_req_i.uncached=1` bypasses the cache data array  
 
 ## Debug Support
 
 ### Signal Monitoring
 
 ```systemverilog
-// Simülasyonda monitor edilmesi gereken sinyaller:
-- miss_state        // Cache miss durumu (2'b00/01/10/11)
+// Signals to monitor in simulation:
+- miss_state        // {odd.miss, even.miss} encoding
 - unalign           // Cache line boundary cross
 - waiting_second_q  // Double miss FSM state
 - masked_valid      // Effective valid signal
@@ -405,66 +405,66 @@ Signal Flow for Double Miss:
   8. buff_res_o.valid = 1 (final instruction ready)
 ```
 
-## Assertions (Önerilen)
+## Suggested assertions
 
 ```systemverilog
-// Double miss durumunda ikinci request gönderilmeli
+// Double miss: issue second refill while waiting
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (waiting_second_q && !masked_valid) |-> lowX_req_o.valid);
 
-// Valid response'da instruction sıfır olmamalı (NOP hariç)
+// Valid output must not be all-zero except legal NOP encoding
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   buff_res_o.valid |-> (buff_res_o.blk inside {32'h00000013, [32'h1:32'hFFFFFFFF]}));
 
-// Unalign olmadan double miss olmamalı
+// Both banks cannot miss unless the access crosses a line
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   (miss_state == 2'b11) |-> unalign);
 
-// Flush sırasında waiting_second temizlenmeli
+// Flush must clear split-line wait state
 assert property (@(posedge clk_i) disable iff (!rst_ni)
   flush_i |=> !waiting_second_q);
 ```
 
-## Gelecek İyileştirmeler
+## Future improvements
 
-1. **Way-Associative Support**: Şu an tek way, gelecekte set-associative expansion
-2. **Prefetching**: Sequential access pattern'lerde proactive fetch
-3. **Streaming Buffer**: Consecutive miss'lerde burst fetch
-4. **Tag RAM Optimization**: BRAM primitive kullanımı ile timing iyileştirmesi
-5. **Adaptive Banking**: Compressed instruction yoğunluğuna göre dinamik bank allocation
+1. **Way-Associative Support**: Currently single-way, future set-associative expansion
+2. **Prefetching:** proactive line fetch on sequential streams  
+3. **Streaming buffer:** burst refill on back-to-back misses  
+4. **Tag RAM:** retime or map to BRAM macros where helpful  
+5. **Adaptive banking:** repartition banks for compressed-heavy code  
 
 ---
 
-## 🚀 Prefetcher Implementasyon Planı
+## 🚀 Prefetcher implementation plan
 
-### Prefetcher Türleri ve Karşılaştırması
+### Prefetcher types and comparison
 
-| # | Prefetcher Türü | Karmaşıklık | Alan | Beklenen Kazanım | Kullanım Alanı |
+| # | Prefetcher type | Complexity | Area | Expected gain | Best for |
 |---|----------------|-------------|------|------------------|----------------|
-| 1 | **Next-Line** | ⭐ Düşük | ~50 FF | %5-10 hit artışı | Baseline, sıralı erişim |
-| 2 | **Stride** | ⭐⭐ Orta | ~1-2KB | %10-20 hit artışı | Array/loop erişimleri |
-| 3 | **Stream** | ⭐⭐ Orta | ~512B-1KB | %15-25 hit artışı | Sequential I-fetch |
-| 4 | **Markov** | ⭐⭐⭐ Orta-Yüksek | ~4-8KB | %15-30 hit artışı | Irregular patterns |
-| 5 | **Neural/Perceptron** | ⭐⭐⭐⭐ Yüksek | ~2-4KB | %20-35 hit artışı | Kompleks patterns |
-| 6 | **Hibrit** | ⭐⭐⭐ Orta-Yüksek | ~2-4KB | %20-30 hit artışı | Tüm workload'lar |
+| 1 | **Next-Line** | ⭐ Low | ~50 FF | %5-10 hit rate gain | Baseline, sequential access |
+| 2 | **Stride** | ⭐⭐ Medium | ~1-2KB | %10-20 hit rate gain | Array / strided loops |
+| 3 | **Stream** | ⭐⭐ Medium | ~512B-1KB | %15-25 hit rate gain | Sequential I-fetch |
+| 4 | **Markov** | ⭐⭐⭐ Medium-High | ~4-8KB | %15-30 hit rate gain | Irregular patterns |
+| 5 | **Neural/Perceptron** | ⭐⭐⭐⭐ High | ~2-4KB | %20-35 hit rate gain | Complex patterns |
+| 6 | **Hybrid** | ⭐⭐⭐ Medium-High | ~2-4KB | %20-30 hit rate gain | Mixed workloads |
 
-### Aşamalı Implementasyon Planı
+### Phased implementation plan
 
-| Aşama | Prefetcher | Hedef | Tahmini Süre | Durum |
+| Phase | Prefetcher | Goal | Estimated time | Status |
 |-------|-----------|-------|--------------|-------|
-| 1 | Next-Line (I-Cache) | Baseline kurulumu | 1-2 gün | ⏳ Planlandı |
-| 2 | Stride (D-Cache) | Array/loop erişimleri | 3-5 gün | 📋 Beklemede |
-| 3 | Stream (I-Cache) | Sequential fetch | 3-5 gün | 📋 Beklemede |
-| 4 | Hibrit/Neural | Maksimum performans | 1-2 hafta | 📋 Beklemede |
+| 1 | Next-Line (I-Cache) | Baseline bring-up | 1-2 day | ⏳ Planned |
+| 2 | Stride (D-Cache) | Array / loop streams | 3-5 day | 📋 Pending |
+| 3 | Stream (I-Cache) | Sequential fetch | 3-5 day | 📋 Pending |
+| 4 | Hybrid/Neural | Maximum coverage | 1-2 week | 📋 Pending |
 
 ---
 
-### 1️⃣ Next-Line Prefetcher (Aşama 1 - Başlangıç)
+### 1️⃣ Next-line prefetcher (phase 1 — starting point)
 
-**Çalışma Prensibi:**
-- Cache miss olduğunda, bir sonraki cache line'ı da prefetch et
-- Özellikle sıralı erişim pattern'leri için etkili
-- Minimum alan ve karmaşıklık ile temel prefetching sağlar
+**Operating principle:**
+- On a demand miss, also prefetch the following line  
+- Strong fit for sequential code  
+- Smallest area/complexity prefetch baseline  
 
 ```systemverilog
 module next_line_prefetcher #(
@@ -475,7 +475,7 @@ module next_line_prefetcher #(
     input  logic             rst_ni,
     input  logic             cache_miss_i,
     input  logic [XLEN-1:0]  miss_addr_i,
-    input  logic             prefetch_ack_i,  // Prefetch kabul edildi
+    input  logic             prefetch_ack_i,  // Prefetch accepted
     output logic             prefetch_valid_o,
     output logic [XLEN-1:0]  prefetch_addr_o
 );
@@ -501,11 +501,11 @@ module next_line_prefetcher #(
             prefetch_addr_q <= '0;
         end else begin
             if (cache_miss_i && !prefetch_pending_q) begin
-                // Yeni miss - next line'ı prefetch et
+                // New miss — prefetch next line
                 prefetch_pending_q <= 1'b1;
                 prefetch_addr_q <= next_line_addr;
             end else if (prefetch_ack_i) begin
-                // Prefetch kabul edildi
+                // Prefetch accepted
                 prefetch_pending_q <= 1'b0;
             end
         end
@@ -514,16 +514,16 @@ module next_line_prefetcher #(
 endmodule
 ```
 
-**Entegrasyon Noktası:** `align_buffer.sv` veya `cache.sv` içinde miss sinyali ile tetiklenir.
+**Integration:** trigger from the I-cache miss path in `align_buffer.sv` or `cache.sv`.
 
 ---
 
-### 2️⃣ Stride Prefetcher (Aşama 2)
+### 2️⃣ Stride prefetcher (phase 2)
 
-**Çalışma Prensibi:**
-- Her PC için erişim pattern'ini izler
-- Stride (adres farkı) tekrar ederse, sonraki adresi prefetch eder
-- Array traversal, matrix işlemleri için çok etkili
+**Operating principle:**
+- Track recent address history per PC (or PC bucket)  
+- When the same stride repeats, prefetch `addr + stride`  
+- Strong for array walks and regular stride kernels  
 
 ```systemverilog
 module stride_prefetcher #(
@@ -578,21 +578,21 @@ module stride_prefetcher #(
             end
         end else if (access_valid_i) begin
             if (!table[idx].valid) begin
-                // İlk erişim - entry oluştur
+                // First access — create entry
                 table[idx].last_addr <= access_addr_i;
                 table[idx].stride <= '0;
                 table[idx].state <= 2'd0;
                 table[idx].valid <= 1'b1;
             end else begin
-                // Mevcut entry güncelle
+                // Update existing entry
                 table[idx].last_addr <= access_addr_i;
                 
                 if (current_stride == table[idx].stride) begin
-                    // Stride match - confidence artır
+                    // Stride match — increase confidence
                     if (table[idx].state < 2'd3)
                         table[idx].state <= table[idx].state + 1;
                 end else begin
-                    // Stride mismatch - yeni stride kaydet, confidence sıfırla
+                    // Stride mismatch — record new stride, reset confidence
                     table[idx].stride <= current_stride;
                     table[idx].state <= 2'd1;
                 end
@@ -605,18 +605,18 @@ endmodule
 
 ---
 
-### 3️⃣ Stream Prefetcher (Aşama 3 - I-Cache için İdeal)
+### 3️⃣ Stream prefetcher (phase 3 — great for I-cache)
 
-**Çalışma Prensibi:**
-- Belirli sayıda ardışık miss tespit edilince "stream" başlar
-- Stream yönünde birden fazla cache line prefetch edilir
-- Özellikle sequential instruction fetch için mükemmel
+**Operating principle:**
+- After *N* consecutive misses along a line, declare a streaming region  
+- Prefetch several lines ahead in the stream direction  
+- Excellent for long sequential instruction runs  
 
 ```systemverilog
 module stream_prefetcher #(
     parameter XLEN           = 32,
     parameter NUM_STREAMS    = 4,
-    parameter PREFETCH_DEGREE = 4,  // Kaç line önceden prefetch
+    parameter PREFETCH_DEGREE = 4,  // Lines to prefetch ahead
     parameter BLK_SIZE       = 128
 )(
     input  logic             clk_i,
@@ -683,12 +683,12 @@ module stream_prefetcher #(
             alloc_ptr <= '0;
         end else if (cache_miss_i) begin
             if (stream_found) begin
-                // Mevcut stream güncelle
+                // Update existing stream
                 streams[active_stream].current_addr <= miss_addr_i;
                 if (streams[active_stream].confidence < 3'd7)
                     streams[active_stream].confidence <= streams[active_stream].confidence + 1;
             end else begin
-                // Yeni stream alloc
+                // Allocate new stream
                 streams[alloc_ptr].start_addr <= miss_addr_i;
                 streams[alloc_ptr].current_addr <= miss_addr_i;
                 streams[alloc_ptr].direction <= 1'b0;  // Default ascending
@@ -709,9 +709,9 @@ endmodule
 
 ---
 
-### 📐 Parametrik Prefetcher Wrapper (Seçim için)
+### 📐 Parametric prefetcher wrapper (compile-time selection)
 
-Tüm prefetcher'ları parametrik olarak seçmek için wrapper modül:
+Wrapper to pick one prefetch algorithm via parameters:
 
 ```systemverilog
 module prefetcher_wrapper #(
@@ -834,7 +834,7 @@ endmodule
 
 ---
 
-### 🔧 Entegrasyon Mimarisi
+### 🔧 Integration architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -866,7 +866,7 @@ endmodule
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### ceres_param.sv'ye Eklenecek Parametreler
+### Parameters to add to level_param.sv
 
 ```systemverilog
 // ============================================================================
@@ -879,13 +879,13 @@ localparam int NUM_STREAMS = 4;          // Stream prefetcher stream count
 localparam int PREFETCH_DEGREE = 4;      // How many lines ahead to prefetch
 ```
 
-## İlgili Modüller
+## Related modules
 
-1. **fetch.sv**: Ana fetch modülü (align buffer'ı kullanır)
-2. **cache.sv**: Instruction cache (align buffer'a response verir)
-3. **compressed_decoder.sv**: 16-bit compressed instruction decode (fetch sonrası)
+1. **fetch.sv:** top-level fetch; instantiates the align buffer  
+2. **cache.sv:** I-cache refill path into the align buffer  
+3. **compressed_decoder.sv:** expands 16-bit parcels after fetch  
 
-## Referanslar
+## References
 
 1. RISC-V Unprivileged ISA Specification - Instruction Fetch
 2. "Cache and Memory Hierarchy Design: A Performance-Directed Approach" - Steven A. Przybylski
@@ -894,6 +894,6 @@ localparam int PREFETCH_DEGREE = 4;      // How many lines ahead to prefetch
 
 ---
 
-**Son Güncelleme:** 4 Aralık 2025  
-**Yazar:** Kerim TURAK  
-**Lisans:** MIT License
+**Last updated:** 4 December 2025  
+**Author:** Kerim TURAK  
+**License:** MIT License

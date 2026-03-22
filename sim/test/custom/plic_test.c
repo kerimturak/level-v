@@ -1,5 +1,5 @@
 /*
- * PLIC (Platform-Level Interrupt Controller) Test for Ceres-V RV32IMC
+ * PLIC (Platform-Level Interrupt Controller) Test for Level-V RV32IMC
  * 
  * Tests PLIC functionality:
  * - Priority register access
@@ -10,7 +10,7 @@
  * 
  * PLIC supports 32 interrupt sources with 8 priority levels
  * 
- * Note: This peripheral is not yet connected in ceres_wrapper.sv
+ * Note: This peripheral is not yet connected in level_wrapper.sv
  *       Requires adding PLIC instantiation and address decode (0x2000_7xxx)
  */
 
@@ -31,7 +31,7 @@
 #define UART_CTRL_RX_EN       0x2
 #define UART_STATUS_TX_FULL   0x1
 
-/* PLIC MMIO Map (base 0x2000_7000 per ceres_param.sv) */
+/* PLIC MMIO Map (base 0x2000_7000 per level_param.sv) */
 #define PLIC_BASE        0x20007000
 
 /* Priority registers (source 0 reserved, sources 1-31) */
@@ -361,7 +361,7 @@ int main(void)
     uart_init();
     
     uart_puts("\n========================================\n");
-    uart_puts("   PLIC Test - Ceres-V RV32IMC\n");
+    uart_puts("   PLIC Test - Level-V RV32IMC\n");
     uart_puts("========================================\n");
     uart_puts("  32 sources, 8 priority levels\n");
     

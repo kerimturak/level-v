@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-CERES RISC-V — ModelSim/Questa Simulation Runner
+Level RISC-V — ModelSim/Questa Simulation Runner
 
-Bu script ModelSim simülasyonunu çalıştırır ve log dosyalarını yönetir.
-JSON konfigürasyon dosyasından ayarları okur.
+Runs ModelSim simulation and manages log files.
+Reads settings from a JSON configuration file.
 
-Kullanım:
+Usage:
     python3 modelsim_runner.py --test=rv32ui-p-add --work-dir=build/work ...
     python3 modelsim_runner.py --test=rv32ui-p-add --profile=debug
     
 Debug:
-    CERES_DEBUG=1 python3 modelsim_runner.py --test rv32ui-p-add
+    LEVEL_DEBUG=1 python3 modelsim_runner.py --test rv32ui-p-add
     python3 modelsim_runner.py --test rv32ui-p-add --debug
 """
 
@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
-# Aynı dizindeki config modülünü import et
+# Import config module from the same directory
 try:
     from modelsim_config import (
         load_config, 
@@ -101,7 +101,7 @@ def success(msg: str) -> None:
 
 
 def header(title: str, char: str = "═") -> None:
-    """Renkli başlık banner'ı yazdır"""
+    """Print a colored title banner"""
     width = 60
     line = char * width
     print(f"\n{Color.CYAN}{line}{Color.RESET}")
@@ -110,12 +110,12 @@ def header(title: str, char: str = "═") -> None:
 
 
 def subheader(title: str) -> None:
-    """Alt başlık yazdır"""
+    """Print a subheading"""
     print(f"\n{Color.MAGENTA}▶ {title}{Color.RESET}")
 
 
 def keyval(key: str, value: str, indent: int = 2) -> None:
-    """Anahtar-değer çifti yazdır"""
+    """Print a key-value pair"""
     spaces = " " * indent
     print(f"{spaces}{Color.DIM}{key}:{Color.RESET} {Color.WHITE}{value}{Color.RESET}")
 
@@ -125,21 +125,21 @@ def keyval(key: str, value: str, indent: int = 2) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 @dataclass
 class SimRunConfig:
-    """Simülasyon runtime konfigürasyonu - CLI args + JSON config birleşimi"""
-    # Test bilgileri
+    """Simulation runtime config — merged CLI args + JSON config"""
+    # Test info
     test_name: str
     work_dir: Path
     log_dir: Path
     mem_dirs: List[Path]
     
-    # Simülasyon ayarları (JSON'dan veya CLI'dan)
+    # Simulation settings (from JSON or CLI)
     sim_time: str = "20000ns"
     time_res: str = "ns"
     tb_level: str = "tb_wrapper"
     gui: bool = False
     quiet: bool = False
     
-    # ModelSim ayarları
+    # ModelSim settings
     voptargs: str = "+acc=npr"
     no_timing_checks: bool = True
     no_specify: bool = True
@@ -157,7 +157,7 @@ class SimRunConfig:
     # Messages
     suppress_codes: List[str] = field(default_factory=list)
     
-    # Dosya yolları (otomatik bulunacak)
+    # Paths (resolved automatically)
     mem_file: Optional[Path] = None
     addr_file: Optional[Path] = None
     do_file: Optional[Path] = None
@@ -165,10 +165,10 @@ class SimRunConfig:
     # Ek define'lar
     defines: List[str] = field(default_factory=list)
     
-    # Build dizini (addr dosyası için)
+    # Build directory (for addr file)
     build_dir: Optional[Path] = None
     
-    # JSON config bilgisi
+    # JSON config metadata
     json_config: Optional["ModelSimConfig"] = None
     profile_name: Optional[str] = None
     
@@ -180,7 +180,7 @@ class SimRunConfig:
 # Memory File Resolution
 # ═══════════════════════════════════════════════════════════════════════════
 def find_mem_file(test_name: str, mem_dirs: List[Path]) -> Optional[Path]:
-    """Test için memory dosyasını bul."""
+    """Find memory file for the test."""
     for mem_dir in mem_dirs:
         if not mem_dir.exists():
             continue
@@ -192,7 +192,7 @@ def find_mem_file(test_name: str, mem_dirs: List[Path]) -> Optional[Path]:
 
 
 def find_addr_file(test_name: str, build_dir: Path) -> Optional[Path]:
-    """Pass/fail adres dosyasını bul."""
+    """Find pass/fail address file."""
     possible_paths = [
         build_dir / "tests" / "riscv-tests" / "pass_fail_addr" / f"{test_name}_addr.txt",
         build_dir / "tests" / "riscv-arch-test" / "pass_fail_addr" / f"{test_name}_addr.txt",
@@ -209,9 +209,9 @@ def find_addr_file(test_name: str, build_dir: Path) -> Optional[Path]:
 # Log Directory Management
 # ═══════════════════════════════════════════════════════════════════════════
 def prepare_log_dir(log_dir: Path, clean: bool = True) -> None:
-    """Log dizinini hazırla."""
+    """Prepare log directory."""
     if clean and log_dir.exists():
-        info(f"Önceki loglar temizleniyor: {log_dir}")
+        info(f"Removing previous logs: {log_dir}")
         shutil.rmtree(log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -220,10 +220,10 @@ def prepare_log_dir(log_dir: Path, clean: bool = True) -> None:
 # VSIM Command Builder
 # ═══════════════════════════════════════════════════════════════════════════
 def build_vsim_command(config: SimRunConfig) -> List[str]:
-    """vsim komut satırını oluştur."""
+    """Build vsim command line."""
     cmd = ["vsim"]
     
-    # GUI veya batch mode
+    # GUI or batch mode
     if not config.gui:
         cmd.append("-c")
     
@@ -234,19 +234,19 @@ def build_vsim_command(config: SimRunConfig) -> List[str]:
     # Work library ve top module
     cmd.append(f"{config.work_dir}.{config.tb_level}")
     
-    # DO komutu
+    # DO script
     if config.gui and config.do_file:
         cmd.extend(["-do", str(config.do_file)])
     else:
         cmd.extend(["-do", f"run {config.sim_time}; quit"])
     
-    # Zaman çözünürlüğü
+    # Time resolution
     cmd.extend(["-t", config.time_res])
     
-    # Optimizasyon argümanları
+    # Optimization arguments
     cmd.append(f"-voptargs={config.voptargs}")
     
-    # Timing kontrolleri
+    # Timing checks
     if config.no_timing_checks:
         cmd.append("+notimingchecks")
     if config.no_specify:
@@ -273,21 +273,21 @@ def build_vsim_command(config: SimRunConfig) -> List[str]:
         f"+test_name={config.test_name}",
         "+simulator=modelsim",
     ])
-    
-    # Adres dosyası
+
+    # Address file
     if config.addr_file:
         cmd.append(f"+addr_file={config.addr_file}")
     
-    # Log dosyaları
+    # Log files
     cmd.append(f"+trace_file={config.log_dir}/commit_trace.log")
-    cmd.append(f"+log_path={config.log_dir}/ceres.log")
+    cmd.append(f"+log_path={config.log_dir}/level.log")
     cmd.append(f"+DUMP_FILE={config.log_dir}/waveform.wlf")
-    
-    # Memory dosyası
+
+    # Memory file
     if config.mem_file:
         cmd.append(f"+INIT_FILE={config.mem_file}")
     
-    # Test adı
+    # Test name
     cmd.append(f"+UVM_TESTNAME={config.test_name}")
     
     return cmd
@@ -302,12 +302,12 @@ def merge_config_with_cli(
     mem_dirs: List[Path]
 ) -> SimRunConfig:
     """
-    JSON konfigürasyonu ile CLI argümanlarını birleştir.
-    CLI argümanları JSON'ı override eder.
+    Merge JSON configuration with CLI arguments.
+    CLI arguments override JSON.
     """
     cli_overrides = []
     
-    # Varsayılan değerler
+    # Default values
     defaults = {
         "sim_time": "20000ns",
         "time_res": "ns",
@@ -324,7 +324,7 @@ def merge_config_with_cli(
         "suppress_codes": [],
     }
     
-    # JSON config varsa, değerleri al
+    # Load values from JSON if present
     if json_config:
         defaults.update({
             "sim_time": json_config.simulation.sim_time,
@@ -342,21 +342,20 @@ def merge_config_with_cli(
             "suppress_codes": json_config.messages.suppress,
         })
     
-    # CLI override'ları uygula
-    # CLI'dan gelen değerler her zaman JSON'u override eder
+    # Apply CLI overrides (always win over JSON)
     final = defaults.copy()
     
-    # sim_time: CLI'dan geliyorsa kullan
+    # sim_time from CLI
     final["sim_time"] = args.sim_time
     if json_config and args.sim_time != json_config.simulation.sim_time:
         cli_overrides.append(f"sim_time={args.sim_time} (JSON: {json_config.simulation.sim_time})")
     
-    # time_res: CLI'dan geliyorsa kullan  
+    # time_res from CLI
     final["time_res"] = args.time_res
     if json_config and args.time_res != json_config.simulation.time_resolution:
         cli_overrides.append(f"time_res={args.time_res}")
     
-    # voptargs: CLI'dan geliyorsa kullan
+    # voptargs from CLI
     final["voptargs"] = args.voptargs
     if json_config and args.voptargs != json_config.simulation.voptargs:
         cli_overrides.append(f"voptargs={args.voptargs}")
@@ -364,7 +363,7 @@ def merge_config_with_cli(
     if args.gui:
         cli_overrides.append("gui=True")
     
-    # Uyarıları göster
+    # Show override summary
     if cli_overrides and json_config:
         info(f"CLI override: {', '.join(cli_overrides)}")
     
@@ -402,7 +401,7 @@ def merge_config_with_cli(
 # Simulation Runner
 # ═══════════════════════════════════════════════════════════════════════════
 def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -> int:
-    """Simülasyonu çalıştır ve sonucu döndür."""
+    """Run simulation and return exit code."""
     
     # Debug logger
     if logger is None:
@@ -411,16 +410,16 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     logger.section("Run Configuration")
     logger.params_from_dataclass(config, source="merged")
     
-    # Başlık banner'ı
+    # Title banner
     print()
-    header(f"CERES RISC-V Simulation")
-    
-    # Test bilgisi
+    header(f"Level RISC-V Simulation")
+
+    # Test info
     mode_str = f"{Color.CYAN}GUI{Color.RESET}" if config.gui else f"{Color.GREEN}Batch{Color.RESET}"
     print(f"  {Color.WHITE}Test:{Color.RESET}   {Color.YELLOW}{config.test_name}{Color.RESET}")
     print(f"  {Color.WHITE}Mode:{Color.RESET}   {mode_str}")
     
-    # JSON config bilgisi
+    # JSON config info
     if config.json_config:
         profile_str = f" → {Color.CYAN}{config.profile_name}{Color.RESET}" if config.profile_name else ""
         print(f"  {Color.WHITE}Config:{Color.RESET} JSON{profile_str}")
@@ -431,16 +430,16 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     
     logger.section("File Discovery")
     
-    # Memory dosyasını bul
-    subheader("Dosya Arama")
+    # Find memory file
+    subheader("File lookup")
     
     if not config.mem_file:
         config.mem_file = find_mem_file(config.test_name, config.mem_dirs)
         if not config.mem_file:
             logger.error(f"Memory file not found: {config.test_name}")
             logger.note(f"Searched dirs: {[str(d) for d in config.mem_dirs]}")
-            error(f"Memory dosyası bulunamadı: {config.test_name}")
-            error(f"Aranan dizinler: {[str(d) for d in config.mem_dirs]}")
+            error(f"Memory file not found: {config.test_name}")
+            error(f"Searched directories: {[str(d) for d in config.mem_dirs]}")
             logger.result(False, 1, "Memory file not found")
             logger.save()
             return 1
@@ -448,43 +447,43 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     logger.param("mem_file", config.mem_file, "found")
     keyval("Memory", str(config.mem_file))
     
-    # Adres dosyasını bul
+    # Find address file
     if config.build_dir:
         config.addr_file = find_addr_file(config.test_name, config.build_dir)
         if config.addr_file:
             logger.param("addr_file", config.addr_file, "found")
-            keyval("Adres", str(config.addr_file))
+            keyval("Address", str(config.addr_file))
         else:
             logger.note("Address file not found, skipping")
-            print(f"  {Color.DIM}Adres dosyası bulunamadı, atlanıyor.{Color.RESET}")
+            print(f"  {Color.DIM}Address file not found, skipping.{Color.RESET}")
     
-    # Log dizinini hazırla
+    # Prepare log directory
     prepare_log_dir(config.log_dir)
     logger.note(f"Log directory prepared: {config.log_dir}")
     
-    # Komutu oluştur
+    # Build command
     cmd = build_vsim_command(config)
     
     logger.section("Command")
     logger.command(cmd, "ModelSim vsim", config.log_dir)
     
-    # Simülasyon ayarları özeti
+    # Simulation settings summary
     print()
-    subheader("Simülasyon Ayarları")
+    subheader("Simulation settings")
     keyval("Sim Time", config.sim_time)
     keyval("Resolution", config.time_res)
     keyval("Log Dir", str(config.log_dir))
     if config.coverage_enabled:
         keyval("Coverage", f"{Color.GREEN}enabled{Color.RESET} ({config.coverage_spec})")
     
-    # Log dosyası yolu
+    # Run log path
     run_log = config.log_dir / "modelsim_run.log"
     
     logger.section("Execution")
     
-    # Simülasyon başlat
+    # Start simulation
     print()
-    subheader("Çalıştırılıyor")
+    subheader("Running")
     print(f"  {Color.DIM}$ vsim ...{Color.RESET}")
     print()
     
@@ -514,13 +513,13 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     
     except FileNotFoundError:
         logger.error("'vsim' command not found")
-        error("'vsim' komutu bulunamadı. ModelSim kurulu ve PATH'de mi?")
+        error("'vsim' not found. Is ModelSim installed and on PATH?")
         logger.result(False, 127, "vsim not found")
         logger.save()
         return 127
     except KeyboardInterrupt:
         logger.warning("Simulation interrupted by user")
-        warn("Simülasyon kullanıcı tarafından durduruldu.")
+        warn("Simulation interrupted by user.")
         exit_code = 130
     
     end_time = datetime.now()
@@ -530,7 +529,7 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     logger.param("exit_code", exit_code, "execution")
     logger.param("elapsed_seconds", round(elapsed, 2), "execution")
     
-    # Summary JSON oluştur
+    # Write summary JSON
     summary = {
         "test": config.test_name,
         "simulator": "modelsim",
@@ -559,7 +558,7 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     
     logger.note(f"Summary saved to: {summary_file}")
     
-    # Sonuç banner'ı
+    # Result banner
     print()
     if exit_code == 0:
         logger.success(f"Simulation passed: {config.test_name}")
@@ -570,11 +569,11 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
         })
         
         print(f"{Color.GREEN}{'═' * 60}{Color.RESET}")
-        print(f"{Color.GREEN}  ✓ Simülasyon Başarılı{Color.RESET}")
+        print(f"{Color.GREEN}  ✓ Simulation succeeded{Color.RESET}")
         print(f"{Color.GREEN}{'═' * 60}{Color.RESET}")
         keyval("Test", config.test_name)
-        keyval("Süre", f"{elapsed:.1f} saniye")
-        keyval("Loglar", str(config.log_dir))
+        keyval("Duration", f"{elapsed:.1f} s")
+        keyval("Logs", str(config.log_dir))
     else:
         logger.error(f"Simulation failed: {config.test_name} (exit={exit_code})")
         logger.result(False, exit_code, "Simulation failed", {
@@ -584,13 +583,13 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
         })
         
         print(f"{Color.RED}{'═' * 60}{Color.RESET}")
-        print(f"{Color.RED}  ✗ Simülasyon Başarısız (exit={exit_code}){Color.RESET}")
+        print(f"{Color.RED}  ✗ Simulation failed (exit={exit_code}){Color.RESET}")
         print(f"{Color.RED}{'═' * 60}{Color.RESET}")
         keyval("Test", config.test_name)
-        keyval("Loglar", str(config.log_dir))
-        print(f"  {Color.DIM}Detaylar için: {run_log}{Color.RESET}")
+        keyval("Logs", str(config.log_dir))
+        print(f"  {Color.DIM}Details: {run_log}{Color.RESET}")
     
-    # Debug log kaydet
+    # Save debug log
     debug_log_path = logger.save()
     if debug_log_path:
         print(f"  {Color.DIM}Debug log: {debug_log_path}{Color.RESET}")
@@ -605,151 +604,150 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
 # ═══════════════════════════════════════════════════════════════════════════
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="CERES RISC-V ModelSim/Questa Simulation Runner",
+        description="Level RISC-V ModelSim/Questa Simulation Runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-JSON Konfigürasyon:
-  Ayarlar önce script/config/modelsim.json'dan okunur.
-  CLI argümanları JSON değerlerini override eder.
-  
-Profiller:
-  --profile ile önceden tanımlı profiller kullanılabilir:
-    fast      - Hızlı simülasyon, minimal debug
-    debug     - Tam debug özellikleri
-    coverage  - Coverage toplama
+JSON configuration:
+  Settings are read from script/config/modelsim.json first.
+  CLI arguments override JSON values.
+
+Profiles (via --profile):
+    fast      - Fast simulation, minimal debug
+    debug     - Full debug features
+    coverage  - Collect coverage
     gls       - Gate-level simulation
 
-Örnekler:
+Examples:
   %(prog)s --test=rv32ui-p-add --work-dir=build/work --log-dir=results/logs
   %(prog)s --test=rv32ui-p-add --profile=debug
   %(prog)s --test=rv32ui-p-add --gui --sim-time=50000ns
         """
     )
     
-    # Zorunlu parametreler
+    # Required arguments
     parser.add_argument(
         "--test", "-t",
         required=True,
         dest="test_name",
-        help="Test adı (örn: rv32ui-p-add)"
+        help="Test name (e.g. rv32ui-p-add)"
     )
     
     parser.add_argument(
         "--work-dir", "-w",
         required=True,
         type=Path,
-        help="ModelSim work dizini (örn: build/work)"
+        help="ModelSim work directory (e.g. build/work)"
     )
     
     parser.add_argument(
         "--log-dir", "-l",
         required=True,
         type=Path,
-        help="Log çıktı dizini"
+        help="Log output directory"
     )
     
     parser.add_argument(
         "--mem-dirs", "-m",
         required=True,
-        help="Memory dosyası arama dizinleri (boşlukla ayrılmış)"
+        help="Memory file search directories (space-separated)"
     )
     
     # JSON config
     parser.add_argument(
         "--config", "-c",
         type=Path,
-        help="JSON konfigürasyon dosyası (varsayılan: script/config/modelsim.json)"
+        help="JSON config file (default: script/config/modelsim.json)"
     )
     
     parser.add_argument(
         "--profile", "-p",
-        help="Kullanılacak profil (fast, debug, coverage, gls)"
+        help="Profile to use (fast, debug, coverage, gls)"
     )
     
     parser.add_argument(
         "--no-config",
         action="store_true",
-        help="JSON konfigürasyonu yükleme, sadece CLI args kullan"
+        help="Do not load JSON config; CLI only"
     )
     
-    # Opsiyonel parametreler
+    # Optional arguments
     parser.add_argument(
         "--build-dir", "-b",
         type=Path,
-        help="Build dizini (addr dosyası için)"
+        help="Build directory (for addr file lookup)"
     )
     
     parser.add_argument(
         "--sim-time", "-s",
         default="20000ns",
-        help="Simülasyon süresi (varsayılan: 20000ns veya JSON'dan)"
+        help="Simulation time (default: 20000ns or from JSON)"
     )
     
     parser.add_argument(
         "--tb-level",
         default="tb_wrapper",
-        help="Top-level testbench modülü (varsayılan: tb_wrapper)"
+        help="Top-level testbench module (default: tb_wrapper)"
     )
     
     parser.add_argument(
         "--gui", "-g",
         action="store_true",
-        help="GUI modunda çalıştır"
+        help="Run in GUI mode"
     )
     
     parser.add_argument(
         "--do-file",
         type=Path,
-        help="GUI modu için DO dosyası"
+        help="DO file for GUI mode"
     )
     
     parser.add_argument(
         "--mem-file",
         type=Path,
-        help="Memory dosyası (belirtilmezse otomatik bulunur)"
+        help="Memory file (auto-discovered if omitted)"
     )
     
     parser.add_argument(
         "--defines", "-D",
         action="append",
         default=[],
-        help="Ek +define'lar (birden fazla kullanılabilir)"
+        help="Extra +define flags (repeatable)"
     )
     
     parser.add_argument(
         "--no-color",
         action="store_true",
-        help="Renkli çıktıyı devre dışı bırak"
+        help="Disable colored output"
     )
     
     parser.add_argument(
         "--voptargs",
         default="+acc=npr",
-        help="VOPT argümanları (varsayılan: +acc=npr veya JSON'dan)"
+        help="VOPT arguments (default: +acc=npr or from JSON)"
     )
     
     parser.add_argument(
         "--time-res",
         default="ns",
-        help="Zaman çözünürlüğü (varsayılan: ns veya JSON'dan)"
+        help="Time resolution (default: ns or from JSON)"
     )
     
     parser.add_argument(
         "--show-config",
         action="store_true",
-        help="Konfigürasyonu göster ve çık"
+        help="Print configuration and exit"
     )
     
     parser.add_argument(
         "--validate-config",
         action="store_true",
-        help="JSON konfigürasyonunu doğrula ve çık"
+        help="Validate JSON configuration and exit"
     )
     
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Debug logging'i etkinleştir (CERES_DEBUG=1 ile de aktif edilebilir)"
+        help="Enable debug logging (also with LEVEL_DEBUG=1)"
     )
     
     return parser.parse_args()
@@ -758,23 +756,23 @@ Profiller:
 def main() -> int:
     args = parse_args()
     
-    # Renkleri devre dışı bırak (gerekirse)
+    # Disable colors if requested
     if args.no_color or not sys.stdout.isatty():
         Color.disable()
         if HAS_CONFIG_MODULE:
             ConfigColor.disable()
     
-    # Debug logging kontrolü
-    debug_enabled = args.debug or os.environ.get("CERES_DEBUG", "0") == "1"
+    # Debug logging
+    debug_enabled = args.debug or os.environ.get("LEVEL_DEBUG", "0") == "1"
     
-    # JSON config yükle
+    # Load JSON config
     json_config = None
     if HAS_CONFIG_MODULE and not args.no_config:
         try:
             json_config = load_config(
                 config_file=args.config,
                 profile=args.profile,
-                quiet=True,  # Runner kendi mesajlarını gösterecek
+                quiet=True,  # Runner prints its own messages
             )
             
             # Validate-only modu
@@ -782,7 +780,7 @@ def main() -> int:
                 print_config_summary(json_config)
                 if json_config.warnings:
                     return 1
-                success("Konfigürasyon geçerli")
+                success("Configuration is valid")
                 return 0
             
             # Show-config modu
@@ -791,17 +789,17 @@ def main() -> int:
                 return 0
                 
         except FileNotFoundError:
-            warn("JSON config bulunamadı, varsayılan değerler kullanılacak")
+            warn("JSON config not found; using defaults")
         except ValueError as e:
-            error(f"JSON config hatası: {e}")
+            error(f"JSON config error: {e}")
             return 1
     elif not HAS_CONFIG_MODULE and not args.no_config:
-        warn("modelsim_config modülü yüklenemedi, sadece CLI args kullanılacak")
+        warn("modelsim_config module not loaded; CLI only")
     
-    # Memory dizinlerini parse et
+    # Parse memory directories
     mem_dirs = [Path(d.strip()) for d in args.mem_dirs.split() if d.strip()]
 
-    # Eğer JSON konfigürasyonu logging/trace makrolarını içeriyorsa, debug logging'i aç
+    # Enable debug logging if JSON enables logging/trace macros
     if json_config:
         try:
             macros = [m.upper() for m in json_config.language.define_macros or []]
@@ -812,10 +810,10 @@ def main() -> int:
         if any(m in logging_macros for m in macros) or getattr(json_config.debug, 'fsmdebug', False) or getattr(json_config.debug, 'classdebug', False):
             debug_enabled = True
     
-    # Config oluştur (JSON + CLI merge)
+    # Build merged config (JSON + CLI)
     config = merge_config_with_cli(json_config, args, mem_dirs)
     
-    # Debug logger oluştur
+    # Create debug logger
     logger = create_logger(
         tool_name="modelsim",
         log_dir=config.log_dir,
@@ -826,7 +824,7 @@ def main() -> int:
     logger.section("CLI Arguments")
     logger.params_from_dict(vars(args), source="cli")
     
-    # JSON config logla
+    # Log JSON config section
     if json_config:
         logger.section("JSON Configuration")
         logger.param("config_file", str(args.config) if args.config else "default", "json")

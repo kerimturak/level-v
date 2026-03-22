@@ -20,8 +20,8 @@ Description:
 */
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
-import ceres_param::*;
+`include "level_defines.svh"
+import level_param::*;
 
 module wb_master_bridge (
     input logic clk_i,
@@ -84,11 +84,7 @@ module wb_master_bridge (
 
   // Determine if this is a write and uncached access
   assign is_write = |iomem_req_i.rw;
-
-  // Uncached detection: 
-  // - For writes: check if all 16 bytes are enabled (cache line write has all 16 bits set)
-  // - For reads: check if address is NOT cache-line aligned (lower 4 bits != 0)
-  assign is_uncached = is_write ? ($countones(iomem_req_i.rw) < 16) : (iomem_req_i.addr[3:0] != 4'h0);
+  assign is_uncached = iomem_req_i.uncached;
 
   // ============================================================================
   // State Machine

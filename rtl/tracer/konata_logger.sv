@@ -1,22 +1,22 @@
 // ============================================================================
-// Ceres Pipeline Logger — KONATA v0004
-//  - Front (F/D) ve Back (X/M/Wb) için ayrı advance mantığı
-//  - Stage başı:  S
-//  - Stage sonu:  E
+// Level Pipeline Logger — KONATA v0004
+//  - Separate advance logic for Front (F/D) and Back (X/M/Wb)
+//  - Stage start: S
+//  - Stage end:   E
 //  - Issue:       I + L (pc:instr)
-//  - Retire:      R (flush=0) veya R (flush=1)
-//  - Ek bilgiler:
+//  - Retire:      R (flush=0) or R (flush=1)
+//  - Extra fields:
 //      * grp=ALU/LOAD/STORE/BRANCH/JUMP/CSR/SYSCALL/PRIV/FENCE
 //      * stall=NONE/IMISS/DMISS/RAW/ALU/OTHER
-//      * stall_cycles=N   (instr pipeline'da toplam kaç cycle stall gördü)
-//      * mem_latency=N    (LOAD/STORE için M stage'de kaç cycle bekledi)
+//      * stall_cycles=N   (total stall cycles seen for the instruction in the pipeline)
+//      * mem_latency=N    (cycles waited in M stage for LOAD/STORE)
 //
 // Enable with: +define+KONATA_TRACER
 // ============================================================================
 `ifndef KONATA_LOGGER_SV
 
 `timescale 1ns / 1ps
-`include "ceres_defines.svh"
+`include "level_defines.svh"
 
 `ifdef KONATA_TRACER
 
@@ -26,16 +26,16 @@ module konata_logger;
   string  log_path;
 
 `ifdef VERILATOR
-  `define SOC $root.ceres_wrapper.i_soc
+  `define SOC $root.level_wrapper.i_soc
 `else
-  `define SOC tb_wrapper.ceres_wrapper.i_soc
+  `define SOC tb_wrapper.level_wrapper.i_soc
 `endif
 
   // ----------------------------------------------------------------------------
-  // Dosya açma & header
+  // File open & header
   // ----------------------------------------------------------------------------
   initial begin
-    if (!$value$plusargs("log_path=%s", log_path)) log_path = "/home/kerim/github/riscv/ceres-riscv/results/logs/rtl/ceres.KONATA";
+    if (!$value$plusargs("log_path=%s", log_path)) log_path = "results/logs/rtl/level.KONATA";
 
     void'($system($sformatf("mkdir -p $(dirname %s)", log_path)));
 
@@ -50,10 +50,10 @@ module konata_logger;
   end
 
   // ----------------------------------------------------------------------------
-  // Yardımcı fonksiyonlar: instr_group & stall string
+  // Helper functions: instr_group & stall string
   // ----------------------------------------------------------------------------
 
-  // Instr tipinden "grp=" etiketi
+  // "grp=" label from instruction type
   function string instr_group(input instr_type_e t);
     unique case (t)
       // LOAD
@@ -71,7 +71,7 @@ module konata_logger;
       // CSR
       CSR_RW, CSR_RS, CSR_RC, CSR_RWI, CSR_RSI, CSR_RCI: instr_group = "CSR";
 
-      // SYSCALL / TRAP benzeri
+      // SYSCALL / trap-like
       ecall, ebreak: instr_group = "SYSCALL";
 
       // PRIV
@@ -80,12 +80,12 @@ module konata_logger;
       // FENCE
       fence_i: instr_group = "FENCE";
 
-      // Default: ALU / diğer her şey
+      // Default: ALU / everything else
       default: instr_group = "ALU";
     endcase
   endfunction
 
-  // Instr memory access mi?
+  // Is instruction a memory access?
   function bit is_mem_instr(input instr_type_e t);
     unique case (t)
       i_lb, i_lh, i_lw, i_lbu, i_lhu, s_sb, s_sh, s_sw: is_mem_instr = 1'b1;
@@ -93,7 +93,7 @@ module konata_logger;
     endcase
   endfunction
 
-  // Stall sebebini string'e çevir
+  // Convert stall reason to string
   function string stall_to_str(input stall_e s);
     unique case (s)
       NO_STALL:       stall_to_str = "NONE";
@@ -106,7 +106,7 @@ module konata_logger;
   endfunction
 
   // ----------------------------------------------------------------------------
-  // Pipeline stage state (logger tarafı)
+  // Pipeline stage state (logger side)
   // ----------------------------------------------------------------------------
   typedef struct {
     integer      id;
@@ -119,12 +119,12 @@ module konata_logger;
     logic        started_m;
     logic        started_wb;
 
-    // Ek bilgiler
-    instr_type_e instr_type;        // CPU fetch'ten gelen instr_type_o
-    integer      stall_cycles;      // toplam stall (front+back)
-    integer      mem_stall_cycles;  // sadece M stage'de LOAD/STORE beklemeleri
-    stall_e      first_stall;       // ilk stall sebebi
-    logic        retired;           // R yazıldı mı? (re-retire spam'i engellemek için)
+    // Extra fields
+    instr_type_e instr_type;        // instr_type_o from CPU fetch
+    integer      stall_cycles;      // total stalls (front+back)
+    integer      mem_stall_cycles;  // LOAD/STORE waits in M stage only
+    stall_e      first_stall;       // first stall reason
+    logic        retired;           // R emitted? (avoids re-retire spam)
   } pipe_entry_t;
 
   pipe_entry_t fetch_s, decode_s, execute_s, memory_s, writeback_s;
@@ -135,7 +135,7 @@ module konata_logger;
   integer next_id = 0;
 
   // ----------------------------------------------------------------------------
-  // Emit helper fonksiyonları
+  // Emit helper functions
   // ----------------------------------------------------------------------------
   function void log_stage_start(input integer id, input string stg);
     if (fd != 0) $fwrite(fd, "S\t%0d\t0\t%s\n", id, stg);
@@ -162,20 +162,20 @@ module konata_logger;
   endfunction
 
   // ----------------------------------------------------------------------------
-  // Ana logger
+  // Main logger
   // ----------------------------------------------------------------------------
-  // Front (F/D) ve Back (X/M/Wb) için ayrı advance sinyalleri
+  // Separate advance signals for Front (F/D) and Back (X/M/Wb)
   logic adv_front;  // F + D (stall_cause == NO_STALL)
   logic adv_back;  // X + M + Wb (stall_cause NOT in {IMISS, DMISS, ALU})
   logic flush_fe;
-  logic wb_closed;  // sadece flush case'inde kullanılıyor, şu an struct'ı sıfırlamıyoruz
+  logic wb_closed;  // used only in flush path; we do not clear the struct for it yet
 
-  // Fetch tarafı
+  // Fetch side
   logic fetch_valid_int;
   logic fetch_buf_valid;
   logic fetch_enter;
 
-  // O cycle’da stage enter edenler
+  // Stages entered this cycle
   logic d_enter_now;
   logic x_enter_now;
   logic m_enter_now;
@@ -184,9 +184,9 @@ module konata_logger;
   always @(posedge `SOC.clk_i) begin
     flush_fe  = `SOC.i_fetch.flush_i;
 
-    // CPU tarafı ile birebir:
-    //  - Front: FETCH & pipe1 sadece NO_STALL iken ilerliyor
-    //  - Back:  pipe2/3/4 sadece IMISS/DMISS/ALU iken duruyor
+    // Matches CPU behavior:
+    //  - Front: FETCH & pipe1 advance only when NO_STALL
+    //  - Back:  pipe2/3/4 held on IMISS, DMISS, ALU, or FENCEI stalls
     adv_front = (`SOC.stall_cause == NO_STALL);
     adv_back  = !(`SOC.stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
 
@@ -212,7 +212,7 @@ module konata_logger;
       end
 
       // ----------------------------------------------------------------------
-      // 2) Snapshot (prev_* bu cycle'ın eski state'i)
+      // 2) Snapshot (prev_* is this cycle's prior state)
       // ----------------------------------------------------------------------
       prev_fetch     = fetch_s;
       prev_decode    = decode_s;
@@ -221,8 +221,8 @@ module konata_logger;
       prev_writeback = writeback_s;
 
       // ----------------------------------------------------------------------
-      // 3) Stall sayaçları
-      //    - flush cycle'ında sayma, çünkü o anda zaten pipeline boşaltılıyor
+      // 3) Stall counters
+      //    - Do not count on flush cycle; pipeline is being drained then
       // ----------------------------------------------------------------------
       if (!flush_fe) begin
         // Front (F + D) stall
@@ -237,11 +237,11 @@ module konata_logger;
           if (memory_s.valid) memory_s.stall_cycles++;
           if (writeback_s.valid) writeback_s.stall_cycles++;
 
-          // Memory stage'de LOAD/STORE için ekstra mem_stall_cycles
+          // Extra mem_stall_cycles for LOAD/STORE in memory stage
           if (memory_s.valid && is_mem_instr(memory_s.instr_type)) memory_s.mem_stall_cycles++;
         end
 
-        // İlk stall sebebi (instr pipeline'a girdiğinden beri ilk kez stall olduğu anda kaydet)
+        // First stall reason (record when instruction first stalls after entering pipeline)
         if (`SOC.stall_cause != NO_STALL) begin
           if (fetch_s.valid && fetch_s.first_stall == NO_STALL) fetch_s.first_stall = `SOC.stall_cause;
           if (decode_s.valid && decode_s.first_stall == NO_STALL) decode_s.first_stall = `SOC.stall_cause;
@@ -266,7 +266,7 @@ module konata_logger;
         log_issue(fid);
         log_line_pc_inst(fid, `SOC.i_fetch.pc_o, `SOC.i_fetch.inst_o);
 
-        // Instr grup etiketi (tek seferlik, issue sırasında)
+        // Instruction group label (once, at issue)
         g_str = instr_group(`SOC.i_fetch.instr_type_o);
         if (fd != 0) $fwrite(fd, "L\t%0d\t1\tgrp=%s\n", fid, g_str);
 
@@ -289,13 +289,13 @@ module konata_logger;
             retired         : 1'b0
         };
       end else if (adv_front) begin
-        // Front ilerliyor ama yeni fetch yok: bubble
+        // Front advances but no new fetch: bubble
         fetch_s <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
       end
-      // Front stall/flush durumunda fetch_s olduğu gibi kalır
+      // On front stall/flush, fetch_s is unchanged
 
       // ----------------------------------------------------------------------
-      // 5) Bu cycle'da hangi stage'e giriş var? (enter_now)
+      // 5) Which stage entries this cycle? (enter_now)
       //     - D: prev_fetch → decode
       //     - X: prev_decode → execute
       //     - M: prev_execute → memory
@@ -315,7 +315,7 @@ module konata_logger;
       // 6) Stage EXIT + RETIRE / FLUSH
       // ----------------------------------------------------------------------
       if (flush_fe) begin
-        // Flush: tüm yaşayanlar R flush
+        // Flush: R with flush for all live entries
         if (prev_fetch.valid) log_retire_flush(prev_fetch.id);
         if (prev_decode.valid) log_retire_flush(prev_decode.id);
         if (prev_execute.valid) log_retire_flush(prev_execute.id);
@@ -325,14 +325,14 @@ module konata_logger;
           wb_closed = 1'b1;
         end
       end else begin
-        // Normal stage kapamaları
+        // Normal stage closes
         if (prev_fetch.valid && prev_fetch.started_f) log_stage_end(prev_fetch.id, "F");
         if (prev_decode.valid && prev_decode.started_d) log_stage_end(prev_decode.id, "D");
         if (prev_execute.valid && prev_execute.started_x) log_stage_end(prev_execute.id, "X");
         if (prev_memory.valid && prev_memory.started_m) log_stage_end(prev_memory.id, "M");
 
         // WB: E + R + metadata
-        //  - retired flag'i ile aynı instr için tekrar tekrar R yazmayı engelliyoruz
+        //  - retired flag prevents emitting R repeatedly for the same instruction
         if (prev_writeback.valid && prev_writeback.started_wb && !prev_writeback.retired) begin
           string g_str, st_str;
           int mem_lat;
@@ -341,7 +341,7 @@ module konata_logger;
           st_str  = stall_to_str(prev_writeback.first_stall);
           mem_lat = prev_writeback.mem_stall_cycles;
 
-          // Metadata satırı:
+          // Metadata line:
           //   grp=..., stall=..., stall_cycles=N [mem_latency=M]
           if (fd != 0) begin
             $fwrite(fd, "L\t%0d\t1\tgrp=%s stall=%s stall_cycles=%0d", prev_writeback.id, g_str, st_str, prev_writeback.stall_cycles);
@@ -354,7 +354,7 @@ module konata_logger;
           log_retire(prev_writeback.id);
           wb_closed = 1'b1;
 
-          // Bu instr artık retire edildi, bir daha R yazma
+          // Instruction retired; do not emit R again
           writeback_s.retired <= 1'b1;
         end
       end
@@ -363,14 +363,14 @@ module konata_logger;
       // 7) PIPELINE SHIFT
       // ----------------------------------------------------------------------
       if (flush_fe) begin
-        // Flush'ta hepsini boşalt
+        // On flush, clear all
         fetch_s     <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
         decode_s    <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
         execute_s   <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
         memory_s    <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
         writeback_s <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
       end else begin
-        // Back (X/M/Wb) sadece adv_back olduğunda kayıyor
+        // Back (X/M/Wb) shifts only when adv_back
         if (adv_back) begin
           writeback_s <= prev_memory;
           memory_s    <= prev_execute;
@@ -381,7 +381,7 @@ module konata_logger;
           if (wb_enter_now) writeback_s.started_wb <= 1'b1;
         end
 
-        // Front (D) sadece adv_front olduğunda kayıyor
+        // Front (D) shifts only when adv_front
         if (adv_front) begin
           decode_s <= prev_fetch;
           if (d_enter_now) decode_s.started_d <= 1'b1;

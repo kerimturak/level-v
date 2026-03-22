@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-CERES RISC-V — Test Runner
+Level RISC-V — Test Runner
 
-Test pipeline'ını yönetir:
-1. Test environment hazırlama
-2. RTL simülasyonu çalıştırma
-3. Spike golden reference çalıştırma
-4. Log karşılaştırma
-5. Rapor oluşturma
+Manages the test pipeline:
+1. Prepare test environment
+2. Run RTL simulation
+3. Run Spike golden reference
+4. Compare logs
+5. Generate report
 
-Kullanım:
+Usage:
     python test_runner.py --test rv32ui-p-add
     python test_runner.py --test rv32ui-p-add --sim verilator --skip-spike
     python test_runner.py --test rv32ui-p-add --debug
@@ -99,7 +99,7 @@ def success(msg: str) -> None:
 
 
 def step(num: int, total: int, title: str) -> None:
-    """Step başlığı yazdır."""
+    """Print step header."""
     print()
     print(f"{Color.YELLOW}{'━' * 50}{Color.RESET}")
     print(f"{Color.GREEN}  Step {num}/{total}: {title}{Color.RESET}")
@@ -107,7 +107,7 @@ def step(num: int, total: int, title: str) -> None:
 
 
 def header(title: str) -> None:
-    """Ana başlık yazdır."""
+    """Print main header."""
     print()
     print(f"{Color.YELLOW}{'━' * 50}{Color.RESET}")
     print(f"{Color.GREEN}  {title}{Color.RESET}")
@@ -115,7 +115,7 @@ def header(title: str) -> None:
 
 
 def keyval(key: str, value: str, indent: int = 0) -> None:
-    """Anahtar-değer çifti yazdır."""
+    """Print key-value pair."""
     spaces = " " * indent
     print(f"{spaces}{Color.YELLOW}[INFO]{Color.RESET} {key:<12}: {value}")
 
@@ -153,13 +153,13 @@ TEST_TYPE_PATTERNS = {
 
 def detect_test_type(test_name: str, build_dir: Path) -> str:
     """
-    Test tipini tespit et.
-    
-    Önce dosya varlığına, sonra pattern'a bakar.
+    Detect test type.
+
+    Uses file presence first, then name patterns.
     """
     import re
     
-    # 1. Dosya tabanlı tespit
+    # 1. File-based detection
     type_paths = {
         "isa": build_dir / "tests/riscv-tests/elf",
         "arch": build_dir / "tests/riscv-arch-test/elf",
@@ -173,13 +173,13 @@ def detect_test_type(test_name: str, build_dir: Path) -> str:
     }
     
     for test_type, base_path in type_paths.items():
-        # .elf uzantılı veya uzantısız dosya ara
+        # Look for .elf or extensionless ELF name
         for ext in [".elf", ""]:
             elf_path = base_path / f"{test_name}{ext}"
             if elf_path.exists():
                 return test_type
     
-    # 2. Pattern tabanlı tespit
+    # 2. Pattern-based detection
     for test_type, patterns in TEST_TYPE_PATTERNS.items():
         for pattern in patterns:
             if isinstance(pattern, str) and pattern.startswith("^"):
@@ -190,12 +190,12 @@ def detect_test_type(test_name: str, build_dir: Path) -> str:
                 # Exact or prefix match
                 return test_type
     
-    # 3. Varsayılan: isa
+    # 3. Default: isa
     return "isa"
 
 
 def get_test_paths(test_name: str, test_type: str, build_dir: Path) -> Dict[str, Path]:
-    """Test tipine göre path'leri döndür."""
+    """Return paths for the given test type."""
     
     type_roots = {
         "isa": "riscv-tests",
@@ -213,7 +213,7 @@ def get_test_paths(test_name: str, test_type: str, build_dir: Path) -> Dict[str,
     root_name = type_roots.get(test_type, "custom")
     test_root = build_dir / "tests" / root_name
     
-    # ELF uzantısı
+    # ELF filename extension rules
     elf_ext = ".elf" if test_type not in ["isa", "bench"] else ""
     
     return {
@@ -236,7 +236,7 @@ def get_test_paths(test_name: str, test_type: str, build_dir: Path) -> Dict[str,
 # ═══════════════════════════════════════════════════════════════════════════
 @dataclass
 class TestConfig:
-    """Test çalıştırma konfigürasyonu."""
+    """Test run configuration."""
     test_name: str
     test_type: str
     simulator: str  # verilator, modelsim
@@ -263,7 +263,7 @@ class TestConfig:
     
     # Spike settings
     spike_isa: str = "rv32imc_zicsr_zicntr_zifencei"
-    spike_pc: str = "0x80000000"  # Başlangıç PC - RTL reset vector ile aynı olmalı
+    spike_pc: str = "0x80000000"  # Start PC — must match RTL reset vector
     spike_priv: str = "m"  # Privilege mode
     spike_log_commits: bool = True
     
@@ -273,19 +273,22 @@ class TestConfig:
     report_file: Optional[Path] = None
     
     def __post_init__(self):
-        """Path'leri otomatik doldur."""
+        """Fill paths automatically."""
         if not self.test_paths:
             self.test_paths = get_test_paths(
                 self.test_name, self.test_type, self.build_dir
             )
         
-        # Log dosyaları
+        # Log file paths
         if not self.rtl_log:
             self.rtl_log = self.log_dir / "rtl_commit.log"
         if not self.spike_log:
             self.spike_log = self.log_dir / "spike_commit.log"
         if not self.report_file:
-            self.report_file = self.log_dir / "test_report.txt"
+            # Not under log_dir: Verilator runner removes log_dir before sim (fresh traces).
+            self.report_file = (
+                self.build_dir / "test_work" / self.test_name / "test_report.txt"
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -294,29 +297,36 @@ class TestConfig:
 
 def prepare_test(config: TestConfig, logger: DebugLogger) -> bool:
     """
-    Step 1: Test ortamını hazırla.
-    
-    - Log dizinlerini oluştur
-    - Gerekli dosyaların varlığını kontrol et
-    - Rapor dosyasını başlat
+    Step 1: Prepare test environment.
+
+    - Create log directories
+    - Check required files exist
+    - Initialize report file
     """
     logger.section("Test Preparation")
     
-    header("CERES RISC-V Test Runner")
+    header("Level RISC-V Test Runner")
     keyval("Test Name", config.test_name)
     keyval("Test Type", config.test_type)
     keyval("Simulator", config.simulator)
     keyval("Max Cycles", str(config.max_cycles))
     keyval("Log Dir", str(config.log_dir))
     
-    # Log dizini oluştur (önce temizle)
+    # Create log directory (clean first)
     if config.log_dir.exists():
         info(f"Removing previous logs: {config.log_dir}")
         shutil.rmtree(config.log_dir)
     config.log_dir.mkdir(parents=True, exist_ok=True)
     logger.note(f"Created log directory: {config.log_dir}")
-    
-    # Gerekli dosyaları kontrol et
+
+    # Match makefile test_prepare: fresh artifact dir (report lives here, not under log_dir).
+    artifact_dir = config.build_dir / "test_work" / config.test_name
+    if artifact_dir.exists():
+        info(f"Removing previous artifacts: {artifact_dir}")
+        shutil.rmtree(artifact_dir)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    # Verify required files
     logger.section("File Verification")
     
     elf_file = config.test_paths["elf_file"]
@@ -337,15 +347,15 @@ def prepare_test(config: TestConfig, logger: DebugLogger) -> bool:
     else:
         keyval("MEM File", str(mem_file))
     
-    # Addr dosyası (opsiyonel)
+    # Address file (optional)
     addr_file = config.test_paths.get("addr_file")
     if addr_file and addr_file.exists():
         keyval("ADDR File", str(addr_file))
         logger.param("addr_file", addr_file, "found")
     
-    # Rapor dosyasını başlat
+    # Initialize report file
     with open(config.report_file, "w") as f:
-        f.write("=== CERES Test Report ===\n")
+        f.write("=== Level Test Report ===\n")
         f.write(f"Test: {config.test_name}\n")
         f.write(f"Type: {config.test_type}\n")
         f.write(f"Simulator: {config.simulator}\n")
@@ -359,7 +369,7 @@ def prepare_test(config: TestConfig, logger: DebugLogger) -> bool:
 
 def run_rtl_simulation(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     """
-    Step 2: RTL simülasyonunu çalıştır.
+    Step 2: Run RTL simulation.
     
     Returns:
         (success, exit_code)
@@ -371,13 +381,13 @@ def run_rtl_simulation(config: TestConfig, logger: DebugLogger) -> Tuple[bool, i
     addr_file = config.test_paths.get("addr_file")
     
     if config.simulator == "verilator":
-        # Verilator runner'ı çağır
+        # Invoke Verilator runner
         runner_script = config.root_dir / "script/python/makefile/verilator_runner.py"
         
         cmd = [
             sys.executable, str(runner_script),
             "--test", config.test_name,
-            "--bin-path", str(config.build_dir / "obj_dir/Vceres_wrapper"),
+            "--bin-path", str(config.build_dir / "obj_dir/Vlevel_wrapper"),
             "--log-dir", str(config.log_dir),
             "--mem-dirs", str(config.test_paths["mem_dir"]),
             "--max-cycles", str(config.max_cycles),
@@ -391,13 +401,13 @@ def run_rtl_simulation(config: TestConfig, logger: DebugLogger) -> Tuple[bool, i
             cmd.extend(["--exception-fail-addr", config.exception_fail_addr])
 
         if addr_file and addr_file.exists():
-            # addr_file runner'a verilecek (build_dir üzerinden bulacak)
+            # addr_file resolved via build_dir inside runner
             pass
         
         logger.command(cmd, "Verilator runner")
         
     elif config.simulator == "modelsim":
-        # ModelSim runner'ı çağır
+        # Invoke ModelSim runner
         runner_script = config.root_dir / "script/python/makefile/modelsim_runner.py"
         
         mem_dirs = " ".join([
@@ -427,7 +437,7 @@ def run_rtl_simulation(config: TestConfig, logger: DebugLogger) -> Tuple[bool, i
         error(f"Unknown simulator: {config.simulator}")
         return False, 1
     
-    # Komutu çalıştır
+    # Run command
     try:
         result = subprocess.run(
             cmd,
@@ -437,7 +447,7 @@ def run_rtl_simulation(config: TestConfig, logger: DebugLogger) -> Tuple[bool, i
         )
         exit_code = result.returncode
         
-        # Rapor dosyasına yaz
+        # Append to report
         with open(config.report_file, "a") as f:
             f.write(f"RTL_EXIT_CODE={exit_code}\n")
         
@@ -458,10 +468,10 @@ def run_rtl_simulation(config: TestConfig, logger: DebugLogger) -> Tuple[bool, i
 
 def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     """
-    Step 3: Spike golden reference çalıştır.
-    
-    Spike'ı debug modunda çalıştırır ve PASS adresinde durdurur.
-    Bu şekilde RTL ile aynı sayıda instruction execute edilir.
+    Step 3: Run Spike golden reference.
+
+    Runs Spike in debug mode and stops at the PASS address so
+    instruction count matches RTL.
     
     Returns:
         (success, exit_code)
@@ -477,14 +487,14 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     elf_file = config.test_paths["elf_file"]
     addr_file = config.test_paths["addr_file"]
     
-    # PASS adresini oku
+    # Read PASS address
     pass_addr = None
     if addr_file.exists():
         try:
             with open(addr_file) as f:
                 parts = f.read().strip().split()
                 if parts:
-                    pass_addr = parts[0]  # İlk değer PASS adresi
+                    pass_addr = parts[0]  # First field is PASS
                     logger.param("pass_addr", pass_addr, "spike")
                     info(f"PASS address: {pass_addr}")
         except Exception as e:
@@ -500,23 +510,23 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
         logger.warning(f"Address file not found or empty: {addr_file}")
         warn(f"Address file not found: {addr_file} - Spike may run indefinitely")
 
-    # Debug command dosyası oluştur (PASS adresinde dur)
+    # Write Spike debug cmd file (stop at PASS)
     debug_cmd_file = config.log_dir / "spike_debug.cmd"
     if pass_addr:
         with open(debug_cmd_file, "w") as f:
-            # "until pc 0 <addr>" - core 0'da <addr> PC'sine ulaşınca dur
+            # "until pc 0 <addr>" — stop when core 0 reaches <addr>
             f.write(f"until pc 0 {pass_addr}\n")
             f.write("quit\n")
         logger.note(f"Created debug command: until pc 0 {pass_addr}")
     
-    # Spike komutunu oluştur
+    # Build Spike command
     cmd = ["spike"]
     
-    # Debug mode ve command file (PASS adresinde durmak için)
+    # Debug mode + cmd file to stop at PASS
     if pass_addr:
         cmd.extend(["-d", f"--debug-cmd={debug_cmd_file}"])
     
-    # ISA, PC ve privilege mode parametreleri (Makefile ile aynı)
+    # ISA, PC, privilege — same as Makefile
     cmd.append(f"--isa={config.spike_isa}")
     cmd.append(f"--pc={config.spike_pc}")
     cmd.append(f"--priv={config.spike_priv}")
@@ -530,14 +540,14 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     info(f"Running: spike -d --isa={config.spike_isa} --pc={config.spike_pc} {elf_file.name}")
     
     try:
-        # Spike çıktısını log dosyasına yaz
+        # Capture Spike output to log file
         with open(config.spike_log, "w") as log_file:
             result = subprocess.run(
                 cmd,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 text=True,
-                timeout=300,  # 5 dakika timeout
+                timeout=300,  # 5 minute timeout
             )
         
         exit_code = result.returncode
@@ -546,7 +556,7 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
             f.write(f"SPIKE_EXIT_CODE={exit_code}\n")
         
         if exit_code == 0:
-            # Spike log satır sayısını göster
+            # Show Spike log line count
             with open(config.spike_log) as f:
                 line_count = sum(1 for _ in f)
             
@@ -574,7 +584,7 @@ def run_spike(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
 
 def compare_logs(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     """
-    Step 4: RTL ve Spike loglarını karşılaştır.
+    Step 4: Compare RTL and Spike logs.
     
     Returns:
         (match, diff_count)
@@ -599,7 +609,7 @@ def compare_logs(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
         warn(f"Spike log not found: {spike_log}")
         return False, -1
     
-    # Basit satır sayısı karşılaştırması
+    # Simple line-count comparison (before script)
     with open(rtl_log) as f:
         rtl_lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
     
@@ -612,11 +622,11 @@ def compare_logs(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
     info(f"RTL commits:   {len(rtl_lines)}")
     info(f"Spike commits: {len(spike_lines)}")
     
-    # Detaylı karşılaştırma - compare_logs.py script'ini kullan
+    # Detailed compare via compare_logs.py
     compare_script = config.root_dir / "script/python/makefile/compare_logs.py"
     
     if compare_script.exists():
-        # Makefile ile aynı argümanları kullan - .log uzantısı gerekli!
+        # Same arguments as Makefile — output must use .log extension
         diff_log = config.log_dir / "diff.log"
         cmd = [
             sys.executable, str(compare_script),
@@ -626,7 +636,7 @@ def compare_logs(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
             "--test-name", config.test_name,
         ]
         
-        # Opsiyonel dump ve addr dosyaları
+        # Optional dump and addr files
         dump_file = config.test_paths.get("dump_file")
         if dump_file and dump_file.exists():
             cmd.extend(["--dump", str(dump_file)])
@@ -637,7 +647,7 @@ def compare_logs(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
         
         logger.command(cmd, "Compare logs")
         
-        # Script çıktısını hem göster hem logla
+        # Stream script output to console
         result = subprocess.run(cmd, capture_output=False, text=True)
         
         if result.returncode == 0:
@@ -651,9 +661,9 @@ def compare_logs(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
         logger.warning(f"Compare script not found: {compare_script}")
         warn(f"Compare script not found, using simple line comparison")
         
-        # Basit karşılaştırma (fallback)
+        # Simple fallback compare
         if len(rtl_lines) == len(spike_lines):
-            # İlk farklı satırı bul
+            # Find first differing line
             for i, (rtl, spike) in enumerate(zip(rtl_lines, spike_lines)):
                 if rtl != spike:
                     logger.error(f"First difference at line {i+1}")
@@ -674,7 +684,7 @@ def compare_logs(config: TestConfig, logger: DebugLogger) -> Tuple[bool, int]:
 def generate_report(config: TestConfig, logger: DebugLogger, 
                    rtl_success: bool, spike_success: bool, compare_success: bool) -> None:
     """
-    Step 5: Final rapor oluştur.
+    Step 5: Write final report.
     """
     logger.section("Test Report")
     
@@ -735,7 +745,7 @@ def generate_report(config: TestConfig, logger: DebugLogger,
 
 def run_test_pipeline(config: TestConfig, logger: DebugLogger) -> int:
     """
-    Ana test pipeline'ı.
+    Main test pipeline.
     
     Returns:
         Exit code (0 = success)
@@ -757,7 +767,7 @@ def run_test_pipeline(config: TestConfig, logger: DebugLogger) -> int:
         logger.result(False, rtl_code, "RTL simulation failed")
         return rtl_code
     
-    # Quick mode: sadece RTL
+    # Quick mode: RTL only
     if config.quick_mode:
         generate_report(config, logger, rtl_success, True, True)
         end_time = datetime.now()
@@ -795,7 +805,7 @@ def run_test_pipeline(config: TestConfig, logger: DebugLogger) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="CERES RISC-V Test Runner",
+        description="Level RISC-V Test Runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -928,7 +938,7 @@ def main() -> int:
     if args.root_dir:
         root_dir = Path(args.root_dir)
     else:
-        # Script konumundan root'u bul
+        # Infer repo root from script location
         root_dir = Path(__file__).parent.parent.parent.parent
     
     # Build directory
@@ -954,11 +964,11 @@ def main() -> int:
     else:
         log_dir = results_dir / "logs" / args.simulator / test_name
     
-    # Pipeline control: --no-spike ve --no-compare bayraklarını işle
+    # Pipeline control: honor --no-spike / --no-compare
     skip_spike = args.no_spike or args.quick or not args.enable_spike
     skip_compare = args.no_compare or args.quick or not args.enable_compare
     
-    # Config oluştur
+    # Build TestConfig
     config = TestConfig(
         test_name=test_name,
         test_type=test_type,
@@ -985,14 +995,14 @@ def main() -> int:
         os.environ["TRACE"] = "1"
     
     # Debug logger
-    debug_enabled = args.debug or os.environ.get("CERES_DEBUG", "0") == "1"
+    debug_enabled = args.debug or os.environ.get("LEVEL_DEBUG", "0") == "1"
     logger = create_logger(
         tool_name="test_runner",
         log_dir=log_dir,
         debug_enabled=debug_enabled
     )
     
-    # CLI args logla
+    # Log CLI args
     logger.section("CLI Arguments")
     logger.params_from_dict(vars(args), source="cli")
     
@@ -1006,7 +1016,7 @@ def main() -> int:
     logger.param("skip_spike", skip_spike, "resolved")
     logger.param("skip_compare", skip_compare, "resolved")
     
-    # Pipeline çalıştır
+    # Run pipeline
     return run_test_pipeline(config, logger)
 
 
