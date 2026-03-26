@@ -4189,7 +4189,7 @@ ELF_TO_MEM         := $(SCRIPT_DIR)/python/elf_to_mem.py
 #
 # EMBENCH_FP_BENCHMARKS := cubic minver nbody st ud
 #
-# Integer-only benchmarks (16 total - works on RV32IMC without FPU):
+# Integer-only benchmarks (15 total - works on RV32IMC without FPU):
 # primecount removed upstream from embench-iot (no src/primecount in current tree)
 EMBENCH_BENCHMARKS := aha-mont64 crc32 edn huffbench matmult-int \
                       md5sum nettle-aes nettle-sha256 nsichneu picojpeg \
@@ -4444,9 +4444,9 @@ embench_help:
 	@echo -e "  sim/test/embench.flist           Test list"
 	@echo -e "  script/config/tests/embench.conf Simulation config"
 	@echo -e ""
-	@echo -e "$(CYAN)Integer Benchmarks (16):$(RESET)"
+	@echo -e "$(CYAN)Integer Benchmarks (15):$(RESET)"
 	@echo -e "  aha-mont64, crc32, edn, huffbench, matmult-int, md5sum"
-	@echo -e "  nettle-aes, nettle-sha256, nsichneu, picojpeg, primecount"
+	@echo -e "  nettle-aes, nettle-sha256, nsichneu, picojpeg"
 	@echo -e "  qrduino, sglib-combined, slre, statemate, tarfind"
 	@echo -e ""
 	@echo -e "$(CYAN)FP Benchmarks (requires FPU - commented out):$(RESET)"
