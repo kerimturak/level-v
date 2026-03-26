@@ -1,5 +1,5 @@
 /* ============================================================
- * level-V Linker Script for Dhrystone - 16KB Memory
+ * level-V Linker Script for Dhrystone (RV32 bare metal; RAM size must fit -O3 + newlib-less image)
  * ============================================================
  */
 
@@ -8,7 +8,7 @@ ENTRY(_start)
 
 MEMORY
 {
-    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 16K
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 32K
 }
 
 _stack_size = 2K;   /* Dhrystone için minimal */
@@ -38,13 +38,15 @@ SECTIONS
         *(.sdata*)
     } > RAM
     
-    /* Data section */
+    /* Data section (VMA = LMA: loaded image; crt0 copies _data_lma → _data_start) */
     .data : ALIGN(4)
     {
         _data_start = .;
         *(.data*)
         _data_end = .;
     } > RAM
+
+    PROVIDE(_data_lma = _data_start);
     
     /* Small BSS */
     .sbss : ALIGN(4)
@@ -80,7 +82,7 @@ SECTIONS
     _end = .;
     
     /* Memory check */
-    ASSERT(. <= 0x80004000, "ERROR: Dhrystone exceeds 16KB memory!")
+    ASSERT(. <= 0x80008000, "ERROR: Dhrystone exceeds 32KB memory!")
     
     /DISCARD/ :
     {

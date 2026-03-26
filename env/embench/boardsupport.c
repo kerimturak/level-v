@@ -6,35 +6,43 @@
 
 #include <stdint.h>
 
-/* Memory-mapped peripherals */
+/* Memory-mapped peripherals — level-V UART (uart.sv) */
 #define UART_BASE       0x20000000UL
-#define UART_DATA       (*(volatile uint32_t*)(UART_BASE + 0x00))
+#define UART_CTRL       (*(volatile uint32_t*)(UART_BASE + 0x00))
 #define UART_STATUS     (*(volatile uint32_t*)(UART_BASE + 0x04))
-#define UART_TX_READY   (1 << 0)
+#define UART_WDATA      (*(volatile uint32_t*)(UART_BASE + 0x0c))
+#define UART_CTRL_TX_EN (1u << 0)
+#define UART_CTRL_RX_EN (1u << 1)
+#define UART_STATUS_TX_FULL (1u << 0)
+#ifndef CPU_MHZ
+#define CPU_MHZ 50
+#endif
+#define UART_BAUD 115200u
 
-#define CLINT_BASE      0x30000000UL
-#define MTIME_LO        (*(volatile uint32_t*)(CLINT_BASE + 0xBFF8))
-#define MTIME_HI        (*(volatile uint32_t*)(CLINT_BASE + 0xBFFC))
+/* Timing variables — mcycle snapshot at start/stop of benchmark() */
+static uint64_t benchmark_start_mcycles;
 
-/* Timing variables */
-static volatile uint64_t benchmark_start_time;
-static volatile uint64_t benchmark_end_time;
-
-/* Read 64-bit mtime */
-static inline uint64_t read_mtime(void) {
-    uint32_t lo, hi, hi2;
+/* 64-bit mcycle (RV32: mcycle + mcycleh, overflow-safe read) */
+static inline uint64_t read_mcycle64(void) {
+    uint32_t hi1, hi2, lo;
     do {
-        hi = MTIME_HI;
-        lo = MTIME_LO;
-        hi2 = MTIME_HI;
-    } while (hi != hi2);
-    return ((uint64_t)hi << 32) | lo;
+        __asm__ volatile("csrr %0, mcycleh" : "=r"(hi1));
+        __asm__ volatile("csrr %0, mcycle" : "=r"(lo));
+        __asm__ volatile("csrr %0, mcycleh" : "=r"(hi2));
+    } while (hi1 != hi2);
+    return ((uint64_t)hi2 << 32) | (uint64_t)lo;
 }
 
 /* UART output */
+static void board_uart_hw_init(void) {
+    uint32_t baud_div = (uint32_t)(CPU_MHZ * 1000000u) / UART_BAUD;
+    UART_CTRL = (baud_div << 16) | UART_CTRL_TX_EN | UART_CTRL_RX_EN;
+}
+
 static void uart_putc(char c) {
-    while (!(UART_STATUS & UART_TX_READY));
-    UART_DATA = c;
+    while (UART_STATUS & UART_STATUS_TX_FULL) {
+    }
+    UART_WDATA = (uint32_t)c;
 }
 
 static void uart_puts(const char* s) {
@@ -44,10 +52,19 @@ static void uart_puts(const char* s) {
     }
 }
 
-static void uart_puthex(uint32_t val) {
-    const char hex[] = "0123456789abcdef";
-    for (int i = 7; i >= 0; i--) {
-        uart_putc(hex[(val >> (i * 4)) & 0xF]);
+static void uart_put_u64_dec(uint64_t v) {
+    char buf[24];
+    int  n = 0;
+    if (v == 0) {
+        uart_putc('0');
+        return;
+    }
+    while (v > 0 && n < (int)sizeof(buf)) {
+        buf[n++] = (char)('0' + (v % 10ULL));
+        v /= 10ULL;
+    }
+    while (n > 0) {
+        uart_putc(buf[--n]);
     }
 }
 
@@ -60,21 +77,24 @@ void initialise_board(void) {
     /* Clear performance counters */
     __asm__ volatile ("csrw mcycle, zero");
     __asm__ volatile ("csrw minstret, zero");
-    
+
+    board_uart_hw_init();
     uart_puts("\r\n[Level-V] Embench Benchmark\r\n");
 }
 
 void start_trigger(void) {
-    benchmark_start_time = read_mtime();
+    benchmark_start_mcycles = read_mcycle64();
 }
 
 void stop_trigger(void) {
-    benchmark_end_time = read_mtime();
-    
-    uint64_t elapsed = benchmark_end_time - benchmark_start_time;
-    
-    uart_puts("Elapsed ticks: 0x");
-    uart_puthex((uint32_t)(elapsed >> 32));
-    uart_puthex((uint32_t)elapsed);
+    uint64_t end   = read_mcycle64();
+    uint64_t delta = end - benchmark_start_mcycles;
+
+    /*
+     * Parse-friendly line for host scripts / future embench.py integration.
+     * Suite geometric mean is computed off-target; each run exports core cycles only.
+     */
+    uart_puts("EMBENCH_MCYCLES: ");
+    uart_put_u64_dec(delta);
     uart_puts("\r\n");
 }

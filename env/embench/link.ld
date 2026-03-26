@@ -52,7 +52,7 @@ SECTIONS
         *(.gnu.linkonce.s.*)
     } > RAM
     
-    /* Initialized data */
+    /* Initialized data (VMA = LMA; crt0 copies _data_lma → _data_start) */
     .data : ALIGN(4)
     {
         _data_start = .;
@@ -60,6 +60,8 @@ SECTIONS
         *(.gnu.linkonce.d.*)
         _data_end = .;
     } > RAM
+
+    PROVIDE(_data_lma = _data_start);
     
     /* Small BSS */
     .sbss : ALIGN(4)

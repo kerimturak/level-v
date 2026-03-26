@@ -46,6 +46,9 @@ _start:
     /* Setup trap handler */
     la      t0, _trap_entry
     csrw    mtvec, t0
+
+    /* UART baud / tx enable — must run before any printf (see syscalls.c) */
+    call    levelv_uart_init
     
     /* Initialize counters */
     csrw    mcycle, zero

@@ -133,9 +133,61 @@ module uart_tx
 `endif  // LOG_UART
 
   // ============================================================================
-  // SIMULATION MONITORING BLOCK (Optional - for threshold-based termination)
-  // Dumps UART TX buffer contents as ASCII and stops simulation when threshold met
-  // Enable with: +define+SIM_UART_MONITOR
+  // SIMULATION MONITORING BLOCK (Optional - UART substring → $finish)
+  //
+  // CoreMark `portable_fini` ends with an infinite loop, so without this the
+  // testbench runs until MAX_CYCLES.  We stop after a configurable TX substring
+  // match (default catches the final banner after all scores / CRC lines).
+  //
+  // Enable RTL: +define+SIM_UART_MONITOR
+  // Optional:   +uart_finish_pattern=CoreMark Complete!
+  //             (override if you want an earlier stop, e.g. after "Iterations/Sec")
   // ============================================================================
+
+`ifdef SIM_UART_MONITOR
+  localparam int unsigned UART_FINISH_BUF_MAX = 96;
+
+  logic [7:0]               finish_buf[UART_FINISH_BUF_MAX];
+  int unsigned              finish_len;
+  int unsigned              finish_match_pos;
+
+  initial begin
+    string pat;
+    int    k;
+    finish_len       = 0;
+    finish_match_pos = 0;
+    if (!$value$plusargs("uart_finish_pattern=%s", pat) || pat.len() == 0) begin
+      pat = "CoreMark Complete!";
+    end
+    if (pat.len() > UART_FINISH_BUF_MAX) begin
+      $display("[UART_TX] SIM_UART_MONITOR: pattern too long (%0d), truncating to %0d", pat.len(),
+               UART_FINISH_BUF_MAX);
+      finish_len = UART_FINISH_BUF_MAX;
+    end else begin
+      finish_len = pat.len();
+    end
+    for (k = 0; k < finish_len; k++) begin
+      finish_buf[k] = pat.getc(k);
+    end
+    $display("[UART_TX] SIM_UART_MONITOR: stop after TX sees %0d-byte pattern (first chars: %s...)",
+             finish_len, pat.substr(0, (pat.len() > 8) ? 7 : pat.len() - 1));
+  end
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      finish_match_pos <= 0;
+    end else if (tx_we_i && !full_o && finish_len > 0) begin
+      if (din_i == finish_buf[finish_match_pos]) begin
+        finish_match_pos <= finish_match_pos + 1;
+        if (finish_match_pos + 1 >= finish_len) begin
+          $display("[UART_TX] SIM_UART_MONITOR: matched — $finish (simulation stopped after UART marker)");
+          $finish(0);
+        end
+      end else begin
+        finish_match_pos <= (din_i == finish_buf[0]) ? 1 : 0;
+      end
+    end
+  end
+`endif  // SIM_UART_MONITOR
 
 endmodule

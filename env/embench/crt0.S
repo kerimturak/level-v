@@ -46,6 +46,8 @@ _start:
     /* Setup trap handler */
     la      t0, _trap_entry
     csrw    mtvec, t0
+
+    call    levelv_uart_init
     
     /* Enable cycle/instret counters access */
     li      t0, -1

@@ -6,11 +6,21 @@
 #include <stdint.h>
 #include <stdarg.h>
 
-/* Memory-mapped peripherals */
+/* Memory-mapped peripherals — layout matches rtl/periph/uart/uart.sv (same as CoreMark) */
 #define UART_BASE       0x20000000UL
-#define UART_DATA       (*(volatile uint32_t*)(UART_BASE + 0x00))
+#define UART_CTRL       (*(volatile uint32_t*)(UART_BASE + 0x00))
 #define UART_STATUS     (*(volatile uint32_t*)(UART_BASE + 0x04))
-#define UART_TX_READY   (1 << 0)
+#define UART_WDATA      (*(volatile uint32_t*)(UART_BASE + 0x0c))
+
+#define UART_CTRL_TX_EN     (1u << 0)
+#define UART_CTRL_RX_EN     (1u << 1)
+/* Status { bit3..0 } = rx_empty, rx_full, tx_empty, tx_full */
+#define UART_STATUS_TX_FULL (1u << 0)
+
+#ifndef CPU_MHZ
+#define CPU_MHZ 50
+#endif
+#define UART_BAUD 115200u
 
 #define CLINT_BASE      0x30000000UL
 #define MTIME           (*(volatile uint64_t*)(CLINT_BASE + 0xBFF8))
@@ -48,9 +58,15 @@ unsigned long read_cycles(void) {
  * ============================================================
  */
 
+void levelv_uart_init(void) {
+    uint32_t baud_div = (uint32_t)(CPU_MHZ * 1000000u) / UART_BAUD;
+    UART_CTRL = (baud_div << 16) | UART_CTRL_TX_EN | UART_CTRL_RX_EN;
+}
+
 static void uart_putc(char c) {
-    while (!(UART_STATUS & UART_TX_READY));
-    UART_DATA = c;
+    while (UART_STATUS & UART_STATUS_TX_FULL) {
+    }
+    UART_WDATA = (uint32_t)c;
 }
 
 static void uart_puts(const char* s) {

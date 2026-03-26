@@ -12,4 +12,12 @@
 /* CPU frequency for timing calculations */
 #define CPU_MHZ 50
 
+/*
+ * Set by Embench's scons for each board; required by benchmark() in each src/*.
+ * When building via makefile, use a conservative default (see doc/README.md).
+ */
+#ifndef GLOBAL_SCALE_FACTOR
+#define GLOBAL_SCALE_FACTOR 1
+#endif
+
 #endif /* BOARDSUPPORT_H */

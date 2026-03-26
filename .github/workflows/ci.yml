@@ -30,6 +30,7 @@ on:
           - quick
           - full
           - nightly
+          - coremark
 
 env:
   VERILATOR_VERSION: "5.026"
@@ -335,10 +336,80 @@ jobs:
           retention-days: 14
 
   # -----------------------------------------
+  # CoreMark on Verilator (UART auto-stop via SIM_UART_MONITOR)
+  # -----------------------------------------
+  coremark-ci:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    if: github.event.inputs.test_suite == 'coremark'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: verilator-build
+          path: build/obj_dir/
+
+      - name: Restore Verilator cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/verilator
+          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
+
+      - name: Restore RISC-V Toolchain cache
+        uses: actions/cache@v4
+        id: cache-riscv-coremark
+        with:
+          path: /opt/riscv
+          key: riscv-toolchain-rv32imc-v3-${{ runner.os }}
+
+      - name: Install RISC-V Toolchain (if not cached)
+        if: steps.cache-riscv-coremark.outputs.cache-hit != 'true'
+        run: |
+          TOOLCHAIN_URL="https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v13.2.0-2/xpack-riscv-none-elf-gcc-13.2.0-2-linux-x64.tar.gz"
+          wget -q "$TOOLCHAIN_URL" -O riscv-toolchain.tar.gz
+          sudo mkdir -p /opt/riscv
+          sudo tar -xzf riscv-toolchain.tar.gz -C /opt/riscv --strip-components=1
+          rm riscv-toolchain.tar.gz
+
+      - name: Setup tools
+        run: |
+          echo "/opt/verilator/bin" >> $GITHUB_PATH
+          echo "/opt/riscv/bin" >> $GITHUB_PATH
+
+      - name: Build and run CoreMark (RTL sim)
+        env:
+          RISCV_PREFIX: riscv-none-elf
+        run: |
+          export PATH="/opt/verilator/bin:/opt/riscv/bin:$PATH"
+          make coremark COREMARK_ITERATIONS=1 RISCV_PREFIX=riscv-none-elf
+          make run_coremark \
+            SIM_FAST=1 \
+            TRACE=0 \
+            SIM_UART_MONITOR=1 \
+            COREMARK_ITERATIONS=1 \
+            MAX_CYCLES=60000000 \
+            RISCV_PREFIX=riscv-none-elf
+
+      - name: Upload CoreMark logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coremark-logs
+          path: results/logs/*/coremark/
+          retention-days: 14
+
+  # -----------------------------------------
   # Report Status
   # -----------------------------------------
   report:
-    needs: [lint, quick-tests]
+    needs: [lint, quick-tests, coremark-ci]
     runs-on: ubuntu-latest
     if: always()
     
@@ -351,4 +422,5 @@ jobs:
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Quick Tests | ${{ needs.quick-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CoreMark | ${{ needs.coremark-ci.result }} |" >> $GITHUB_STEP_SUMMARY
 

@@ -212,10 +212,26 @@ def get_test_paths(test_name: str, test_type: str, build_dir: Path) -> Dict[str,
     
     root_name = type_roots.get(test_type, "custom")
     test_root = build_dir / "tests" / root_name
-    
+
     # ELF filename extension rules
     elf_ext = ".elf" if test_type not in ["isa", "bench"] else ""
-    
+
+    # Dhrystone Makefile emits flat layout: tests/dhrystone/{name}.elf + .mem (not elf/ mem/ subdirs)
+    if test_type == "dhrystone":
+        return {
+            "test_root": test_root,
+            "elf_dir": test_root,
+            "mem_dir": test_root,
+            "hex_dir": test_root,
+            "dump_dir": test_root,
+            "addr_dir": test_root / "pass_fail_addr",
+            "elf_file": test_root / f"{test_name}{elf_ext}",
+            "mem_file": test_root / f"{test_name}.mem",
+            "hex_file": test_root / f"{test_name}.hex",
+            "dump_file": test_root / f"{test_name}.dump",
+            "addr_file": test_root / "pass_fail_addr" / f"{test_name}_addr.txt",
+        }
+
     return {
         "test_root": test_root,
         "elf_dir": test_root / "elf",

@@ -1,9 +1,11 @@
 #include "Vlevel_wrapper.h"
 #include "verilated.h"
 
-#if defined(VM_TRACE_FST)
+// Verilator passes -DVM_TRACE_FST=0 when FST is off; `defined(VM_TRACE_FST)` is still true,
+// so use `#if VM_TRACE_FST` / `#if VM_TRACE` (undefined names are treated as 0).
+#if VM_TRACE_FST
 #include "verilated_fst_c.h"
-#elif defined(VM_TRACE)
+#elif VM_TRACE
 #include "verilated_vcd_c.h"
 #endif
 
@@ -24,24 +26,24 @@ int main(int argc, char **argv) {
     VerilatedContext* contextp = new VerilatedContext;
     contextp->commandArgs(argc, argv);
 
-#if defined(VM_TRACE_FST) || defined(VM_TRACE)
+#if VM_TRACE_FST || VM_TRACE
     Verilated::traceEverOn(true);
 #endif
 
     // Instantiate DUT
     Vlevel_wrapper* top = new Vlevel_wrapper{contextp};
 
-#if defined(VM_TRACE_FST)
+#if VM_TRACE_FST
     VerilatedFstC* tfp = new VerilatedFstC;
     top->trace(tfp, 99);
     const char* dump_file = "waveform.fst";
-#elif defined(VM_TRACE)
+#elif VM_TRACE
     VerilatedVcdC* tfp = new VerilatedVcdC;
     top->trace(tfp, 99);
     const char* dump_file = "waveform.vcd";
 #endif
 
-#if defined(VM_TRACE_FST) || defined(VM_TRACE)
+#if VM_TRACE_FST || VM_TRACE
     // Parse +DUMP_FILE= argument (optional)
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "+DUMP_FILE=", 11) == 0)
@@ -60,11 +62,11 @@ int main(int argc, char **argv) {
     // --- Reset phase (10 cycles) ---
     for (int i = 0; i < 10; ++i) {
         top->clk_i = 0; top->eval();
-#if defined(VM_TRACE_FST) || defined(VM_TRACE)
+#if VM_TRACE_FST || VM_TRACE
         tfp->dump(main_time++);
 #endif
         top->clk_i = 1; top->eval();
-#if defined(VM_TRACE_FST) || defined(VM_TRACE)
+#if VM_TRACE_FST || VM_TRACE
         tfp->dump(main_time++);
 #endif
     }
@@ -86,16 +88,16 @@ int main(int argc, char **argv) {
         }
         
         top->clk_i = 0; top->eval();
-#if defined(VM_TRACE_FST) || defined(VM_TRACE)
+#if VM_TRACE_FST || VM_TRACE
         tfp->dump(main_time++);
 #endif
         top->clk_i = 1; top->eval();
-#if defined(VM_TRACE_FST) || defined(VM_TRACE)
+#if VM_TRACE_FST || VM_TRACE
         tfp->dump(main_time++);
 #endif
     }
 
-#if defined(VM_TRACE_FST) || defined(VM_TRACE)
+#if VM_TRACE_FST || VM_TRACE
     tfp->close();
     delete tfp;
 #endif

@@ -26,7 +26,8 @@
   },
 
   "coverage": {
-    "enabled": true,
+    "_comment": "Off by default for sim speed; use profile 'coverage' or make COVERAGE=1",
+    "enabled": false,
     "line": true,
     "toggle": true,
     "user": false
@@ -73,6 +74,7 @@
       "simulation": { "threads": "auto" },
       "build": { "mode": "release", "opt_level": "-O3" },
       "trace": { "enabled": false },
+      "coverage": { "enabled": false },
       "logging": { "fast_sim": true }
     },
     "debug": {
@@ -93,6 +95,7 @@
       "simulation": { "max_cycles": 10000000 },
       "build": { "mode": "release", "opt_level": "-O3" },
       "trace": { "enabled": false },
+      "coverage": { "enabled": false },
       "logging": { "fast_sim": true, "bp_log": true }
     }
   }

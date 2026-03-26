@@ -231,6 +231,20 @@ def prepare_log_dir(log_dir: Path) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # Command Builder
 # ═══════════════════════════════════════════════════════════════════════════
+def _mem_file_under_embench(mem_file: Optional[Path]) -> bool:
+    """True if memory image is from build/.../embench/mem (Embench suite)."""
+    if not mem_file:
+        return False
+    try:
+        parts = mem_file.resolve().parts
+    except OSError:
+        parts = mem_file.parts
+    for i, p in enumerate(parts):
+        if p == "embench" and i + 1 < len(parts) and parts[i + 1] == "mem":
+            return True
+    return False
+
+
 def build_run_command(config: SimRunConfig) -> List[str]:
     """Build the Verilator run command line."""
     cmd = [str(config.bin_path)]
@@ -262,18 +276,27 @@ def build_run_command(config: SimRunConfig) -> List[str]:
     if config.trace_enabled:
         trace_file = config.log_dir / f"waveform.{config.trace_format}"
         cmd.append(f"+DUMP_FILE={trace_file}")
-    
-    # Commit trace log
-    cmd.append(f"+trace_file={config.log_dir}/commit_trace.log")
-    
-    # Konata/pipeline log
-    cmd.append(f"+log_path={config.log_dir}/level.log")
-    
-    # UART log
+
+    # UART (always for mem-based tests)
     cmd.append(f"+uart_log_path={config.log_dir}/uart_output.log")
-    
-    # BP stats directory
-    cmd.append(f"+BP_LOG_DIR={config.log_dir}")
+
+    # Skip heavy RTL log plusargs for UART-centric benchmarks (rebuild: verilate w/ TEST_CONFIG).
+    # VERILATOR_FORCE_ALL_PLUSARGS=1 always passes them (debug).
+    _uart_centric_tests = frozenset({"coremark", "dhrystone"})
+    embench_run = _mem_file_under_embench(config.mem_file)
+    uart_centric = config.test_name.lower() in _uart_centric_tests or embench_run
+    force_plus = os.environ.get("VERILATOR_FORCE_ALL_PLUSARGS", "") == "1"
+    if force_plus or not uart_centric:
+        cmd.append(f"+trace_file={config.log_dir}/commit_trace.log")
+        cmd.append(f"+log_path={config.log_dir}/level.log")
+        cmd.append(f"+BP_LOG_DIR={config.log_dir}")
+
+    # SIM_UART_MONITOR default pattern is CoreMark; other suites use _exit() banners in syscalls.c.
+    tn = config.test_name.lower()
+    if tn == "dhrystone":
+        cmd.append("+uart_finish_pattern=Dhrystone Complete")
+    elif embench_run:
+        cmd.append("+uart_finish_pattern=Benchmark Complete")
     
     # Coverage
     if config.coverage_enabled and config.coverage_file:
@@ -365,6 +388,17 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
         return 1
     
     keyval("Executable", str(config.bin_path))
+
+    # Absolute paths: subprocess uses cwd=log_dir, so relative +trace_file/+uart_log_path
+    # would nest under log_dir (e.g. torture compare misses commit_trace.log).
+    config.bin_path = config.bin_path.expanduser().resolve(strict=False)
+    config.log_dir = config.log_dir.expanduser().resolve(strict=False)
+    if config.mem_file:
+        config.mem_file = config.mem_file.expanduser().resolve(strict=False)
+    if config.addr_file:
+        config.addr_file = config.addr_file.expanduser().resolve(strict=False)
+    if config.coverage_file:
+        config.coverage_file = config.coverage_file.expanduser().resolve(strict=False)
     
     # Prepare log directory
     prepare_log_dir(config.log_dir)
@@ -383,7 +417,10 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
     keyval("Trace", "Enabled" if config.trace_enabled else "Disabled")
     keyval("Log Dir", str(config.log_dir))
     if config.coverage_enabled:
-        keyval("Coverage", f"{Color.GREEN}enabled{Color.RESET}")
+        if config.coverage_file:
+            keyval("Coverage", f"{Color.GREEN}enabled{Color.RESET} ({config.coverage_file.name})")
+        else:
+            keyval("Coverage", f"{Color.YELLOW}enabled (no --coverage-file; no +coverage_file){Color.RESET}")
     
     logger.section("Execution")
     
@@ -575,6 +612,10 @@ def merge_config_with_cli(
             cli_overrides.append("fast_sim=enabled")
         fast_sim = True
         trace_enabled = False
+        if coverage_enabled and not args.coverage:
+            cli_overrides.append("coverage=disabled (fast mode)")
+        if not args.coverage:
+            coverage_enabled = False
     
     # Parse paths
     mem_dirs = [Path(d) for d in args.mem_dirs.split()] if args.mem_dirs else []

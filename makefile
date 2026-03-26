@@ -283,8 +283,13 @@ ifdef CFG_TRACE
   TRACE := $(CFG_TRACE)
 endif
 
+# Snapshot .conf defines now: `SV_DEFINES += $(CFG_SV_DEFINES)` would be recursive/deferred,
+# and `-include build/.modelsim_config.mk` later overwrites CFG_SV_DEFINES (ModelSim JSON) —
+# Verilator would then see the wrong +define+ list for profiles like coremark.
 ifdef CFG_SV_DEFINES
-  SV_DEFINES += $(CFG_SV_DEFINES)
+  SV_DEFINES := $(strip $(CFG_SV_DEFINES))
+else
+  SV_DEFINES :=
 endif
 
 # -----------------------------------------
@@ -455,6 +460,16 @@ print-config:
 # Local Overrides (optional)
 # -----------------------------------------
 -include $(ROOT_DIR)/script/makefiles/config/local.mk
+
+# CoreMark: UART-only RTL logs — pin LOG_* / KONATA after local.mk and env so Verilator blocks
+# below cannot re-add heavy defines; TEST_CONFIG=coremark still uses frozen SV_DEFINES from .conf.
+ifneq ($(filter coremark dhrystone,$(TEST_CONFIG)),)
+  override LOG_COMMIT := 0
+  override LOG_BP := 0
+  override LOG_PIPELINE := 0
+  override KONATA_TRACER := 0
+  override LOG_RAM := 0
+endif
 
 # ====== sim/modelsim.mk ======
 # =========================================
@@ -970,10 +985,14 @@ else
   HIER_FLAGS :=
 endif
 
-# Setup trace flags if not in fast mode
-ifndef TRACE_FLAGS
-  TRACE_FLAGS := --trace-fst --trace-structs --trace-params
-  TRACE_DEFINE := +define+VM_TRACE_FST
+# Verilator waveform: enable unless SIM_FAST cleared TRACE_FLAGS (empty means "off";
+# `ifndef TRACE_FLAGS` is true for empty vars and would wrongly re-enable FST).
+ifeq ($(SIM_FAST),1)
+else
+  ifndef TRACE_FLAGS
+    TRACE_FLAGS := --trace-fst --trace-structs --trace-params
+    TRACE_DEFINE := +define+VM_TRACE_FST
+  endif
 endif
 
 VERILATOR_DEFINE = $(TRACE_DEFINE) $(SV_DEFINES)
@@ -1213,12 +1232,18 @@ lint: dirs
 # VERILATE_FAST=1: dev shortcut — skip if $(RUN_BIN) is newer than first flist entry
 #   (can miss edits to other RTL files; CI / tam rebuild: plain `make verilate`).
 #   When a build runs, adds $(NO_WARNING) like the old verilate-fast.
+#
+# After toggling trace (SIM_FAST, TRACE, --trace-fst), Verilator regenerates
+# Vlevel_wrapper_classes.mk with new VM_TRACE_FST, but tb_wrapper.o is not pulled in
+# as a dependency — make leaves a stale object and the link step fails with
+# undefined reference to VerilatedFst::*.  Drop tb_wrapper.o before each verilate.
 # ============================================================
 verilate: dirs
 ifeq ($(VERILATE_FAST),1)
 	@if [ -x "$(RUN_BIN)" ] && [ "$(RUN_BIN)" -nt "$(word 1,$(SV_SOURCES))" ]; then \
 		printf "$(YELLOW)[SKIP]$(RESET) Binary up-to-date vs first flist source: $(RUN_BIN)\n"; \
 	else \
+		rm -f "$(OBJ_DIR)/tb_wrapper.o"; \
 		printf "$(GREEN)[VERILATING RTL — VERILATE_FAST=1, $(MODE) mode]$(RESET)\n"; \
 		$(VERILATOR) \
 			$(SV_SOURCES) \
@@ -1229,6 +1254,7 @@ ifeq ($(VERILATE_FAST),1)
 		printf "$(GREEN)[SUCCESS]$(RESET) Built: $(RUN_BIN)\n"; \
 	fi
 else
+	@rm -f "$(OBJ_DIR)/tb_wrapper.o"
 	@printf "$(GREEN)[VERILATING RTL SOURCES — $(MODE) mode, $(VERILATOR_THREADS) threads]$(RESET)\n"
 	$(VERILATOR) \
 		$(SV_SOURCES) \
@@ -1298,7 +1324,8 @@ ifeq ($(COVERAGE),1)
     VERILATOR_RUNNER_ARGS += --coverage --coverage-file $(COVERAGE_DATA_DIR)/$(TEST_NAME).dat
 endif
 
-ifeq ($(FAST),1)
+# Runner "fast mode": no trace + disable coverage override (see verilator_runner merge_config)
+ifneq ($(filter 1,$(FAST) $(SIM_FAST)),)
     VERILATOR_RUNNER_ARGS += --fast
 endif
 
@@ -3071,6 +3098,7 @@ coremark_build: coremark_gen_linker
 	@# Clean previous build in coremark source
 	@env -u CC -u LD -u AS -u OBJCOPY -u OBJDUMP \
 		$(MAKE) -C $(COREMARK_SRC_DIR) PORT_DIR=levelv clean 2>/dev/null || true
+	@cd "$(COREMARK_SRC_DIR)" && (git checkout -- core_main.c 2>/dev/null || true)
 	@# Build CoreMark - use env to unset variables that might interfere
 	@echo -e "$(CYAN)[DEBUG] COREMARK_ITERATIONS=$(COREMARK_ITERATIONS)$(RESET)"
 	@echo -e "$(CYAN)[DEBUG] Passing ITERATIONS=$(COREMARK_ITERATIONS) to subrepo Makefile$(RESET)"
@@ -3117,6 +3145,8 @@ coremark_build: coremark_gen_linker
 COREMARK_LOG_DIR := $(RESULTS_DIR)/logs/$(SIM)/coremark
 
 # Main run target - build if needed, then simulate
+# CoreMark RTL sim needs tens of millions of cycles. Global MAX_CYCLES ?= 100000 is for ISA tests;
+# if you did not pass MAX_CYCLES on the command line, use 50M (matches coremark.conf intent).
 run_coremark: coremark
 	@echo -e ""
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -3130,13 +3160,22 @@ run_coremark: coremark
 	@$(MKDIR) "$(COREMARK_LOG_DIR)"
 	@echo -e "$(YELLOW)[INFO]$(RESET) MEM File: $(COREMARK_MEM)"
 	@echo -e "$(YELLOW)[INFO]$(RESET) Log Dir:  $(COREMARK_LOG_DIR)"
-	@echo -e "$(YELLOW)[INFO]$(RESET) Max Cycles: $(or $(MAX_CYCLES),5000000)"
-	@$(MAKE) --no-print-directory run_verilator \
+	@set -e; \
+	if [ "$(origin MAX_CYCLES)" = "command line" ]; then \
+	  CM_MAX="$(MAX_CYCLES)"; \
+	  if [ "$$CM_MAX" -lt 1000000 ] 2>/dev/null; then \
+	    echo -e "$(YELLOW)[WARN]$(RESET) MAX_CYCLES=$$CM_MAX is very low — CoreMark will stop before UART prints Iterations/Sec / crc lines."; \
+	  fi; \
+	else \
+	  CM_MAX=50000000; \
+	fi; \
+	echo -e "$(YELLOW)[INFO]$(RESET) Max Cycles: $$CM_MAX"; \
+	$(MAKE) --no-print-directory run_verilator \
 		TEST_NAME=coremark \
 		TEST_CONFIG=coremark \
 		MEM_FILE=$(COREMARK_MEM) \
 		NO_ADDR=1 \
-		MAX_CYCLES=$(or $(MAX_CYCLES),5000000) \
+		MAX_CYCLES=$$CM_MAX \
 		VERILATOR_LOG_DIR=$(COREMARK_LOG_DIR)
 	@echo -e ""
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -3187,6 +3226,7 @@ coremark_help:
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo -e "  $(CYAN)SIM_FAST=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
 	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP for fast compile$(RESET)"
+	@echo -e "  $(CYAN)+uart_finish_pattern=STR$(RESET) - $(CYAN)Verilator plusarg: stop sim after TX sends this substring (default: CoreMark Complete!)$(RESET)"
 	@echo -e "  $(CYAN)THREADS=N$(RESET)                - $(CYAN)Enable multi-threaded simulation$(RESET)"
 	@echo ""
 	@echo -e "$(YELLOW)MINIMAL_SOC Mode:$(RESET)"
@@ -4137,7 +4177,7 @@ ELF_TO_MEM         := $(SCRIPT_DIR)/python/elf_to_mem.py
 # All available benchmarks:
 #   aha-mont64, crc32, cubic, edn, huffbench, matmult-int, md5sum,
 #   minver, nbody, nettle-aes, nettle-sha256, nsichneu, picojpeg,
-#   primecount, qrduino, sglib-combined, slre, st, statemate,
+#   qrduino, sglib-combined, slre, st, statemate,
 #   tarfind, ud, wikisort
 #
 # Notes:
@@ -4150,9 +4190,10 @@ ELF_TO_MEM         := $(SCRIPT_DIR)/python/elf_to_mem.py
 # EMBENCH_FP_BENCHMARKS := cubic minver nbody st ud
 #
 # Integer-only benchmarks (16 total - works on RV32IMC without FPU):
+# primecount removed upstream from embench-iot (no src/primecount in current tree)
 EMBENCH_BENCHMARKS := aha-mont64 crc32 edn huffbench matmult-int \
                       md5sum nettle-aes nettle-sha256 nsichneu picojpeg \
-                      primecount qrduino sglib-combined slre statemate tarfind
+                      qrduino sglib-combined slre statemate tarfind
 #
 # Full benchmark list (uncomment if FPU available):
 # EMBENCH_BENCHMARKS := aha-mont64 crc32 cubic edn huffbench matmult-int \
@@ -4341,14 +4382,18 @@ embench_run_all: embench_flist embench_verilate
 		TEST_LOG_DIR="$(EMBENCH_LOG_DIR)" \
 		RTL_LOG_DIR="$(EMBENCH_LOG_DIR)"
 
-# Run single embench benchmark
-embench_run_one: embench_verilate
+# Run single embench benchmark (builds BENCH if $(EMBENCH_MEM_DIR)/$(BENCH).mem is missing)
+embench_run_one: embench_setup embench_verilate
 	@if [ -z "$(BENCH)" ]; then \
 		echo -e "$(RED)[ERROR] Specify benchmark: make embench_run_one BENCH=crc32$(RESET)"; \
 		exit 1; \
 	fi
 	@if [ ! -f "$(EMBENCH_MEM_DIR)/$(BENCH).mem" ]; then \
-		echo -e "$(RED)[ERROR] Benchmark not found: $(BENCH)$(RESET)"; \
+		echo -e "$(YELLOW)[EMBENCH] No $(BENCH).mem — building benchmark...$(RESET)"; \
+		$(MAKE) --no-print-directory _embench_build_one BENCH=$(BENCH) || exit 1; \
+	fi
+	@if [ ! -f "$(EMBENCH_MEM_DIR)/$(BENCH).mem" ]; then \
+		echo -e "$(RED)[ERROR] Benchmark missing or build failed: $(BENCH) (expected $(EMBENCH_MEM_DIR)/$(BENCH).mem)$(RESET)"; \
 		exit 1; \
 	fi
 	@echo -e "$(YELLOW)[EMBENCH] Running: $(BENCH)$(RESET)"
@@ -4442,11 +4487,14 @@ DHRY_SIZE            := $(RISCV_PREFIX)-size
 DHRY_MARCH           := rv32imc_zicsr
 DHRY_MABI            := ilp32
 
+# Iteration count (override: make dhrystone_build DHRY_ITERS=1)
+DHRY_ITERS           ?= 100000
+
 # Compiler flags (optimize for performance, avoid inline to keep structure)
 DHRY_CFLAGS          := -march=$(DHRY_MARCH) -mabi=$(DHRY_MABI) \
                         -O3 -fno-inline -funroll-loops \
                         -static -nostdlib -nostartfiles \
-                        -DTIME -DDHRY_ITERS=100000 \
+                        -DTIME -DDHRY_ITERS=$(DHRY_ITERS) \
                         -DCPU_MHZ=50
 
 # Linker
