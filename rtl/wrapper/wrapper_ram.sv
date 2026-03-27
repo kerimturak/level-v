@@ -13,7 +13,7 @@ Description:
     - Direct cache line width organization (128-bit default)
     - Byte-enable support for fine-grained writes
     - UART programming interface via separate module
-    - Optimized for BRAM inference
+    - Main array: no ram_style override (tool infers block vs distributed)
 
   Memory Organization:
     - Single wide RAM array matching cache line width
@@ -60,10 +60,10 @@ module wrapper_ram
   localparam int LINE_ADDR_BITS = $clog2(WORDS_PER_LINE);
 
   // ==========================================================================
-  // Memory Array - Single Wide BRAM (fallback)
+  // Main memory array (Vivado infers RAM type unless constrained in XDC)
   // ==========================================================================
 `ifndef LEVEL_OPENLANE
-  (* ram_style = "block" *) logic [CACHE_LINE_WIDTH-1:0] ram [LINE_DEPTH-1:0];
+  logic [CACHE_LINE_WIDTH-1:0] ram[LINE_DEPTH-1:0];
 `endif
 
   // ==========================================================================
@@ -206,7 +206,7 @@ module wrapper_ram
 
     assign rdata_o = sram_rdata_line;
   end else begin : g_sram_fallback_regmem
-    (* ram_style = "block" *) logic [CACHE_LINE_WIDTH-1:0] ram [LINE_DEPTH-1:0];
+    logic [CACHE_LINE_WIDTH-1:0] ram[LINE_DEPTH-1:0];
 
     genvar i;
     for (i = 0; i < BYTES_PER_LINE; i++) begin : byte_write
