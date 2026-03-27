@@ -1,30 +1,41 @@
+# =============================================================================
+# Level-V — Basys3 (xc7a35tcpg236-1) pin + timing constraints
+# =============================================================================
+# Vivado: Bu dosyayı Constraints sources (constrs_1) içine ekleyin.
+#   Implementation run → Settings → use same constraint set.
+#   Dosya özellikleri: "Used in synthesis" VE "Used in implementation" AÇIK olmalı.
+# Yalnızca bu 6 portlu üst modül (clk_i, rst_ni, uart0_*, prog_*) için yazıldı.
+# =============================================================================
 
-## Basys3 pin mappings (uncommented for this project)
-# Clock: Basys3 100 MHz clock input
-set_property -dict { PACKAGE_PIN W5   IOSTANDARD LVCMOS33 } [get_ports { clk_i }]
+# 7-Series: 3.3 V bank ile bitstream uyarılarını azaltmak (kart 3.3 V CMOS)
+set_property CONFIG_VOLTAGE 3.3 [current_design]
+set_property CFGBVS VCCO [current_design]
 
+# Saat: 25 MHz → 40 ns (CPU_CLK ve gerçek clk_i ile aynı olmalı)
+create_clock -period 40.000 -name sys_clk -add [get_ports clk_i]
 
-# Reset: map to center pushbutton (btnC)
-set_property -dict { PACKAGE_PIN U18   IOSTANDARD LVCMOS33 } [get_ports { rst_ni }]
+# --- I/O: her porta ayrı PACKAGE_PIN + IOSTANDARD (NSTD-1 / UCIO-1 için) ---
+# Basys3 referans pinleri; başka kartta pinmap'i değiştir.
 
-# Status LEDs (use user LEDs LD0..LD3)
-# set_property -dict { PACKAGE_PIN U16   IOSTANDARD LVCMOS33 } [get_ports { status_led_o[0] }]
-# set_property -dict { PACKAGE_PIN E19   IOSTANDARD LVCMOS33 } [get_ports { status_led_o[1] }]
-# set_property -dict { PACKAGE_PIN U19   IOSTANDARD LVCMOS33 } [get_ports { status_led_o[2] }]
-# set_property -dict { PACKAGE_PIN V19   IOSTANDARD LVCMOS33 } [get_ports { status_led_o[3] }]
+set_property PACKAGE_PIN W5  [get_ports clk_i]
+set_property IOSTANDARD LVCMOS33 [get_ports clk_i]
 
-# Programming mode LED (map to LD4)
-set_property -dict { PACKAGE_PIN W18   IOSTANDARD LVCMOS33 } [get_ports { prog_mode_o }]
+set_property PACKAGE_PIN U18 [get_ports rst_ni]
+set_property IOSTANDARD LVCMOS33 [get_ports rst_ni]
 
-# Main UART (console) -> onboard USB-RS232 (FTDI)
-# Map to UART0 signals on top-level
-set_property -dict { PACKAGE_PIN A18    IOSTANDARD LVCMOS33 } [get_ports { uart0_tx_o }]
-set_property -dict { PACKAGE_PIN B18    IOSTANDARD LVCMOS33 } [get_ports { uart0_rx_i }]
+set_property PACKAGE_PIN A18 [get_ports uart0_tx_o]
+set_property IOSTANDARD LVCMOS33 [get_ports uart0_tx_o]
 
-# Programmer UART -> PMOD JA pin 1 (JA1)
-# Basys3 PMOD JA mapping: JA[0] -> PACKAGE_PIN J1
-set_property -dict { PACKAGE_PIN J1    IOSTANDARD LVCMOS33 } [get_ports { prog_rx_i }]
+set_property PACKAGE_PIN B18 [get_ports uart0_rx_i]
+set_property IOSTANDARD LVCMOS33 [get_ports uart0_rx_i]
 
-# Notes:
-# - `status_led_o` is a 4-bit port (LD0..LD3). prog_mode_led_o mapped to LD4.
-# - Main console UART uses on-board USB-RS232; no board changes needed for host PC connection.
+set_property PACKAGE_PIN J1  [get_ports prog_rx_i]
+set_property IOSTANDARD LVCMOS33 [get_ports prog_rx_i]
+
+set_property PACKAGE_PIN W18 [get_ports prog_mode_o]
+set_property IOSTANDARD LVCMOS33 [get_ports prog_mode_o]
+
+# (İsteğe bağlı) Ek gecikme: UART RX / prog RX için
+# set_input_delay -clock [get_clocks sys_clk] -max 10.0 [get_ports {uart0_rx_i prog_rx_i}]
+# set_input_delay -clock [get_clocks sys_clk] -min 0.0 [get_ports {uart0_rx_i prog_rx_i}]
+# set_output_delay -clock [get_clocks sys_clk] -max 10.0 [get_ports uart0_tx_o]

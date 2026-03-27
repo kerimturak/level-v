@@ -7023,7 +7023,7 @@ slang_lint: check_slang
 	@$(MKDIR) $(SLANG_OUT_DIR)
 	@echo -e "$(CYAN)[INFO]$(RESET) Output: $(SLANG_OUT_DIR)/"
 	@echo -e "$(CYAN)[INFO]$(RESET) Files: $(words $(LINT_SOURCES)) source files"
-	@echo -e "$(CYAN)[INFO]$(RESET) Using pyslang v$$(python3 -c 'import pyslang; print(pyslang.__version__)')"
+	@echo -e "$(CYAN)[INFO]$(RESET) Using pyslang v$$(python3 -c \"import importlib.metadata as m; print(m.version('pyslang'))\")"
 	@echo -e ""
 	@python3 $(ROOT_DIR)/script/python/slang_lint.py \
 		$(addprefix -I , $(INC_DIRS)) \
@@ -7098,7 +7098,7 @@ lint_install:
 	@echo -e ""
 	@echo -e "Versions installed:"
 	@svlint --version 2>/dev/null || echo "  svlint: not found"
-	@python3 -c "import pyslang; print('  pyslang:', pyslang.__version__)" 2>/dev/null || echo "  pyslang: not found"
+	@python3 -c "import importlib.metadata as m; print('  pyslang:', m.version('pyslang'))" 2>/dev/null || echo "  pyslang: not found"
 
 # Clean lint outputs
 lint_clean:

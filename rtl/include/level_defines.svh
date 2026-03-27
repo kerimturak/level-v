@@ -47,7 +47,9 @@
 // Cache implementation selection
 //`define USE_UNIFIED_CACHE // Unified cache module (cache.sv with icache/dcache)
 //`define USE_STANDALONE_DCACHE // Standalone dcache module (dcache.sv - writeback only)
+`ifndef USE_L2_CACHE
 `define USE_L2_CACHE
+`endif
 
 // Multiplier implementation (only one must be active)
 // Priority: PIPELINED_MUL > WALLACE_SINGLE > DSP_MUL > Sequential

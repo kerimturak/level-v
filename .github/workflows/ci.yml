@@ -67,7 +67,7 @@ jobs:
       - name: Install pyslang
         run: |
           pip install pyslang
-          python3 -c "import pyslang; print('pyslang version:', pyslang.__version__)"
+          python3 -c "import importlib.metadata as m; print('pyslang version:', m.version('pyslang'))"
       
       - name: Run Verilator static lint
         run: make verilator_static || true

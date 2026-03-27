@@ -17,11 +17,19 @@ Usage:
   # Specify .mem path directly:
   python3 uart_send_data.py --mem path/to/test.mem
 
-  # Load CoreMark:
+  # Load CoreMark / Dhrystone / Embench (paths are searched under build/tests/):
   python3 uart_send_data.py --test coremark
+  python3 uart_send_data.py --test dhrystone
+  python3 uart_send_data.py --test crc32
 
-  # Set port and baud (WSL: COM8 = /dev/ttyS8):
+  # Set port and baud (WSL: COM8 ≈ /dev/ttyS8; native Windows: COM8):
   python3 uart_send_data.py --test rv32ui-p-add --port /dev/ttyS8 --baud 115200
+
+Troubleshooting:
+  • Bitstream must use the same PROG_BAUD_RATE (115200) and CPU_CLK / UART divider as rtl/pkg/level_param.sv.
+  • If the board resets when you run the script, try another USB cable/port or disable adapter auto-reset.
+  • If magic is ignored: wrong UART pin, wrong baud, or garbage in RX — script clears RX buffer after open.
+  • If transfer hangs: increase write timeout is automatic; try --inter-byte-delay 0.00005 for very marginal links.
 
   # Via Makefile:
   make fpga_program T=rv32ui-p-add
@@ -73,6 +81,10 @@ def find_mem_file(test_name: str) -> str:
         os.path.join(BUILD_DIR, "riscv-arch-test", "mem", f"{test_name}.mem"),
         os.path.join(BUILD_DIR, "imperas", "mem", f"{test_name}.mem"),
         os.path.join(BUILD_DIR, "coremark", f"{test_name}.mem"),
+        os.path.join(BUILD_DIR, "dhrystone", f"{test_name}.mem"),
+        os.path.join(BUILD_DIR, "embench", "mem", f"{test_name}.mem"),
+        os.path.join(BUILD_DIR, "torture", "mem", f"{test_name}.mem"),
+        os.path.join(BUILD_DIR, "riscv-benchmarks", "mem", f"{test_name}.mem"),
         os.path.join(BUILD_DIR, "custom", f"{test_name}.mem"),
     ]
 
@@ -112,6 +124,10 @@ def load_mem_file(filepath: str) -> list[int]:
             # Skip @ address lines (Verilog $readmemh format)
             if line.startswith("@"):
                 continue
+            # First hex token only (allows "deadbeef // comment" or tab-separated)
+            line = line.split()[0] if line.split() else ""
+            if not line:
+                continue
             try:
                 word = int(line, 16)
                 words.append(word & 0xFFFFFFFF)
@@ -123,7 +139,13 @@ def load_mem_file(filepath: str) -> list[int]:
 # ─────────────────────────────────────────────────────────────────────────────
 # UART programming
 # ─────────────────────────────────────────────────────────────────────────────
-def program_fpga(port: str, baud: int, words: list[int], verbose: bool = False) -> bool:
+def program_fpga(
+    port: str,
+    baud: int,
+    words: list[int],
+    verbose: bool = False,
+    inter_byte_delay_s: float = 0.0,
+) -> bool:
     """
     Load the FPGA over UART using the ram_programmer.sv protocol.
 
@@ -144,8 +166,20 @@ def program_fpga(port: str, baud: int, words: list[int], verbose: bool = False) 
     print(f"║  Total Bytes: {total_bytes:<35d}║")
     print(f"╚══════════════════════════════════════════════════╝")
 
+    # Seconds: enough for wire-time at baud + margin (large .mem can be slow to push).
+    est_wire_s = (max(total_bytes, 64) * 12.0) / float(max(baud, 1))
+    write_timeout_s = max(60.0, est_wire_s * 2.0)
+
     try:
-        ser = serial.Serial(port, baud, timeout=2)
+        # dsrdtr=False: many USB-UART bridges tie DTR/RTS to EN/RST — toggling can reset the FPGA.
+        ser = serial.Serial(
+            port,
+            baud,
+            timeout=2,
+            write_timeout=write_timeout_s,
+            rtscts=False,
+            dsrdtr=False,
+        )
     except serial.SerialException as e:
         print(f"\n✗ Could not open UART: {e}")
         if "No such file" in str(e):
@@ -157,19 +191,33 @@ def program_fpga(port: str, baud: int, words: list[int], verbose: bool = False) 
             print(f"  5. Or use: --port /dev/ttyS8  (for COM8)")
         return False
 
+    def write_bytes(data: bytes) -> None:
+        if inter_byte_delay_s and inter_byte_delay_s > 0:
+            for b in data:
+                ser.write(bytes([b]))
+                ser.flush()
+                time.sleep(inter_byte_delay_s)
+        else:
+            ser.write(data)
+            ser.flush()
+
     try:
+        time.sleep(0.05)  # let adapter / FPGA RX line settle after open
+        try:
+            ser.reset_input_buffer()
+        except (AttributeError, serial.SerialException):
+            pass
+
         # ── Step 1: Magic sequence ──
         print(f"\n[1/3] Sending magic sequence: {MAGIC_SEQUENCE.decode()}")
-        ser.write(MAGIC_SEQUENCE)
-        ser.flush()
-        time.sleep(0.01)
+        write_bytes(MAGIC_SEQUENCE)
+        time.sleep(0.02)
 
         # ── Step 2: Word count (big-endian) ──
         count_bytes = struct.pack(">I", word_count)  # big-endian uint32
         print(f"[2/3] Sending word count: {word_count} (0x{word_count:08x})")
-        ser.write(count_bytes)
-        ser.flush()
-        time.sleep(0.01)
+        write_bytes(count_bytes)
+        time.sleep(0.02)
 
         # ── Step 3: Data words (little-endian) ──
         print(f"[3/3] Sending program data ({word_count} words)...")
@@ -181,7 +229,7 @@ def program_fpga(port: str, baud: int, words: list[int], verbose: bool = False) 
         for i, word in enumerate(words):
             # Little-endian: LSB first (ram_programmer.sv shift-right assembly)
             word_bytes = struct.pack("<I", word)
-            ser.write(word_bytes)
+            write_bytes(word_bytes)
 
             if verbose and i < 16:
                 print(f"  [{i:6d}] 0x{word:08x} → {word_bytes.hex()}")
@@ -291,6 +339,13 @@ Makefile integration:
         action="store_true",
         help="Print first 16 words in detail",
     )
+    parser.add_argument(
+        "--inter-byte-delay",
+        type=float,
+        default=float(os.environ.get("FPGA_UART_INTER_BYTE_DELAY", "0")),
+        metavar="SEC",
+        help="Optional delay between each byte (e.g. 0.0001 if programming fails; default 0)",
+    )
 
     args = parser.parse_args()
 
@@ -330,7 +385,13 @@ Makefile integration:
 
     print(f"Loaded: {len(words)} word(s) ({len(words)*4} byte(s))\n")
 
-    success = program_fpga(args.port, args.baud, words, verbose=args.verbose)
+    success = program_fpga(
+        args.port,
+        args.baud,
+        words,
+        verbose=args.verbose,
+        inter_byte_delay_s=args.inter_byte_delay,
+    )
     sys.exit(0 if success else 1)
 
 

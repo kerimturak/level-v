@@ -129,6 +129,8 @@ module konata_logger;
 
   pipe_entry_t fetch_s, decode_s, execute_s, memory_s, writeback_s;
   pipe_entry_t prev_fetch, prev_decode, prev_execute, prev_memory, prev_writeback;
+  // Work copies for this posedge (Verilator BLKANDNBLK: no blocking member updates + NBA on same reg)
+  pipe_entry_t n_fetch, n_decode, n_execute, n_memory, n_writeback;
 
   longint cycle_cnt = 0;
   logic   first_cycle = 1'b1;
@@ -220,6 +222,12 @@ module konata_logger;
       prev_memory    = memory_s;
       prev_writeback = writeback_s;
 
+      n_fetch     = fetch_s;
+      n_decode    = decode_s;
+      n_execute   = execute_s;
+      n_memory    = memory_s;
+      n_writeback = writeback_s;
+
       // ----------------------------------------------------------------------
       // 3) Stall counters
       //    - Do not count on flush cycle; pipeline is being drained then
@@ -227,27 +235,27 @@ module konata_logger;
       if (!flush_fe) begin
         // Front (F + D) stall
         if (!adv_front) begin
-          if (fetch_s.valid) fetch_s.stall_cycles++;
-          if (decode_s.valid) decode_s.stall_cycles++;
+          if (n_fetch.valid) n_fetch.stall_cycles++;
+          if (n_decode.valid) n_decode.stall_cycles++;
         end
 
         // Back (X + M + Wb) stall
         if (!adv_back) begin
-          if (execute_s.valid) execute_s.stall_cycles++;
-          if (memory_s.valid) memory_s.stall_cycles++;
-          if (writeback_s.valid) writeback_s.stall_cycles++;
+          if (n_execute.valid) n_execute.stall_cycles++;
+          if (n_memory.valid) n_memory.stall_cycles++;
+          if (n_writeback.valid) n_writeback.stall_cycles++;
 
           // Extra mem_stall_cycles for LOAD/STORE in memory stage
-          if (memory_s.valid && is_mem_instr(memory_s.instr_type)) memory_s.mem_stall_cycles++;
+          if (n_memory.valid && is_mem_instr(n_memory.instr_type)) n_memory.mem_stall_cycles++;
         end
 
         // First stall reason (record when instruction first stalls after entering pipeline)
         if (`SOC.stall_cause != NO_STALL) begin
-          if (fetch_s.valid && fetch_s.first_stall == NO_STALL) fetch_s.first_stall = `SOC.stall_cause;
-          if (decode_s.valid && decode_s.first_stall == NO_STALL) decode_s.first_stall = `SOC.stall_cause;
-          if (execute_s.valid && execute_s.first_stall == NO_STALL) execute_s.first_stall = `SOC.stall_cause;
-          if (memory_s.valid && memory_s.first_stall == NO_STALL) memory_s.first_stall = `SOC.stall_cause;
-          if (writeback_s.valid && writeback_s.first_stall == NO_STALL) writeback_s.first_stall = `SOC.stall_cause;
+          if (n_fetch.valid && n_fetch.first_stall == NO_STALL) n_fetch.first_stall = `SOC.stall_cause;
+          if (n_decode.valid && n_decode.first_stall == NO_STALL) n_decode.first_stall = `SOC.stall_cause;
+          if (n_execute.valid && n_execute.first_stall == NO_STALL) n_execute.first_stall = `SOC.stall_cause;
+          if (n_memory.valid && n_memory.first_stall == NO_STALL) n_memory.first_stall = `SOC.stall_cause;
+          if (n_writeback.valid && n_writeback.first_stall == NO_STALL) n_writeback.first_stall = `SOC.stall_cause;
         end
       end
 
@@ -272,7 +280,7 @@ module konata_logger;
 
         log_stage_start(fid, "F");
 
-        fetch_s <= '{
+        n_fetch = '{
             id              : fid,
             pc              : `SOC.i_fetch.pc_o,
             inst            : `SOC.i_fetch.inst_o,
@@ -290,9 +298,9 @@ module konata_logger;
         };
       end else if (adv_front) begin
         // Front advances but no new fetch: bubble
-        fetch_s <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        n_fetch = '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
       end
-      // On front stall/flush, fetch_s is unchanged
+      // On front stall/flush, n_fetch keeps section 3/2 state
 
       // ----------------------------------------------------------------------
       // 5) Which stage entries this cycle? (enter_now)
@@ -354,8 +362,8 @@ module konata_logger;
           log_retire(prev_writeback.id);
           wb_closed = 1'b1;
 
-          // Instruction retired; do not emit R again
-          writeback_s.retired <= 1'b1;
+          // Instruction retired; do not emit R again (same cycle may be overwritten by shift below)
+          n_writeback.retired = 1'b1;
         end
       end
 
@@ -364,29 +372,35 @@ module konata_logger;
       // ----------------------------------------------------------------------
       if (flush_fe) begin
         // On flush, clear all
-        fetch_s     <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
-        decode_s    <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
-        execute_s   <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
-        memory_s    <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
-        writeback_s <= '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        n_fetch     = '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        n_decode    = '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        n_execute   = '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        n_memory    = '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
+        n_writeback = '{first_stall: NO_STALL, instr_type: Null_Instr_Type, default: 0};
       end else begin
         // Back (X/M/Wb) shifts only when adv_back
         if (adv_back) begin
-          writeback_s <= prev_memory;
-          memory_s    <= prev_execute;
-          execute_s   <= prev_decode;
+          n_writeback = prev_memory;
+          n_memory    = prev_execute;
+          n_execute   = prev_decode;
 
-          if (x_enter_now) execute_s.started_x <= 1'b1;
-          if (m_enter_now) memory_s.started_m <= 1'b1;
-          if (wb_enter_now) writeback_s.started_wb <= 1'b1;
+          if (x_enter_now) n_execute.started_x = 1'b1;
+          if (m_enter_now) n_memory.started_m = 1'b1;
+          if (wb_enter_now) n_writeback.started_wb = 1'b1;
         end
 
         // Front (D) shifts only when adv_front
         if (adv_front) begin
-          decode_s <= prev_fetch;
-          if (d_enter_now) decode_s.started_d <= 1'b1;
+          n_decode = prev_fetch;
+          if (d_enter_now) n_decode.started_d = 1'b1;
         end
       end
+
+      fetch_s     <= n_fetch;
+      decode_s    <= n_decode;
+      execute_s   <= n_execute;
+      memory_s    <= n_memory;
+      writeback_s <= n_writeback;
 
       // ----------------------------------------------------------------------
       // 8) cycle++
@@ -408,4 +422,4 @@ module konata_logger;
 endmodule
 
 `endif  // KONATA_TRACER
-`endif  // KONATA_TRACER
+`endif  // KONATA_LOGGER_SV

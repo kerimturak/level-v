@@ -34,11 +34,7 @@ module level_wrapper
     // ========================================================================
     // Memory Configuration
     // ========================================================================
-`ifndef SYNTHESIS
-    parameter int unsigned RAM_SIZE_KB = 40,
-`else
-    parameter int unsigned RAM_SIZE_KB = 40,
-`endif
+    parameter int unsigned RAM_SIZE_KB = WRAPPER_RAM_SIZE_KB,
 
     parameter int unsigned RAM_LATENCY     = 16,
     parameter bit          BOOTROM_EN      = 1'b0,
