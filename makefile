@@ -89,6 +89,7 @@ CONFIG_DIR    := $(SCRIPT_DIR)/config
 CPU_CLK_HZ            ?= 25000000
 export CPU_CLK_HZ
 LEVELV_CPU_CLK_CPPFLAGS := -I$(ENV_DIR)/common -DCPU_CLK_HZ=$(CPU_CLK_HZ)UL
+export LEVELV_CPU_CLK_CPPFLAGS
 
 # -----------------------------------------
 # Derived Directories
@@ -3167,13 +3168,16 @@ coremark_build: coremark_gen_linker
 		$(MAKE) -C $(COREMARK_SRC_DIR) PORT_DIR=levelv clean 2>/dev/null || true
 	@cd "$(COREMARK_SRC_DIR)" && (git checkout -- core_main.c 2>/dev/null || true)
 	@# Build CoreMark - use env to unset variables that might interfere
+	@# Keep LEVELV_CPU_CLK_CPPFLAGS out of XCFLAGS: port embeds XCFLAGS in FLAGS_STR; longer
+	@# FLAGS_STR shifts linked .text and can expose Verilator/align_buffer fetch ordering bugs.
+	@# Clock flags come from exported LEVELV_CPU_CLK_CPPFLAGS in env/.../core_portme.mak PORT_CFLAGS.
 	@echo -e "$(CYAN)[DEBUG] COREMARK_ITERATIONS=$(COREMARK_ITERATIONS)$(RESET)"
 	@echo -e "$(CYAN)[DEBUG] Passing ITERATIONS=$(COREMARK_ITERATIONS) to subrepo Makefile$(RESET)"
 	@env -u CC -u LD -u AS -u OBJCOPY -u OBJDUMP -u RISCV_PREFIX \
 		$(MAKE) -C $(COREMARK_SRC_DIR) \
 		PORT_DIR=levelv \
 		ITERATIONS=$(COREMARK_ITERATIONS) \
-		XCFLAGS="-DPERFORMANCE_RUN=1 $(LEVELV_CPU_CLK_CPPFLAGS)" \
+		XCFLAGS="-DPERFORMANCE_RUN=1" \
 		|| { echo -e "$(RED)[COREMARK] ✗ Build failed$(RESET)"; exit 1; }
 	@# Copy output files to build directory
 	@echo -e "$(YELLOW)[COREMARK] Copying output files...$(RESET)"

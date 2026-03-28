@@ -44,13 +44,20 @@ SIZE    = $(RISCV_PREFIX)size
 # Architecture flags for level-V RV32IMC_Zicsr
 ARCH_FLAGS = -march=rv32imc_zicsr -mabi=ilp32
 
+# Match RTL / top makefile CPU_CLK_HZ (parent exports LEVELV_CPU_CLK_CPPFLAGS with -I abs path).
+CPU_CLK_HZ ?= 25000000
+LEVELV_CPU_CLK_CPPFLAGS ?= -I../../env/common -DCPU_CLK_HZ=$(CPU_CLK_HZ)UL
+
 # Linker script location
 LINKER_SCRIPT = $(PORT_DIR)/link.ld
 
 # Flag : CFLAGS
 #	Use this flag to define compiler options.
-PORT_CFLAGS = -O2 -g $(ARCH_FLAGS) -fno-builtin -fno-common -nostdlib -nostartfiles
-FLAGS_STR = "$(PORT_CFLAGS) $(XCFLAGS) $(XLFLAGS) $(LFLAGS_END)"
+# FLAGS_STR must stay short: only PORT_CFLAGS_BASE + XCFLAGS (see level-v makefile coremark_build).
+# Putting LEVELV_CPU_CLK_CPPFLAGS in XCFLAGS bloats FLAGS_STR and changes .text layout (bad for sim).
+PORT_CFLAGS_BASE = -O2 -g $(ARCH_FLAGS) -fno-builtin -fno-common -nostdlib -nostartfiles
+PORT_CFLAGS = $(PORT_CFLAGS_BASE) $(LEVELV_CPU_CLK_CPPFLAGS)
+FLAGS_STR = "$(PORT_CFLAGS_BASE) $(XCFLAGS) $(XLFLAGS) $(LFLAGS_END)"
 CFLAGS = $(PORT_CFLAGS) -I$(PORT_DIR) -I. -DFLAGS_STR=\"$(FLAGS_STR)\" 
 
 # Flag : LFLAGS_END
