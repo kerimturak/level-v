@@ -1,0 +1,9 @@
+// Small golden image for UART programmer verification (≤1024 words)
+deadbeef
+00000000
+12345678
+ffffffff
+6f00000b
+00100513
+00250533
+40000033

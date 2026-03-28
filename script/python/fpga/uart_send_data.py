@@ -136,6 +136,17 @@ def load_mem_file(filepath: str) -> list[int]:
     return words
 
 
+def build_programmer_payload(words: list[int]) -> bytes:
+    """
+    Exact byte stream sent to FPGA / ram_programmer (magic + big-endian count +
+    little-endian words). Use with Verilator +PROG_UART_PAYLOAD=<file>.
+    """
+    word_count = len(words)
+    count_bytes = struct.pack(">I", word_count)
+    body = b"".join(struct.pack("<I", w & 0xFFFFFFFF) for w in words)
+    return MAGIC_SEQUENCE + count_bytes + body
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # UART programming
 # ─────────────────────────────────────────────────────────────────────────────
@@ -298,6 +309,9 @@ Examples:
   %(prog)s --mem build/tests/custom/my_test.mem       # Custom .mem file
   %(prog)s --test rv32ui-p-add --port COM8            # Windows port
   %(prog)s --test rv32ui-p-add --port /dev/ttyUSB1    # Different Linux port
+  %(prog)s --test rv32ui-p-add --dump-payload prog.bin
+  # Verilator: first arg = max cycles; omit +INIT_FILE to RAM-only via UART
+  #   ./Vlevel_wrapper 8000000 +PROG_UART_PAYLOAD=prog.bin +uart_log_path=out.log
   %(prog)s --list                                     # List available tests
 
 Makefile integration:
@@ -346,6 +360,11 @@ Makefile integration:
         metavar="SEC",
         help="Optional delay between each byte (e.g. 0.0001 if programming fails; default 0)",
     )
+    parser.add_argument(
+        "--dump-payload",
+        metavar="PATH",
+        help="Write raw programmer stream to PATH for sim (+PROG_UART_PAYLOAD); no serial",
+    )
 
     args = parser.parse_args()
 
@@ -384,6 +403,14 @@ Makefile integration:
         sys.exit(1)
 
     print(f"Loaded: {len(words)} word(s) ({len(words)*4} byte(s))\n")
+
+    if args.dump_payload:
+        blob = build_programmer_payload(words)
+        out_path = os.path.abspath(args.dump_payload)
+        with open(out_path, "wb") as f:
+            f.write(blob)
+        print(f"Wrote programmer payload: {len(blob)} byte(s) → {out_path}")
+        sys.exit(0)
 
     success = program_fpga(
         args.port,

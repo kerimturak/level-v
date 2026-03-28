@@ -20,7 +20,9 @@ create_clock -period 40.000 -name sys_clk -add [get_ports clk_i]
 set_property PACKAGE_PIN W5  [get_ports clk_i]
 set_property IOSTANDARD LVCMOS33 [get_ports clk_i]
 
-set_property PACKAGE_PIN U18 [get_ports rst_ni]
+# Reset: active-low rst_ni. SW0=V17 — switch UP = run (1), DOWN = reset (0); tutmaya gerek yok.
+# (U18 CPU_RESET düğmesi serbest bırakılınca sıçrar; sürekli basılı tutmak gerekirdi.)
+set_property PACKAGE_PIN V17 [get_ports rst_ni]
 set_property IOSTANDARD LVCMOS33 [get_ports rst_ni]
 
 set_property PACKAGE_PIN A18 [get_ports uart0_tx_o]

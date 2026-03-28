@@ -38,7 +38,8 @@ package level_param;
 `ifdef LEVEL_OPENLANE
   localparam int WRAPPER_RAM_SIZE_KB = 4;
 `else
-  localparam int WRAPPER_RAM_SIZE_KB = 32;
+  // 34 KiB: CoreMark sim loads coremark.mem padded to 34816 B (makefile elf_to_mem --pad-to-size 34816)
+  localparam int WRAPPER_RAM_SIZE_KB = 34;
 `endif
   localparam logic [31:0] RESET_VECTOR = 32'h8000_0000;
 
@@ -57,10 +58,10 @@ package level_param;
   localparam int DC_CAPACITY = 1 * 1024 * 8;  // 1KB (bits)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
 `elsif MINIMAL_SOC
-  // ── MINIMAL_SOC: Small cache (sufficient for CoreMark ~4KB) ──
-  // Instruction Cache: 2-way, 2KB
+  // ── MINIMAL_SOC: Small cache (sufficient for CoreMark ~4KB working set) ──
+  // Instruction Cache: 2-way, 4KB — 2KB I$ + L2 still mis-orders heavy I-miss traffic in sim
   localparam int IC_WAY = 2;
-  localparam int IC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits): KB * 1024 B/KB * 8 bit/B
+  localparam int IC_CAPACITY = 4 * 1024 * 8;
   localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
 
   // Data Cache: 2-way, 2KB

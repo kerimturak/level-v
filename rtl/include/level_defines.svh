@@ -27,7 +27,7 @@
 // MINIMAL_SOC: In benchmark mode (CoreMark, etc.) minimize resource usage
 // 
 // In this mode:
-//   - Cache: 2KB I-Cache + 2KB D-Cache (instead of 8KB)
+//   - Cache: 4KB I-Cache + 2KB D-Cache (instead of 8KB each; 2KB I$ + L2 still stressed sim)
 //   - Branch Predictor: PHT=64, BTB=32, GHR=8 (instead of 512/256/24)
 //   - Only CPU + RAM + UART + Timer + CLINT active
 //
@@ -39,7 +39,8 @@
 // Usage: 
 //   make run_coremark COREMARK_ITERATIONS=0 SIM_FAST=1 MINIMAL_SOC=1 TRACE=0 MAX_CYCLES=2000000
 //   make verilate MINIMAL_SOC=1 SIM_FAST=1
-
+//
+// L2: Optional MINIMAL_NO_L2=1 adds +define+NO_L2_CACHE (see makefile).
 
 // ============================================================================
 // FEATURE FLAGS
@@ -47,8 +48,11 @@
 // Cache implementation selection
 //`define USE_UNIFIED_CACHE // Unified cache module (cache.sv with icache/dcache)
 //`define USE_STANDALONE_DCACHE // Standalone dcache module (dcache.sv - writeback only)
+`ifdef NO_L2_CACHE
+`else
 `ifndef USE_L2_CACHE
 `define USE_L2_CACHE
+`endif
 `endif
 
 // Multiplier implementation (only one must be active)

@@ -108,6 +108,10 @@
    assign d_req_set = d_req_q.addr[L2_INDEX_BITS+L2_OFFSET_BITS-1:L2_OFFSET_BITS];
    assign d_req_tag = d_req_q.addr[XLEN-1:L2_INDEX_BITS+L2_OFFSET_BITS];
    assign d_req_wr  = d_req_q.is_write;
+
+   // Victim way latched at miss resolution — must not drift while the other port
+   // updates PLRU for the same set during MISS_WAIT.
+   logic [L2_NUM_WAY-1:0] i_victim_way_q, d_victim_way_q;
  
    // =========================================================================
    // Flush logic
@@ -366,6 +370,12 @@
      d_updated_node = update_node(d_plru_rdata, d_hit_way_oh);
      d_evict_way    = compute_evict_way(d_plru_rdata);
    end
+
+   logic [L2_NUM_WAY-1:0] i_evict_way_sel, d_evict_way_sel;
+   assign i_evict_way_sel = ((i_pipe_state == PIPE_WB_EVICT) || (i_pipe_state == PIPE_MISS_WAIT) ||
+                             (i_pipe_state == PIPE_FILL_RESPOND)) ? i_victim_way_q : i_evict_way;
+   assign d_evict_way_sel = ((d_pipe_state == PIPE_WB_EVICT) || (d_pipe_state == PIPE_MISS_WAIT) ||
+                             (d_pipe_state == PIPE_FILL_RESPOND)) ? d_victim_way_q : d_evict_way;
  
    // =========================================================================
    // Per-pipe eviction data
@@ -378,7 +388,7 @@
    always_comb begin
      i_evict_dirty = 1'b0; i_evict_tag = '0; i_evict_data = '0;
      for (int w = 0; w < L2_NUM_WAY; w++) begin
-       if (i_evict_way[w]) begin
+       if (i_evict_way_sel[w]) begin
          i_evict_dirty = i_dirty_read[w] && i_tag_rdata[w][L2_TAG_BITS];
          i_evict_tag   = i_tag_rdata[w][L2_TAG_BITS-1:0];
          i_evict_data  = i_data_rdata[w];
@@ -395,7 +405,7 @@
    always_comb begin
      d_evict_dirty = 1'b0; d_evict_tag = '0; d_evict_data = '0;
      for (int w = 0; w < L2_NUM_WAY; w++) begin
-       if (d_evict_way[w]) begin
+       if (d_evict_way_sel[w]) begin
          d_evict_dirty = d_dirty_read[w] && d_tag_rdata[w][L2_TAG_BITS];
          d_evict_tag   = d_tag_rdata[w][L2_TAG_BITS-1:0];
          d_evict_data  = d_data_rdata[w];
@@ -560,7 +570,7 @@
    // (prevents reading stale tags while the other pipe overwrites them)
    assign i_fill_writing = (i_pipe_state == PIPE_FILL_RESPOND);
    assign d_fill_writing = (d_pipe_state == PIPE_FILL_RESPOND);
- 
+
    assign i_resolve_stall = (i_pipe_state == PIPE_RESOLVE) &&
                           (d_fill_writing && d_req_set == i_req_set);
    assign d_resolve_stall = (d_pipe_state == PIPE_RESOLVE) &&
@@ -612,13 +622,11 @@
        end
 
        // Fill issued → PENDING → FILL_ACTIVE
-       if (fill_issued) begin
-         for (int i = 0; i < L2_MSHR_DEPTH; i++)
-           if (mshr_entries[i].valid && mshr_entries[i].state == MSHR_PENDING) begin
-             mshr_entries[i].state <= MSHR_FILL_ACTIVE;
-             break;
-           end
-       end
+       // Memory controller drives the fill address from `mshr_pending_idx` (highest-index
+       // PENDING entry). The old code advanced the *lowest* PENDING slot; under multiple
+       // outstanding misses that swapped line tags/data and broke L1/L2 coherency (e.g.
+       // CoreMark CRC with small L1 + L2).
+       if (fill_issued) mshr_entries[mshr_pending_idx].state <= MSHR_FILL_ACTIVE;
  
        // Fill response → FILL_ACTIVE → COMPLETE
        if (fill_resp_valid && |mshr_fill_match_vec)
@@ -784,9 +792,9 @@
        i_tag_we    = '1;
        i_tag_wdata = '0;
      end else if (i_fill_complete) begin
-       i_tag_we    = i_evict_way;
+       i_tag_we    = i_evict_way_sel;
        i_tag_wdata = {1'b1, i_req_tag};
-       i_data_we   = i_evict_way;
+       i_data_we   = i_evict_way_sel;
        i_data_wdata = fill_resp_data;
      end
    end
@@ -804,9 +812,9 @@
        d_data_we    = d_hit_way_oh;
        d_data_wdata = d_hit_wr_merged;
      end else if (d_fill_complete) begin
-       d_tag_we    = d_evict_way;
+       d_tag_we    = d_evict_way_sel;
        d_tag_wdata = {1'b1, d_req_tag};
-       d_data_we   = d_evict_way;
+       d_data_we   = d_evict_way_sel;
        d_data_wdata = d_req_wr ? merge_fill_data(fill_resp_data, d_req_q.wdata, d_req_q.wstrb)
                                 : fill_resp_data;
      end
@@ -823,7 +831,7 @@
        i_plru_wdata = i_updated_node;
      end else if (i_pipe_state == PIPE_FILL_RESPOND) begin
        i_plru_wr    = 1'b1;
-       i_plru_wdata = update_node(i_plru_rdata, i_evict_way);
+       i_plru_wdata = update_node(i_plru_rdata, i_evict_way_sel);
      end
    end
  
@@ -835,7 +843,7 @@
        d_plru_wdata = d_updated_node;
      end else if (d_pipe_state == PIPE_FILL_RESPOND) begin
        d_plru_wr    = 1'b1;
-       d_plru_wdata = update_node(d_plru_rdata, d_evict_way);
+       d_plru_wdata = update_node(d_plru_rdata, d_evict_way_sel);
      end
    end
  
@@ -844,7 +852,7 @@
      if (d_pipe_state == PIPE_HIT_RESPOND)
        return d_hit_way_oh;
      else
-       return d_evict_way;
+       return d_evict_way_sel;
    endfunction
  
    // =========================================================================
@@ -857,7 +865,7 @@
      i_dirty_val = 1'b0;
      if (i_fill_complete) begin
        i_dirty_wr  = 1'b1;
-       i_dirty_way = i_evict_way;
+       i_dirty_way = i_evict_way_sel;
        i_dirty_val = 1'b0;
      end
    end
@@ -873,7 +881,7 @@
        d_dirty_val = 1'b1;
      end else if (d_fill_complete) begin
        d_dirty_wr  = 1'b1;
-       d_dirty_way = d_evict_way;
+       d_dirty_way = d_evict_way_sel;
        d_dirty_val = d_req_wr;
      end
    end
@@ -889,6 +897,7 @@
        i_pipe_state        <= PIPE_IDLE;
        i_req_q             <= '0;
        i_mshr_resp_accepted <= 1'b0;
+       i_victim_way_q      <= '0;
      end else begin
        i_mshr_resp_accepted <= 1'b0;
  
@@ -915,8 +924,10 @@
            end else if (i_hit_any) begin
              i_pipe_state <= PIPE_HIT_RESPOND;
            end else if (i_evict_dirty) begin
+             i_victim_way_q <= i_evict_way;
              i_pipe_state <= PIPE_WB_EVICT;
            end else begin
+             i_victim_way_q <= i_evict_way;
              i_pipe_state <= PIPE_MISS_WAIT;
            end
          end
@@ -954,6 +965,7 @@
        d_pipe_state        <= PIPE_IDLE;
        d_req_q             <= '0;
        d_mshr_resp_accepted <= 1'b0;
+       d_victim_way_q      <= '0;
      end else begin
        d_mshr_resp_accepted <= 1'b0;
  
@@ -991,8 +1003,10 @@
            end else if (d_hit_any) begin
              d_pipe_state <= PIPE_HIT_RESPOND;
            end else if (d_evict_dirty) begin
+             d_victim_way_q <= d_evict_way;
              d_pipe_state <= PIPE_WB_EVICT;
            end else begin
+             d_victim_way_q <= d_evict_way;
              d_pipe_state <= PIPE_MISS_WAIT;
            end
          end

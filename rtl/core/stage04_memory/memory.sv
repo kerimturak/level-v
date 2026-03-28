@@ -196,6 +196,11 @@ module memory
     end
   end
 
+  // Store-buffer drain ack: dcache can complete a buffered store in the same cycle as
+  // `drain_fire` (e.g. cache hit). `drain_active` is registered the cycle after `drain_fire`,
+  // so requiring `drain_active && dcache_res.valid` misses that cycle and never pops SB.
+  assign sb_drain_ack = dcache_res.valid && (drain_active || drain_fire);
+
   // Transaction state tracking
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
@@ -205,17 +210,15 @@ module memory
     end else begin
       if (dcache_res.valid) begin
         load_active     <= 1'b0;
-        drain_active    <= 1'b0;
         uc_store_active <= 1'b0;
       end
-      if (load_req_fire)   load_active     <= 1'b1;
-      if (drain_fire)      drain_active    <= 1'b1;
-      if (uc_store_fire)   uc_store_active <= 1'b1;
+      if (load_req_fire) load_active <= 1'b1;
+      if (uc_store_fire) uc_store_active <= 1'b1;
+
+      if (sb_drain_ack) drain_active <= 1'b0;
+      else if (drain_fire) drain_active <= 1'b1;
     end
   end
-
-  // Store buffer drain acknowledgment
-  assign sb_drain_ack = drain_active && dcache_res.valid;
 
   // -------------------------------------------------------------------
   // Dcache request mux (load > uncached store > drain)

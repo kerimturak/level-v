@@ -18,6 +18,12 @@
 `else
   `define SOC tb_wrapper.level_wrapper.i_soc
 `endif
+// D-cache is under the memory stage, not directly under cpu
+`ifdef VERILATOR
+  `define DCACHE_HIER $root.level_wrapper.i_soc.i_memory.i_dcache
+`else
+  `define DCACHE_HIER tb_wrapper.level_wrapper.i_soc.i_memory.i_dcache
+`endif
 
 // ============================================================================
 // CACHE WRITEBACK LOGGING
@@ -58,39 +64,38 @@ end
 always @(posedge clk_i) begin
   if (rst_ni) begin
     // Check for normal eviction writeback
-    if (`SOC.dcache.write_back && `SOC.dcache.lowX_req_o.valid) begin
+    if (`DCACHE_HIER.write_back && `DCACHE_HIER.lowX_req_o.valid) begin
       $fwrite(wb_trace_fd,
         "%0d | EVICT_WB | 0x%08h | 0x%032h | set=%0d valid=%b dirty=%b\n",
         $time,
-        `SOC.dcache.lowX_req_o.addr,
-        `SOC.dcache.lowX_req_o.data,
-        `SOC.dcache.rd_idx,
-        `SOC.dcache.cache_valid_vec,
-        `SOC.dcache.drsram_rd_rdirty
+        `DCACHE_HIER.lowX_req_o.addr,
+        `DCACHE_HIER.lowX_req_o.data,
+        `DCACHE_HIER.rd_idx,
+        `DCACHE_HIER.cache_valid_vec,
+        `DCACHE_HIER.dirty_read_vec
       );
     end
 
     // Check for fence.i writeback
-    if (`SOC.dcache.fi_active && `SOC.dcache.fi_writeback_req) begin
+    if (`DCACHE_HIER.fi_active && `DCACHE_HIER.fi_writeback_req) begin
       $fwrite(wb_trace_fd,
-        "%0d | FENCEI_WB | 0x%08h | 0x%032h | set=%0d way=%0d state=%0d\n",
+        "%0d | FENCEI_WB | 0x%08h | 0x%032h | set=%0d way_oh=%b\n",
         $time,
-        `SOC.dcache.fi_evict_addr,
-        `SOC.dcache.fi_evict_data,
-        `SOC.dcache.fi_set_idx_q,
-        `SOC.dcache.fi_way_idx_q,
-        `SOC.dcache.fi_state_q
+        `DCACHE_HIER.fi_evict_addr,
+        `DCACHE_HIER.fi_evict_data,
+        `DCACHE_HIER.fi_set_idx_q,
+        `DCACHE_HIER.fi_way_onehot
       );
     end
 
-    // Log dirty bit updates
-    if (`SOC.dcache.drsram_wr_rw_en) begin
+    // Log dirty bit array writes (dcache.sv dirty_wr_*)
+    if (`DCACHE_HIER.dirty_wr_en) begin
       $fwrite(wb_trace_fd,
         "%0d | DIRTY_UPD | idx=0x%02h | way=%b | dirty=%b\n",
         $time,
-        `SOC.dcache.drsram_wr_idx,
-        `SOC.dcache.drsram_wr_way,
-        `SOC.dcache.drsram_wr_wdirty
+        `DCACHE_HIER.dirty_wr_idx,
+        `DCACHE_HIER.dirty_wr_way,
+        `DCACHE_HIER.dirty_wr_val
       );
     end
   end

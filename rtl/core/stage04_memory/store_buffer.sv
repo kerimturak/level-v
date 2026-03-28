@@ -93,47 +93,90 @@ module store_buffer
   // -------------------------------------------------------------------
   // Store-to-load forwarding with conflict detection
   //
-  // WORD stores use word-aligned matching (addr[31:2]) and can forward
-  // to any load within the same word. HALF/BYTE stores require exact
-  // address match and the store size must cover the load size.
+  // Merge pending stores that target the same 32-bit word as the load,
+  // youngest-to-oldest (tail side first): each byte comes from the newest
+  // store that still occupies the buffer and writes that byte.
   //
-  // A conflict is flagged when a store overlaps the load's word but
-  // cannot provide the needed data. The memory module must stall and
-  // wait for the conflicting entry to drain before issuing the load.
+  // Stale head->tail scan + false "has_conflict" from a younger byte/half
+  // store could cancel an older word forward and break CoreMark under
+  // pressure (small D$ / more SB occupancy).
   //
-  // Newest match wins (scan head→tail, later iterations overwrite).
+  // conflict: the load needs byte(s) this merge does not cover, but some
+  // pending store touches the word — we cannot supply the full value from
+  // SB alone and do not merge SB partial + dcache; stall until drains.
   // -------------------------------------------------------------------
   always_comb begin
+    logic [3:0] need_m, covered_m, wr_mask;
+    logic [31:0] merged;
+    logic        word_pending;
+    int          j, i, bi;
+
     fwd_hit_o      = 1'b0;
-    fwd_data_o     = '0;
     fwd_conflict_o = 1'b0;
+    fwd_data_o     = '0;
 
-    for (int i = 0; i < DEPTH; i++) begin
+    need_m = '0;
+    unique case (fwd_size_i)
+      BYTE: need_m = 4'b1 << fwd_addr_i[1:0];
+      HALF: need_m = fwd_addr_i[1] ? 4'b1100 : 4'b0011;
+      WORD: need_m = 4'b1111;
+      default: need_m = '0;
+    endcase
+
+    covered_m    = '0;
+    merged       = '0;
+    word_pending = 1'b0;
+
+    for (j = 0; j < DEPTH; j++) begin
       logic [PTR_W-1:0] idx;
-      logic word_match, exact_match, can_fwd, has_conflict;
 
+      i   = DEPTH - 1 - j;
       idx = PTR_W'(head_ptr[PTR_W-1:0] + i[PTR_W-1:0]);
 
-      word_match  = buf_valid[idx] && (buf_addr[idx][31:2] == fwd_addr_i[31:2]);
-      exact_match = buf_valid[idx] && (buf_addr[idx] == fwd_addr_i);
+      if (!buf_valid[idx] || buf_addr[idx][31:2] != fwd_addr_i[31:2]) begin
+      end else begin
+        word_pending = 1'b1;
 
-      can_fwd = (buf_size[idx] == WORD && word_match) ||
-                (buf_size[idx] != WORD && exact_match && buf_size[idx] >= fwd_size_i);
+        unique case (buf_size[idx])
+          WORD: wr_mask = 4'b1111;
+          HALF: wr_mask = buf_addr[idx][1] ? 4'b1100 : 4'b0011;
+          BYTE: wr_mask = 4'b1 << buf_addr[idx][1:0];
+          default: wr_mask = '0;
+        endcase
 
-      has_conflict = word_match && !can_fwd;
-
-      if (can_fwd) begin
-        fwd_hit_o      = 1'b1;
-        fwd_conflict_o = 1'b0;
-        if (buf_size[idx] == WORD)
-          fwd_data_o = buf_data[idx];
-        else
-          fwd_data_o = buf_data[idx] << (buf_addr[idx][1:0] * 8);
-      end else if (has_conflict) begin
-        fwd_conflict_o = 1'b1;
-        fwd_hit_o      = 1'b0;
-        fwd_data_o     = '0;
+        for (bi = 0; bi < 4; bi++) begin
+          if (wr_mask[bi] && !covered_m[bi]) begin
+            unique case (buf_size[idx])
+              WORD: merged[bi*8+:8] = buf_data[idx][bi*8+:8];
+              HALF: begin
+                if (!buf_addr[idx][1]) begin
+                  unique case (bi)
+                    0: merged[7:0]   = buf_data[idx][7:0];
+                    1: merged[15:8]  = buf_data[idx][15:8];
+                    default: ;
+                  endcase
+                end else begin
+                  unique case (bi)
+                    2: merged[23:16] = buf_data[idx][7:0];
+                    3: merged[31:24] = buf_data[idx][15:8];
+                    default: ;
+                  endcase
+                end
+              end
+              BYTE: merged[bi*8+:8] = buf_data[idx][7:0];
+              default: ;
+            endcase
+            covered_m[bi] = 1'b1;
+          end
+        end
       end
+    end
+
+    if (|need_m && ((covered_m & need_m) == need_m)) begin
+      fwd_hit_o  = 1'b1;
+      fwd_data_o = merged;
+    end else if (|need_m && word_pending && ((covered_m & need_m) != need_m)) begin
+      fwd_conflict_o = 1'b1;
     end
   end
 

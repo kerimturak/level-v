@@ -267,8 +267,11 @@ endif
 ifdef CFG_MAX_CYCLES
   MAX_CYCLES := $(CFG_MAX_CYCLES)
 endif
+# Respect `make SIM_FAST=0` over .conf (e.g. enable commit/cache logs on coremark profile)
 ifdef CFG_SIM_FAST
+ifeq ($(filter command line,$(origin SIM_FAST)),)
   SIM_FAST := $(CFG_SIM_FAST)
+endif
 endif
 ifdef CFG_BP_LOG
   BP_LOG := $(CFG_BP_LOG)
@@ -280,7 +283,9 @@ ifdef CFG_MODE
   MODE := $(CFG_MODE)
 endif
 ifdef CFG_TRACE
+ifeq ($(filter command line,$(origin TRACE)),)
   TRACE := $(CFG_TRACE)
+endif
 endif
 
 # Snapshot .conf defines now: `SV_DEFINES += $(CFG_SV_DEFINES)` would be recursive/deferred,
@@ -461,14 +466,23 @@ print-config:
 # -----------------------------------------
 -include $(ROOT_DIR)/script/makefiles/config/local.mk
 
-# CoreMark: UART-only RTL logs — pin LOG_* / KONATA after local.mk and env so Verilator blocks
-# below cannot re-add heavy defines; TEST_CONFIG=coremark still uses frozen SV_DEFINES from .conf.
+# CoreMark/Dhrystone: default UART-only RTL logs (override with e.g. make LOG_COMMIT=1 …)
 ifneq ($(filter coremark dhrystone,$(TEST_CONFIG)),)
+ifeq ($(filter command line,$(origin LOG_COMMIT)),)
   override LOG_COMMIT := 0
+endif
+ifeq ($(filter command line,$(origin LOG_BP)),)
   override LOG_BP := 0
+endif
+ifeq ($(filter command line,$(origin LOG_PIPELINE)),)
   override LOG_PIPELINE := 0
+endif
+ifeq ($(filter command line,$(origin KONATA_TRACER)),)
   override KONATA_TRACER := 0
+endif
+ifeq ($(filter command line,$(origin LOG_RAM)),)
   override LOG_RAM := 0
+endif
 endif
 
 # ====== sim/modelsim.mk ======
@@ -883,6 +897,16 @@ ifeq ($(LOG_RAM),1)
   SV_DEFINES += +define+LOG_RAM
 endif
 
+# D-cache interface table log (memory.sv → cache_logger) — LOG_CACHE=1
+ifeq ($(LOG_CACHE),1)
+  SV_DEFINES += +define+LOG_CACHE
+endif
+
+# D-cache evict/dirty writeback file (writeback_log.svh) — LOG_WRITEBACK=1
+ifeq ($(LOG_WRITEBACK),1)
+  SV_DEFINES += +define+LOG_WRITEBACK
+endif
+
 # UART file logging - LOG_UART=1
 ifeq ($(LOG_UART),1)
   SV_DEFINES += +define+LOG_UART
@@ -947,13 +971,22 @@ endif
 
 # MINIMAL_SOC -> Minimal peripherals for faster simulation
 # Only CPU + RAM + UART + Timer + CLINT active
+# MINIMAL_NO_L2=1 skips L2 (memory arbiter only) for faster sim / isolating L2.
 ifeq ($(MINIMAL_SOC),1)
   SV_DEFINES += +define+MINIMAL_SOC
+  ifeq ($(MINIMAL_NO_L2),1)
+    SV_DEFINES += +define+NO_L2_CACHE
+  endif
 endif
 
 # USE_L2_CACHE -> Enable Yarok14-based L2 non-blocking cache
 ifeq ($(USE_L2_CACHE),1)
   SV_DEFINES += +define+USE_L2_CACHE
+endif
+
+# NO_L2_CACHE -> Skip L2 (icache/dcache talk to memory_arbiter); for debugging L2 issues
+ifeq ($(NO_L2_CACHE),1)
+  SV_DEFINES += +define+NO_L2_CACHE
 endif
 
 # COVERAGE -> SIM_COVERAGE
@@ -1525,6 +1558,11 @@ clean_ccache:
 # Nuclear clean - everything including ccache
 clean_verilator_nuclear: clean_verilator_deep clean_ccache
 	@echo -e "$(RED)[NUCLEAR CLEAN COMPLETE]$(RESET)"
+
+# UART programmer: payload .mem → binary stream; Verilator tb_uart_programmer RAM R/W + optional UART golden
+.PHONY: uart_programmer_verify
+uart_programmer_verify:
+	bash "$(ROOT_DIR)/script/shell/uart_programmer_verify.sh"
 
 # ============================================================
 # Help
@@ -3225,12 +3263,15 @@ coremark_help:
 	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1)"
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo -e "  $(CYAN)SIM_FAST=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
-	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP for fast compile$(RESET)"
+	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP; L2 on by default$(RESET)"
+	@echo -e "  $(CYAN)MINIMAL_NO_L2=1$(RESET)         - $(CYAN)With MINIMAL_SOC: direct mem arbiter (faster sim, no L2)$(RESET)"
+	@echo -e "  $(CYAN)NO_L2_CACHE=1$(RESET)          - $(CYAN)Force memory arbiter instead of L2$(RESET)"
 	@echo -e "  $(CYAN)+uart_finish_pattern=STR$(RESET) - $(CYAN)Verilator plusarg: stop sim after TX sends this substring (default: CoreMark Complete!)$(RESET)"
 	@echo -e "  $(CYAN)THREADS=N$(RESET)                - $(CYAN)Enable multi-threaded simulation$(RESET)"
 	@echo ""
 	@echo -e "$(YELLOW)MINIMAL_SOC Mode:$(RESET)"
-	@echo -e "  Cache: 2KB I$ + 2KB D$ (instead of 8KB each)"
+	@echo -e "  Cache: 4KB I$ + 2KB D$ (instead of 8KB each; I$ sized for stable L2 sim)"
+	@echo -e "  Memory: L2 on (use MINIMAL_NO_L2=1 to skip L2)"
 	@echo -e "  BP: PHT=64, BTB=32, GHR=8 (instead of 512/256/24)"
 	@echo -e "  Compile time: ~40-50%% faster"
 	@echo -e "  Sim speed: ~20-30%% faster"
