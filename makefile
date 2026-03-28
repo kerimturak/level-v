@@ -5203,7 +5203,8 @@ riscv_dv_run: riscv_dv_build riscv_dv_verilate
 			fi; \
 		fi; \
 	done; \
-	echo -e "$(GREEN)[RISCV-DV] Results: $$PASS passed, $$FAIL failed$(RESET)"
+	echo -e "$(GREEN)[RISCV-DV] Results: $$PASS passed, $$FAIL failed$(RESET)"; \
+	test $$FAIL -eq 0
 
 # Build Verilator with riscv-dv config
 riscv_dv_verilate:
@@ -5280,7 +5281,8 @@ _riscv_dv_run_only:
 	echo -e ""; \
 	echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
 	echo -e "$(GREEN) RISCV-DV Final Results: $$PASS passed, $$FAIL failed$(RESET)"; \
-	echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
+	test $$FAIL -eq 0
 
 # Build ALL enabled tests from JSON config
 riscv_dv_build_all: riscv_dv_clone riscv_dv_setup

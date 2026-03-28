@@ -31,7 +31,7 @@ rtl/core/
 | Stage | Modules |
 |-------|---------|
 | [Fetch](stage01_fetch/fetch_module.md) | Instruction fetch, branch prediction, RAS |
-| Fetch (prefetch) | [Next-line prefetcher](stage01_fetch/next_line_prefetcher_module.md), [Prefetcher wrapper](stage01_fetch/prefetcher_wrapper_module.md) |
+| Fetch (prefetch) + microarch notes | [Next-line prefetcher](stage01_fetch/next_line_prefetcher_module.md), [Prefetcher wrapper](stage01_fetch/prefetcher_wrapper_module.md), [Microarch ideas — fetch & memory](stage01_fetch/fetch-prefetch-future-ideas.md) |
 | [Decode](stage02_decode/decode_module.md) | Instruction decode, register file |
 | [Execute](stage03_execute/execution_module.md) | ALU, multiplier, divider, CSR |
 | Execute (MUL/DIV variants) | [mul_int](stage03_execute/mul_int_module.md), [mul_pipelined](stage03_execute/mul_pipelined_module.md), [Wallace tree](stage03_execute/wallace_multiplier_module.md), [divu_int](stage03_execute/divu_int_module.md), [divu_pipelined](stage03_execute/divu_pipelined_module.md) |

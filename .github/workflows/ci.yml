@@ -31,6 +31,17 @@ on:
           - full
           - nightly
           - coremark
+          - riscv-dv
+      riscv_dv_iterations:
+        description: 'RISC-V DV — kaç adet rastgele program (CI batch)'
+        required: false
+        default: '1000'
+        type: string
+      riscv_dv_test:
+        description: 'RISC-V DV test şablonu (fallback generator isimleri)'
+        required: false
+        default: 'riscv_rand_instr_test'
+        type: string
 
 env:
   VERILATOR_VERSION: "5.026"
@@ -406,10 +417,82 @@ jobs:
           retention-days: 14
 
   # -----------------------------------------
+  # RISC-V DV — çok sayıda rastgele program üret, derle, Verilator ile koş
+  # (subrepo riscv-dv isteğe bağlı; vsc yoksa script/python/riscv_dv_gen.py fallback)
+  # -----------------------------------------
+  riscv-dv-ci:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    if: github.event.inputs.test_suite == 'riscv-dv'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: verilator-build
+          path: build/obj_dir/
+
+      - name: Restore Verilator cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/verilator
+          key: verilator-${{ env.VERILATOR_VERSION }}-${{ runner.os }}
+
+      - name: Restore RISC-V Toolchain cache
+        uses: actions/cache@v4
+        id: cache-riscv-dv
+        with:
+          path: /opt/riscv
+          key: riscv-toolchain-rv32imc-v3-${{ runner.os }}
+
+      - name: Install RISC-V Toolchain (if not cached)
+        if: steps.cache-riscv-dv.outputs.cache-hit != 'true'
+        run: |
+          TOOLCHAIN_URL="https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v13.2.0-2/xpack-riscv-none-elf-gcc-13.2.0-2-linux-x64.tar.gz"
+          wget -q "$TOOLCHAIN_URL" -O riscv-toolchain.tar.gz
+          sudo mkdir -p /opt/riscv
+          sudo tar -xzf riscv-toolchain.tar.gz -C /opt/riscv --strip-components=1
+          rm riscv-toolchain.tar.gz
+
+      - name: Ensure riscv-dv subrepo (sparse checkout ok)
+        run: |
+          if [ ! -f subrepo/riscv-dv/run.py ]; then
+            echo "::error::subrepo/riscv-dv eksik — checkout submodules: recursive açık olmalı"
+            exit 1
+          fi
+
+      - name: Run RISC-V DV batch (generate, build, RTL sim)
+        env:
+          RISCV_PREFIX: riscv-none-elf
+          RISCV_DV_ITER: ${{ github.event.inputs.riscv_dv_iterations || '1000' }}
+          RISCV_DV_TEST: ${{ github.event.inputs.riscv_dv_test || 'riscv_rand_instr_test' }}
+        run: |
+          export PATH="/opt/verilator/bin:/opt/riscv/bin:$PATH"
+          echo "RISC-V DV: test=$RISCV_DV_TEST iterations=$RISCV_DV_ITER"
+          make riscv_dv_clean RISCV_PREFIX="$RISCV_PREFIX"
+          make riscv_dv_run RISCV_PREFIX="$RISCV_PREFIX" RISCV_DV_ITER="$RISCV_DV_ITER" RISCV_DV_TEST="$RISCV_DV_TEST"
+
+      - name: Upload RISC-V DV logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riscv-dv-results
+          path: |
+            results/logs/
+            build/tests/riscv-dv/
+          retention-days: 7
+
+  # -----------------------------------------
   # Report Status
   # -----------------------------------------
   report:
-    needs: [lint, quick-tests, coremark-ci]
+    needs: [lint, quick-tests, coremark-ci, riscv-dv-ci]
     runs-on: ubuntu-latest
     if: always()
     
@@ -423,4 +506,5 @@ jobs:
           echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Quick Tests | ${{ needs.quick-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| CoreMark | ${{ needs.coremark-ci.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| RISC-V DV | ${{ needs.riscv-dv-ci.result }} |" >> $GITHUB_STEP_SUMMARY
 

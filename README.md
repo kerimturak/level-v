@@ -10,6 +10,15 @@
 
 # Level RISC-V
 
+<p align="center">
+  <img src="docs/level-v-logo.png" alt="Level SoC block diagram" width="720"/>
+</p>
+
+<p align="center">
+  <img src="docs/level-v.svg" alt="Level SoC block diagram" width="720"/>
+</p>
+
+
 A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / machine mode, caches, Wishbone, and a small SoC (UART, GPIO, SPI, I2C, timers, PLIC, and more). Built for learning, research, FPGA bring-up, and flow automation—not a minimal toy core.
 
 <p align="center">

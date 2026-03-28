@@ -418,6 +418,34 @@ Controller for external SRAM, SDRAM, or DDR memory.
 
 ---
 
+## 🧰 Software, peripherals, and RTOS (community reference)
+
+Level-v already has a richer ISA (**RV32IMC**), caches, and a Wishbone SoC than many teaching cores. A useful **product-style goal** is still: **run a real RTOS** and **reuseable C drivers** against your memory map—similar in spirit to [AngeloJacobo/RISC-V](https://github.com/AngeloJacobo/RISC-V) (MIT-licensed Verilog **RV32I + Zicsr**, Harvard-style bus split, **FreeRTOS**, `test/` regression script, and a small **peripheral library**: UART, I²C, GPIO, CLINT, LCD/sensor demos).
+
+### What is worth borrowing (ideas, not RTL duplication)
+
+| From that project | Application to Level-v |
+|-------------------|-------------------------|
+| **`test.sh`-style automation** | One entrypoint: toolchain check → compile bare-metal/FreeRTOS → run ISA or sim → optional FPGA bitstream (you already have `make`/`script/`; align *documentation* for “RTOS developer path”). |
+| **FreeRTOS port package** | `FreeRTOSConfig.h`, `freertos_risc_v_chip_specific_extensions.h`, stack/interrupt ABI—**retarget** to Level-v’s **CLINT + PLIC** base addresses and trap vector (their core is simpler: no **C** extension, different memory map). |
+| **Thin C HAL (`rv32i.h`-style)** | A **Level BSP** header: register offsets for *your* UART/GPIO/SPI/I²C/CLINT/PLIC; keeps app code portable across revs. |
+| **End-to-end demo** | Their “Smart Garden” style app proves **RTOS + drivers + UART**; equivalent here could be a **small sensor / CLI demo** on Verilator or FPGA. |
+| **Formal flow (`*.sby`)** | Same *discipline* (SymbiYosys) you may already use; compare property scope as a checklist, not a code merge. |
+
+### Explicit goals (add to project backlog)
+
+- [ ] **Document a stable “application memory map”** (flash/RAM/mmio) for software porters.  
+- [ ] **FreeRTOS (or Zephyr later)** on Level-v: timer tick from **mtime/mtimecmp**, context switch with correct **FPU-less** ABI, peripheral ISRs via **PLIC**.  
+- [ ] **Minimal driver suite** in `env/` or `sw/`: UART console, GPIO LED/button, one **blocking** I²C/SPI sample—enough to mirror Angelo’s library *coverage*, not necessarily the same API names.  
+- [ ] **CI or script** that builds a **RTOS smoke binary** and runs it in simulation (even if UART output is scoreboard-only).  
+
+### Differences to remember
+
+- Their core is **Verilog + RV32I** (no **M/C**), **no branch predictor**; Level-v is **SystemVerilog**, **Wishbone**, caches, **BP**—**higher performance**, more to verify when enabling multi-IRQ RTOS.  
+- **Harvard** `rv32i_soc` split buses vs your **unified SoC** path: linker scripts and DMA visibility differ; BSP docs must match **your** loader.  
+
+---
+
 ## 📋 Checklist
 
 - [ ] **GPIO**
@@ -461,12 +489,13 @@ Controller for external SRAM, SDRAM, or DDR memory.
 
 ## 🔗 References
 
-1. [RISC-V Privileged Specification](https://riscv.org/specifications/privileged-isa/)
-2. [SiFive FE310 Manual](https://sifive.cdn.prismic.io/sifive/4faf3e34-4a42-4c2f-be9e-c77baa4928c7_fe310-g002-manual-v1p5.pdf)
-3. [RISC-V PLIC Specification](https://github.com/riscv/riscv-plic-spec)
-4. [RISC-V Debug Specification](https://riscv.org/specifications/debug-specification/)
+1. [AngeloJacobo/RISC-V](https://github.com/AngeloJacobo/RISC-V) — Verilog RV32I+Zicsr, FreeRTOS, peripheral C library, regression/FPGA flow (ideas for BSP + RTOS goals above)
+2. [RISC-V Privileged Specification](https://riscv.org/specifications/privileged-isa/)
+3. [SiFive FE310 Manual](https://sifive.cdn.prismic.io/sifive/4faf3e34-4a42-4c2f-be9e-c77baa4928c7_fe310-g002-manual-v1p5.pdf)
+4. [RISC-V PLIC Specification](https://github.com/riscv/riscv-plic-spec)
+5. [RISC-V Debug Specification](https://riscv.org/specifications/debug-specification/)
 
 ---
 
-*Last updated: 2025-12-03*  
+*Last updated: 2026-03-28*  
 *Version: 1.0*
