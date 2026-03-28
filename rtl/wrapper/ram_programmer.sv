@@ -80,6 +80,7 @@ module ram_programmer
   logic [            31:0] prog_word_q;
   logic [             1:0] byte_cnt_q;
   logic                    prog_valid_q;
+  logic [            31:0] prog_data_q;  // Registered: avoid combinational prog_data + uart glitch (Verilator)
   logic                    sys_rst_q;
 
   // ==========================================================================
@@ -166,6 +167,7 @@ module ram_programmer
       word_idx_q   <= '0;
       prog_addr_q  <= '0;
       prog_word_q  <= '0;
+      prog_data_q  <= '0;
       byte_cnt_q   <= '0;
       prog_valid_q <= 1'b0;
       sys_rst_q    <= 1'b1;
@@ -218,9 +220,10 @@ module ram_programmer
             prog_word_q <= {uart_data[7:0], prog_word_q[31:8]};
 
             if (&byte_cnt_q) begin
-              // Complete word received
+              // Complete word (capture before uart/reg_dat_do goes idle in same sim timestep)
               byte_cnt_q   <= '0;
               prog_valid_q <= 1'b1;
+              prog_data_q  <= {uart_data[7:0], prog_word_q[31:8]};
               prog_addr_q  <= prog_addr_q + 1;
               word_idx_q   <= word_idx_q + 1;
             end else begin
@@ -242,9 +245,39 @@ module ram_programmer
   // Outputs
   // ==========================================================================
   assign prog_addr_o    = prog_addr_q - 1;  // Address of completed word
-  assign prog_data_o    = {uart_data[7:0], prog_word_q[31:8]};  // Current complete word
+  assign prog_data_o    = prog_data_q;
   assign prog_valid_o   = prog_valid_q;
   assign prog_mode_o    = (state_q == ST_PROGRAM);
   assign system_reset_o = sys_rst_q;
+
+`ifdef UART_PROGRAMMER_TRACE
+  // Simulation-only: FSM transitions, each RAM program beat, reset pin edges (sys_rst_q).
+  // level_wrapper ties CPU run to (rst_ni & system_reset_o); here 1=allow run, 0=pulse reset.
+  state_t dbg_state_q;
+  logic   dbg_sys_q;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      dbg_state_q <= ST_IDLE;
+      dbg_sys_q   <= 1'b1;
+    end else begin
+      if (state_q != dbg_state_q) begin
+        $display(
+            "[UART_PROG] t=%0t  FSM %0d -> %0d  prog_mode=%b system_reset_o=%b word_idx=%0d word_target=%0d",
+            $time, dbg_state_q, state_q, prog_mode_o, system_reset_o, word_idx_q, word_count_q);
+        if (state_q == ST_PROGRAM && dbg_state_q == ST_LEN_RECEIVE) begin
+          $display("[UART_PROG] t=%0t  word_count loaded (big-endian) = %0d", $time, word_count_q);
+        end
+      end
+      if (prog_valid_o) begin
+        $display("[UART_PROG] t=%0t  RAM prog beat  addr_word=%0h  wdata=%08h", $time, prog_addr_o, prog_data_o);
+      end
+      if (sys_rst_q != dbg_sys_q) begin
+        $display("[UART_PROG] t=%0t  system_reset_o %b -> %b", $time, dbg_sys_q, sys_rst_q);
+      end
+      dbg_state_q <= state_q;
+      dbg_sys_q   <= sys_rst_q;
+    end
+  end
+`endif
 
 endmodule

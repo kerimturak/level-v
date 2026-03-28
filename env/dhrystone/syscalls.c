@@ -17,8 +17,9 @@
 /* Status { bit3..0 } = rx_empty, rx_full, tx_empty, tx_full */
 #define UART_STATUS_TX_FULL (1u << 0)
 
+/* Must match SoC clk frequency (see rtl/pkg/level_param.sv localparam CPU_CLK). */
 #ifndef CPU_MHZ
-#define CPU_MHZ 50
+#define CPU_MHZ 25
 #endif
 #define UART_BAUD 115200u
 

@@ -136,6 +136,11 @@ def load_mem_file(filepath: str) -> list[int]:
     return words
 
 
+def _p(msg: str, *, quiet: bool, flush: bool = True) -> None:
+    if not quiet:
+        print(msg, flush=flush)
+
+
 def build_programmer_payload(words: list[int]) -> bytes:
     """
     Exact byte stream sent to FPGA / ram_programmer (magic + big-endian count +
@@ -147,6 +152,37 @@ def build_programmer_payload(words: list[int]) -> bytes:
     return MAGIC_SEQUENCE + count_bytes + body
 
 
+def _hexdump_region(data: bytes, start: int, end: int, width: int = 16) -> None:
+    end = min(end, len(data))
+    for i in range(start, end, width):
+        chunk = data[i : min(i + width, end)]
+        hx = " ".join(f"{b:02x}" for b in chunk)
+        asc = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
+        print(f"  {i:08x}  {hx:<{max(1, width * 3 - 1)}} |{asc}", flush=True)
+
+
+def print_sent_program_hex(
+    data: bytes,
+    *,
+    full: bool,
+    head_bytes: int = 128,
+    tail_bytes: int = 64,
+) -> None:
+    """Print exact UART wire bytes (for logs / cross-check with --dump-payload)."""
+    n = len(data)
+    print(f"\n--- Gönderilen program (tam kablo: {n} B) — hex ---", flush=True)
+    if full or n <= head_bytes + tail_bytes:
+        _hexdump_region(data, 0, n)
+        return
+    _hexdump_region(data, 0, head_bytes)
+    skipped = n - head_bytes - tail_bytes
+    print(
+        f"  --------  … {skipped} byte atlandı — tam döküm: --full-payload-hex …",
+        flush=True,
+    )
+    _hexdump_region(data, n - tail_bytes, n)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # UART programming
 # ─────────────────────────────────────────────────────────────────────────────
@@ -156,6 +192,9 @@ def program_fpga(
     words: list[int],
     verbose: bool = False,
     inter_byte_delay_s: float = 0.0,
+    quiet: bool = False,
+    show_payload_hex: bool = True,
+    full_payload_hex: bool = False,
 ) -> bool:
     """
     Load the FPGA over UART using the ram_programmer.sv protocol.
@@ -167,22 +206,26 @@ def program_fpga(
     """
     word_count = len(words)
     total_bytes = len(MAGIC_SEQUENCE) + 4 + (word_count * 4)
+    step_hi = 7
 
-    print(f"╔══════════════════════════════════════════════════╗")
-    print(f"║       Level RISC-V — FPGA UART Programmer       ║")
-    print(f"╠══════════════════════════════════════════════════╣")
-    print(f"║  Port       : {port:<35s}║")
-    print(f"║  Baud Rate  : {baud:<35d}║")
-    print(f"║  Word Count : {word_count:<35d}║")
-    print(f"║  Total Bytes: {total_bytes:<35d}║")
-    print(f"╚══════════════════════════════════════════════════╝")
+    _p(f"╔══════════════════════════════════════════════════╗", quiet=quiet)
+    _p(f"║       Level RISC-V — FPGA UART Programmer       ║", quiet=quiet)
+    _p(f"╠══════════════════════════════════════════════════╣", quiet=quiet)
+    _p(f"║  Port        : {port:<34s}║", quiet=quiet)
+    _p(f"║  Baud        : {baud:<34d}║", quiet=quiet)
+    _p(f"║  Word count  : {word_count:<34d}║", quiet=quiet)
+    _p(f"║  Wire bytes  : {total_bytes:<34d}║", quiet=quiet)
+    if inter_byte_delay_s > 0:
+        _p(f"║  Inter-byte  : {inter_byte_delay_s:<34g}s║", quiet=quiet)
+    _p(f"╚══════════════════════════════════════════════════╝", quiet=quiet)
 
-    # Seconds: enough for wire-time at baud + margin (large .mem can be slow to push).
     est_wire_s = (max(total_bytes, 64) * 12.0) / float(max(baud, 1))
     write_timeout_s = max(60.0, est_wire_s * 2.0)
+    _p(f"\n>>> [1/{step_hi}] Özet: kabloda ~{est_wire_s:.1f}s tahmini; "
+        f"write_timeout={write_timeout_s:.0f}s", quiet=quiet)
 
     try:
-        # dsrdtr=False: many USB-UART bridges tie DTR/RTS to EN/RST — toggling can reset the FPGA.
+        _p(f">>> [2/{step_hi}] Seri port açılıyor: {port!r} …", quiet=quiet)
         ser = serial.Serial(
             port,
             baud,
@@ -191,15 +234,13 @@ def program_fpga(
             rtscts=False,
             dsrdtr=False,
         )
+        _p(f"    OK — port açık (dsrdtr/rtscts kapalı)", quiet=quiet)
     except serial.SerialException as e:
-        print(f"\n✗ Could not open UART: {e}")
+        print(f"\n✗ [2/{step_hi}] Port açılamadı: {e}", flush=True)
         if "No such file" in str(e):
-            print("\n  If you use WSL:")
-            print("  1. On Windows: usbipd list")
-            print("  2. On Windows: usbipd bind --busid <BUSID>")
-            print("  3. On Windows: usbipd attach --wsl --busid <BUSID>")
-            print("  4. In WSL:     ls /dev/ttyUSB* /dev/ttyACM*")
-            print(f"  5. Or use: --port /dev/ttyS8  (for COM8)")
+            print("\n  WSL kullanıyorsan COM yerine /dev/ttyUSB0 vb. kullan; ya da Windows’ta py ile çalıştır:")
+            print("  1. Windows: usbipd list / attach --wsl")
+            print("  2. WSL: ls /dev/ttyUSB* /dev/ttyACM*")
         return False
 
     def write_bytes(data: bytes) -> None:
@@ -213,62 +254,84 @@ def program_fpga(
             ser.flush()
 
     try:
-        time.sleep(0.05)  # let adapter / FPGA RX line settle after open
+        _p(f">>> [3/{step_hi}] Hat oturması 50ms, RX buffer temizleniyor…", quiet=quiet)
+        time.sleep(0.05)
         try:
             ser.reset_input_buffer()
-        except (AttributeError, serial.SerialException):
-            pass
+            _p("    OK — reset_input_buffer()", quiet=quiet)
+        except (AttributeError, serial.SerialException) as ex:
+            _p(f"    (atlandı: {ex})", quiet=quiet)
 
-        # ── Step 1: Magic sequence ──
-        print(f"\n[1/3] Sending magic sequence: {MAGIC_SEQUENCE.decode()}")
+        sent = 0
+        _p(f">>> [4/{step_hi}] Magic gönderiliyor ({len(MAGIC_SEQUENCE)} B): "
+            f"{MAGIC_SEQUENCE.decode()!r}", quiet=quiet)
         write_bytes(MAGIC_SEQUENCE)
+        sent += len(MAGIC_SEQUENCE)
         time.sleep(0.02)
+        _p(f"    OK — şimdiye kadar toplam {sent} B (magic)", quiet=quiet)
 
-        # ── Step 2: Word count (big-endian) ──
-        count_bytes = struct.pack(">I", word_count)  # big-endian uint32
-        print(f"[2/3] Sending word count: {word_count} (0x{word_count:08x})")
+        count_bytes = struct.pack(">I", word_count)
+        _p(f">>> [5/{step_hi}] Kelime sayısı (4 B, big-endian): {word_count} "
+            f"(hex BE: {count_bytes.hex()})", quiet=quiet)
         write_bytes(count_bytes)
+        sent += 4
         time.sleep(0.02)
+        _p(f"    OK — toplam {sent} B (magic+sayı)", quiet=quiet)
 
-        # ── Step 3: Data words (little-endian) ──
-        print(f"[3/3] Sending program data ({word_count} words)...")
+        payload_bytes = word_count * 4
+        _p(f">>> [6/{step_hi}] Yük gövdesi: {word_count} kelime = {payload_bytes} B (little-endian / kelime)…",
+            quiet=quiet)
+        if word_count > 0:
+            _p(f"    İlk kelime: 0x{words[0]:08x} | Son kelime: 0x{words[-1]:08x}", quiet=quiet)
 
-        # Progress milestones
         milestone = max(1, word_count // 10)
         start_time = time.time()
 
         for i, word in enumerate(words):
-            # Little-endian: LSB first (ram_programmer.sv shift-right assembly)
             word_bytes = struct.pack("<I", word)
             write_bytes(word_bytes)
+            sent += 4
 
             if verbose and i < 16:
-                print(f"  [{i:6d}] 0x{word:08x} → {word_bytes.hex()}")
+                print(f"  [{i:6d}] 0x{word:08x} → {word_bytes.hex()}", flush=True)
 
-            # Progress
-            if (i + 1) % milestone == 0:
-                pct = (i + 1) * 100 // word_count
+            if (i + 1) % milestone == 0 or (i + 1) == word_count:
+                pct = (i + 1) * 100 // word_count if word_count else 100
                 elapsed = time.time() - start_time
                 rate = (i + 1) * 4 / elapsed if elapsed > 0 else 0
-                print(f"  ▓ {pct:3d}%  ({i+1}/{word_count})  "
-                      f"{elapsed:.1f}s  {rate:.0f} B/s")
+                _p(f"    … {pct}% ({i+1}/{word_count}) {elapsed:.1f}s ~{rate:.0f} B/s — gönderilen {sent} B",
+                    quiet=quiet)
 
         ser.flush()
         elapsed = time.time() - start_time
         rate = total_bytes / elapsed if elapsed > 0 else 0
 
-        print(f"\n══════════════════════════════════════════════════")
-        print(f"  ✓ Programming complete!")
-        print(f"    Time : {elapsed:.2f}s")
-        print(f"    Rate : {rate:.0f} B/s ({rate/1024:.1f} KB/s)")
-        print(f"══════════════════════════════════════════════════")
+        wire = build_programmer_payload(words)
+        if len(wire) != sent:
+            print(
+                f"✗ İç tutarsızlık: beklenen kablo {len(wire)} B, sayaç {sent} B",
+                flush=True,
+            )
+        if show_payload_hex and not quiet:
+            print_sent_program_hex(wire, full=full_payload_hex)
+
+        _p(f"\n>>> [7/{step_hi}] Bitti: port kapatılıyor", quiet=quiet)
+        print(f"══════════════════════════════════════════════════", flush=True)
+        print(f"  ✓ Gönderim tamam (RAM programlayıcı protokolü)", flush=True)
+        print(f"    Süre : {elapsed:.2f}s", flush=True)
+        print(f"    Hız  : {rate:.0f} B/s ({rate/1024:.1f} KB/s)", flush=True)
+        print(f"    Toplam kablo: {sent} B (beklenen: {total_bytes} B)", flush=True)
+        print(f"══════════════════════════════════════════════════", flush=True)
+        if sent != total_bytes:
+            print(f"✗ Uyarı: byte sayısı beklenenden farklı ({sent} vs {total_bytes})", flush=True)
         return True
 
     except serial.SerialException as e:
-        print(f"\n✗ UART communication error: {e}")
+        print(f"\n✗ [UART] İletişim hatası: {e}", flush=True)
         return False
     finally:
         ser.close()
+        _p("    Port kapandı.", quiet=quiet)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -354,6 +417,11 @@ Makefile integration:
         help="Print first 16 words in detail",
     )
     parser.add_argument(
+        "--quiet", "-q",
+        action="store_true",
+        help="Less console output (only banner + final result / errors)",
+    )
+    parser.add_argument(
         "--inter-byte-delay",
         type=float,
         default=float(os.environ.get("FPGA_UART_INTER_BYTE_DELAY", "0")),
@@ -365,8 +433,19 @@ Makefile integration:
         metavar="PATH",
         help="Write raw programmer stream to PATH for sim (+PROG_UART_PAYLOAD); no serial",
     )
+    parser.add_argument(
+        "--no-show-payload",
+        action="store_true",
+        help="Do not print sent wire bytes as hex after transfer",
+    )
+    parser.add_argument(
+        "--full-payload-hex",
+        action="store_true",
+        help="Print every byte on the wire as hex (default: first 128 + last 64 B only)",
+    )
 
     args = parser.parse_args()
+    quiet = args.quiet or os.environ.get("FPGA_UART_QUIET", "") == "1"
 
     # ── List mode ──
     if args.list:
@@ -394,22 +473,24 @@ Makefile integration:
     # ── File info ──
     mem_path = os.path.abspath(mem_path)
     rel_path = os.path.relpath(mem_path, PROJECT_ROOT)
-    print(f"Source: {rel_path}")
+    _p(f"\n>>> [0a] Kaynak: {rel_path}", quiet=quiet)
 
     # ── Load and send ──
+    _p(f">>> [0b] .mem okunuyor…", quiet=quiet)
     words = load_mem_file(mem_path)
     if not words:
         print(f"✗ File empty or unreadable: {mem_path}")
         sys.exit(1)
 
-    print(f"Loaded: {len(words)} word(s) ({len(words)*4} byte(s))\n")
+    _p(f"    OK — {len(words)} kelime ({len(words)*4} B data)\n", quiet=quiet)
 
     if args.dump_payload:
+        _p(">>> [dump] Binary payload yazılıyor…", quiet=quiet)
         blob = build_programmer_payload(words)
         out_path = os.path.abspath(args.dump_payload)
         with open(out_path, "wb") as f:
             f.write(blob)
-        print(f"Wrote programmer payload: {len(blob)} byte(s) → {out_path}")
+        print(f"OK — {len(blob)} B → {out_path}", flush=True)
         sys.exit(0)
 
     success = program_fpga(
@@ -418,6 +499,9 @@ Makefile integration:
         words,
         verbose=args.verbose,
         inter_byte_delay_s=args.inter_byte_delay,
+        quiet=quiet,
+        show_payload_hex=not args.no_show_payload,
+        full_payload_hex=args.full_payload_hex,
     )
     sys.exit(0 if success else 1)
 

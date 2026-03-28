@@ -10,7 +10,7 @@ module tb_uart_programmer (
     output wire         prog_mode_led_o,
     output wire         system_reset_o,
 
-    input  wire  [ 9:0] addr_i,
+    input  wire  [11:0] addr_i,
     input  wire [127:0] wdata_i,
     input  wire  [15:0] wstrb_i,
     output wire [127:0] rdata_o,
@@ -18,7 +18,7 @@ module tb_uart_programmer (
 );
 
   wrapper_ram #(
-      .RAM_DEPTH(1024)
+      .RAM_DEPTH(4096)
   ) dut (
       .clk_i         (clk_i),
       .rst_ni        (rst_ni),

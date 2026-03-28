@@ -9,10 +9,13 @@
 //     rtl/wrapper/wrapper_ram.sv sim/tb/tb_uart_programmer.sv \
 //     sim/tb/tb_uart_programmer.cpp
 //
+// RTL aşama logları (+define+UART_PROGRAMMER_TRACE) için ayrı -Mdir önerilir; bkz. script/shell/uart_programmer_verify.sh
+//
 // Run:
-//   python3 script/python/fpga/uart_send_data.py --mem build/tests/.../tiny.mem --dump-payload build/tests/uart_verify/payload.bin
-//   build/obj_uart_programmer_verify/Vtb_uart_programmer \
-//     +PAYLOAD=build/tests/uart_verify/payload.bin +GOLDEN=build/tests/.../tiny.mem
+//   UART_PROG_TRACE=1 TB_TRACE=1 bash script/shell/uart_programmer_verify.sh
+//   veya: Vtb_uart_programmer +PAYLOAD=... +GOLDEN=... +TB_TRACE
+//
+//   python3 script/python/fpga/uart_send_data.py --mem ... --dump-payload payload.bin
 
 #include "Vtb_uart_programmer.h"
 #include "verilated.h"
@@ -29,6 +32,33 @@
 static vluint64_t sim_time = 0;
 double sc_time_stamp() { return sim_time; }
 
+static bool g_tb_trace = false;
+static int g_prev_sys_reset = -1;
+static int g_prev_prog_mode = -1;
+
+static void trace_top_signals(Vtb_uart_programmer* top, const char* ctx) {
+    if (!g_tb_trace) return;
+    const int sr = top->system_reset_o ? 1 : 0;
+    const int pm = top->prog_mode_led_o ? 1 : 0;
+    if (g_prev_sys_reset < 0) {
+        g_prev_sys_reset = sr;
+        g_prev_prog_mode = pm;
+        std::cout << "[tb_trace] " << ctx << "  initial system_reset_o=" << sr << " prog_mode_led_o=" << pm
+                  << "  (CPU runs when system_reset_o==1 in level_wrapper)\n";
+        return;
+    }
+    if (sr != g_prev_sys_reset) {
+        std::cout << "[tb_trace] t=" << sim_time << "  system_reset_o " << g_prev_sys_reset << " -> " << sr << "  (" << ctx
+                  << ")\n";
+        g_prev_sys_reset = sr;
+    }
+    if (pm != g_prev_prog_mode) {
+        std::cout << "[tb_trace] t=" << sim_time << "  prog_mode_led_o " << g_prev_prog_mode << " -> " << pm << "  (" << ctx
+                  << ")\n";
+        g_prev_prog_mode = pm;
+    }
+}
+
 static const char* plusarg(int argc, char** argv, const char* key) {
     size_t n = std::strlen(key);
     for (int i = 1; i < argc; ++i) {
@@ -44,6 +74,7 @@ static void clock_cycle(Vtb_uart_programmer* top) {
     top->clk_i = 1;
     top->eval();
     sim_time++;
+    trace_top_signals(top, "after_posedge");
 }
 
 static void uart_send_byte(Vtb_uart_programmer* top, uint8_t b, unsigned bit_cycles) {
@@ -72,10 +103,21 @@ static void stream_payload(Vtb_uart_programmer* top, const char* path, unsigned 
     unsigned bit_cycles = bit_cycles_override ? bit_cycles_override : (div + 1);
     std::cout << "[uart_verify] payload " << path << "  bytes=" << data.size() << "  cfg_div=" << div
               << "  bit_clks=" << bit_cycles << "\n";
+    if (g_tb_trace) std::cout << "[tb_trace] --- UART byte stream start (host -> prog_rx) ---\n";
     top->ram_prog_rx_i = 1;
     for (unsigned i = 0; i < bit_cycles * 8; ++i) clock_cycle(top);
-    for (uint8_t byte : data) uart_send_byte(top, byte, bit_cycles);
+    size_t n = 0;
+    for (uint8_t byte : data) {
+        uart_send_byte(top, byte, bit_cycles);
+        if (g_tb_trace && ((++n <= 32u) || (n == data.size()))) {
+            std::cout << "[tb_trace] streamed byte " << n << "/" << data.size() << " = 0x" << std::hex << (unsigned)byte
+                      << std::dec << "\n";
+        } else if (g_tb_trace && n == 33u) {
+            std::cout << "[tb_trace] ... (suppress further per-byte logs; RTL UART_PROGRAMMER_TRACE shows FSM) ...\n";
+        }
+    }
     top->ram_prog_rx_i = 1;
+    if (g_tb_trace) std::cout << "[tb_trace] --- UART byte stream end ---\n";
 }
 
 static std::vector<uint32_t> load_mem_hex(const char* path) {
@@ -136,11 +178,14 @@ int main(int argc, char** argv) {
     bool skip_payload = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "+SKIP_PAYLOAD") == 0) skip_payload = true;
+        if (std::strcmp(argv[i], "+TB_TRACE") == 0) g_tb_trace = true;
     }
     const char* payload = plusarg(argc, argv, "+PAYLOAD=");
     const char* golden_path = plusarg(argc, argv, "+GOLDEN=");
     if (!skip_payload && (!payload || !golden_path)) {
-        std::cerr << "Usage: Vtb_uart_programmer +PAYLOAD=prog.bin +GOLDEN=test.mem [+SKIP_PAYLOAD] ...\n";
+        std::cerr << "Usage: Vtb_uart_programmer +PAYLOAD=prog.bin +GOLDEN=test.mem [+SKIP_PAYLOAD] [+TB_TRACE] ...\n"
+                     "  +TB_TRACE           — log top-level system_reset_o / prog_mode edges and stream summary\n"
+                     "  Rebuild Verilator with +define+UART_PROGRAMMER_TRACE for ram_programmer FSM & RAM-beat logs.\n";
         return 1;
     }
     unsigned cpu_hz = 25000000u;
@@ -158,8 +203,8 @@ int main(int argc, char** argv) {
             std::cerr << "FATAL: golden is empty\n";
             return 2;
         }
-        if (golden.size() > 1024u) {
-            std::cerr << "FATAL: golden has " << golden.size() << " words; tb UART_programmer RAM_DEPTH=1024\n";
+        if (golden.size() > 4096u) {
+            std::cerr << "FATAL: golden has " << golden.size() << " words; tb UART_programmer RAM_DEPTH=4096\n";
             return 2;
         }
     }
@@ -175,6 +220,7 @@ int main(int argc, char** argv) {
     top->rd_en_i = 0;
     for (int i = 0; i < 10; ++i) clock_cycle(top);
     top->rst_ni = 1;
+    if (g_tb_trace) std::cout << "[tb_trace] board rst_ni deasserted; watching programmer outputs\n";
 
     bool ram_selftest = false;
     for (int i = 1; i < argc; ++i) {
@@ -202,9 +248,27 @@ int main(int argc, char** argv) {
     int post_idle = 5000;
     if (const char* s = plusarg(argc, argv, "+POST_IDLE_CYCLES="))
         post_idle = static_cast<int>(std::strtoul(s, nullptr, 10));
+    if (g_tb_trace) {
+        std::cout << "[tb_trace] post-UART idle " << post_idle << " cycles; sampling pins before RAM readback\n";
+        std::cout << "[tb_trace]   system_reset_o=" << (top->system_reset_o ? 1 : 0)
+                  << " prog_mode_led_o=" << (top->prog_mode_led_o ? 1 : 0) << "\n";
+    }
     for (int i = 0; i < post_idle; ++i) clock_cycle(top);
+    if (g_tb_trace) {
+        std::cout << "[tb_trace] post-idle done; system_reset_o=" << (top->system_reset_o ? 1 : 0)
+                  << " prog_mode_led_o=" << (top->prog_mode_led_o ? 1 : 0) << "\n";
+    }
 
     bool ok = true;
+    const size_t peek = golden.size() < 8u ? golden.size() : 8u;
+    if (g_tb_trace && peek > 0) {
+        std::cout << "[tb_trace] RAM readback preview (first " << peek << " words):\n";
+        for (size_t i = 0; i < peek; ++i) {
+            uint32_t got = ram_read_word(top, static_cast<unsigned>(i));
+            std::cout << "[tb_trace]   [" << i << "] golden=0x" << std::hex << golden[i] << " got=0x" << got << std::dec
+                      << (got == golden[i] ? " OK" : " BAD") << "\n";
+        }
+    }
     for (size_t i = 0; i < golden.size(); ++i) {
         uint32_t got = ram_read_word(top, static_cast<unsigned>(i));
         if (got != golden[i]) {

@@ -4203,7 +4203,7 @@ EMBENCH_MABI       := ilp32
 EMBENCH_CFLAGS     := -march=$(EMBENCH_MARCH) -mabi=$(EMBENCH_MABI) \
                       -O2 -ffunction-sections -fdata-sections \
                       -static -nostdlib -nostartfiles \
-                      -DCPU_MHZ=50
+                      -DCPU_MHZ=25
 
 # Linker flags (include libgcc for soft-float support)
 EMBENCH_LDSCRIPT   := $(EMBENCH_ENV_SRC)/link.ld
@@ -4536,7 +4536,7 @@ DHRY_CFLAGS          := -march=$(DHRY_MARCH) -mabi=$(DHRY_MABI) \
                         -O3 -fno-inline -funroll-loops \
                         -static -nostdlib -nostartfiles \
                         -DTIME -DDHRY_ITERS=$(DHRY_ITERS) \
-                        -DCPU_MHZ=50
+                        -DCPU_MHZ=25
 
 # Linker
 DHRY_LDSCRIPT        := $(DHRYSTONE_ENV_SRC)/link.ld

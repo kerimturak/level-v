@@ -72,7 +72,8 @@ module simpleuart #(
       recv_buf_valid <= 0;
     end else begin
       recv_divcnt <= recv_divcnt + 1;
-      if (reg_dat_re && recv_buf_valid) recv_buf_valid <= 0;
+      // PicoRV32 original: clear valid before case (reg_dat_re always pops when CPU reads).
+      if (reg_dat_re) recv_buf_valid <= 0;
       case (recv_state)
         0: begin
           if (!ser_rx) recv_state <= 1;

@@ -19,7 +19,7 @@
 #define UART_STATUS_TX_FULL (1u << 0)
 
 #ifndef CPU_MHZ
-#define CPU_MHZ 50
+#define CPU_MHZ 25
 #endif
 #define UART_BAUD 115200u
 
