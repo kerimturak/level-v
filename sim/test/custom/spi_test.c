@@ -8,12 +8,12 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "cpu_clock.h"
 
 /* ========================================================================
- * Hardware Definitions
+ * Hardware Definitions (UART @ 115200; SPI math uses CPU_CLK_HZ)
  * ======================================================================== */
-#define CPU_CLK          50000000   /* 50 MHz */
-#define BAUD_RATE        115200
+#define BAUD_RATE        115200u
 
 /* UART MMIO Map */
 #define UART_CTRL        (*(volatile uint32_t*)0x20000000)
@@ -66,7 +66,8 @@
 
 void uart_init(void)
 {
-    uint32_t baud_div = CPU_CLK / BAUD_RATE;
+    uint32_t baud_div = (uint32_t)(CPU_CLK_HZ / BAUD_RATE);
+    if (baud_div < 1u) baud_div = 1u;
     UART_CTRL = (baud_div << 16) | UART_CTRL_TX_EN | UART_CTRL_RX_EN;
 }
 
@@ -107,7 +108,7 @@ void uart_puthex8(uint8_t val)
 
 /**
  * Initialize SPI with given clock divider and mode
- * @param sck_div  Clock divider (SPI clock = CPU_CLK / (2 * sck_div))
+ * @param sck_div  Clock divider (SPI clock = CPU_CLK_HZ / (2 * sck_div))
  * @param mode     SPI mode (0-3)
  */
 void spi_init(uint16_t sck_div, uint8_t mode)
@@ -210,7 +211,7 @@ int test_spi_loopback(void)
     uart_puts("\n[TEST] SPI Loopback Test\n");
     
     /* Initialize SPI: Fast clock for simulation, Mode 0 */
-    /* sck_div=2 means SPI clock = CPU_CLK/(2*2) = 12.5MHz */
+    /* sck_div=2 => SPI clock = CPU_CLK_HZ/4 (e.g. ~6.25 MHz at 25 MHz CPU) */
     spi_init(2, 0);
     uart_puts("  init done\n");
     

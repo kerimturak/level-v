@@ -5,6 +5,7 @@
  */
 
 #include <stdint.h>
+#include "cpu_clock.h"
 
 /* Memory-mapped peripherals — level-V UART (uart.sv) */
 #define UART_BASE       0x20000000UL
@@ -14,9 +15,6 @@
 #define UART_CTRL_TX_EN (1u << 0)
 #define UART_CTRL_RX_EN (1u << 1)
 #define UART_STATUS_TX_FULL (1u << 0)
-#ifndef CPU_MHZ
-#define CPU_MHZ 25
-#endif
 #define UART_BAUD 115200u
 
 /* Timing variables — mcycle snapshot at start/stop of benchmark() */
@@ -35,7 +33,7 @@ static inline uint64_t read_mcycle64(void) {
 
 /* UART output */
 static void board_uart_hw_init(void) {
-    uint32_t baud_div = (uint32_t)(CPU_MHZ * 1000000u) / UART_BAUD;
+    uint32_t baud_div = (uint32_t)(CPU_CLK_HZ / UART_BAUD);
     UART_CTRL = (baud_div << 16) | UART_CTRL_TX_EN | UART_CTRL_RX_EN;
 }
 

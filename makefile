@@ -81,6 +81,15 @@ SUBREPO_DIR   := $(ROOT_DIR)/subrepo
 ENV_DIR       := $(ROOT_DIR)/env
 CONFIG_DIR    := $(SCRIPT_DIR)/config
 
+# -------------------------------------------------------------------------
+# CPU clock for C env (UART, CoreMark timebase). MUST match RTL:
+#   rtl/pkg/level_param.sv localparam CPU_CLK
+# Override:  make any_build CPU_CLK_HZ=48000000
+# -------------------------------------------------------------------------
+CPU_CLK_HZ            ?= 25000000
+export CPU_CLK_HZ
+LEVELV_CPU_CLK_CPPFLAGS := -I$(ENV_DIR)/common -DCPU_CLK_HZ=$(CPU_CLK_HZ)UL
+
 # -----------------------------------------
 # Derived Directories
 # -----------------------------------------
@@ -3050,6 +3059,10 @@ COREMARK_HEX      := $(COREMARK_BUILD_DIR)/coremark.hex
 COREMARK_MEM      := $(COREMARK_BUILD_DIR)/coremark.mem
 COREMARK_MEM_128  := $(COREMARK_BUILD_DIR)/coremark_128.mem
 COREMARK_DUMP     := $(COREMARK_BUILD_DIR)/coremark.dump
+# 0 = no padding (smaller .mem; BRAM depth can follow max benchmark size).
+# Legacy: COREMARK_MEM_PAD_BYTES=34816 matched WRAPPER_RAM_SIZE_KB=34.
+COREMARK_MEM_PAD_BYTES ?= 0
+COREMARK_ELF_TO_MEM_EXTRA := $(shell [ "$(COREMARK_MEM_PAD_BYTES)" -gt 0 ] 2>/dev/null && echo --pad-to-size $(COREMARK_MEM_PAD_BYTES))
 
 # ============================================================
 # 1 Main Target - Full Pipeline
@@ -3144,7 +3157,7 @@ coremark_build: coremark_gen_linker
 		$(MAKE) -C $(COREMARK_SRC_DIR) \
 		PORT_DIR=levelv \
 		ITERATIONS=$(COREMARK_ITERATIONS) \
-		XCFLAGS="-DPERFORMANCE_RUN=1" \
+		XCFLAGS="-DPERFORMANCE_RUN=1 $(LEVELV_CPU_CLK_CPPFLAGS)" \
 		|| { echo -e "$(RED)[COREMARK] ✗ Build failed$(RESET)"; exit 1; }
 	@# Copy output files to build directory
 	@echo -e "$(YELLOW)[COREMARK] Copying output files...$(RESET)"
@@ -3162,9 +3175,9 @@ coremark_build: coremark_gen_linker
 		--word-size 4 \
 		--word-endian little \
 		--word-order high-to-low \
-		--pad-to-size 34816
-	@# Generate 128-bit cache line .mem file with heap+stack padding (34KB total)
-	@echo -e "$(YELLOW)[COREMARK] Generating .mem file for 128-bit cache line (with heap+stack)...$(RESET)"
+		$(COREMARK_ELF_TO_MEM_EXTRA)
+	@# 128-bit cache line .mem (optional pad via COREMARK_MEM_PAD_BYTES)
+	@echo -e "$(YELLOW)[COREMARK] Generating .mem file for 128-bit cache line...$(RESET)"
 	@python3 $(ELF_TO_MEM) \
 		--in $(COREMARK_BIN) \
 		--out $(COREMARK_MEM_128) \
@@ -3173,7 +3186,7 @@ coremark_build: coremark_gen_linker
 		--word-size 4 \
 		--word-endian little \
 		--word-order high-to-low \
-		--pad-to-size 34816
+		$(COREMARK_ELF_TO_MEM_EXTRA)
 	@echo -e "$(GREEN)[COREMARK] $(SUCCESS) Build successful$(RESET)"
 
 # ============================================================
@@ -3260,6 +3273,8 @@ coremark_help:
 	@echo -e "  make run_coremark          - Build (if needed) and run Verilator sim"
 	@echo ""
 	@echo -e "$(YELLOW)Configuration:$(RESET)"
+	@echo -e "  CPU_CLK_HZ=N               - Bare-metal C clock (default: 25000000); match rtl/pkg/level_param.sv"
+	@echo -e "  COREMARK_MEM_PAD_BYTES=N  - Pad coremark*.mem to N bytes (0=minimal; 34816=legacy 34KiB)"
 	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1)"
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo -e "  $(CYAN)SIM_FAST=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
@@ -4157,8 +4172,45 @@ custom_help_integration:
 	@echo -e "  make custom_build_all        Build all custom tests"
 	@echo -e "  make custom_run_all          Run all custom tests from flist"
 	@echo ""
+	@echo -e "$(CYAN)BEEBS (submodule, GPL-3.0 — see env/beebs/README.md):$(RESET)"
+	@echo -e "  make beebs_clone              git submodule update --init subrepo/beebs"
+	@echo -e "  make beebs_build              ./configure && make (native host binaries)"
+	@echo -e "  make beebs_help               Notes / RV32 port"
+	@echo ""
 
 .PHONY: custom_help_integration
+
+# ====== BEEBS upstream (GPL-3.0) — git submodule + native host build ======
+BEEBS_REPO_URL := https://github.com/mageec/beebs.git
+BEEBS_ROOT     := $(SUBREPO_DIR)/beebs
+
+.PHONY: beebs_clone beebs_build beebs_help beebs_distclean
+
+beebs_clone:
+	@echo -e "$(YELLOW)[BEEBS] git submodule update --init (shallow)$(RESET)"
+	@cd "$(ROOT_DIR)" && git submodule update --init --depth 1 subrepo/beebs
+	@echo -e "$(GREEN)[OK] subrepo/beebs ready. GPL-3.0 — see env/beebs/README.md$(RESET)"
+
+# Native host build (gcc x86_64-linux-gnu). For RV32 bare-metal you still need a chip/board port.
+beebs_build: beebs_clone
+	@if [ ! -f "$(BEEBS_ROOT)/Makefile" ]; then \
+		echo -e "$(YELLOW)[BEEBS] ./configure (first time)$(RESET)"; \
+		cd "$(BEEBS_ROOT)" && ./configure; \
+	fi
+	@echo -e "$(YELLOW)[BEEBS] make -j$(RESET)"
+	@$(MAKE) -C "$(BEEBS_ROOT)" -j $$(command -v nproc >/dev/null && nproc || echo 4)
+	@echo -e "$(GREEN)[OK] BEEBS built under $(BEEBS_ROOT)/$(RESET)"
+
+beebs_distclean:
+	@if [ -f "$(BEEBS_ROOT)/Makefile" ]; then $(MAKE) -C "$(BEEBS_ROOT)" distclean; fi
+
+beebs_help:
+	@echo -e "$(CYAN)BEEBS — Bristol Embedded Energy Benchmark Suite$(RESET)"
+	@echo -e "  Submodule: $(YELLOW)git submodule update --init --depth 1 subrepo/beebs$(RESET) or $(YELLOW)make beebs_clone$(RESET)"
+	@echo -e "  Native build: $(YELLOW)make beebs_build$(RESET)  (./configure && make; host executables in src/*/)"
+	@echo -e "  RV32 Level-V .mem: needs config/chip + config/board port — $(YELLOW)env/beebs/README.md$(RESET)"
+	@echo -e "  Alternatives: $(YELLOW)make embench$(RESET) / $(YELLOW)make custom_build TEST=dsp_fir_mac_test$(RESET)"
+	@echo ""
 
 # ====== test/embench.mk ======
 # ============================================================
@@ -4203,7 +4255,7 @@ EMBENCH_MABI       := ilp32
 EMBENCH_CFLAGS     := -march=$(EMBENCH_MARCH) -mabi=$(EMBENCH_MABI) \
                       -O2 -ffunction-sections -fdata-sections \
                       -static -nostdlib -nostartfiles \
-                      -DCPU_MHZ=25
+                      $(LEVELV_CPU_CLK_CPPFLAGS)
 
 # Linker flags (include libgcc for soft-float support)
 EMBENCH_LDSCRIPT   := $(EMBENCH_ENV_SRC)/link.ld
@@ -4388,6 +4440,11 @@ embench_report:
 		echo -e "  $(YELLOW)No builds found. Run 'make embench_build' first.$(RESET)"; \
 	fi
 
+# Full-tree ELF sizing (text/data/bss/dec + optional .mem line count). Tuning link.ld / BRAM.
+.PHONY: levelv_memory_report
+levelv_memory_report:
+	@$(PYTHON) $(SCRIPT_DIR)/python/levelv_elf_memory_report.py $(BUILD_DIR)/tests $(RISCV_PREFIX)
+
 # ============================================================
 # Simulation with run_flist
 # ============================================================
@@ -4536,7 +4593,7 @@ DHRY_CFLAGS          := -march=$(DHRY_MARCH) -mabi=$(DHRY_MABI) \
                         -O3 -fno-inline -funroll-loops \
                         -static -nostdlib -nostartfiles \
                         -DTIME -DDHRY_ITERS=$(DHRY_ITERS) \
-                        -DCPU_MHZ=25
+                        $(LEVELV_CPU_CLK_CPPFLAGS)
 
 # Linker
 DHRY_LDSCRIPT        := $(DHRYSTONE_ENV_SRC)/link.ld
@@ -6855,6 +6912,9 @@ help_tests:
 	@echo -e "  dhrystone_help  Show Dhrystone detailed help"
 	@echo -e "  embench         Build Embench-IoT"
 	@echo -e "  embench_run     Run Embench benchmarks"
+	@echo -e "  beebs_clone     Init subrepo/beebs (GPL-3.0)"
+	@echo -e "  beebs_build     Native BEEBS compile under subrepo/beebs"
+	@echo -e "  beebs_help      BEEBS + Level-V (RV32 needs port)"
 	@echo -e ""
 	@echo -e "$(CYAN)▶ Extended Test Suites:$(RESET)"
 	@echo -e "  torture         Generate & build torture tests"

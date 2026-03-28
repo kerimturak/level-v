@@ -7,12 +7,12 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "cpu_clock.h"
 
 /* ========================================================================
- * Hardware Definitions (same conventions as platform headers)
+ * Hardware Definitions (match rtl/pkg/level_param.sv CPU_CLK & host 115200)
  * ======================================================================== */
-#define CPU_CLK          50000000   /* 50 MHz */
-#define BAUD_RATE        115200
+#define BAUD_RATE        115200u
 
 /* UART MMIO Map */
 #define UART_CTRL        (*(volatile uint32_t*)0x20000000)
@@ -43,8 +43,9 @@
  */
 void uart_init(void)
 {
-    uint32_t baud_div = CPU_CLK / BAUD_RATE;
-    
+    uint32_t baud_div = (uint32_t)(CPU_CLK_HZ / BAUD_RATE);
+    if (baud_div < 1u) baud_div = 1u;
+
     /* Control register: [31:16] baud_div, [1] rx_en, [0] tx_en */
     UART_CTRL = (baud_div << 16) | UART_CTRL_TX_EN | UART_CTRL_RX_EN;
 }
@@ -165,8 +166,8 @@ int main(void)
     uart_puts("  -456 = ");
     uart_putdec(-456);
     uart_puts("\n");
-    uart_puts("  50000000 = ");
-    uart_putdec(50000000);
+    uart_puts("  CPU_CLK_HZ = ");
+    uart_putdec((int32_t)CPU_CLK_HZ);
     uart_puts("\n");
     uart_puts("\n");
     

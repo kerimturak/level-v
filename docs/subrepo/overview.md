@@ -8,8 +8,9 @@
 4. [imperas-riscv-tests](#imperas-riscv-tests)
 5. [CoreMark](#coremark)
 6. [Embench-IoT](#embench-iot)
-7. [RISCV-DV](#riscv-dv)
-8. [RISCV-Formal](#riscv-formal)
+7. [BEEBS](#beebs)
+8. [RISCV-DV](#riscv-dv)
+9. [RISCV-Formal](#riscv-formal)
 
 ---
 
@@ -24,6 +25,7 @@ subrepo/
 ├── imperas-riscv-tests/   # Imperas Extended Tests
 ├── coremark/              # EEMBC CoreMark Benchmark
 ├── embench-iot/           # Embench-IoT Benchmark Suite
+├── beebs/                 # BEEBS embedded energy benchmark suite (GPL-3.0)
 ├── riscv-dv/              # RISCV-DV Random Test Generator
 └── riscv-formal/          # RISC-V Formal Verification
 ```
@@ -37,6 +39,7 @@ subrepo/
 | imperas-riscv-tests | Extended coverage | ~500+ | Imperas |
 | coremark | Performance benchmark | 1 | EEMBC |
 | embench-iot | Embedded benchmark | 19 | Embench |
+| beebs | Embedded / energy-oriented benchmarks | Many | University of Bristol / MAGEEC |
 | riscv-dv | Random testing | Generated | Google |
 | riscv-formal | Formal verification | N/A | Claire Wolf |
 
@@ -408,6 +411,26 @@ make embench_run
 # Specific benchmark
 make embench_single B=crc32
 ```
+
+---
+
+## BEEBS
+
+**Directory:** `subrepo/beebs/`  
+**Source:** https://github.com/mageec/beebs  
+
+### Purpose
+
+Bristol / Embecosm Embedded Benchmark Suite focused on deeply embedded and energy-oriented workloads (GPL-3.0).
+
+### Submodule and build
+
+```bash
+make beebs_clone    # git submodule update --init --depth 1 subrepo/beebs
+make beebs_build    # ./configure && make — native host toolchain
+```
+
+Cross-compiling for Level-V requires adding `config/chip` and `config/board` entries and boardsupport; see `env/beebs/README.md`.
 
 ---
 

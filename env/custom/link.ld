@@ -1,22 +1,18 @@
-/*
- * Simple linker script for level-V baremetal CoreMark
- * Everything in one contiguous RAM block
+/* Level-V bare-metal custom tests (sim/test/custom/*.c)
+ * Wider than CoreMark's 32 KiB so large test sources (e.g. cache_test) link.
+ * Match FPGA: rtl/pkg/level_param.sv WRAPPER_RAM_SIZE_KB must be >= LENGTH here.
  */
-
 OUTPUT_ARCH("riscv")
 ENTRY(_start)
 
 MEMORY
 {
-    /* CoreMark + libm + -O2/-g needs most of 32 KiB (see make levelv_memory_report). */
-    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 32K
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 40K
 }
 
 SECTIONS
 {
     . = 0x80000000;
-
-    /* Everything in order: text, rodata, data, bss, heap, stack */
 
     .text : ALIGN(4)
     {
@@ -46,13 +42,8 @@ SECTIONS
         _bss_end = .;
     } > RAM
 
-    /* Global pointer for small data */
     __global_pointer$ = _data_start + (_bss_end - _data_start) / 2;
 
-    /*
-     * Reserve heap/stack as NOLOAD so they occupy VMA (and RAM) like dhrystone/embench.
-     * 8K heap + 4K stack with ~22K text/rodata/bss exceeded 32 KiB; 4K heap is enough for CoreMark port.
-     */
     .heap (NOLOAD) : ALIGN(4)
     {
         _heap_start = .;
@@ -69,5 +60,5 @@ SECTIONS
 
     _end = .;
 
-    ASSERT(. <= 0x80008000, "ERROR: CoreMark exceeds 32KB RAM in link.ld")
+    ASSERT(. <= 0x8000A000, "ERROR: Custom test exceeds 40KB RAM in env/custom/link.ld")
 }

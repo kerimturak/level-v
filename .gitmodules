@@ -34,3 +34,6 @@
 [submodule "subrepo/asic-tools/caravel_user_project"]
 	path = subrepo/asic-tools/caravel_user_project
 	url = https://github.com/efabless/caravel_user_project.git
+[submodule "subrepo/beebs"]
+	path = subrepo/beebs
+	url = https://github.com/mageec/beebs.git

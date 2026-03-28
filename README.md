@@ -171,7 +171,7 @@ make help
 ├── sim/                 # C++ TB, test lists, custom C tests
 ├── env/                 # Per-test link scripts & runtime for each suite
 ├── script/              # Python tools, shell helpers, JSON/.conf profiles
-├── subrepo/             # riscv-tests, riscv-arch-test, Imperas, CoreMark, …
+├── subrepo/             # riscv-tests, arch-test, Imperas, CoreMark, Embench, BEEBS, …
 ├── docs/                # Deep-dive markdown + MkDocs site source
 ├── makefile             # Single entry point for sim, tests, synth helpers
 └── results/             # Logs, waves, dashboards (generated)
@@ -193,8 +193,61 @@ make help
 | `make dashboard` | HTML summary over `results/logs/<sim>/` |
 | `make clean` | Clears build artifacts; keeps `build/tests/` by default |
 | `make clean_nuclear` | Deletes all of `build/` including compiled tests |
+| `make levelv_memory_report` | Prints `riscv32-unknown-elf-size` for every `build/tests/**/*.elf` plus per-suite `max(dec)` |
+| `make custom_build TEST=<name>` | Bare-metal demo C tests → `build/tests/custom/<name>.mem` (UART; see `sim/test/custom/`) |
+| `make beebs_clone` / `make beebs_build` | Git submodule `subrepo/beebs` (GPL-3.0); `beebs_build` runs native `./configure && make`. RV32 `.mem` still needs a chip/board port (`env/beebs/README.md`) |
 
 **Configuration:** simulator JSON under `script/config/verilator.json` & `modelsim.json`; simulation profile keys in `script/config/tests/*.conf` (merged with `default.conf`). Override with `TEST_CONFIG=...`, `MAX_CYCLES=...`, etc.
+
+---
+
+## Static program memory (linker image size)
+
+For **on-chip RAM** sizing and `env/*/link.ld` `LENGTH`, the relevant figure is the **`dec`** column from `riscv32-unknown-elf-size` (text + data + bss), which includes heap/stack reservations when the linker script places them in the image (e.g. CoreMark `.heap` / `.stack` `NOLOAD` regions).
+
+Refresh numbers any time after (re)building tests:
+
+```bash
+make levelv_memory_report
+```
+
+### Per-suite ceiling (`max(dec)` in a typical tree)
+
+These are **upper bounds per suite** — individual tests can be smaller. **riscv-arch-test** images are aimed at simulation / compliance flows and can be **hundreds of KiB**; they are not representative of small FPGA BRAM.
+
+| Suite | Typical `max(dec)` | ~KiB | Notes |
+|-------|-------------------:|-----:|-------|
+| **torture** | 5988 | ~5.9 | Small randomized fragments |
+| **imperas** | 13028 | ~12.7 | |
+| **riscv-dv** | 13432 | ~13.1 | |
+| **dhrystone** | 19860 | ~19.4 | `env/dhrystone/link.ld` RAM **20 KiB** |
+| **coremark** | 30556 | ~29.8 | `env/coremark/levelv/link.ld` **32 KiB** ceiling |
+| **embench-IoT** | 39928 | ~39.0 | `env/embench/link.ld` **40 KiB** LENGTH, **16 KiB** stack (largest: **qrduino**); RTL `WRAPPER_RAM_SIZE_KB` must match |
+| **riscv-arch-test** | often much larger than 32 KiB | — | Use `levelv_memory_report` for exact ELFs |
+
+### Embench-IoT (each benchmark, static `dec`)
+
+Sorted by name (one row per `.elf` under `build/tests/embench/elf/` after `make embench_build`):
+
+| Benchmark | `dec` (bytes) | ~KiB |
+|-----------|---------------:|-----:|
+| aha-mont64 | 23170 | 22.63 |
+| crc32 | 22717 | 22.19 |
+| edn | 26193 | 25.58 |
+| huffbench | 32798 | 32.03 |
+| matmult-int | 31695 | 30.95 |
+| md5sum | 26075 | 25.46 |
+| nettle-aes | 35699 | 34.86 |
+| nettle-sha256 | 27363 | 26.72 |
+| nsichneu | 37069 | 36.20 |
+| picojpeg | 35669 | 34.83 |
+| qrduino | 39928 | 38.99 |
+| sglib-combined | 33649 | 32.86 |
+| slre | 24990 | 24.40 |
+| statemate | 25757 | 25.15 |
+| tarfind | 31019 | 30.29 |
+
+**UART / `.mem` note:** `.mem` file **line count** is driven by the binary image (+ optional padding, e.g. `COREMARK_MEM_PAD_BYTES` in the makefile). Smaller linker images yield smaller `.mem` files for FPGA programming.
 
 ---
 
@@ -232,8 +285,8 @@ Fill in after locked configuration (RTL profile, compiler flags, clock). For met
 | --------- | -------------------------------------- | ------------------- | ------------------- | ---------------------------------------- |
 | CoreMark | CoreMark/MHz | | | e.g. iterations & linker match FPGA RAM |
 | CoreMark | Total CoreMarks @ Fclk | | | |
-| Dhrystone | Dhrystones/s | | | |
-| Dhrystone | DMIPS/MHz | | | |
+| Dhrystone | Dhrystones/s | | ~60.8k | Dhrystone 2.1, 10⁵ runs, total cycles 41 100 036, **Fclk = 25 MHz** (`rtl/pkg/level_param.sv` `CPU_CLK`); Dhrystones/s ≈ iters·Fclk/total_cycles |
+| Dhrystone | DMIPS/MHz | | ~1.39 | DMIPS = (Dhrystones/s)/1757; **~35 DMIPS** @ 25 MHz; **~411 cycles/iter**; rescale if your PLL ≠ 25 MHz |
 | Embench | Normalized score (geomean) | | | Host-side geomean from per-bench metrics |
 | Embench | Per-bench `EMBENCH_MCYCLES` (optional) | | | UART / log aggregate |
 

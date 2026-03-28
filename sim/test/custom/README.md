@@ -7,9 +7,21 @@ In this directory you can author, build, and run your own UART test programs on 
 ```
 sim/test/custom/
 ├── uart_hello_test.c          # Example: simple UART hello message
+├── dsp_fir_mac_test.c         # DSP-style FIR + mcycle (MAC load)
+├── crc32_demo_test.c          # CRC-32 over 4 KiB buffer (MiBench-like flavour)
+├── i2c_test.c / spi_test.c … # Peripherals (match pins on your FPGA board)
 ├── README.md                   # This file
 └── (other test sources)
 ```
+
+### FPGA / compliance
+
+| Goal | What to use |
+|------|-------------|
+| UART demo / bring-up | `custom_build` tests here, Embench, Dhrystone, CoreMark |
+| ISA / RE compliance | `make run_verilator TEST_NAME=... TEST_TYPE=isa` — finish via **tohost** / sim log, not UART |
+| riscv-arch-test | `TEST_TYPE=arch` — PASS/FAIL **PC** in simulation |
+| BEEBS (full suite) | `make beebs_clone` then port chip/board per `env/beebs/README.md` |
 
 ## Prerequisites
 
@@ -84,6 +96,16 @@ chmod +x /path/to/level-v/script/shell/build_level_custom_c_test.sh
 ./script/shell/build_level_custom_c_test.sh my_custom_test
 ```
 
+### UART metin bozulması (FPGA / gerçek serial)
+
+Baud, **CPU saatine** ve host ayarına bağlıdır. Tüm testler `env/common/cpu_clock.h` içindeki **`CPU_CLK_HZ`** ile **115200** bps hesaplar (RTL `level_param.sv` `CPU_CLK` ile aynı olmalı). Eski örneklerde 50 MHz + 5 Mbaud vardı; PC **115200** açıkken bu çıktıyı çöpler.
+
+Farklı kristal kullanıyorsan: derlerken `-DCPU_CLK_HZ=...UL` ver veya `cpu_clock.h` / makefile’daki tanımı güncelle.
+
+### Linker RAM size
+
+`make custom_build` uses `env/custom/link.ld` (**40 KiB** RAM) so large sources (e.g. `cache_test.c`) link; keep RTL `WRAPPER_RAM_SIZE_KB` at least that large on FPGA.
+
 ### Manual build
 
 ```bash
@@ -95,9 +117,10 @@ riscv32-unknown-elf-gcc \
     -static -mcmodel=medany \
     -fvisibility=hidden -nostdlib -nostartfiles \
     -Wl,--gc-sections \
-    -Wl,-Ttext=0x80000000 \
+    -I env/common \
+    -Wl,-T env/custom/link.ld \
     -o build/tests/custom/uart_hello_test.elf \
-    sim/test/custom/uart_hello_test.c
+    sim/test/custom/startup.s sim/test/custom/uart_hello_test.c
 
 # 2. Raw binary
 riscv32-unknown-elf-objcopy -O binary \

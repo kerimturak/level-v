@@ -1,6 +1,9 @@
 /* ============================================================
- * level-V Linker Script for Embench - 32KB Memory
- * Embench benchmarks are small embedded apps
+ * level-V Linker Script for Embench (40 KiB RAM)
+ * Largest image observed: qrduino ~31.7 KiB (make levelv_memory_report).
+ * 32 KiB LENGTH left almost no margin above text+bss+heap+stack; nsichneu /
+ * heavy benches can overflow stack and corrupt UART/MMIO — use 40 KiB + 16 KiB stack.
+ * Keep LEVEL RTL WRAPPER_RAM_SIZE_KB >= LENGTH here (see rtl/pkg/level_param.sv).
  * ============================================================
  */
 
@@ -9,10 +12,10 @@ ENTRY(_start)
 
 MEMORY
 {
-    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 32K
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 40K
 }
 
-_stack_size = 4K;   /* Embench benchmarks need decent stack */
+_stack_size = 16K;  /* nsichneu / crypto stacks; was 8K at 32 KiB LENGTH */
 _heap_size  = 4K;   /* Some tests use malloc */
 
 SECTIONS
@@ -100,7 +103,7 @@ SECTIONS
     _end = .;
     
     /* Memory check */
-    ASSERT(. <= 0x80008000, "ERROR: Embench exceeds 32KB memory!")
+    ASSERT(. <= 0x8000A000, "ERROR: Embench exceeds 40KB memory!")
     
     /* Discard sections */
     /DISCARD/ :

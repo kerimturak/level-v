@@ -24,11 +24,11 @@ Modified for level-V RV32IMC_Zicsr processor
 #define CORE_PORTME_H
 
 #include <stdint.h>
+#include "cpu_clock.h"
 
 /************************/
 /* level-V Hardware Definitions */
 /************************/
-#define CPU_CLK          25000000   /* 40 MHz */
 #define BAUD_RATE        115200
 
 /* UART Registers */
@@ -122,6 +122,9 @@ typedef signed int     ee_s32;
 typedef double         ee_f32;
 typedef unsigned char  ee_u8;
 typedef unsigned int   ee_u32;
+#ifndef CPU_CLK
+#define CPU_CLK          ((ee_u32)CPU_CLK_HZ)
+#endif
 typedef ee_u32         ee_ptr_int;
 typedef unsigned int   ee_size_t;
 #define NULL ((void *)0)

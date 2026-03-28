@@ -18,12 +18,10 @@
  */
 
 #include <stdint.h>
+#include "cpu_clock.h"
 
-/* ========================================================================
- * Hardware Definitions
- * ======================================================================== */
-#define CPU_CLK          50000000   /* 50 MHz */
-#define BAUD_RATE        5000000    /* Fast simulation baud rate */
+/* UART 115200 @ CPU_CLK_HZ (FPGA/Verilator); old 5 Mbaud @ 50 MHz broke real serial */
+#define BAUD_RATE        115200u
 
 /* UART MMIO Map */
 #define UART_CTRL        (*(volatile uint32_t*)0x20000000)
@@ -78,7 +76,8 @@
  * ======================================================================== */
 void uart_init(void)
 {
-    uint32_t baud_div = CPU_CLK / BAUD_RATE;
+    uint32_t baud_div = (uint32_t)(CPU_CLK_HZ / BAUD_RATE);
+    if (baud_div < 1u) baud_div = 1u;
     UART_CTRL = (baud_div << 16) | UART_CTRL_TX_EN | UART_CTRL_RX_EN;
 }
 

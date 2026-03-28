@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <stdarg.h>
+#include "cpu_clock.h"
 
 /* Memory-mapped peripherals — layout matches rtl/periph/uart/uart.sv (same as CoreMark) */
 #define UART_BASE       0x20000000UL
@@ -17,10 +18,6 @@
 /* Status { bit3..0 } = rx_empty, rx_full, tx_empty, tx_full */
 #define UART_STATUS_TX_FULL (1u << 0)
 
-/* Must match SoC clk frequency (see rtl/pkg/level_param.sv localparam CPU_CLK). */
-#ifndef CPU_MHZ
-#define CPU_MHZ 25
-#endif
 #define UART_BAUD 115200u
 
 #define CLINT_BASE      0x30000000UL
@@ -60,7 +57,7 @@ unsigned long read_cycles(void) {
  */
 
 void levelv_uart_init(void) {
-    uint32_t baud_div = (uint32_t)(CPU_MHZ * 1000000u) / UART_BAUD;
+    uint32_t baud_div = (uint32_t)(CPU_CLK_HZ / UART_BAUD);
     UART_CTRL = (baud_div << 16) | UART_CTRL_TX_EN | UART_CTRL_RX_EN;
 }
 

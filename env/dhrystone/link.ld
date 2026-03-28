@@ -8,7 +8,8 @@ ENTRY(_start)
 
 MEMORY
 {
-    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 32K
+    /* ~19.4 KiB image (see: make levelv_memory_report); leave headroom */
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 20K
 }
 
 _stack_size = 2K;   /* Dhrystone için minimal */
@@ -82,7 +83,7 @@ SECTIONS
     _end = .;
     
     /* Memory check */
-    ASSERT(. <= 0x80008000, "ERROR: Dhrystone exceeds 32KB memory!")
+    ASSERT(. <= 0x80005000, "ERROR: Dhrystone exceeds 20KB RAM in link.ld")
     
     /DISCARD/ :
     {

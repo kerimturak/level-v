@@ -9,8 +9,9 @@
 
 set -e  # Exit on error
 
-# Ensure we're in the project root to avoid .lo files in unexpected places
-PROJ_ROOT="/home/kerim/level-v"
+# Repo root (this file lives in script/shell/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJ_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJ_ROOT"
 
 # Definitions for colored output
@@ -37,11 +38,11 @@ CC="${RISCV_PREFIX}-gcc"
 OBJCOPY="${RISCV_PREFIX}-objcopy"
 OBJDUMP="${RISCV_PREFIX}-objdump"
 
-# Linker script (example from CoreMark)
-LINKER_SCRIPT="${PROJ_ROOT}/subrepo/coremark/levelv/link.ld"
+# Linker script: 40 KiB RAM for large custom tests (cache_test, etc.)
+LINKER_SCRIPT="${PROJ_ROOT}/env/custom/link.ld"
 
-# Compiler flags
-CFLAGS="-march=rv32imc_zicsr_zifencei -mabi=ilp32 -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles"
+# Compiler flags (-I for cpu_clock.h in custom tests)
+CFLAGS="-march=rv32imc_zicsr_zifencei -mabi=ilp32 -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I${PROJ_ROOT}/env/common"
 LDFLAGS="-Wl,--gc-sections"
 
 # Startup file

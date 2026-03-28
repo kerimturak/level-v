@@ -8,6 +8,7 @@
 #define LEVEL_TEST_H
 
 #include <stdint.h>
+#include "cpu_clock.h"
 
 /* ========================================================================
  * UART MMIO Definitions
@@ -24,8 +25,10 @@
 #define UART_STATUS_TX_EMPTY  0x4
 #define UART_STATUS_RX_EMPTY  0x8
 
-/* Control Register Bits */
-#define UART_CTRL_TX_EN   0x1
+/* Control register: [31:16] baud_div, [1] rx_en, [0] tx_en (see rtl/periph/uart) */
+#define UART_CTRL_TX_EN   0x1u
+#define UART_CTRL_RX_EN   0x2u
+#define UART_BAUD         115200u
 
 /* ========================================================================
  * Memory Definitions
@@ -39,7 +42,9 @@
  * ======================================================================== */
 
 static inline void uart_init(void) {
-    UART_CTRL = UART_CTRL_TX_EN;
+    uint32_t baud_div = (uint32_t)(CPU_CLK_HZ / UART_BAUD);
+    if (baud_div < 1u) baud_div = 1u;
+    UART_CTRL = (baud_div << 16) | UART_CTRL_TX_EN | UART_CTRL_RX_EN;
 }
 
 static inline void uart_putc(char c) {

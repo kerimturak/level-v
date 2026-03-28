@@ -510,7 +510,7 @@ int test_multisize_patterns(void) {
 
     uint8_t  *byte_ptr = (uint8_t *)test_buffer;
     uint16_t *half_ptr = (uint16_t *)test_buffer;
-    uint32_t *word_ptr = test_buffer;
+    volatile uint32_t *word_ptr = test_buffer;
 
     // BYTE Write-Read
     print_str("  BYTE: ");

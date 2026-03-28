@@ -33,13 +33,14 @@ package level_param;
   // ============================================================================
   // 1. CORE PARAMETERS
   // ============================================================================
+  /* Match software: makefile CPU_CLK_HZ (env/common/cpu_clock.h). */
   localparam int CPU_CLK = 25_000_000;
   localparam int XLEN = 32;
 `ifdef LEVEL_OPENLANE
   localparam int WRAPPER_RAM_SIZE_KB = 4;
 `else
-  // 34 KiB: CoreMark sim loads coremark.mem padded to 34816 B (makefile elf_to_mem --pad-to-size 34816)
-  localparam int WRAPPER_RAM_SIZE_KB = 34;
+  // Main RAM depth for FPGA/sim (program + heap/stack). Embench link.ld uses 40 KiB; keep this >= that LENGTH.
+  localparam int WRAPPER_RAM_SIZE_KB = 40;
 `endif
   localparam logic [31:0] RESET_VECTOR = 32'h8000_0000;
 
