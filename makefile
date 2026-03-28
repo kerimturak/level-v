@@ -3347,7 +3347,7 @@ coremark_help:
 #   make bench        - Run benchmarks (NO_ADDR=1)
 #   make all_tests    - Run all tests
 #   make quick        - Quick smoke (~5 min): ISA + CSR
-#   make full         - Full suite (~30 min): ISA + Arch + Imperas + CSR
+#   make full         - Full suite: ISA + Arch + Imperas + CSR + RISC-V DV + Torture
 #   make nightly      - Nightly build (full + CoreMark + benchmarks)
 # ============================================================
 
@@ -3589,10 +3589,19 @@ quick:
 	echo -e "$(GREEN)╚══════════════════════════════════════════════════════════════╝$(RESET)"; \
 	if [ $$ISA_FAIL -gt 0 ] || [ $$CSR_FAIL -gt 0 ]; then exit 1; fi
 
+# Optional random stress for `make full` (override or skip on CLI):
+#   FULL_RISCV_DV_ITER=5 FULL_TORTURE_NUM_TESTS=8 make full
+#   SKIP_FULL_RISCV_DV=1 SKIP_FULL_TORTURE=1 make full
+FULL_RISCV_DV_ITER     ?= 3
+FULL_TORTURE_NUM_TESTS ?= 5
+FULL_TORTURE_MAX_INSNS ?= 500
+SKIP_FULL_RISCV_DV     ?= 0
+SKIP_FULL_TORTURE      ?= 0
+
 # -----------------------------------------
-# Full Test Suite (~30 min)
+# Full Test Suite (~30–90 min; scales with DV/torture counts)
 # -----------------------------------------
-# ISA + Arch + Imperas + CSR
+# ISA + Arch + Imperas + CSR + RISC-V DV + Torture
 .PHONY: full
 
 full:
@@ -3611,38 +3620,75 @@ full:
 	ARCH_PASS=0; ARCH_FAIL=0; \
 	IMP_PASS=0; IMP_FAIL=0; \
 	CSR_PASS=0; CSR_FAIL=0; \
-	echo -e "$(YELLOW)[1/4] Running ISA tests...$(RESET)"; \
+	DV_PASS=0; DV_FAIL=0; \
+	TORT_PASS=0; TORT_FAIL=0; \
+	echo -e "$(YELLOW)[1/6] Running ISA tests...$(RESET)"; \
 	if $(MAKE) --no-print-directory isa CLEAN_LOGS=1 2>&1 | tee $(REGRESSION_DIR)/reg_isa.log; then \
 		ISA_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_isa.log 2>/dev/null || true); \
 		ISA_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_isa.log 2>/dev/null || true); \
 	fi; \
 	ISA_PASS=$${ISA_PASS:-0}; ISA_FAIL=$${ISA_FAIL:-0}; \
 	echo "ISA: $$ISA_PASS passed, $$ISA_FAIL failed" >> $$REPORT; \
-	echo -e "$(YELLOW)[2/4] Running Architecture tests...$(RESET)"; \
+	echo -e "$(YELLOW)[2/6] Running Architecture tests...$(RESET)"; \
 	if $(MAKE) --no-print-directory arch 2>&1 | tee $(REGRESSION_DIR)/reg_arch.log; then \
 		ARCH_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_arch.log 2>/dev/null || true); \
 		ARCH_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_arch.log 2>/dev/null || true); \
 	fi; \
 	ARCH_PASS=$${ARCH_PASS:-0}; ARCH_FAIL=$${ARCH_FAIL:-0}; \
 	echo "ARCH: $$ARCH_PASS passed, $$ARCH_FAIL failed" >> $$REPORT; \
-	echo -e "$(YELLOW)[3/4] Running Imperas tests...$(RESET)"; \
+	echo -e "$(YELLOW)[3/6] Running Imperas tests...$(RESET)"; \
 	if $(MAKE) --no-print-directory imperas 2>&1 | tee $(REGRESSION_DIR)/reg_imperas.log; then \
 		IMP_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_imperas.log 2>/dev/null || true); \
 		IMP_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_imperas.log 2>/dev/null || true); \
 	fi; \
 	IMP_PASS=$${IMP_PASS:-0}; IMP_FAIL=$${IMP_FAIL:-0}; \
 	echo "IMPERAS: $$IMP_PASS passed, $$IMP_FAIL failed" >> $$REPORT; \
-	echo -e "$(YELLOW)[4/4] Running CSR tests...$(RESET)"; \
+	echo -e "$(YELLOW)[4/6] Running CSR tests...$(RESET)"; \
 	if $(MAKE) --no-print-directory csr 2>&1 | tee $(REGRESSION_DIR)/reg_csr.log; then \
 		CSR_PASS=$$(grep -c "PASSED" $(REGRESSION_DIR)/reg_csr.log 2>/dev/null || true); \
 		CSR_FAIL=$$(grep -c "FAILED" $(REGRESSION_DIR)/reg_csr.log 2>/dev/null || true); \
 	fi; \
 	CSR_PASS=$${CSR_PASS:-0}; CSR_FAIL=$${CSR_FAIL:-0}; \
 	echo "CSR: $$CSR_PASS passed, $$CSR_FAIL failed" >> $$REPORT; \
+	if [ "$(SKIP_FULL_RISCV_DV)" = "1" ]; then \
+		echo -e "$(YELLOW)[5/6] Skipping RISC-V DV (SKIP_FULL_RISCV_DV=1)$(RESET)"; \
+		echo "RISCV-DV: skipped" >> $$REPORT; \
+	else \
+		echo -e "$(YELLOW)[5/6] Running RISC-V DV (iter=$(FULL_RISCV_DV_ITER))...$(RESET)"; \
+		if $(MAKE) --no-print-directory riscv_dv_run \
+			RISCV_DV_ITER=$(FULL_RISCV_DV_ITER) \
+			SIM=$(SIM) 2>&1 | tee $(REGRESSION_DIR)/reg_riscv_dv.log; then \
+			DV_PASS=$$(grep '\[RISCV-DV\] Results:' $(REGRESSION_DIR)/reg_riscv_dv.log 2>/dev/null | tail -1 | sed -e 's/.*Results: //' -e 's/ passed.*//' || echo 0); \
+			DV_FAIL=$$(grep '\[RISCV-DV\] Results:' $(REGRESSION_DIR)/reg_riscv_dv.log 2>/dev/null | tail -1 | sed -e 's/.*, //' -e 's/ failed.*//' || echo 0); \
+		else \
+			DV_PASS=$$(grep '\[RISCV-DV\] Results:' $(REGRESSION_DIR)/reg_riscv_dv.log 2>/dev/null | tail -1 | sed -e 's/.*Results: //' -e 's/ passed.*//' || echo 0); \
+			DV_FAIL=$$(grep '\[RISCV-DV\] Results:' $(REGRESSION_DIR)/reg_riscv_dv.log 2>/dev/null | tail -1 | sed -e 's/.*, //' -e 's/ failed.*//' || echo 1); \
+		fi; \
+		DV_PASS=$${DV_PASS:-0}; DV_FAIL=$${DV_FAIL:-0}; \
+		echo "RISCV-DV: $$DV_PASS passed, $$DV_FAIL failed" >> $$REPORT; \
+	fi; \
+	if [ "$(SKIP_FULL_TORTURE)" = "1" ]; then \
+		echo -e "$(YELLOW)[6/6] Skipping Torture (SKIP_FULL_TORTURE=1)$(RESET)"; \
+		echo "TORTURE: skipped" >> $$REPORT; \
+	else \
+		echo -e "$(YELLOW)[6/6] Running Torture (N=$(FULL_TORTURE_NUM_TESTS), max_insns=$(FULL_TORTURE_MAX_INSNS))...$(RESET)"; \
+		if $(MAKE) --no-print-directory torture_batch \
+			TORTURE_NUM_TESTS=$(FULL_TORTURE_NUM_TESTS) \
+			TORTURE_MAX_INSNS=$(FULL_TORTURE_MAX_INSNS) \
+			SIM=$(SIM) 2>&1 | tee $(REGRESSION_DIR)/reg_torture.log; then \
+			TORT_PASS=$$(grep '\[TORTURE\] Results:' $(REGRESSION_DIR)/reg_torture.log 2>/dev/null | tail -1 | sed -e 's/.*Results: //' -e 's/ passed.*//' || echo 0); \
+			TORT_FAIL=$$(grep '\[TORTURE\] Results:' $(REGRESSION_DIR)/reg_torture.log 2>/dev/null | tail -1 | sed -e 's/.*, //' -e 's/ failed.*//' || echo 0); \
+		else \
+			TORT_PASS=$$(grep '\[TORTURE\] Results:' $(REGRESSION_DIR)/reg_torture.log 2>/dev/null | tail -1 | sed -e 's/.*Results: //' -e 's/ passed.*//' || echo 0); \
+			TORT_FAIL=$$(grep '\[TORTURE\] Results:' $(REGRESSION_DIR)/reg_torture.log 2>/dev/null | tail -1 | sed -e 's/.*, //' -e 's/ failed.*//' || echo 1); \
+		fi; \
+		TORT_PASS=$${TORT_PASS:-0}; TORT_FAIL=$${TORT_FAIL:-0}; \
+		echo "TORTURE: $$TORT_PASS passed, $$TORT_FAIL failed" >> $$REPORT; \
+	fi; \
 	END_TIME=$$(date +%s); \
 	DURATION=$$((END_TIME - START_TIME)); \
-	TOTAL_PASS=$$((ISA_PASS + ARCH_PASS + IMP_PASS + CSR_PASS)); \
-	TOTAL_FAIL=$$((ISA_FAIL + ARCH_FAIL + IMP_FAIL + CSR_FAIL)); \
+	TOTAL_PASS=$$((ISA_PASS + ARCH_PASS + IMP_PASS + CSR_PASS + DV_PASS + TORT_PASS)); \
+	TOTAL_FAIL=$$((ISA_FAIL + ARCH_FAIL + IMP_FAIL + CSR_FAIL + DV_FAIL + TORT_FAIL)); \
 	echo "============================================" >> $$REPORT; \
 	echo "TOTAL: $$TOTAL_PASS passed, $$TOTAL_FAIL failed" >> $$REPORT; \
 	echo "Duration: $${DURATION}s" >> $$REPORT; \
@@ -3655,6 +3701,12 @@ full:
 	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "ARCH:" $$ARCH_PASS $$ARCH_FAIL; \
 	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "IMPERAS:" $$IMP_PASS $$IMP_FAIL; \
 	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "CSR:" $$CSR_PASS $$CSR_FAIL; \
+	if [ "$(SKIP_FULL_RISCV_DV)" != "1" ]; then \
+		printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "RISCV-DV:" $$DV_PASS $$DV_FAIL; \
+	fi; \
+	if [ "$(SKIP_FULL_TORTURE)" != "1" ]; then \
+		printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "TORTURE:" $$TORT_PASS $$TORT_FAIL; \
+	fi; \
 	echo -e "$(GREEN)╠══════════════════════════════════════════════════════════════╣$(RESET)"; \
 	printf "$(GREEN)║$(RESET)  %-12s  %3d passed, %3d failed                      $(GREEN)║$(RESET)\n" "TOTAL:" $$TOTAL_PASS $$TOTAL_FAIL; \
 	echo -e "$(GREEN)║$(RESET)  Duration: $${DURATION}s                                             $(GREEN)║$(RESET)"; \
@@ -3817,7 +3869,7 @@ help_lists:
 	@echo -e "$(CYAN)  REGRESSION SUITES$(RESET)"
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "  $(GREEN)make quick$(RESET)        – Quick smoke test (~5 min) [ISA + CSR]"
-	@echo -e "  $(GREEN)make full$(RESET)         – Full regression (~30 min) [ISA + Arch + Imperas + CSR]"
+	@echo -e "  $(GREEN)make full$(RESET)         – Full regression [ISA + Arch + Imperas + CSR + RISC-V DV + Torture]"
 	@echo -e "  $(GREEN)make nightly$(RESET)      – Nightly build (full + benchmarks + CoreMark)"
 	@echo -e ""
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -3870,6 +3922,8 @@ help_lists:
 	@echo -e "$(YELLOW)Examples:$(RESET)"
 	@echo -e "  make quick                        # Quick smoke test"
 	@echo -e "  make full CLEAN_LOGS=1            # Full regression, clean logs first"
+	@echo -e "  make full SKIP_FULL_RISCV_DV=1     # Skip RISC-V DV in full"
+	@echo -e "  FULL_TORTURE_NUM_TESTS=8 make full # More torture tests"
 	@echo -e "  make coverage                     # Full coverage analysis"
 	@echo -e "  make t T=rv32ui-p-add SIM_FAST=1  # Single fast test"
 	@echo -e ""
@@ -4949,7 +5003,8 @@ torture_run: torture_build torture_verilate
 			fi; \
 		fi; \
 	done; \
-	echo -e "$(GREEN)[TORTURE] Results: $$PASS passed, $$FAIL failed$(RESET)"
+	echo -e "$(GREEN)[TORTURE] Results: $$PASS passed, $$FAIL failed$(RESET)"; \
+	test $$FAIL -eq 0
 
 # ============================================================
 # Batch Testing
