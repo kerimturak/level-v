@@ -293,15 +293,36 @@ module vga_controller
   // ===========================================================================
   // Framebuffer Read Pipeline
   // ===========================================================================
-  // Prefetch pixels ahead of display position
+  // One Wishbone read supplies multiple pixels (word granularity). Issue a new
+  // fetch only at word boundaries so memory has time to return (e.g. 1bpp:
+  // 32 px / word @ 25 MHz fits ~16-cycle RAM latency between fetches).
   logic [31:0] pixel_data_q;
-  logic        prefetch_req;
   logic [ 2:0] prefetch_state;
 
   localparam PREFETCH_IDLE = 3'd0;
   localparam PREFETCH_REQ = 3'd1;
   localparam PREFETCH_WAIT = 3'd2;
   localparam PREFETCH_DONE = 3'd3;
+
+  logic need_fetch;
+
+  always_comb begin
+    need_fetch = 1'b0;
+    if (disp_en && h_visible && v_visible) begin
+      if (gfx_mode) begin
+        unique case (bpp_mode)
+          2'b00: need_fetch = (pixel_x[4:0] == 5'd0);  // 1bpp — 32 px / word
+          2'b01: need_fetch = (pixel_x[3:0] == 4'd0);  // 2bpp — 16 px / word
+          2'b10: need_fetch = (pixel_x[2:0] == 3'd0);  // 4bpp — 8 px / word
+          2'b11: need_fetch = (pixel_x[1:0] == 2'd0);  // 8bpp — 4 px / word
+          default: need_fetch = 1'b0;
+        endcase
+      end else begin
+        // Text: new char/attr every 8 columns
+        need_fetch = (pixel_x[2:0] == 3'd0);
+      end
+    end
+  end
 
   always_ff @(posedge pixel_clk_i) begin
     if (!rst_ni) begin
@@ -310,9 +331,7 @@ module vga_controller
     end else begin
       case (prefetch_state)
         PREFETCH_IDLE: begin
-          if (h_visible && v_visible && disp_en) begin
-            prefetch_state <= PREFETCH_REQ;
-          end
+          if (need_fetch) prefetch_state <= PREFETCH_REQ;
         end
         PREFETCH_REQ: begin
           prefetch_state <= PREFETCH_WAIT;
@@ -383,12 +402,14 @@ module vga_controller
     if (!disp_en || !vga_de_o) begin
       pixel_color = 12'h000;  // Blank
     end else if (gfx_mode) begin
-      // Graphics mode
-      case (bpp_mode)
-        2'b00: pixel_index = pixel_data_q[pixel_x[4:0]] ? 8'hFF : 8'h00;
+      // Graphics mode — select lane within last fetched word
+      unique case (bpp_mode)
+        2'b00:
+        pixel_index = pixel_data_q[31-pixel_x[4:0]] ? 8'h0F : 8'h00;  // palette 15 / 0
         2'b01: pixel_index = {6'b0, pixel_data_q[pixel_x[3:0]*2+:2]};
         2'b10: pixel_index = {4'b0, pixel_data_q[pixel_x[2:0]*4+:4]};
-        2'b11: pixel_index = pixel_data_q[7:0];
+        2'b11: pixel_index = pixel_data_q[pixel_x[1:0]*8+:8];
+        default: pixel_index = 8'h00;
       endcase
       pixel_color = palette_ram[pixel_index];
     end else begin
@@ -417,7 +438,7 @@ module vga_controller
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       ctrl_q          <= 32'h0;
-      fb_base_q       <= 32'h8010_0000;  // Default FB at RAM + 1MB
+      fb_base_q       <= 32'h8000_2000;  // Inside default 40 KiB RAM (see vga_demo)
       fb_stride_q     <= H_VISIBLE;
       cursor_x_q      <= 16'd0;
       cursor_y_q      <= 16'd0;

@@ -577,6 +577,11 @@ ifeq ($(LOG_UART),1)
   MODELSIM_DEFINES += +define+LOG_UART
 endif
 
+# GPTimer ARR register trace ($display) - LOG_GPTIMER_ARR=1
+ifeq ($(LOG_GPTIMER_ARR),1)
+  MODELSIM_DEFINES += +define+LOG_GPTIMER_ARR
+endif
+
 # Branch Predictor stats - LOG_BP=1
 ifeq ($(LOG_BP),1)
   MODELSIM_DEFINES += +define+LOG_BP
@@ -921,6 +926,11 @@ ifeq ($(LOG_UART),1)
   SV_DEFINES += +define+LOG_UART
 endif
 
+# GPTimer ARR register trace ($display) - LOG_GPTIMER_ARR=1
+ifeq ($(LOG_GPTIMER_ARR),1)
+  SV_DEFINES += +define+LOG_GPTIMER_ARR
+endif
+
 # Branch Predictor stats - LOG_BP=1
 ifeq ($(LOG_BP),1)
   SV_DEFINES += +define+LOG_BP
@@ -1038,6 +1048,10 @@ else
 endif
 
 VERILATOR_DEFINE = $(TRACE_DEFINE) $(SV_DEFINES)
+
+# Verilator: üst modül (level_wrapper) parametre geçersiz kılma — örnek:
+#   make verilate VERILATOR_GFLAGS="-GVGA_EN=1 -GGPIO_EN=1 -GPLIC_EN=1"
+VERILATOR_GFLAGS ?=
 
 # Trace depth control
 TRACE_DEPTH ?= 99
@@ -1180,7 +1194,7 @@ NO_WARNING_LINT = \
 # Build Flags
 # -----------------------------------------
 # Lint flags: -Wall enables all warnings, no suppressions for real issues
-LINT_FLAGS  = --lint-only -Wall -I$(INC_DIRS) --top-module $(RTL_LEVEL)
+LINT_FLAGS  = --lint-only -Wall -I$(INC_DIRS) --top-module $(RTL_LEVEL) $(VERILATOR_GFLAGS)
 RUN_BIN     := $(OBJ_DIR)/V$(RTL_LEVEL)
 
 # Common verilator flags
@@ -1188,6 +1202,7 @@ RUN_BIN     := $(OBJ_DIR)/V$(RTL_LEVEL)
 # --x-initial-edge: Triggers initial blocks on the edge for better compatibility
 VERILATOR_COMMON_FLAGS = \
     --top-module $(RTL_LEVEL) \
+    $(VERILATOR_GFLAGS) \
     $(VERILATOR_INCLUDES) \
     --timing \
     --x-assign $(X_ASSIGN) \
@@ -1302,6 +1317,7 @@ else
 		$(SV_SOURCES) \
 		$(VERILATOR_COMMON_FLAGS) \
 		$(VERILATOR_BUILD_FLAGS) \
+		$(NO_WARNING) \
 		$(VERILATOR_DEFINE)
 	@printf "$(GREEN)[SUCCESS]$(RESET) Built: $(RUN_BIN)\n"
 endif
@@ -3885,6 +3901,20 @@ MAX_CYCLES ?= $(CUSTOM_MAX_CYCLES)
 # Coverage data directory
 COVERAGE_DATA_DIR := $(RESULTS_DIR)/logs/verilator/coverage_data
 
+# custom_run: level_wrapper parametreleri (Verilator -G). run_verilator → verilate
+# her koşuda tetiklediği için burada bayrak yoksa model varsayılan (çoğu periph kapalı)
+# ile yeniden derlenir. İsterseniz: make custom_run TEST=foo VERILATOR_GFLAGS="-G..."
+TEST_VERILATOR_GFLAGS_gpio_test  := -GGPIO_EN=1
+TEST_VERILATOR_GFLAGS_vga_test   := -GVGA_EN=1
+TEST_VERILATOR_GFLAGS_pwm_test   := -GPWM_EN=1
+TEST_VERILATOR_GFLAGS_plic_test  := -GPLIC_EN=1
+TEST_VERILATOR_GFLAGS_wdt_test   := -GWDT_EN=1
+TEST_VERILATOR_GFLAGS_dma_test   := -GDMA_EN=1
+TEST_VERILATOR_GFLAGS_i2c_test   := -GI2C_EN=1
+TEST_VERILATOR_GFLAGS_spi_test   := -GSPI_EN=1
+TEST_VERILATOR_GFLAGS_timer_test := -GTIMER_EN=1
+TEST_VERILATOR_GFLAGS_vga_demo  := -GVGA_EN=1
+
 # Dynamically discover custom tests
 CUSTOM_TESTS := $(patsubst $(CUSTOM_TEST_DIR)/%.c,%,$(wildcard $(CUSTOM_TEST_DIR)/*.c))
 
@@ -3902,6 +3932,7 @@ custom_help:
 	@echo -e "  $(YELLOW)make custom_test TEST=<name>$(RESET) - Build and run custom test"
 	@echo -e "  $(YELLOW)make custom_build TEST=<name>$(RESET) - Build custom test"
 	@echo -e "  $(YELLOW)make custom_run TEST=<name>$(RESET) - Run custom test simulation"
+	@echo -e "  $(YELLOW)(İpucu)$(RESET) peripheral testleri otomatik $(CYAN)-G…$(RESET) ile verilate eder; ek için $(CYAN)VERILATOR_GFLAGS$(RESET)"
 	@echo -e "  $(YELLOW)make custom_clean TEST=<name>$(RESET) - Clean custom test artifacts"
 	@echo -e "  $(YELLOW)make custom_config$(RESET)        - Show custom test configuration"
 	@echo ""
@@ -3959,7 +3990,7 @@ endif
 		echo -e "$(RED)[ERROR]$(RESET) Memory file not found. Run 'make custom_build TEST=$(TEST)' first."; \
 		exit 1; \
 	fi
-	@cd $(ROOT_DIR) && $(MAKE) run_verilator MEM_FILE="$(CUSTOM_BUILD_DIR)/$(TEST).mem" TEST_NAME="$(TEST)" MAX_CYCLES=$(MAX_CYCLES) LOG_UART=1 SIM_UART_MONITOR=1 COVERAGE_FILE="$(COVERAGE_DATA_DIR)/$(TEST).dat" 2>&1 | tee "$(CUSTOM_BUILD_DIR)/sim.log"
+	@cd $(ROOT_DIR) && $(MAKE) run_verilator MEM_FILE="$(CUSTOM_BUILD_DIR)/$(TEST).mem" TEST_NAME="$(TEST)" MAX_CYCLES=$(MAX_CYCLES) LOG_UART=1 SIM_UART_MONITOR=1 COVERAGE_FILE="$(COVERAGE_DATA_DIR)/$(TEST).dat" VERILATOR_GFLAGS="$(strip $(VERILATOR_GFLAGS) $(TEST_VERILATOR_GFLAGS_$(TEST)))" 2>&1 | tee "$(CUSTOM_BUILD_DIR)/sim.log"
 	@UART_LOG="$(LOG_DIR)/verilator/$(TEST)/uart_output.log"; \
 	if [ -f "$$UART_LOG" ]; then \
 		cp "$$UART_LOG" "$(CUSTOM_BUILD_DIR)/$(TEST)_uart.log"; \
@@ -6862,6 +6893,7 @@ help_sim:
 	@echo -e "  LOG_PIPELINE=1      Konata pipeline trace file"
 	@echo -e "  LOG_RAM=1           RAM initialization messages"
 	@echo -e "  LOG_UART=1          UART TX file logging"
+	@echo -e "  LOG_GPTIMER_ARR=1   GPTimer TIMx_ARR RD/WR (\$$display)"
 	@echo -e "  LOG_BP=1            Branch predictor statistics"
 	@echo -e "  LOG_BP_VERBOSE=1    Per-branch verbose logging"
 	@echo -e "  KONATA_TRACER=1     Enable Konata visualizer"

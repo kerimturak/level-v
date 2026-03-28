@@ -38,7 +38,7 @@ CC="${RISCV_PREFIX}-gcc"
 OBJCOPY="${RISCV_PREFIX}-objcopy"
 OBJDUMP="${RISCV_PREFIX}-objdump"
 
-# Linker script: 40 KiB RAM for large custom tests (cache_test, etc.)
+# Linker script: 40 KiB RAM (FPGA BRAM friendly; vga_demo uses partial FB + HW OOB clamp)
 LINKER_SCRIPT="${PROJ_ROOT}/env/custom/link.ld"
 
 # Compiler flags (-I for cpu_clock.h in custom tests)

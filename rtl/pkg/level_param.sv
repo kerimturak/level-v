@@ -39,7 +39,8 @@ package level_param;
 `ifdef LEVEL_OPENLANE
   localparam int WRAPPER_RAM_SIZE_KB = 4;
 `else
-  // Main RAM depth for FPGA/sim (program + heap/stack). Embench link.ld uses 40 KiB; keep this >= that LENGTH.
+  // Main RAM depth for FPGA/sim (program + heap/stack). Match env/custom/link.ld LENGTH.
+  // Full 640×480@1bpp needs ~38 KiB VRAM; on 40 KiB FPGA the VGA reader clamps past-RAM fetches to black (see vga_fb_wishbone).
   localparam int WRAPPER_RAM_SIZE_KB = 40;
 `endif
   localparam logic [31:0] RESET_VECTOR = 32'h8000_0000;

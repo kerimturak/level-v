@@ -265,7 +265,9 @@ module wb_master_bridge (
           wb_m_o.stb = 1'b1;
           wb_m_o.adr = iomem_req_i.addr;
           wb_m_o.we  = is_write;
-          wb_m_o.sel = byte_sel_comb;
+          // Loads leave iomem_req_i.rw == 0, so byte_sel_comb is zero; PBUS uses
+          // immediate ack in IDLE — drive full word select on uncached reads.
+          wb_m_o.sel = is_write ? byte_sel_comb : 4'b1111;
           wb_m_o.dat = iomem_req_i.data[31:0];
         end
       end

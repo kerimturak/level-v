@@ -17,6 +17,9 @@ Description:
   - 2 Compare/Capture channels per timer
   - PWM output generation
   - Interrupt on overflow, compare match
+
+  Simulation: define LOG_GPTIMER_ARR (e.g. make verilate LOG_GPTIMER_ARR=1) to
+  $display every TIMx_ARR read/write (timer index, adr_i, data, wstrb).
   
   Memory Map (base 0x2000_6000, 0x40 per timer):
     Timer 0: 0x000-0x03F
@@ -241,6 +244,11 @@ module gptimer
             if (byte_sel_i[1]) arr_q[timer_sel][15:8] <= dat_i[15:8];
             if (byte_sel_i[2]) arr_q[timer_sel][23:16] <= dat_i[23:16];
             if (byte_sel_i[3]) arr_q[timer_sel][31:24] <= dat_i[31:24];
+`ifdef LOG_GPTIMER_ARR
+            $display(
+                "[GPTIMER_ARR] %0t WR tim=%0d adr_i=%h dat_i=%h wstrb=%b (reg_sel=%0h)",
+                $time, timer_sel, adr_i, dat_i, byte_sel_i, reg_sel);
+`endif
           end
 
           REG_CCR0: begin
@@ -295,6 +303,15 @@ module gptimer
       default:  dat_o = '0;
     endcase
   end
+
+`ifdef LOG_GPTIMER_ARR
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && stb_i && !we_i && (reg_sel == REG_ARR))
+      $display(
+          "[GPTIMER_ARR] %0t RD tim=%0d adr_i=%h arr_q=%h dat_o=%h",
+          $time, timer_sel, adr_i, arr_q[timer_sel], dat_o);
+  end
+`endif
 
   // ============================================================================
   // PWM Output Generation

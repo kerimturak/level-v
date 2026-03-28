@@ -4,6 +4,7 @@ rtl/pkg/level_param.sv
 rtl/core/cpu.sv
 rtl/core/hazard_unit.sv
 rtl/core/bus/wb_interconnect.sv
+rtl/core/bus/wb_arbiter2.sv
 rtl/core/bus/wb_master_bridge.sv
 rtl/core/pmp_pma/pma.sv
 rtl/core/stage01_fetch/align_buffer.sv
@@ -56,6 +57,7 @@ rtl/periph/pwm/pwm.sv
 rtl/periph/vga/vga_char_rom.sv
 rtl/periph/vga/vga_clk_gen.sv
 rtl/periph/vga/vga_controller.sv
+rtl/periph/vga/vga_fb_wishbone.sv
 rtl/periph/i2c/i2c_master.sv
 rtl/periph/i2c/i2c_slave_sim.sv
 rtl/periph/spi/spi_master.sv

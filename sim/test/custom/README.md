@@ -9,6 +9,7 @@ sim/test/custom/
 ├── uart_hello_test.c          # Example: simple UART hello message
 ├── dsp_fir_mac_test.c         # DSP-style FIR + mcycle (MAC load)
 ├── crc32_demo_test.c          # CRC-32 over 4 KiB buffer (MiBench-like flavour)
+├── vga_demo.c                 # 640×480 1bpp framebuffer in RAM + VGA enable
 ├── i2c_test.c / spi_test.c … # Peripherals (match pins on your FPGA board)
 ├── README.md                   # This file
 └── (other test sources)
@@ -104,7 +105,7 @@ Farklı kristal kullanıyorsan: derlerken `-DCPU_CLK_HZ=...UL` ver veya `cpu_clo
 
 ### Linker RAM size
 
-`make custom_build` uses `env/custom/link.ld` (**40 KiB** RAM) so large sources (e.g. `cache_test.c`) link; keep RTL `WRAPPER_RAM_SIZE_KB` at least that large on FPGA.
+`make custom_build` uses `env/custom/link.ld` (**40 KiB** RAM) to match typical Basys3-style BRAM budgets; `vga_demo` only paints the lines that fit below RAM top and relies on RTL black-fill past end of RAM.
 
 ### Manual build
 

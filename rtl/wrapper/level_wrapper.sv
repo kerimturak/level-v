@@ -12,7 +12,7 @@ Description:
   Full Wishbone B4 pipelined bus architecture for peripheral interconnect.
   
   Bus Topology:
-    CPU -> iomem -> wb_master_bridge -> wb_interconnect -> slaves
+    CPU -> iomem -> wb_master_bridge -> wb_arbiter2 (+VGA FB master) -> wb_interconnect -> slaves
     
   Memory Map:
     0x8000_0000 : Main RAM (via Wishbone)
@@ -176,6 +176,10 @@ module level_wrapper
   // Wishbone Bus
   wb_master_t                         wb_cpu_m;
   wb_slave_t                          wb_cpu_s;
+  wb_master_t                         wb_mux_m;
+  wb_slave_t                          wb_mux_s;
+  wb_master_t                         wb_vga_m;
+  wb_slave_t                          wb_s_vga;
   wb_master_t                         wb_slave_m           [WB_NUM_SLAVES_LOCAL];
   wb_slave_t                          wb_slave_s           [WB_NUM_SLAVES_LOCAL];
 
@@ -243,7 +247,7 @@ module level_wrapper
   // SPI
   logic       [                 31:0] spi0_rdata;
 
-  // I2C (currently not instantiated, default to 0)
+  // I2C (tie-off when I2C_EN=0 to avoid continuous-assign vs i2c_master drivers)
   logic       [                 31:0] i2c0_rdata;
   logic                               i2c0_scl_o;
   logic                               i2c0_scl_oe;
@@ -253,15 +257,18 @@ module level_wrapper
   logic                               i2c0_sda_i;
   logic                               i2c0_irq;
 
-  // Default unused I2C signals to 0 (no I2C module instantiated)
-  assign i2c0_rdata  = 32'h0;
-  assign i2c0_scl_o  = 1'b0;
-  assign i2c0_scl_oe = 1'b0;
-  assign i2c0_scl_i  = 1'b0;
-  assign i2c0_sda_o  = 1'b0;
-  assign i2c0_sda_oe = 1'b0;
-  assign i2c0_sda_i  = 1'b0;
-  assign i2c0_irq    = 1'b0;
+  generate
+    if (!I2C_EN) begin : gen_i2c_tieoff
+      assign i2c0_rdata  = 32'h0;
+      assign i2c0_scl_o  = 1'b0;
+      assign i2c0_scl_oe = 1'b0;
+      assign i2c0_scl_i  = 1'b0;
+      assign i2c0_sda_o  = 1'b0;
+      assign i2c0_sda_oe = 1'b0;
+      assign i2c0_sda_i  = 1'b0;
+      assign i2c0_irq    = 1'b0;
+    end
+  endgenerate
 
   // Default unused UART1 signals to 0 (no UART1 module instantiated)
   assign uart1_rdata = 32'h0;
@@ -353,6 +360,16 @@ module level_wrapper
       .wb_s_i     (wb_cpu_s)
   );
 
+  // CPU (port 0) wins over VGA framebuffer master while .cyc is asserted
+  wb_arbiter2 i_wb_arb (
+      .wb_m_cpu_i(wb_cpu_m),
+      .wb_s_cpu_o(wb_cpu_s),
+      .wb_m_vga_i(wb_vga_m),
+      .wb_s_vga_o(wb_s_vga),
+      .wb_m_o    (wb_mux_m),
+      .wb_s_i    (wb_mux_s)
+  );
+
   // ==========================================================================
   // WISHBONE INTERCONNECT (1-to-N Switch)
   // ==========================================================================
@@ -361,8 +378,8 @@ module level_wrapper
   ) i_wb_interconnect (
       .clk_i (clk_i),
       .rst_ni(sys_rst_n),
-      .wb_m_i(wb_cpu_m),
-      .wb_s_o(wb_cpu_s),
+      .wb_m_i(wb_mux_m),
+      .wb_s_o(wb_mux_s),
       .wb_m_o(wb_slave_m),
       .wb_s_i(wb_slave_s)
   );
@@ -560,29 +577,33 @@ module level_wrapper
 
   // ==========================================================================
   // Peripheral Bus Address Decoding
+  // 4KB slots under 0x2000_0000 use addr[15:12]; UART0/SPI/I2C/UART1 pages also
+  // require addr[15:12]==0 so they do not alias GPIO/timer/etc. in the same 64KB.
   // Memory Map:
-  //   0x2000_0xxx : UART0 (addr[19:16] == 0x0)
-  //   0x2001_0xxx : SPI0  (addr[19:16] == 0x1)
-  //   0x2002_0xxx : I2C0  (addr[19:16] == 0x2)
-  //   0x2003_0xxx : UART1 (addr[19:16] == 0x3)
+  //   0x2000_0xxx : UART0 ( [19:16]==0 && [15:12]==0 )
+  //   0x2001_0xxx : SPI0  ( [19:16]==1 && [15:12]==0 )
+  //   0x2002_0xxx : I2C0  ( [19:16]==2 && [15:12]==0 )
+  //   0x2003_0xxx : UART1 ( [19:16]==3 && [15:12]==0 )
+  //   0x2000_4xxx : GPIO … 0x2000_Axxx : VGA
   // ==========================================================================
-  assign uart_sel  = (pbus_addr[19:16] == 4'h0);  // 0x2000_0xxx
-  assign spi_sel   = (pbus_addr[19:16] == 4'h1);  // 0x2001_0xxx
-  assign i2c_sel   = (pbus_addr[19:16] == 4'h2);  // 0x2002_0xxx
+  assign uart_sel  = (pbus_addr[19:16] == 4'h0) && (pbus_addr[15:12] == 4'h0);
+  assign spi_sel   = (pbus_addr[19:16] == 4'h1) && (pbus_addr[15:12] == 4'h0);
+  assign i2c_sel   = (pbus_addr[19:16] == 4'h2) && (pbus_addr[15:12] == 4'h0);
 
-  assign sel_uart0 = uart_sel;  // UART0 at 0x2000_0xxx
-  assign sel_uart1 = (pbus_addr[19:16] == 4'h3);  // UART1 at 0x2003_0xxx
-  assign sel_spi0  = spi_sel;  // SPI0 at 0x2001_0xxx
-  assign sel_i2c0  = i2c_sel;  // I2C0 at 0x2002_0xxx
+  assign sel_uart0 = uart_sel;
+  assign sel_uart1 = (pbus_addr[19:16] == 4'h3) && (pbus_addr[15:12] == 4'h0);
+  assign sel_spi0  = spi_sel;
+  assign sel_i2c0  = i2c_sel;
 
-  // Additional peripheral selects (currently unused/disabled)
-  assign sel_gpio  = 1'b0;
-  assign sel_pwm   = 1'b0;
-  assign sel_timer = 1'b0;
-  assign sel_plic  = 1'b0;
-  assign sel_wdt   = 1'b0;
-  assign sel_dma   = 1'b0;
-  assign sel_vga   = 1'b0;
+  assign sel_gpio  = (pbus_addr[19:16] == 4'h0) && (pbus_addr[15:12] == 4'h4);
+  assign sel_pwm   = (pbus_addr[19:16] == 4'h0) && (pbus_addr[15:12] == 4'h5);
+  assign sel_timer = (pbus_addr[19:16] == 4'h0) && (pbus_addr[15:12] == 4'h6);
+  assign sel_plic  = (pbus_addr[19:16] == 4'h0) && (pbus_addr[15:12] == 4'h7);
+  assign sel_wdt   = (pbus_addr[19:16] == 4'h0) && (pbus_addr[15:12] == 4'h8);
+  assign sel_dma   = (pbus_addr[19:16] == 4'h0) && (pbus_addr[15:12] == 4'h9);
+  assign sel_vga   = (pbus_addr[19:16] == 4'h0) && (pbus_addr[15:12] == 4'hA);
+
+  assign sel_periph = sel_gpio | sel_pwm | sel_timer | sel_plic | sel_wdt | sel_dma | sel_vga;
 
   // ==========================================================================
   // UART (Connected via Peripheral Bus)
@@ -716,11 +737,11 @@ module level_wrapper
       ) i_gpio (
           .clk_i     (clk_i),
           .rst_ni    (sys_rst_n),
-          .stb_i     (sel_gpio),
-          .adr_i     (cpu_mem_req.addr[5:2]),   // Register address (word aligned)
-          .byte_sel_i(cpu_mem_req.rw[3:0]),     // Byte enables
-          .we_i      (|cpu_mem_req.rw),         // Write enable
-          .dat_i     (cpu_mem_req.data[31:0]),
+          .stb_i     (pbus_valid && sel_gpio),
+          .adr_i     (pbus_addr[5:2]),
+          .byte_sel_i(pbus_wstrb),
+          .we_i      (pbus_we),
+          .dat_i     (pbus_wdata),
           .dat_o     (gpio_rdata),
           .gpio_i    (gpio_i),
           .gpio_o    (gpio_o),
@@ -768,11 +789,11 @@ module level_wrapper
       ) i_plic (
           .clk_i        (clk_i),
           .rst_ni       (sys_rst_n),
-          .stb_i        (sel_plic),
-          .adr_i        (cpu_mem_req.addr[11:2]),  // 10-bit word address
-          .byte_sel_i   (cpu_mem_req.rw[3:0]),
-          .we_i         (|cpu_mem_req.rw),
-          .dat_i        (cpu_mem_req.data[31:0]),
+          .stb_i        (pbus_valid && sel_plic),
+          .adr_i        (pbus_addr[11:2]),
+          .byte_sel_i   (pbus_wstrb),
+          .we_i         (pbus_we),
+          .dat_i        (pbus_wdata),
           .dat_o        (plic_rdata),
           .irq_sources_i(plic_irq_sources),
           .irq_o        (plic_irq)
@@ -793,11 +814,11 @@ module level_wrapper
       ) i_gptimer (
           .clk_i         (clk_i),
           .rst_ni        (sys_rst_n),
-          .stb_i         (sel_timer),
-          .adr_i         (cpu_mem_req.addr[9:2]),   // 8-bit word address
-          .byte_sel_i    (cpu_mem_req.rw[3:0]),
-          .we_i          (|cpu_mem_req.rw),
-          .dat_i         (cpu_mem_req.data[31:0]),
+          .stb_i         (pbus_valid && sel_timer),
+          .adr_i         (pbus_addr[7:0]),
+          .byte_sel_i    (pbus_wstrb),
+          .we_i          (pbus_we),
+          .dat_i         (pbus_wdata),
           .dat_o         (timer_rdata),
           .pwm_o         (timer_pwm),
           .irq_o         (gptimer_irq),
@@ -821,11 +842,11 @@ module level_wrapper
       ) i_watchdog (
           .clk_i      (clk_i),
           .rst_ni     (sys_rst_n),
-          .stb_i      (sel_wdt),
-          .adr_i      (cpu_mem_req.addr[5:2]),   // 4-bit word address
-          .byte_sel_i (cpu_mem_req.rw[3:0]),
-          .we_i       (|cpu_mem_req.rw),
-          .dat_i      (cpu_mem_req.data[31:0]),
+          .stb_i      (pbus_valid && sel_wdt),
+          .adr_i      (pbus_addr[5:2]),
+          .byte_sel_i (pbus_wstrb),
+          .we_i       (pbus_we),
+          .dat_i      (pbus_wdata),
           .dat_o      (wdt_rdata),
           .dbg_halt_i (1'b0),                    // TODO: Connect to debug module
           .wdt_reset_o(wdt_reset),
@@ -851,11 +872,11 @@ module level_wrapper
       ) i_dma (
           .clk_i      (clk_i),
           .rst_ni     (sys_rst_n),
-          .stb_i      (sel_dma),
-          .adr_i      (cpu_mem_req.addr[7:2]),   // 6-bit word address
-          .byte_sel_i (cpu_mem_req.rw[3:0]),
-          .we_i       (|cpu_mem_req.rw),
-          .dat_i      (cpu_mem_req.data[31:0]),
+          .stb_i      (pbus_valid && sel_dma),
+          .adr_i      (pbus_addr[7:2]),
+          .byte_sel_i (pbus_wstrb),
+          .we_i       (pbus_we),
+          .dat_i      (pbus_wdata),
           .dat_o      (dma_rdata),
           .dma_req_o  (dma_req),
           .dma_addr_o (dma_addr),
@@ -887,11 +908,11 @@ module level_wrapper
       ) i_pwm (
           .clk_i     (clk_i),
           .rst_ni    (sys_rst_n),
-          .stb_i     (sel_pwm),
-          .adr_i     (cpu_mem_req.addr[7:2]),   // 6-bit word address
-          .byte_sel_i(cpu_mem_req.rw[3:0]),
-          .we_i      (|cpu_mem_req.rw),
-          .dat_i     (cpu_mem_req.data[31:0]),
+          .stb_i     (pbus_valid && sel_pwm),
+          .adr_i     (pbus_addr[7:2]),
+          .byte_sel_i(pbus_wstrb),
+          .we_i      (pbus_we),
+          .dat_i     (pbus_wdata),
           .dat_o     (pwm_rdata),
           .fault_i   (pwm_fault_i),
           .pwm_o     (pwm_out),
@@ -917,6 +938,11 @@ module level_wrapper
   // ==========================================================================
   generate
     if (VGA_EN) begin : gen_vga
+      logic        vga_fb_req;
+      logic [31:0] vga_fb_addr;
+      logic [31:0] vga_fb_data;
+      logic        vga_fb_ack;
+
       // Pixel clock generator
       vga_clk_gen #(
           .SYS_CLK_FREQ  (CLK_FREQ_HZ),
@@ -946,27 +972,50 @@ module level_wrapper
           .clk_i      (clk_i),
           .rst_ni     (sys_rst_n),
           .pixel_clk_i(pixel_clk),
-          .stb_i      (sel_vga),
-          .adr_i      (cpu_mem_req.addr[11:2]),  // 10-bit word address (4KB)
-          .byte_sel_i (cpu_mem_req.rw[3:0]),
-          .we_i       (|cpu_mem_req.rw),
-          .dat_i      (cpu_mem_req.data[31:0]),
+          .stb_i      (pbus_valid && sel_vga),
+          .adr_i      (pbus_addr[7:2]),
+          .byte_sel_i (pbus_wstrb),
+          .we_i       (pbus_we),
+          .dat_i      (pbus_wdata),
           .dat_o      (vga_rdata),
-          .fb_req_o   (),                        // Framebuffer interface not connected
-          .fb_addr_o  (),
-          .fb_data_i  (32'h0),
-          .fb_ack_i   (1'b0),
-          .char_addr_o(),                        // Character ROM interface not connected
+          .fb_req_o   (vga_fb_req),
+          .fb_addr_o  (vga_fb_addr),
+          .fb_data_i  (vga_fb_data),
+          .fb_ack_i   (vga_fb_ack),
+          .char_addr_o(),                        // Character ROM not connected (text mode limited)
           .char_data_i(8'h0),
           .vga_hsync_o(vga_hsync_o),
           .vga_vsync_o(vga_vsync_o),
           .vga_r_o    (vga_r_o),
           .vga_g_o    (vga_g_o),
           .vga_b_o    (vga_b_o),
-          .vga_de_o   (),                        // Data enable not connected
-          .vsync_irq_o()                         // VSync interrupt not connected
+          .vga_de_o   (),
+          .vsync_irq_o()
+      );
+
+      vga_fb_wishbone #(
+          .RAM_SIZE_KB(RAM_SIZE_KB)
+      ) i_vga_fb_wb (
+          .clk_i    (clk_i),
+          .rst_ni   (sys_rst_n),
+          .fb_req_i (vga_fb_req),
+          .fb_addr_i(vga_fb_addr),
+          .fb_data_o(vga_fb_data),
+          .fb_ack_o (vga_fb_ack),
+          .wb_m_o   (wb_vga_m),
+          .wb_s_i   (wb_s_vga)
       );
     end else begin : gen_no_vga
+      assign wb_vga_m = '{
+          adr: '0,
+          dat: '0,
+          sel: '0,
+          we: 1'b0,
+          stb: 1'b0,
+          cyc: 1'b0,
+          cti: WB_CTI_CLASSIC,
+          bte: WB_BTE_LINEAR
+      };
       assign vga_rdata   = '0;
       assign pixel_clk   = 1'b0;
       assign pll_locked  = 1'b0;
