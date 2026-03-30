@@ -204,7 +204,7 @@ class DebugLogger:
         # Capture relevant environment variables
         relevant_vars = [
             "TEST_NAME", "MAX_CYCLES", "MODE", "TRACE", "MEM_FILE",
-            "LOG_COMMIT", "LOG_BP", "LOG_RAM", "LOG_UART", "SIM_FAST",
+            "LOG_COMMIT", "LOG_BP", "LOG_PERF_STALL", "LOG_RAM", "LOG_UART", "SIM_FAST",
             "ENABLE_SPIKE", "ENABLE_COMPARE", "ENABLE_HTML_REPORT"
         ]
         for var in relevant_vars:

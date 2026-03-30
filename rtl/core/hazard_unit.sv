@@ -13,9 +13,7 @@ module hazard_unit (
     input  logic [4:0] r2_addr_de_i,
     input  logic [4:0] r1_addr_ex_i,
     input  logic [4:0] r2_addr_ex_i,
-    input  logic [4:0] rd_addr_ex_i,
     input  logic       pc_sel_ex_i,
-    input  logic       rslt_sel_ex_0,
     input  logic [4:0] rd_addr_me_i,
     input  logic       rf_rw_me_i,
     input  logic       rf_rw_wb_i,
@@ -29,8 +27,6 @@ module hazard_unit (
     output logic       fwd_a_de_o,
     output logic       fwd_b_de_o
 );
-
-  logic lw_stall;
 
   always_comb begin
     if (rf_rw_me_i && (r1_addr_ex_i == rd_addr_me_i) && (r1_addr_ex_i != 0)) begin  // memory to execution
@@ -52,12 +48,14 @@ module hazard_unit (
     fwd_a_de_o = rf_rw_wb_i && (r1_addr_de_i == rd_addr_wb_i) && (r1_addr_de_i != 0);  // writeback to decode
     fwd_b_de_o = rf_rw_wb_i && (r2_addr_de_i == rd_addr_wb_i) && (r2_addr_de_i != 0);
 
-    lw_stall   = rslt_sel_ex_0 && ((r1_addr_de_i == rd_addr_ex_i) || (r2_addr_de_i == rd_addr_ex_i));
-    stall_fe_o = lw_stall;
-    stall_de_o = lw_stall;
+    // Load-use (SSR, arXiv:1912.10663): do not stall FE/DE or flush EX. When the
+    // dependent reaches EX, the producer load is in MEM (pipe3); MEM→EX bypass
+    // (fwd_* = 2'b10, ex_mem_bypass_data) supplies read_data / ALU result.
+    stall_fe_o = 1'b0;
+    stall_de_o = 1'b0;
 
     flush_de_o = pc_sel_ex_i;
-    flush_ex_o = lw_stall || pc_sel_ex_i;
+    flush_ex_o = pc_sel_ex_i;
 
   end
 

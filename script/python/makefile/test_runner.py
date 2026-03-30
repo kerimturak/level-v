@@ -887,6 +887,11 @@ Examples:
     # Log control (from Makefile)
     parser.add_argument("--log-commit", action="store_true", help="Enable commit logging")
     parser.add_argument("--log-bp", action="store_true", help="Enable branch predictor logging")
+    parser.add_argument(
+        "--log-perf-stall",
+        action="store_true",
+        help="Enable stall cycle histogram (LOG_PERF_STALL; rebuild RTL)",
+    )
     parser.add_argument("--konata-tracer", action="store_true", help="Enable Konata tracer")
     parser.add_argument("--trace", action="store_true", help="Enable waveform tracing")
     
@@ -1005,6 +1010,8 @@ def main() -> int:
         os.environ["LOG_COMMIT"] = "1"
     if args.log_bp:
         os.environ["LOG_BP"] = "1"
+    if args.log_perf_stall:
+        os.environ["LOG_PERF_STALL"] = "1"
     if args.konata_tracer:
         os.environ["KONATA_TRACER"] = "1"
     if args.trace:

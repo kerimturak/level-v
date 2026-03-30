@@ -127,6 +127,16 @@ module cpu
   logic       [XLEN-1:0] trap_tval;
   logic                  pipe_downstream_stall;
   logic                  pipe2_frozen;
+  // MEM→EX bypass data must match writeback mux (not raw alu_result for loads/JAL)
+  logic       [XLEN-1:0] ex_mem_bypass_data;
+
+  always_comb begin
+    unique case (pipe3.result_src)
+      2'b01: ex_mem_bypass_data = pipe3.read_data;   // load → use mem read, not EA in alu_result
+      2'b10: ex_mem_bypass_data = pipe3.pc_incr;     // JAL/JALR rd
+      default: ex_mem_bypass_data = pipe3.alu_result;
+    endcase
+  end
 
   // ============================================================================
   // FETCH
@@ -358,7 +368,7 @@ module cpu
       .stall_i      (stall_cause),
       .fwd_a_i      (ex_fwd_a),
       .fwd_b_i      (ex_fwd_b),
-      .alu_result_i (pipe3.alu_result),
+      .alu_result_i (ex_mem_bypass_data),
       .wb_data_i    (wb_data),
       .r1_data_i    (pipe2.r1_data),
       .r2_data_i    (pipe2.r2_data),
@@ -611,9 +621,7 @@ module cpu
       .r2_addr_de_i (pipe1.inst.r2_addr),
       .r1_addr_ex_i (pipe2.r1_addr),
       .r2_addr_ex_i (pipe2.r2_addr),
-      .rd_addr_ex_i (pipe2.rd_addr),
       .pc_sel_ex_i  (!ex_spec_hit),
-      .rslt_sel_ex_0(pipe2.result_src[0]),
       .rd_addr_me_i (pipe3.rd_addr),
       .rf_rw_me_i   (pipe3.rf_rw_en),
       .rf_rw_wb_i   (pipe4.rf_rw_en),
@@ -628,19 +636,22 @@ module cpu
       .fwd_b_de_o   (de_fwd_b)
   );
 
+  logic l2_miss_busy;
 `ifdef USE_L2_CACHE
   nbmbmp_l2_cache i_l2_cache (
-      .clk_i        (clk_i),
-      .rst_ni       (rst_ni),
-      .flush_i      (1'b0),
-      .icache_req_i (lx_ireq),
-      .icache_res_o (fe_lx_ires),
-      .dcache_req_i (lx_dreq),
-      .dcache_res_o (lx_dres),
-      .mem_req_o    (iomem_req_o),
-      .mem_res_i    (iomem_res_i)
+      .clk_i           (clk_i),
+      .rst_ni          (rst_ni),
+      .flush_i         (1'b0),
+      .icache_req_i    (lx_ireq),
+      .icache_res_o    (fe_lx_ires),
+      .dcache_req_i    (lx_dreq),
+      .dcache_res_o    (lx_dres),
+      .mem_req_o       (iomem_req_o),
+      .mem_res_i       (iomem_res_i),
+      .l2_miss_busy_o  (l2_miss_busy)
   );
 `else
+  assign l2_miss_busy = 1'b0;
   memory_arbiter i_memory_arbiter (
       .clk_i       (clk_i),
       .rst_ni      (rst_ni),
@@ -750,5 +761,20 @@ module cpu
   // Enable with: +define+KONATA_TRACER
 `ifdef KONATA_TRACER
   konata_logger i_konata_logger ();
+`endif
+
+  // Stall cycle histogram + end-of-sim summary
+  // Enable with: +define+LOG_PERF_STALL or make verilate/run LOG_PERF_STALL=1
+`ifdef LOG_PERF_STALL
+  perf_stall_counters i_perf_stall_counters (
+      .clk_i            (clk_i),
+      .rst_ni           (rst_ni),
+      .stall_cause      (stall_cause),
+      .fencei_flush_i   (fencei_flush),
+      .priority_flush_i (priority_flush),
+      .de_flush_en_i    (de_flush_en),
+      .ex_flush_en_i    (ex_flush_en),
+      .l2_miss_busy_i   (l2_miss_busy)
+  );
 `endif
 endmodule

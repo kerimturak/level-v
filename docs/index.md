@@ -99,7 +99,10 @@ docs/
 │
 ├── script/                    # Build system
 ├── sim/                       # Simulation
-└── env/                       # Test environments
+├── env/                       # Test environments
+│
+├── FIXES_HISTORY.md           # Running log: what we fixed and why
+└── PERF_PIPELINE_LOG.md       # LOG_PERF_STALL reference
 ```
 
 ---
@@ -127,6 +130,8 @@ make lint
 
 ## References
 
+- [Fixes history](FIXES_HISTORY.md) — ongoing log of significant fixes (what / why / files)
+- [Pipeline performance log (`LOG_PERF_STALL`)](PERF_PIPELINE_LOG.md) — stall/flush types and tuning ideas
 - [RISC-V ISA specifications](https://riscv.org/technical/specifications/)
 - [Wishbone B4 specification](https://cdn.opencores.org/downloads/wbspec_b4.pdf)
 - [Verilator manual](https://verilator.org/guide/latest/)

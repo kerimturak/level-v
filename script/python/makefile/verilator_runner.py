@@ -99,6 +99,43 @@ def keyval(key: str, value: str, indent: int = 2) -> None:
     print(f"{spaces}{Color.DIM}{key}:{Color.RESET} {value}")
 
 
+def write_perf_pipeline_snippet(run_log: Path, log_dir: Path) -> Optional[Path]:
+    """If run log contains the LOG_PERF_STALL RTL summary, extract it to perf_pipeline.log."""
+    out = log_dir / "perf_pipeline.log"
+    try:
+        text = run_log.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    marker = "LOG_PERF_STALL"
+    if marker not in text:
+        return None
+    lines = text.splitlines(keepends=True)
+    idxs = [i for i, line in enumerate(lines) if marker in line]
+    if not idxs:
+        return None
+    idx = idxs[-1]
+    start = idx
+    while start > 0:
+        stripped = lines[start - 1].strip()
+        if stripped.startswith("=") and len(stripped) >= 20:
+            start -= 1
+            break
+        start -= 1
+    end = idx + 1
+    while end < len(lines):
+        stripped = lines[end].strip()
+        if stripped.startswith("=") and len(stripped) >= 20:
+            end += 1
+            break
+        end += 1
+    chunk = "".join(lines[start:end])
+    try:
+        out.write_text(chunk, encoding="utf-8")
+    except OSError:
+        return None
+    return out
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Run Configuration
 # ═══════════════════════════════════════════════════════════════════════════
@@ -466,7 +503,11 @@ def run_simulation(config: SimRunConfig, logger: Optional[DebugLogger] = None) -
 
             process.wait()
             exit_code = process.returncode
-    
+
+        perf_path = write_perf_pipeline_snippet(run_log, config.log_dir)
+        if perf_path is not None:
+            logger.note(f"Perf pipeline summary: {perf_path}")
+
     except FileNotFoundError:
         logger.error(f"Executable could not run: {config.bin_path}")
         error(f"Could not execute: {config.bin_path}")

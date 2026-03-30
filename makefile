@@ -487,6 +487,18 @@ endif
 ifeq ($(filter command line,$(origin LOG_PIPELINE)),)
   override LOG_PIPELINE := 0
 endif
+# CoreMark: perf counters on by default (1 iter still runs long enough for $final summary).
+# Dhrystone: keep off unless LOG_PERF_STALL=1 on CLI.
+ifneq ($(filter coremark,$(TEST_CONFIG)),)
+ifeq ($(filter command line,$(origin LOG_PERF_STALL)),)
+  override LOG_PERF_STALL := 1
+endif
+endif
+ifneq ($(filter dhrystone,$(TEST_CONFIG)),)
+ifeq ($(filter command line,$(origin LOG_PERF_STALL)),)
+  override LOG_PERF_STALL := 0
+endif
+endif
 ifeq ($(filter command line,$(origin KONATA_TRACER)),)
   override KONATA_TRACER := 0
 endif
@@ -586,6 +598,11 @@ endif
 # Branch Predictor stats - LOG_BP=1
 ifeq ($(LOG_BP),1)
   MODELSIM_DEFINES += +define+LOG_BP
+endif
+
+# Pipeline stall cycle stats (sim end summary) - LOG_PERF_STALL=1
+ifeq ($(LOG_PERF_STALL),1)
+  MODELSIM_DEFINES += +define+LOG_PERF_STALL
 endif
 
 # Verbose BP logging - LOG_BP_VERBOSE=1
@@ -935,6 +952,11 @@ endif
 # Branch Predictor stats - LOG_BP=1
 ifeq ($(LOG_BP),1)
   SV_DEFINES += +define+LOG_BP
+endif
+
+# Pipeline stall cycle histogram (sim end $display) - LOG_PERF_STALL=1
+ifeq ($(LOG_PERF_STALL),1)
+  SV_DEFINES += +define+LOG_PERF_STALL
 endif
 
 # Verbose BP logging - LOG_BP_VERBOSE=1
@@ -1923,6 +1945,7 @@ run_python:
 			--exception-fail-addr "$$2" \
 			$(if $(filter 1,$(LOG_COMMIT)),--log-commit,) \
 			$(if $(filter 1,$(LOG_BP)),--log-bp,) \
+			$(if $(filter 1,$(LOG_PERF_STALL)),--log-perf-stall,) \
 			$(if $(filter 1,$(KONATA_TRACER)),--konata-tracer,) \
 			$(if $(filter 1,$(TRACE)),--trace,) \
 			$(if $(filter 1,$(CFG_SPIKE)),--enable-spike,--no-spike) \
@@ -1941,6 +1964,7 @@ run_python:
 			--max-cycles $(MAX_CYCLES) \
 			$(if $(filter 1,$(LOG_COMMIT)),--log-commit,) \
 			$(if $(filter 1,$(LOG_BP)),--log-bp,) \
+			$(if $(filter 1,$(LOG_PERF_STALL)),--log-perf-stall,) \
 			$(if $(filter 1,$(KONATA_TRACER)),--konata-tracer,) \
 			$(if $(filter 1,$(TRACE)),--trace,) \
 			$(if $(filter 1,$(CFG_SPIKE)),--enable-spike,--no-spike) \
@@ -3252,6 +3276,11 @@ run_coremark: coremark
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  CoreMark Simulation Complete$(RESET)"
 	@echo -e "$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@if [ -f "$(COREMARK_LOG_DIR)/perf_pipeline.log" ]; then \
+		echo -e "$(YELLOW)[PERF PIPELINE]$(RESET) $(COREMARK_LOG_DIR)/perf_pipeline.log"; \
+		cat "$(COREMARK_LOG_DIR)/perf_pipeline.log"; \
+		echo ""; \
+	fi
 	@if [ -f "$(COREMARK_LOG_DIR)/uart_output.log" ]; then \
 		echo -e "$(YELLOW)[UART OUTPUT]$(RESET)"; \
 		cat "$(COREMARK_LOG_DIR)/uart_output.log"; \
@@ -3296,6 +3325,8 @@ coremark_help:
 	@echo -e "  CPU_CLK_HZ=N               - Bare-metal C clock (default: 25000000); match rtl/pkg/level_param.sv"
 	@echo -e "  COREMARK_MEM_PAD_BYTES=N  - Pad coremark*.mem to N bytes (0=minimal; 34816=legacy 34KiB)"
 	@echo -e "  COREMARK_ITERATIONS=N      - Set iteration count (default: 1)"
+	@echo -e "  LOG_PERF_STALL=0          - Disable RTL perf counters (default 1 for TEST_CONFIG=coremark)"
+	@echo -e "  perf log: results/logs/verilator/coremark/perf_pipeline.log (and verilator_run.log tail)"
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo -e "  $(CYAN)SIM_FAST=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
 	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP; L2 on by default$(RESET)"
@@ -6956,6 +6987,7 @@ help_sim:
 	@echo -e "  LOG_UART=1          UART TX file logging"
 	@echo -e "  LOG_GPTIMER_ARR=1   GPTimer TIMx_ARR RD/WR (\$$display)"
 	@echo -e "  LOG_BP=1            Branch predictor statistics"
+	@echo -e "  LOG_PERF_STALL=1    Stall cycles by cause + total (stdout at sim end)"
 	@echo -e "  LOG_BP_VERBOSE=1    Per-branch verbose logging"
 	@echo -e "  KONATA_TRACER=1     Enable Konata visualizer"
 	@echo -e "  TRACE=1             Enable waveform tracing"

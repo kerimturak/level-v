@@ -196,6 +196,7 @@ nav:
       - TODO: TODO.md
       - Troubleshooting: TROUBLESHOOTING.md
       - Fix Plan: FIX_PLAN.md
+      - Fixes history: FIXES_HISTORY.md
       - Fixes Applied: FIXES_APPLIED.md
       - Combinational Loop Fix: COMBINATIONAL_LOOP_FIX.md
     - Testing & Validation:

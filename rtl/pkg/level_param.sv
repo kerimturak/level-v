@@ -95,7 +95,7 @@ package level_param;
   localparam int L2_MSHR_DEPTH    = 4;
   localparam int L2_NUM_BANKS     = 2;
 `else
-  localparam int L2_CACHE_SIZE_KB = 16;
+  localparam int L2_CACHE_SIZE_KB = 8;
   localparam int L2_NUM_WAY       = 4;
   localparam int L2_MSHR_DEPTH    = 4;
   localparam int L2_NUM_BANKS     = 2;

@@ -1033,9 +1033,7 @@ add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexa
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/r2_addr_de_i
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/r1_addr_ex_i
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/r2_addr_ex_i
-add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/rd_addr_ex_i
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/pc_sel_ex_i
-add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/rslt_sel_ex_0
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/rd_addr_me_i
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/rf_rw_me_i
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group in -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/rf_rw_wb_i
@@ -1048,7 +1046,6 @@ add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group out -radix hex
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group out -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/fwd_b_ex_o
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group out -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/fwd_a_de_o
 add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group out -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/fwd_b_de_o
-add wave -noupdate -group WRAPPER -group SOC -group HAZARD -group internal -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_hazard_unit/lw_stall
 add wave -noupdate -group WRAPPER -group WRAPPER -group SOC -group FETCH1 -group internal -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_fetch/RESET_VECTOR
 add wave -noupdate -group WRAPPER -group WRAPPER -group SOC -group FETCH1 -group internal -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_fetch/IC_NUM_SET
 add wave -noupdate -group WRAPPER -group WRAPPER -group SOC -group FETCH1 -group internal -radix hexadecimal /tb_wrapper/level_wrapper/i_soc/i_fetch/DC_NUM_SET

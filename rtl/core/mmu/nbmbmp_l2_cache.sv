@@ -39,7 +39,12 @@
      output dlowX_res_t dcache_res_o,
  
      output iomem_req_t mem_req_o,
-     input  iomem_res_t mem_res_i
+     input  iomem_res_t mem_res_i,
+
+     // High in any cycle either I- or D-pipe is servicing an L2 miss (alloc, victim WB,
+     // memory fill wait, or fill writeback to arrays). Wall-clock: one cycle counted even
+     // if both ports are busy. Independent of CPU stall_cause / DMISS_STALL.
+     output logic l2_miss_busy_o
  );
  
    // =========================================================================
@@ -559,6 +564,12 @@
    // Fill request from either pipe in MISS_WAIT
    assign i_miss_wait = (i_pipe_state == PIPE_MISS_WAIT);
    assign d_miss_wait = (d_pipe_state == PIPE_MISS_WAIT);
+
+   wire i_l2_miss_phase = i_mshr_alloc_req || (i_pipe_state == PIPE_WB_EVICT) ||
+                          (i_pipe_state == PIPE_MISS_WAIT) || (i_pipe_state == PIPE_FILL_RESPOND);
+   wire d_l2_miss_phase = d_mshr_alloc_req || (d_pipe_state == PIPE_WB_EVICT) ||
+                          (d_pipe_state == PIPE_MISS_WAIT) || (d_pipe_state == PIPE_FILL_RESPOND);
+   assign l2_miss_busy_o = i_l2_miss_phase || d_l2_miss_phase;
  
    assign fill_req_valid = (i_miss_wait || d_miss_wait) && mshr_pending_valid && !mem_busy;
    assign wb_req_valid   = (i_wb_req || d_wb_req) && !mem_busy;

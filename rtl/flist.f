@@ -65,6 +65,7 @@ rtl/periph/uart/uart.sv
 rtl/periph/uart/uart_rx.sv
 rtl/periph/uart/uart_tx.sv
 rtl/tracer/konata_logger.sv
+rtl/tracer/perf_stall_counters.sv
 rtl/ram/dp_bram.sv
 rtl/ram/sky130_sram_1kbyte_1rw1r_32x256_8.bb.sv
 rtl/ram/sp_bram.sv
