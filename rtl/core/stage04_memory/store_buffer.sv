@@ -22,6 +22,10 @@ module store_buffer
     output logic            fwd_hit_o,
     output logic [XLEN-1:0] fwd_data_o,
     output logic            fwd_conflict_o,
+    // Partial forwarding: SB covers some but not all needed bytes
+    output logic            fwd_partial_o,
+    output logic [XLEN-1:0] fwd_partial_data_o,
+    output logic [3:0]      fwd_byte_mask_o,
 
     // Drain port (to dcache via memory module)
     output logic            drain_valid_o,
@@ -111,9 +115,12 @@ module store_buffer
     logic        word_pending;
     int          j, i, bi;
 
-    fwd_hit_o      = 1'b0;
-    fwd_conflict_o = 1'b0;
-    fwd_data_o     = '0;
+    fwd_hit_o          = 1'b0;
+    fwd_conflict_o     = 1'b0;
+    fwd_partial_o      = 1'b0;
+    fwd_data_o         = '0;
+    fwd_partial_data_o = '0;
+    fwd_byte_mask_o    = '0;
 
     need_m = '0;
     unique case (fwd_size_i)
@@ -127,11 +134,11 @@ module store_buffer
     merged       = '0;
     word_pending = 1'b0;
 
+    // Scan youngest-to-oldest so the newest store wins per byte lane
     for (j = 0; j < DEPTH; j++) begin
       logic [PTR_W-1:0] idx;
 
-      i   = DEPTH - 1 - j;
-      idx = PTR_W'(head_ptr[PTR_W-1:0] + i[PTR_W-1:0]);
+      idx = PTR_W'(tail_ptr[PTR_W-1:0] - 1'b1 - PTR_W'(j));
 
       if (!buf_valid[idx] || buf_addr[idx][31:2] != fwd_addr_i[31:2]) begin
       end else begin
@@ -172,11 +179,20 @@ module store_buffer
       end
     end
 
+    fwd_partial_data_o = merged;
+    fwd_byte_mask_o    = covered_m;
+
     if (|need_m && ((covered_m & need_m) == need_m)) begin
+      // Full coverage: all load bytes found in SB
       fwd_hit_o  = 1'b1;
       fwd_data_o = merged;
-    end else if (|need_m && word_pending && ((covered_m & need_m) != need_m)) begin
-      fwd_conflict_o = 1'b1;
+    end else if (|need_m && word_pending && (|(covered_m & need_m)) &&
+               ((covered_m & need_m) != need_m)) begin
+      // Partial coverage: some needed bytes in SB, rest from dcache
+      fwd_partial_o = 1'b1;
+    end else if (|need_m && word_pending && !(|(covered_m & need_m))) begin
+      // Word-matching store but covers NONE of our needed bytes — no conflict
+      // The load can proceed to dcache directly.
     end
   end
 

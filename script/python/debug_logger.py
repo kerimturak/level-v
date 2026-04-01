@@ -120,7 +120,7 @@ class DebugLogger:
     Main debug logger that tracks entire Makefile/script execution.
     """
 
-    def __init__(self, test_name: str, target: str, makefile: str = "Makefile.verilator"):
+    def __init__(self, test_name: str, target: str, makefile: str = "makefile"):
         self.test_name = test_name
         self.target = target
         self.makefile = makefile

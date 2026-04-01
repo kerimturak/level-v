@@ -265,7 +265,8 @@ class TestRunner:
         self.debug_enable = debug_enable
         self.validation_enable = validation_enable
         self.root_dir = Path.cwd()
-        self.makefile = "Makefile.verilator"
+        # Unified root makefile (docs may say Makefile.verilator; the repo uses `makefile`).
+        self.makefile = "makefile"
         self.results_dir = self.root_dir / "results"
 
     def run_test(self, test_name: str, suite_name: str = None, **kwargs) -> Dict[str, Any]:
@@ -473,8 +474,9 @@ class TestRunner:
                 result["final_status"] = "SIMULATION_COMPLETED"
                 result["passed"] = True  # Simulation OK
 
-                print(f"{Colors.YELLOW}[INFO] Validation skipped{Colors.RESET}")
-                print(f"\n{Colors.GREEN}✓ SIMULATION COMPLETED (validation skipped){Colors.RESET}\n")
+                print(f"{Colors.YELLOW}[INFO] Spike/log compare skipped (benchmark suite or validation disabled in registry).{Colors.RESET}")
+                print(f"{Colors.YELLOW}      This is not an ISA compliance pass — RTL ran only.{Colors.RESET}")
+                print(f"\n{Colors.GREEN}✓ SIMULATION COMPLETED (no Spike validation){Colors.RESET}\n")
 
                 if logger:
                     logger.set_result("SIMULATION_COMPLETED", 0)

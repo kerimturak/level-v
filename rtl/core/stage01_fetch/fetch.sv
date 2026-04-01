@@ -66,6 +66,7 @@ module fetch
   icache_req_t            icache_req;  // Gated request to cache
 
   localparam bit IC_PREFETCH_EN = (level_param::PREFETCH_TYPE != 0);
+  localparam int ICACHE_LINE_OFF_W = $clog2(BLK_SIZE / 8);
   logic            pf_valid;
   logic [XLEN-1:0] pf_addr;
   logic            pf_ack;
@@ -291,6 +292,11 @@ module fetch
 
   assign ic_miss_uncached = icache_res.miss && icache_req.uncached;
   assign pf_pma_addr      = pf_valid ? pf_addr : pc_o;
+  // Line-aligned demand fetch address (match align_buffer lowX addr); avoids stale icache_req.addr
+  wire [XLEN-1:0] ic_miss_line_addr = {
+    abuff_icache_req.addr[XLEN-1:ICACHE_LINE_OFF_W], {ICACHE_LINE_OFF_W{1'b0}}
+  };
+  wire pf_region_ok = pf_pma_grand && !pf_pma_uncached;
 
   prefetcher_wrapper #(
       .PREFETCH_TYPE(level_param::PREFETCH_TYPE)
@@ -300,8 +306,9 @@ module fetch
       .flush_i          (flush_i),
       .cache_miss_i     (icache_res.miss),
       .miss_uncached_i  (ic_miss_uncached),
-      .miss_addr_i      (icache_req.addr),
+      .miss_addr_i      (ic_miss_line_addr),
       .prefetch_ack_i   (pf_ack),
+      .prefetch_region_ok_i(pf_region_ok),
       .prefetch_valid_o (pf_valid),
       .prefetch_addr_o  (pf_addr)
   );

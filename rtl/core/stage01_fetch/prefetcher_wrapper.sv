@@ -28,6 +28,7 @@ module prefetcher_wrapper
     input  logic            miss_uncached_i,
     input  logic [XLEN-1:0] miss_addr_i,
     input  logic            prefetch_ack_i,
+    input  logic            prefetch_region_ok_i,
     output logic            prefetch_valid_o,
     output logic [XLEN-1:0] prefetch_addr_o
 );
@@ -51,6 +52,7 @@ module prefetcher_wrapper
           .miss_uncached_i  (miss_uncached_i),
           .miss_addr_i      (miss_addr_i),
           .prefetch_ack_i   (prefetch_ack_i),
+          .prefetch_region_ok_i(prefetch_region_ok_i),
           .prefetch_valid_o (prefetch_valid_o),
           .prefetch_addr_o  (prefetch_addr_o)
       );

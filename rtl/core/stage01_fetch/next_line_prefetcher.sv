@@ -31,6 +31,8 @@ module next_line_prefetcher
     input  logic            miss_uncached_i,
     input  logic [XLEN-1:0] miss_addr_i,
     input  logic            prefetch_ack_i,
+    // Next-line is executable cached PMA; if false while in REQ, abort (no icache ack — non-exec/MMIO)
+    input  logic            prefetch_region_ok_i,
     output logic            prefetch_valid_o,
     output logic [XLEN-1:0] prefetch_addr_o
 );
@@ -58,7 +60,8 @@ module next_line_prefetcher
   logic is_new_miss_line;
   assign is_new_miss_line = (miss_line != last_miss_line_q);
 
-  assign prefetch_addr_o  = pf_line_q;
+  // Guarantee cache-line alignment on the bus (low offset bits zero)
+  assign prefetch_addr_o  = {pf_line_q[XLEN-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
   assign prefetch_valid_o = (state_q == ST_REQ);
 
   always_comb begin
@@ -75,6 +78,7 @@ module next_line_prefetcher
       ST_REQ: begin
         if (flush_i) state_d = ST_IDLE;
         else if (prefetch_ack_i) state_d = ST_IDLE;
+        else if (!prefetch_region_ok_i) state_d = ST_IDLE;
       end
       default: state_d = ST_IDLE;
     endcase
@@ -91,6 +95,7 @@ module next_line_prefetcher
       state_q <= state_d;
 
       if (state_q == ST_IDLE && cache_miss_i && !miss_uncached_i && is_new_miss_line) begin
+        // Register aligned next-line address (miss_line already cleared low OFFSET_BITS)
         pf_line_q        <= next_line_addr;
         last_miss_line_q <= miss_line;
       end

@@ -252,7 +252,9 @@ module icache
   always_comb begin
     lowX_req_o.valid    = issue_dem || issue_pf;
     lowX_req_o.ready    = !flush;
-    lowX_req_o.addr     = issue_dem ? cache_req_q.addr : prefetch_addr_i;
+    // Prefetch must present a line-aligned address (lower BOFFSET bits zero)
+    lowX_req_o.addr     = issue_dem ? cache_req_q.addr
+        : {prefetch_addr_i[XLEN-1:BOFFSET], {BOFFSET{1'b0}}};
     lowX_req_o.uncached = issue_dem ? cache_req_q.uncached : 1'b0;
     cache_res_o.miss    = cache_miss;
     cache_res_o.valid   = cache_req_i.ready && (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid));

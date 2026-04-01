@@ -86,44 +86,42 @@ package level_param;
   // L2 Cache (Yarok14-based non-blocking)
 `ifdef LEVEL_OPENLANE
   localparam int L2_CACHE_SIZE_KB = 4;
-  localparam int L2_NUM_WAY       = 2;
-  localparam int L2_MSHR_DEPTH    = 2;
-  localparam int L2_NUM_BANKS     = 1;
+  localparam int L2_NUM_WAY = 2;
+  localparam int L2_MSHR_DEPTH = 2;
+  localparam int L2_NUM_BANKS = 1;
 `elsif MINIMAL_SOC
   localparam int L2_CACHE_SIZE_KB = 8;
-  localparam int L2_NUM_WAY       = 4;
-  localparam int L2_MSHR_DEPTH    = 4;
-  localparam int L2_NUM_BANKS     = 2;
+  localparam int L2_NUM_WAY = 4;
+  localparam int L2_MSHR_DEPTH = 4;
+  localparam int L2_NUM_BANKS = 2;
 `else
   localparam int L2_CACHE_SIZE_KB = 8;
-  localparam int L2_NUM_WAY       = 4;
-  localparam int L2_MSHR_DEPTH    = 4;
-  localparam int L2_NUM_BANKS     = 2;
+  localparam int L2_NUM_WAY = 4;
+  localparam int L2_MSHR_DEPTH = 4;
+  localparam int L2_NUM_BANKS = 2;
 `endif
-  localparam int L2_LINE_SIZE_B   = BLK_SIZE / 8;  // 16 bytes, matches L1 block
-  localparam int L2_ADDR_WIDTH    = XLEN;
-  localparam int L2_DATA_WIDTH    = XLEN;           // 32-bit words within line
-  localparam int L2_ECC_BITS      = 8;              // SECDED for 32-bit word
+  localparam int L2_LINE_SIZE_B = BLK_SIZE / 8;  // 16 bytes, matches L1 block
+  localparam int L2_ADDR_WIDTH = XLEN;
+  localparam int L2_DATA_WIDTH = XLEN;  // 32-bit words within line
+  localparam int L2_ECC_BITS = 8;  // SECDED for 32-bit word
 
   // L2 derived parameters
-  localparam int L2_NUM_SETS       = (L2_CACHE_SIZE_KB * 1024) / (L2_NUM_WAY * L2_LINE_SIZE_B);
-  localparam int L2_INDEX_BITS     = $clog2(L2_NUM_SETS);
-  localparam int L2_OFFSET_BITS    = $clog2(L2_LINE_SIZE_B);
-  localparam int L2_TAG_BITS       = L2_ADDR_WIDTH - L2_INDEX_BITS - L2_OFFSET_BITS;
-  localparam int L2_WAY_W          = $clog2(L2_NUM_WAY);
+  localparam int L2_NUM_SETS = (L2_CACHE_SIZE_KB * 1024) / (L2_NUM_WAY * L2_LINE_SIZE_B);
+  localparam int L2_INDEX_BITS = $clog2(L2_NUM_SETS);
+  localparam int L2_OFFSET_BITS = $clog2(L2_LINE_SIZE_B);
+  localparam int L2_TAG_BITS = L2_ADDR_WIDTH - L2_INDEX_BITS - L2_OFFSET_BITS;
+  localparam int L2_WAY_W = $clog2(L2_NUM_WAY);
   localparam int L2_WORDS_PER_LINE = L2_LINE_SIZE_B / (L2_DATA_WIDTH / 8);
-  localparam int L2_LRU_W          = L2_NUM_WAY - 1;
-  localparam int L2_MSHR_PTR_W     = $clog2(L2_MSHR_DEPTH);
-  localparam int L2_BANK_SETS      = L2_NUM_SETS / L2_NUM_BANKS;
+  localparam int L2_LRU_W = L2_NUM_WAY - 1;
+  localparam int L2_MSHR_PTR_W = $clog2(L2_MSHR_DEPTH);
+  localparam int L2_BANK_SETS = L2_NUM_SETS / L2_NUM_BANKS;
 
   // Flush cycle calculation (centralized for fetch reset stall)
   localparam int IC_NUM_SET = IC_CAPACITY / BLK_SIZE / IC_WAY;
   localparam int DC_NUM_SET = DC_CAPACITY / BLK_SIZE / DC_WAY;
 
 `ifdef USE_L2_CACHE
-  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET)
-      ? (IC_NUM_SET > L2_NUM_SETS ? IC_NUM_SET : L2_NUM_SETS)
-      : (DC_NUM_SET > L2_NUM_SETS ? DC_NUM_SET : L2_NUM_SETS);
+  localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ? (IC_NUM_SET > L2_NUM_SETS ? IC_NUM_SET : L2_NUM_SETS) : (DC_NUM_SET > L2_NUM_SETS ? DC_NUM_SET : L2_NUM_SETS);
 `else
   localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ? IC_NUM_SET : DC_NUM_SET;
 `endif
@@ -157,13 +155,13 @@ package level_param;
 
   // L2 MSHR entry structure
   typedef struct packed {
-    logic                       valid;
-    mshr_state_t                state;
-    logic [L2_ADDR_WIDTH-1:0]   addr;
-    logic                       is_write;
-    logic [BLK_SIZE-1:0]        wdata;
-    logic [BLK_SIZE/8-1:0]      wstrb;
-    logic                       from_dport;
+    logic                     valid;
+    mshr_state_t              state;
+    logic [L2_ADDR_WIDTH-1:0] addr;
+    logic                     is_write;
+    logic [BLK_SIZE-1:0]      wdata;
+    logic [BLK_SIZE/8-1:0]    wstrb;
+    logic                     from_dport;
   } l2_mshr_entry_t;
 
   // L2 tag entry structure
@@ -415,7 +413,7 @@ package level_param;
   } rw_size_e;
 
   // Store Buffer
-  localparam int SB_DEPTH = 4;
+  localparam int SB_DEPTH = 8;
   localparam int SB_PTR_W = $clog2(SB_DEPTH);
 
   // ---------------------------------------------------------------------------

@@ -3863,17 +3863,26 @@ run_bench_flist:
 # -----------------------------------------
 .PHONY: t tb
 
-# Quick ISA test: make t T=rv32ui-p-add
+# ISA single test with Spike + log compare (same pipeline as: make run T=...)
+# For RTL-only (faster, no golden model): make qt T=<name>
 t:
 ifndef T
 	$(error Usage: make t T=<test_name>)
 endif
-	@$(MAKE) --no-print-directory run_verilator \
+	@$(MAKE) --no-print-directory verilate
+	@$(MAKE) --no-print-directory run \
 		TEST_NAME=$(T) \
 		TEST_TYPE=isa \
-		SIM=verilator
+		SIM=verilator \
+		MAX_CYCLES=$(MAX_CYCLES) \
+		TRACE=$(TRACE) \
+		SIM_FAST=$(SIM_FAST) \
+		FAST=$(FAST) \
+		LOG_COMMIT=$(LOG_COMMIT) \
+		MODE=$(MODE)
 
 # Quick benchmark test: make tb T=dhrystone
+# RTL/Verilator only — benchmarks disable Spike/compare in their .conf (see script/config/tests/bench.conf).
 tb:
 ifndef T
 	$(error Usage: make tb T=<benchmark_name>)
@@ -3924,10 +3933,11 @@ help_lists:
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(CYAN)  QUICK SINGLE TEST$(RESET)"
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@echo -e "  $(GREEN)make t T=rv32ui-p-add$(RESET)   – Quick ISA test"
+	@echo -e "  $(GREEN)make t T=rv32ui-p-add$(RESET)   – ISA: RTL + Spike + compare (full check)"
+	@echo -e "  $(GREEN)make qt T=rv32ui-p-add$(RESET)  – RTL only (fast; no Spike)"
 	@echo -e "  $(GREEN)make ta T=I-add-01$(RESET)      – Quick arch test"
 	@echo -e "  $(GREEN)make ti T=I-ADD-01$(RESET)      – Quick Imperas test"
-	@echo -e "  $(GREEN)make tb T=dhrystone$(RESET)     – Quick benchmark [NO_ADDR=1]"
+	@echo -e "  $(GREEN)make tb T=dhrystone$(RESET)     – Benchmark RTL only (no Spike)"
 	@echo -e ""
 	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(CYAN)  COVERAGE$(RESET)"
@@ -3956,7 +3966,8 @@ help_lists:
 	@echo -e "  make full SKIP_FULL_RISCV_DV=1     # Skip RISC-V DV in full"
 	@echo -e "  FULL_TORTURE_NUM_TESTS=8 make full # More torture tests"
 	@echo -e "  make coverage                     # Full coverage analysis"
-	@echo -e "  make t T=rv32ui-p-add SIM_FAST=1  # Single fast test"
+	@echo -e "  make qt T=rv32ui-p-add SIM_FAST=1  # RTL-only fast iteration"
+	@echo -e "  make t T=rv32ui-p-add SIM_FAST=1    # Full check (Spike) with faster RTL logging"
 	@echo -e ""
 
 # ====== custom_test.mk ======
@@ -7025,9 +7036,10 @@ help_tests:
 	@echo -e "  all_tests       Run ALL tests"
 	@echo -e ""
 	@echo -e "$(CYAN)▶ Quick Test Shortcuts:$(RESET)"
-	@echo -e "  t T=<name>      Quick ISA test    (e.g., make t T=rv32ui-p-add)"
-	@echo -e "  tb T=<name>     Quick benchmark   (e.g., make tb T=dhrystone)"
-	@echo -e "  ti T=<name>     Quick Imperas test"
+	@echo -e "  t T=<name>      ISA: RTL + Spike + compare (e.g., make t T=rv32ui-p-add)"
+	@echo -e "  qt T=<name>     RTL only, auto-detect type (no Spike; same as quick Verilator path)"
+	@echo -e "  tb T=<name>     Benchmark RTL only (Spike/compare off for bench profile)"
+	@echo -e "  ti T=<name>     Quick Imperas test (uses make run → Spike if enabled in profile)"
 	@echo -e ""
 	@echo -e "$(CYAN)▶ Benchmarks:$(RESET)"
 	@echo -e "  run_coremark    Build + run CoreMark on Verilator"

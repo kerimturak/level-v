@@ -101,32 +101,38 @@ module memory
   // -------------------------------------------------------------------
   logic            sb_fwd_hit, sb_fwd_conflict;
   logic [XLEN-1:0] sb_fwd_data;
+  logic            sb_fwd_partial;
+  logic [XLEN-1:0] sb_fwd_partial_data;
+  logic [3:0]      sb_fwd_byte_mask;
   logic            sb_drain_valid, sb_drain_uncached;
   logic [XLEN-1:0] sb_drain_addr, sb_drain_data;
   rw_size_e        sb_drain_size;
   logic            sb_drain_ack;
 
   store_buffer i_store_buffer (
-      .clk_i          (clk_i),
-      .rst_ni         (rst_ni),
-      .wr_valid_i     (store_buffer_write),
-      .wr_addr_i      (ex_data_req_i.addr),
-      .wr_data_i      (ex_data_req_i.data),
-      .wr_size_i      (ex_data_req_i.rw_size),
-      .wr_uncached_i  (1'b0),
-      .fwd_addr_i     (ex_data_req_i.addr),
-      .fwd_size_i     (ex_data_req_i.rw_size),
-      .fwd_hit_o      (sb_fwd_hit),
-      .fwd_data_o     (sb_fwd_data),
-      .fwd_conflict_o (sb_fwd_conflict),
-      .drain_valid_o  (sb_drain_valid),
-      .drain_addr_o   (sb_drain_addr),
-      .drain_data_o   (sb_drain_data),
-      .drain_size_o   (sb_drain_size),
-      .drain_uncached_o(sb_drain_uncached),
-      .drain_ack_i    (sb_drain_ack),
-      .full_o         (sb_full),
-      .empty_o        (sb_empty)
+      .clk_i              (clk_i),
+      .rst_ni             (rst_ni),
+      .wr_valid_i         (store_buffer_write),
+      .wr_addr_i          (ex_data_req_i.addr),
+      .wr_data_i          (ex_data_req_i.data),
+      .wr_size_i          (ex_data_req_i.rw_size),
+      .wr_uncached_i      (1'b0),
+      .fwd_addr_i         (ex_data_req_i.addr),
+      .fwd_size_i         (ex_data_req_i.rw_size),
+      .fwd_hit_o          (sb_fwd_hit),
+      .fwd_data_o         (sb_fwd_data),
+      .fwd_conflict_o     (sb_fwd_conflict),
+      .fwd_partial_o      (sb_fwd_partial),
+      .fwd_partial_data_o (sb_fwd_partial_data),
+      .fwd_byte_mask_o    (sb_fwd_byte_mask),
+      .drain_valid_o      (sb_drain_valid),
+      .drain_addr_o       (sb_drain_addr),
+      .drain_data_o       (sb_drain_data),
+      .drain_size_o       (sb_drain_size),
+      .drain_uncached_o   (sb_drain_uncached),
+      .drain_ack_i        (sb_drain_ack),
+      .full_o             (sb_full),
+      .empty_o            (sb_empty)
   );
 
   // -------------------------------------------------------------------
@@ -145,6 +151,9 @@ module memory
   // stays pending until it resolves via forwarding or dcache read.
   logic load_fwd_resolve;
   assign load_fwd_resolve = load_pending && is_load && sb_fwd_hit && !sb_fwd_conflict;
+
+  // Partial forwarding: load fires to dcache, on response merge SB bytes
+  logic load_partial_q;
 
   logic load_req_fire;
   assign load_req_fire = ((is_load && new_req) || load_pending) &&
@@ -184,15 +193,23 @@ module memory
   // clear when it fires to dcache or resolves via forwarding.
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
-      load_pending <= 1'b0;
+      load_pending   <= 1'b0;
+      load_partial_q <= 1'b0;
     end else begin
       if (is_load && new_req && !sb_fwd_hit &&
+          !sb_fwd_partial &&
           (sb_fwd_conflict || dcache_busy || uc_drain_pending))
         load_pending <= 1'b1;
       else if (load_req_fire || load_fwd_resolve)
         load_pending <= 1'b0;
       else if (!is_load && pipe2_advanced_q)
         load_pending <= 1'b0;
+
+      // Track partial forwarding state
+      if (load_req_fire && sb_fwd_partial)
+        load_partial_q <= 1'b1;
+      else if (dcache_res.valid || fe_flush_cache_i)
+        load_partial_q <= 1'b0;
     end
   end
 
@@ -281,9 +298,11 @@ module memory
   assign dcache_flush = (fe_flush_cache_i && sb_empty) ||
                         (fencei_pending && sb_empty);
 
-  // Load blocked on first cycle (conflict / dcache busy) — combinational
+  // Load blocked on first cycle (hard conflict / dcache busy) — combinational
+  // Partial overlap (sb_fwd_partial) is NOT a block — load fires to dcache.
   logic first_cycle_load_blocked;
   assign first_cycle_load_blocked = is_load && new_req && !sb_fwd_hit &&
+                                    !sb_fwd_partial &&
                                     (sb_fwd_conflict || dcache_busy || uc_drain_pending);
 
   // Pending load stalls unless resolved by forwarding this cycle
@@ -350,12 +369,44 @@ module memory
 
   // -------------------------------------------------------------------
   // Read data: forwarded from store buffer OR from dcache
+  // Supports full forwarding, partial merge, and dcache-only paths.
   // -------------------------------------------------------------------
   logic [ 7:0] selected_byte;
   logic [15:0] selected_halfword;
 
+  // Latched SB partial data and mask for merging with dcache response
+  logic [XLEN-1:0] sb_partial_data_q;
+  logic [3:0]      sb_partial_mask_q;
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      sb_partial_data_q <= '0;
+      sb_partial_mask_q <= '0;
+    end else if (load_req_fire && sb_fwd_partial) begin
+      sb_partial_data_q <= sb_fwd_partial_data;
+      sb_partial_mask_q <= sb_fwd_byte_mask;
+    end else if (dcache_res.valid || fe_flush_cache_i) begin
+      sb_partial_mask_q <= '0;
+    end
+  end
+
   always_comb begin : read_data_size_handler
-    rd_data = (is_load && sb_fwd_hit && !sb_fwd_conflict) ? sb_fwd_data : dcache_res.data;
+    // Full SB hit: use SB data directly
+    if (is_load && sb_fwd_hit && !sb_fwd_conflict) begin
+      rd_data = sb_fwd_data;
+    end
+    // Partial merge: combine latched SB bytes with dcache response
+    else if (load_partial_q) begin
+      for (int b = 0; b < 4; b++) begin
+        rd_data[b*8+:8] = sb_partial_mask_q[b] ? sb_partial_data_q[b*8+:8]
+                                                : dcache_res.data[b*8+:8];
+      end
+    end
+    // Default: dcache only
+    else begin
+      rd_data = dcache_res.data;
+    end
+
     me_data_o = '0;
 
     selected_byte     = rd_data[(ex_data_req_i.addr[1:0]*8)+:8];
