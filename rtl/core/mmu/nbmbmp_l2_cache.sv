@@ -19,8 +19,9 @@
  *
  * Pipeline timing (per pipe):
  *   Cycle 0 (IDLE):       Request accepted, address driven to SRAMs
- *   Cycle 1 (TAG_LOOKUP): Registered SRAM outputs settle
- *   Cycle 2 (RESOLVE):    Hit/miss resolved. Hit → respond. Miss → MSHR + evict/fill.
+ *   Cycle 1 (TAG_LOOKUP): Registered SRAM outputs settle; hit/miss resolved
+ *                          combinationally.  Hit → respond same cycle, return
+ *                          to IDLE (2-cycle hit).  Miss → MSHR + evict/fill.
  */
 `timescale 1ns / 1ps
 `include "level_defines.svh"
@@ -60,8 +61,6 @@ module nbmbmp_l2_cache
   typedef enum logic [2:0] {
     PIPE_IDLE,
     PIPE_TAG_LOOKUP,
-    PIPE_RESOLVE,
-    PIPE_HIT_RESPOND,
     PIPE_MISS_WAIT,
     PIPE_FILL_RESPOND,
     PIPE_WB_EVICT,
@@ -422,6 +421,13 @@ module nbmbmp_l2_cache
   /* verilator lint_on UNOPTFLAT */
 
   // =========================================================================
+  // Combinational hit-respond signals (2-cycle hit: respond in TAG_LOOKUP)
+  // =========================================================================
+  logic i_hit_respond, d_hit_respond;
+  assign i_hit_respond = (i_pipe_state == PIPE_TAG_LOOKUP) && i_hit_any && !i_resolve_stall;
+  assign d_hit_respond = (d_pipe_state == PIPE_TAG_LOOKUP) && d_hit_any && !d_resolve_stall;
+
+  // =========================================================================
   // MSHR (inlined, shared between pipes)
   // =========================================================================
   l2_mshr_entry_t mshr_entries[L2_MSHR_DEPTH];
@@ -452,8 +458,8 @@ module nbmbmp_l2_cache
   logic                     i_wb_req;
   logic                     d_wb_req;
 
-  assign i_mshr_alloc_req = (i_pipe_state == PIPE_RESOLVE) && !i_hit_any && !i_resolve_stall;
-  assign d_mshr_alloc_req = (d_pipe_state == PIPE_RESOLVE) && !d_hit_any && !d_resolve_stall;
+  assign i_mshr_alloc_req = (i_pipe_state == PIPE_TAG_LOOKUP) && !i_hit_any && !i_resolve_stall;
+  assign d_mshr_alloc_req = (d_pipe_state == PIPE_TAG_LOOKUP) && !d_hit_any && !d_resolve_stall;
 
   always_comb begin
     for (int i = 0; i < L2_MSHR_DEPTH; i++) begin
@@ -558,11 +564,11 @@ module nbmbmp_l2_cache
   assign i_fill_writing = (i_pipe_state == PIPE_FILL_RESPOND);
   assign d_fill_writing = (d_pipe_state == PIPE_FILL_RESPOND);
 
-  assign i_resolve_stall = (i_pipe_state == PIPE_RESOLVE) && (d_fill_writing && d_req_set == i_req_set);
-  assign d_resolve_stall = (d_pipe_state == PIPE_RESOLVE) && (i_fill_writing && i_req_set == d_req_set);
+  assign i_resolve_stall = (i_pipe_state == PIPE_TAG_LOOKUP) && (d_fill_writing && d_req_set == i_req_set);
+  assign d_resolve_stall = (d_pipe_state == PIPE_TAG_LOOKUP) && (i_fill_writing && i_req_set == d_req_set);
 
   // If both pipes miss on the same set, D-pipe defers to I-pipe
-  assign dual_miss_same_set = (i_pipe_state == PIPE_RESOLVE) && !i_hit_any && (d_pipe_state == PIPE_RESOLVE) && !d_hit_any && (i_req_set == d_req_set);
+  assign dual_miss_same_set = (i_pipe_state == PIPE_TAG_LOOKUP) && !i_hit_any && (d_pipe_state == PIPE_TAG_LOOKUP) && !d_hit_any && (i_req_set == d_req_set);
 
   // =========================================================================
   // MSHR state machine
@@ -814,7 +820,7 @@ module nbmbmp_l2_cache
     d_data_we   = '0;
     d_data_wdata = '0;
 
-    if (d_pipe_state == PIPE_HIT_RESPOND && d_req_wr) begin
+    if (d_hit_respond && d_req_wr) begin
       d_data_we    = d_hit_way_oh;
       d_data_wdata = d_hit_wr_merged;
     end else if (d_fill_complete) begin
@@ -832,7 +838,7 @@ module nbmbmp_l2_cache
   always_comb begin
     i_plru_wr    = 1'b0;
     i_plru_wdata = '0;
-    if (i_pipe_state == PIPE_HIT_RESPOND) begin
+    if (i_hit_respond) begin
       i_plru_wr    = 1'b1;
       i_plru_wdata = i_updated_node;
     end else if (i_pipe_state == PIPE_FILL_RESPOND) begin
@@ -844,7 +850,7 @@ module nbmbmp_l2_cache
   always_comb begin
     d_plru_wr    = 1'b0;
     d_plru_wdata = '0;
-    if (d_pipe_state == PIPE_HIT_RESPOND) begin
+    if (d_hit_respond) begin
       d_plru_wr    = 1'b1;
       d_plru_wdata = d_updated_node;
     end else if (d_pipe_state == PIPE_FILL_RESPOND) begin
@@ -855,7 +861,7 @@ module nbmbmp_l2_cache
 
   // Helper: extract D-pipe hit way for merged PLRU update
   function automatic [L2_NUM_WAY-1:0] d_plru_hit_way();
-    if (d_pipe_state == PIPE_HIT_RESPOND) return d_hit_way_oh;
+    if (d_hit_respond) return d_hit_way_oh;
     else return d_evict_way_sel;
   endfunction
 
@@ -879,7 +885,7 @@ module nbmbmp_l2_cache
     d_dirty_idx = d_req_set;
     d_dirty_way = '0;
     d_dirty_val = 1'b0;
-    if (d_pipe_state == PIPE_HIT_RESPOND && d_req_wr) begin
+    if (d_hit_respond && d_req_wr) begin
       d_dirty_wr  = 1'b1;
       d_dirty_way = d_hit_way_oh;
       d_dirty_val = 1'b1;
@@ -919,13 +925,13 @@ module nbmbmp_l2_cache
           end
         end
 
-        PIPE_TAG_LOOKUP: i_pipe_state <= PIPE_RESOLVE;
-
-        PIPE_RESOLVE: begin
+        PIPE_TAG_LOOKUP: begin
+          // SRAM data valid this cycle — resolve hit/miss combinationally
           if (i_resolve_stall || (i_mshr_any_match && !i_hit_any)) begin
-            i_pipe_state <= PIPE_TAG_LOOKUP;
+            i_pipe_state <= PIPE_TAG_LOOKUP;  // retry (re-read same set)
           end else if (i_hit_any) begin
-            i_pipe_state <= PIPE_HIT_RESPOND;
+            // 2-cycle hit: respond combinationally this cycle, return to IDLE
+            i_pipe_state <= PIPE_IDLE;
           end else if (i_evict_dirty) begin
             i_victim_way_q <= i_evict_way;
             i_pipe_state   <= PIPE_WB_EVICT;
@@ -934,8 +940,6 @@ module nbmbmp_l2_cache
             i_pipe_state   <= PIPE_MISS_WAIT;
           end
         end
-
-        PIPE_HIT_RESPOND: i_pipe_state <= PIPE_IDLE;
 
         PIPE_WB_EVICT: if (wb_done && !wb_from_dport) i_pipe_state <= PIPE_MISS_WAIT;
 
@@ -991,13 +995,13 @@ module nbmbmp_l2_cache
           end
         end
 
-        PIPE_TAG_LOOKUP: d_pipe_state <= PIPE_RESOLVE;
-
-        PIPE_RESOLVE: begin
+        PIPE_TAG_LOOKUP: begin
+          // SRAM data valid this cycle — resolve hit/miss combinationally
           if (d_resolve_stall || dual_miss_same_set || (d_mshr_any_match && !d_hit_any)) begin
-            d_pipe_state <= PIPE_TAG_LOOKUP;
+            d_pipe_state <= PIPE_TAG_LOOKUP;  // retry (re-read same set)
           end else if (d_hit_any) begin
-            d_pipe_state <= PIPE_HIT_RESPOND;
+            // 2-cycle hit: respond combinationally this cycle, return to IDLE
+            d_pipe_state <= PIPE_IDLE;
           end else if (d_evict_dirty) begin
             d_victim_way_q <= d_evict_way;
             d_pipe_state   <= PIPE_WB_EVICT;
@@ -1006,8 +1010,6 @@ module nbmbmp_l2_cache
             d_pipe_state   <= PIPE_MISS_WAIT;
           end
         end
-
-        PIPE_HIT_RESPOND: d_pipe_state <= PIPE_IDLE;
 
         PIPE_WB_EVICT: if (wb_done && wb_from_dport) d_pipe_state <= PIPE_MISS_WAIT;
 
@@ -1036,7 +1038,7 @@ module nbmbmp_l2_cache
   always_comb begin
     i_resp_valid = 1'b0;
     i_resp_data  = '0;
-    if (i_pipe_state == PIPE_HIT_RESPOND) begin
+    if (i_hit_respond) begin
       i_resp_valid = 1'b1;
       i_resp_data  = i_select_data;
     end else if (i_pipe_state == PIPE_FILL_RESPOND) begin
@@ -1051,7 +1053,7 @@ module nbmbmp_l2_cache
   always_comb begin
     d_resp_valid = 1'b0;
     d_resp_data  = '0;
-    if (d_pipe_state == PIPE_HIT_RESPOND) begin
+    if (d_hit_respond) begin
       d_resp_valid = 1'b1;
       d_resp_data  = d_req_wr ? d_req_q.wdata : d_select_data;
     end else if (d_pipe_state == PIPE_FILL_RESPOND) begin
@@ -1079,8 +1081,8 @@ module nbmbmp_l2_cache
   logic ev_hit;
   logic ev_miss;
   logic ev_wb;
-  assign ev_hit  = (i_pipe_state == PIPE_HIT_RESPOND) || (d_pipe_state == PIPE_HIT_RESPOND);
-  assign ev_miss = ((i_pipe_state == PIPE_RESOLVE) && !i_hit_any && !i_resolve_stall) || ((d_pipe_state == PIPE_RESOLVE) && !d_hit_any && !d_resolve_stall);
+  assign ev_hit  = i_hit_respond || d_hit_respond;
+  assign ev_miss = ((i_pipe_state == PIPE_TAG_LOOKUP) && !i_hit_any && !i_resolve_stall) || ((d_pipe_state == PIPE_TAG_LOOKUP) && !d_hit_any && !d_resolve_stall);
   assign ev_wb   = wb_done;
 
   always_ff @(posedge clk_i) begin
