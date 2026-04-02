@@ -26,11 +26,14 @@ module fetch
     input  logic            [XLEN-1:0] pc_target_i,
     input  logic            [XLEN-1:0] ex_mtvec_i,
     input  logic                       trap_active_i,
-    input  logic                       misa_c_i,       // C extension enabled
-    input  logic            [XLEN-1:0] tdata1_i[0:1],  // Trigger 0 and 1 data1 (config)
-    input  logic            [XLEN-1:0] tdata2_i[0:1],  // Trigger 0 and 1 data2 (breakpoint addr)
-    input  logic            [XLEN-1:0] tcontrol_i,     // Trigger control (mte bit[3] enables triggers)
+    input  logic                       misa_c_i,                   // C extension enabled
+    input  logic            [XLEN-1:0] tdata1_i            [0:1],  // Trigger 0 and 1 data1 (config)
+    input  logic            [XLEN-1:0] tdata2_i            [0:1],  // Trigger 0 and 1 data2 (breakpoint addr)
+    input  logic            [XLEN-1:0] tcontrol_i,                 // Trigger control (mte bit[3] enables triggers)
     input  logic                       spec_hit_i,
+    input  logic                       actual_spec_hit_i,          // Actual prediction accuracy (for GShare)
+    input  logic                       de_redirect_i,              // DE early misprediction redirect
+    input  logic            [XLEN-1:0] de_redirect_target_i,       // DE redirect target PC
     output predict_info_t              spec_o,
     output ilowX_req_t                 lx_ireq_o,
     output logic            [XLEN-1:0] pc_o,
@@ -67,17 +70,17 @@ module fetch
 
   localparam bit IC_PREFETCH_EN = (level_param::PREFETCH_TYPE != 0);
   localparam int ICACHE_LINE_OFF_W = $clog2(BLK_SIZE / 8);
-  logic            pf_valid;
-  logic [XLEN-1:0] pf_addr;
-  logic            pf_ack;
-  logic            pf_ready_nc;
-  logic            ic_miss_uncached;
-  logic            pf_pma_uncached;
-  logic            pf_pma_grand;
-  logic            pf_pma_memregion;
-  logic [XLEN-1:0] pf_pma_addr;
-  blowX_res_t             buff_lowX_res;
-  logic                   buf_lookup_ack;
+  logic                             pf_valid;
+  logic       [           XLEN-1:0] pf_addr;
+  logic                             pf_ack;
+  logic                             pf_ready_nc;
+  logic                             ic_miss_uncached;
+  logic                             pf_pma_uncached;
+  logic                             pf_pma_grand;
+  logic                             pf_pma_memregion;
+  logic       [           XLEN-1:0] pf_pma_addr;
+  blowX_res_t                       buff_lowX_res;
+  logic                             buf_lookup_ack;
 
   // ============================================================================
   // Reset Flush Cycle Counter
@@ -90,18 +93,18 @@ module fetch
   // MAX_FLUSH_CYCLES and FLUSH_CNT_WIDTH are defined in level_param.sv
   // and include L2 when USE_L2_CACHE is enabled.
 
-  logic [FLUSH_CNT_WIDTH-1:0] flush_counter;
-  logic                       flush_in_progress;
+  logic       [FLUSH_CNT_WIDTH-1:0] flush_counter;
+  logic                             flush_in_progress;
 
   // Exception priority detection signals
-  logic                   has_debug_breakpoint;
-  logic                   has_instr_misaligned;
-  logic                   has_instr_access_fault;
-  logic                   has_illegal_instr;
-  logic                   has_ebreak;
-  logic                   has_ecall;
-  logic                   trigger0_execute_hit;
-  logic                   trigger1_execute_hit;
+  logic                             has_debug_breakpoint;
+  logic                             has_instr_misaligned;
+  logic                             has_instr_access_fault;
+  logic                             has_illegal_instr;
+  logic                             has_ebreak;
+  logic                             has_ecall;
+  logic                             trigger0_execute_hit;
+  logic                             trigger1_execute_hit;
 
   // ============================================================================
   // PC Register: Program counter management
@@ -166,17 +169,23 @@ module fetch
     // ============================================================================
     // Next PC Logic: Determines next PC from branch predictions and exceptions
     // Priority order:
-    // 1. Misprediction/Exception recovery -> pc_target_i
-    // 2. Branch taken -> spec_o.pc
-    // 3. Sequential fetch -> pc_incr_o
+    // 1. Fence.i flush -> flush_pc_i
+    // 2. Trap -> mtvec
+    // 3. EX misprediction (unresolved) -> pc_target_i
+    // 4. DE early misprediction -> de_redirect_target_i
+    // 5. Branch taken -> spec_o.pc
+    // 6. Sequential fetch -> pc_incr_o
     // ============================================================================
     if (flush_i) begin
       pc_next = flush_pc_i;
     end else if (trap_active_i) begin
       pc_next = ex_mtvec_i;
     end else if (!spec_hit_i) begin
-      // Misprediction or exception recovery
+      // EX misprediction or exception recovery (unresolved branches)
       pc_next = pc_target_i;
+    end else if (de_redirect_i) begin
+      // DE early misprediction — 1 cycle penalty instead of 2
+      pc_next = de_redirect_target_i;
     end else if (spec_o.taken) begin
       // Branch prediction taken
       pc_next = spec_o.pc;
@@ -241,9 +250,9 @@ module fetch
     // Detect all exceptions present
     // Breakpoint trigger requires: mte bit enabled (tcontrol[3]) + execute bit (tdata1[2]) + address match
     // Check both triggers (Trigger 0 and Trigger 1)
-    trigger0_execute_hit = fetch_valid && tcontrol_i[3] && tdata1_i[0][2] && (pc_o == tdata2_i[0]);
-    trigger1_execute_hit = fetch_valid && tcontrol_i[3] && tdata1_i[1][2] && (pc_o == tdata2_i[1]);
-    has_debug_breakpoint = trigger0_execute_hit || trigger1_execute_hit;
+    trigger0_execute_hit   = fetch_valid && tcontrol_i[3] && tdata1_i[0][2] && (pc_o == tdata2_i[0]);
+    trigger1_execute_hit   = fetch_valid && tcontrol_i[3] && tdata1_i[1][2] && (pc_o == tdata2_i[1]);
+    has_debug_breakpoint   = trigger0_execute_hit || trigger1_execute_hit;
     has_instr_misaligned   = fetch_valid && (misa_c_i ? pc_o[0] : (pc_o[1:0] != 2'b00));
     has_instr_access_fault = fetch_valid && !grand;
     has_illegal_instr      = fetch_valid && illegal_instr && buff_res.valid;
@@ -293,24 +302,22 @@ module fetch
   assign ic_miss_uncached = icache_res.miss && icache_req.uncached;
   assign pf_pma_addr      = pf_valid ? pf_addr : pc_o;
   // Line-aligned demand fetch address (match align_buffer lowX addr); avoids stale icache_req.addr
-  wire [XLEN-1:0] ic_miss_line_addr = {
-    abuff_icache_req.addr[XLEN-1:ICACHE_LINE_OFF_W], {ICACHE_LINE_OFF_W{1'b0}}
-  };
-  wire pf_region_ok = pf_pma_grand && !pf_pma_uncached;
+  wire [XLEN-1:0] ic_miss_line_addr = {abuff_icache_req.addr[XLEN-1:ICACHE_LINE_OFF_W], {ICACHE_LINE_OFF_W{1'b0}}};
+  wire            pf_region_ok = pf_pma_grand && !pf_pma_uncached;
 
   prefetcher_wrapper #(
       .PREFETCH_TYPE(level_param::PREFETCH_TYPE)
   ) i_prefetcher (
-      .clk_i            (clk_i),
-      .rst_ni           (rst_ni),
-      .flush_i          (flush_i),
-      .cache_miss_i     (icache_res.miss),
-      .miss_uncached_i  (ic_miss_uncached),
-      .miss_addr_i      (ic_miss_line_addr),
-      .prefetch_ack_i   (pf_ack),
+      .clk_i               (clk_i),
+      .rst_ni              (rst_ni),
+      .flush_i             (flush_i),
+      .cache_miss_i        (icache_res.miss),
+      .miss_uncached_i     (ic_miss_uncached),
+      .miss_addr_i         (ic_miss_line_addr),
+      .prefetch_ack_i      (pf_ack),
       .prefetch_region_ok_i(pf_region_ok),
-      .prefetch_valid_o (pf_valid),
-      .prefetch_addr_o  (pf_addr)
+      .prefetch_valid_o    (pf_valid),
+      .prefetch_addr_o     (pf_addr)
   );
 
   pma i_pma_pf (
@@ -364,13 +371,13 @@ module fetch
   gshare_bp i_gshare_bp (
       .clk_i        (clk_i),
       .rst_ni       (rst_ni),
-      .spec_hit_i   (spec_hit_i),
+      .spec_hit_i   (actual_spec_hit_i),
       .pc_target_i  (pc_target_i),
       .inst_i       (inst_o),
       .stall_i      (!pc_en),
       .pc_i         (pc_o),
       .pc_incr_i    (pc_incr_o),
-      .fetch_valid_i(fetch_valid_reg),  // Use registered fetch_valid to break comb loop
+      .fetch_valid_i(fetch_valid_reg),    // Use registered fetch_valid to break comb loop
       .spec_o       (spec_o),
       .de_info_i    (de_info_i),
       .ex_info_i    (ex_info_i)
@@ -394,14 +401,14 @@ module fetch
   // ============================================================================
 
   icache #(
-      .cache_req_t(icache_req_t),
-      .cache_res_t(icache_res_t),
-      .lowX_req_t (ilowX_req_t),
-      .lowX_res_t (ilowX_res_t),
-      .CACHE_SIZE (IC_CAPACITY),
-      .BLK_SIZE   (BLK_SIZE),
-      .XLEN       (XLEN),
-      .NUM_WAY    (IC_WAY),
+      .cache_req_t           (icache_req_t),
+      .cache_res_t           (icache_res_t),
+      .lowX_req_t            (ilowX_req_t),
+      .lowX_res_t            (ilowX_res_t),
+      .CACHE_SIZE            (IC_CAPACITY),
+      .BLK_SIZE              (BLK_SIZE),
+      .XLEN                  (XLEN),
+      .NUM_WAY               (IC_WAY),
       .ENABLE_ICACHE_PREFETCH(IC_PREFETCH_EN)
   ) i_icache (
       .clk_i              (clk_i),

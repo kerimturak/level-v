@@ -731,6 +731,7 @@ package level_param;
     instr_type_e     instr_type;
     predict_info_t   spec;
     logic            dcache_valid;
+    logic            de_resolved;   // Branch was resolved in decode (skip EX flush)
     logic            misa_c;        // C extension enabled when this instruction was fetched
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
