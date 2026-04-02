@@ -651,15 +651,12 @@ module nbmbmp_l2_cache
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       mem_state       <= MEM_IDLE;
-      mem_addr_q      <= '0;
-      mem_data_q      <= '0;
+      // mem_addr_q/mem_data_q/fill_resp_data/wb_addr_latch/wb_data_latch:
+      // no reset — guarded by mem_state FSM and valid signals
       fill_resp_valid <= 1'b0;
-      fill_resp_data  <= '0;
       fill_issued     <= 1'b0;
       wb_done         <= 1'b0;
       wb_from_dport   <= 1'b0;
-      wb_addr_latch   <= '0;
-      wb_data_latch   <= '0;
     end else begin
       fill_resp_valid <= 1'b0;
       fill_issued     <= 1'b0;
@@ -905,9 +902,8 @@ module nbmbmp_l2_cache
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       i_pipe_state         <= PIPE_IDLE;
-      i_req_q              <= '0;
+      // i_req_q/i_victim_way_q: no reset — guarded by pipe state FSM
       i_mshr_resp_accepted <= 1'b0;
-      i_victim_way_q       <= '0;
     end else begin
       i_mshr_resp_accepted <= 1'b0;
 
@@ -966,9 +962,8 @@ module nbmbmp_l2_cache
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       d_pipe_state         <= PIPE_IDLE;
-      d_req_q              <= '0;
+      // d_req_q/d_victim_way_q: no reset — guarded by pipe state FSM
       d_mshr_resp_accepted <= 1'b0;
-      d_victim_way_q       <= '0;
     end else begin
       d_mshr_resp_accepted <= 1'b0;
 

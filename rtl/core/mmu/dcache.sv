@@ -436,7 +436,7 @@ module dcache
   // when eviction way/addr might change in the next cycle.
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      lowx_req_q <= '0;
+      // lowx_req_q data: no reset — guarded by lowx_req_valid_q
       lowx_req_valid_q <= 1'b0;
     end else begin
       if (lowx_req_valid_q) begin

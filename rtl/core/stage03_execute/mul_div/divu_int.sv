@@ -65,17 +65,12 @@ module divu_int #(
   // ------------------------------------------------------------
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      busy_o      <= 1'b0;
-      done_o      <= 1'b0;
-      valid_o     <= 1'b0;
-      dbz_o       <= 1'b0;
-      quotient_o  <= '0;
-      reminder_o  <= '0;
-
-      divisor_q   <= '0;
-      quotient_q  <= '0;
-      remainder_q <= '0;
-      count_q     <= '0;
+      busy_o  <= 1'b0;
+      done_o  <= 1'b0;
+      valid_o <= 1'b0;
+      dbz_o   <= 1'b0;
+      // quotient_o/reminder_o/divisor_q/quotient_q/remainder_q: no reset — guarded by valid_o/busy_o
+      count_q <= '0;
     end else begin
       // Defaults
       done_o <= 1'b0;  // pulsed high only on completion cycle

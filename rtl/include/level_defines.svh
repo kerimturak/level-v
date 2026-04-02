@@ -7,6 +7,7 @@
 // Usage:
 //   make run LOG_COMMIT=1 KONATA_TRACER=1    # Enable trace logs
 //   make run SIM_FAST=1                       # Fast mode (logs off)
+//   make run_verilator RTL_PRINT_CFG=1         # Print rtl/cfg profile + key params at sim start (tb_wrapper)
 // ============================================================================
 
 // ============================================================================

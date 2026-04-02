@@ -60,12 +60,7 @@ module mul_pipelined #(
   // ------------------------------------------------------------
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      a_stage1     <= '0;
-      b_stage1     <= '0;
-      prod_q0      <= '0;
-      prod_q1      <= '0;
-      prod_q2      <= '0;
-      prod_q3      <= '0;
+      // a_stage1/b_stage1/prod_q*: no reset — guarded by stage1_valid
       stage1_valid <= 1'b0;
     end else begin
       if (start_i) begin
@@ -91,8 +86,7 @@ module mul_pipelined #(
   // ------------------------------------------------------------
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      result       <= '0;
-      product_o    <= '0;
+      // result/product_o: no reset — guarded by stage2_valid/valid_o
       stage2_valid <= 1'b0;
       valid_o      <= 1'b0;
       done_o       <= 1'b0;

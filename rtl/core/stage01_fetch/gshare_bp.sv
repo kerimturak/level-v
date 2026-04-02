@@ -353,20 +353,16 @@ module gshare_bp
         choice[i] <= 2'b10;  // Start with GSHARE
       end
       for (int i = 0; i < BTB_SIZE; i++) begin
-        btb_valid[i]  <= 1'b0;
-        btb_tag[i]    <= '0;
-        btb_target[i] <= '0;
+        btb_valid[i] <= 1'b0;
+        // btb_tag/target: no reset needed — guarded by btb_valid
       end
       for (int i = 0; i < IBTC_SIZE; i++) begin
-        ibtc_valid[i]  <= 1'b0;
-        ibtc_tag[i]    <= '0;
-        ibtc_target[i] <= '0;
+        ibtc_valid[i] <= 1'b0;
+        // ibtc_tag/target: no reset needed — guarded by ibtc_valid
       end
       for (int i = 0; i < LOOP_SIZE; i++) begin
         loop_valid[i] <= 1'b0;
-        loop_count[i] <= '0;
-        loop_trip[i]  <= '0;
-        loop_tag[i]   <= '0;
+        // loop_count/trip/tag: no reset needed — guarded by loop_valid
       end
     end else if (!stall_i) begin
       // Update when branch resolves

@@ -42,7 +42,7 @@ module memory
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
       ex_valid_q   <= 1'b0;
-      ex_addr_q    <= '0;
+      // ex_addr_q/ex_rw_q/ex_rw_size_q: no reset — overwritten every cycle
       ex_rw_q      <= 1'b0;
       ex_rw_size_q <= NO_SIZE;
     end else begin
@@ -140,7 +140,7 @@ module memory
 
   // No serialization — load and store ports are independent
   logic ld_port_busy;
-  assign ld_port_busy = load_active;
+  assign ld_port_busy = load_active || pf_active;
 
   // A load that couldn't be forwarded or fired (conflict / ld_port busy)
   // stays pending until it resolves via forwarding or dcache read.
@@ -205,15 +205,26 @@ module memory
   assign sb_drain_ack = drain_fire || (drain_active && st_dcache_res.valid);
 
   // Transaction state tracking
+  logic pf_active;  // prefetch in-flight on LD port
+
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
       load_active     <= 1'b0;
       drain_active    <= 1'b0;
       uc_store_active <= 1'b0;
+      pf_active       <= 1'b0;
     end else begin
       // Load port: ld_dcache_res
-      if (ld_dcache_res.valid) load_active <= 1'b0;
-      if (load_req_fire) load_active <= 1'b1;
+      if (ld_dcache_res.valid) begin
+        load_active <= 1'b0;
+        pf_active   <= 1'b0;
+      end
+      if (load_req_fire) begin
+        load_active <= 1'b1;
+        pf_active   <= 1'b0;
+      end else if (pf_fire) begin
+        pf_active <= 1'b1;
+      end
 
       // Store port: st_dcache_res
       if (st_dcache_res.valid) uc_store_active <= 1'b0;
@@ -226,7 +237,80 @@ module memory
   end
 
   // -------------------------------------------------------------------
-  // LD-port request (loads + uncached reads)
+  // Next-line prefetcher (on D-cache miss → fetch next cache line)
+  // -------------------------------------------------------------------
+  localparam int NLP_LINE_BYTES = BLK_SIZE / 8;  // 16 bytes
+  localparam int NLP_LINE_OFF = $clog2(NLP_LINE_BYTES);  // 4 bits
+
+  logic        pf_valid;
+  logic [31:0] pf_addr;
+  logic        pf_ready;
+
+  // Miss detection: one cycle after load_req_fire, if load_active is
+  // still high (no immediate hit), it is a cache miss.
+  logic        load_fired_q;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) load_fired_q <= 1'b0;
+    else load_fired_q <= load_req_fire;
+  end
+
+  logic miss_detected;
+  assign miss_detected = load_fired_q && load_active && !ld_dcache_res.valid;
+
+  // Latch the miss address so we can compute next-line target
+  logic [31:0] miss_addr_q;
+  always_ff @(posedge clk_i) begin
+    // No reset — only used after load_req_fire writes it
+    if (load_req_fire) miss_addr_q <= ex_data_req_i.addr;
+  end
+
+  // Next-line target: line-align miss addr, then +1 line
+  logic [31:0] nl_target;
+  assign nl_target = {miss_addr_q[31:NLP_LINE_OFF] + 1'b1, {NLP_LINE_OFF{1'b0}}};
+
+  // Don't prefetch into uncached / peripheral region (only RAM >= 0x8000_0000)
+  logic nl_addr_ok;
+  assign nl_addr_ok = nl_target[31];  // bit 31 set → RAM region
+
+  // Prefetch pending register
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni || fe_flush_cache_i) begin
+      pf_valid <= 1'b0;
+      // pf_addr: no reset — guarded by pf_valid
+    end else if (miss_detected && !pf_valid && nl_addr_ok) begin
+      pf_valid <= 1'b1;
+      pf_addr  <= nl_target;
+    end else if (pf_fire) begin
+      pf_valid <= 1'b0;
+    end
+  end
+
+  // Prefetch can fire when: LD port is idle, no demand load pending,
+  // no flush, and prefetcher has a request
+  assign pf_ready = !load_req_fire && !load_active && !pf_active && !load_pending && !uc_drain_pending && !fe_flush_cache_i && ld_dcache_res.ready;
+
+  logic pf_fire;
+  assign pf_fire = pf_valid && pf_ready;
+
+  // Debug counters (simulation only)
+  int unsigned dbg_nlp_miss, dbg_nlp_issued;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      dbg_nlp_miss   <= 0;
+      dbg_nlp_issued <= 0;
+    end else begin
+      if (miss_detected) dbg_nlp_miss <= dbg_nlp_miss + 1;
+      if (pf_fire) dbg_nlp_issued <= dbg_nlp_issued + 1;
+    end
+  end
+  // synthesis translate_off
+  final begin
+    $display("[NEXTLINE_PF] misses_seen=%0d pf_issued=%0d", dbg_nlp_miss, dbg_nlp_issued);
+  end
+  // synthesis translate_on
+
+  // -------------------------------------------------------------------
+  // LD-port request (loads + uncached reads + prefetch)
   // -------------------------------------------------------------------
   always_comb begin
     if (load_req_fire) begin
@@ -237,6 +321,15 @@ module memory
       ld_dcache_req.rw_size  = ex_data_req_i.rw_size;
       ld_dcache_req.data     = '0;
       ld_dcache_req.uncached = uncached;
+    end else if (pf_fire) begin
+      // Prefetch: read a full cache line (WORD-sized read, cached)
+      ld_dcache_req.valid    = 1'b1;
+      ld_dcache_req.addr     = pf_addr;
+      ld_dcache_req.ready    = 1'b1;
+      ld_dcache_req.rw       = 1'b0;
+      ld_dcache_req.rw_size  = WORD;
+      ld_dcache_req.data     = '0;
+      ld_dcache_req.uncached = 1'b0;
     end else begin
       ld_dcache_req.valid    = 1'b0;
       ld_dcache_req.addr     = ex_data_req_i.addr;
@@ -382,7 +475,7 @@ module memory
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
-      ld_data_q       <= '0;
+      // ld_data_q: no reset — guarded by ld_data_valid_q
       ld_data_valid_q <= 1'b0;
     end else if (ld_dcache_res.valid) begin
       ld_data_q       <= ld_dcache_res.data;
@@ -404,7 +497,7 @@ module memory
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
-      sb_fwd_data_q <= '0;
+      // sb_fwd_data_q: no reset — guarded by sb_fwd_hold_q
       sb_fwd_hold_q <= 1'b0;
     end else if (is_load && sb_fwd_hit && !sb_fwd_conflict) begin
       // Capture SB forward data every cycle the forward is valid
@@ -422,7 +515,7 @@ module memory
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      sb_partial_data_q <= '0;
+      // sb_partial_data_q: no reset — guarded by sb_partial_mask_q
       sb_partial_mask_q <= '0;
     end else if (load_req_fire && sb_fwd_partial) begin
       sb_partial_data_q <= sb_fwd_partial_data;

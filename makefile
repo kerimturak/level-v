@@ -103,7 +103,7 @@ LINT_DIR      := $(RESULTS_DIR)/lint
 # -----------------------------------------
 # RTL Paths
 # -----------------------------------------
-INC_DIRS      := $(RTL_DIR)/include
+INC_DIRS      := $(RTL_DIR)/include $(BUILD_DIR)/gen
 
 # -----------------------------------------
 # Testbench Paths
@@ -641,7 +641,7 @@ endif
 # Compilation Options
 # -----------------------------------------
 VLOG_BASE_OPTS := $(MODELSIM_SV_MODE) $(MODELSIM_MFCU) \
-                  +acc=$(MODELSIM_ACC) +incdir+$(INC_DIRS) \
+                  +acc=$(MODELSIM_ACC) $(foreach d,$(INC_DIRS),+incdir+$(d)) \
                   -work $(WORK_DIR) -svinputport=$(MODELSIM_SVINPUTPORT) \
                   $(MODELSIM_SUPPRESS) $(MODELSIM_NOWARN) \
                   $(MODELSIM_DEFINES)
@@ -1072,6 +1072,37 @@ endif
 
 VERILATOR_DEFINE = $(TRACE_DEFINE) $(SV_DEFINES)
 
+# -------------------------------------------------------------------------
+# RTL pack: rtl/cfg/<profile>.cfg → build/gen/level_param_profile.svh
+# Override profile: RTL_CFG_PROFILE=full_soc | minimal_soc | openlane
+# Default: +define+LEVEL_OPENLANE in SV_DEFINES → openlane;
+#          elif MINIMAL_SOC=1 → minimal_soc; else full_soc
+# -------------------------------------------------------------------------
+RTL_GEN_DIR              := $(BUILD_DIR)/gen
+LEVEL_PARAM_PROFILE_SVH  := $(RTL_GEN_DIR)/level_param_profile.svh
+GEN_LEVEL_PARAM_PY       := $(SCRIPT_DIR)/python/gen_level_param_profile.py
+
+ifneq ($(RTL_CFG_PROFILE),)
+  RESOLVED_RTL_PROFILE := $(RTL_CFG_PROFILE)
+else ifneq ($(findstring +define+LEVEL_OPENLANE,$(SV_DEFINES)),)
+  RESOLVED_RTL_PROFILE := openlane
+else ifeq ($(MINIMAL_SOC),1)
+  RESOLVED_RTL_PROFILE := minimal_soc
+else
+  RESOLVED_RTL_PROFILE := full_soc
+endif
+
+$(LEVEL_PARAM_PROFILE_SVH): $(GEN_LEVEL_PARAM_PY) $(wildcard $(RTL_DIR)/cfg/*.cfg) | $(RTL_GEN_DIR)
+	@printf "$(CYAN)[RTL_CFG]$(RESET) profile=$(RESOLVED_RTL_PROFILE) -> $(LEVEL_PARAM_PROFILE_SVH)\n"
+	@$(PYTHON) $(GEN_LEVEL_PARAM_PY) $(RESOLVED_RTL_PROFILE) --out $(LEVEL_PARAM_PROFILE_SVH)
+
+$(RTL_GEN_DIR):
+	@$(MKDIR) "$(RTL_GEN_DIR)"
+
+.PHONY: gen-rtl-cfg
+gen-rtl-cfg: $(LEVEL_PARAM_PROFILE_SVH)
+	@true
+
 # Verilator: üst modül (level_wrapper) parametre geçersiz kılma — örnek:
 #   make verilate VERILATOR_GFLAGS="-GVGA_EN=1 -GGPIO_EN=1 -GPLIC_EN=1"
 VERILATOR_GFLAGS ?=
@@ -1217,7 +1248,7 @@ NO_WARNING_LINT = \
 # Build Flags
 # -----------------------------------------
 # Lint flags: -Wall enables all warnings, no suppressions for real issues
-LINT_FLAGS  = --lint-only -Wall -I$(INC_DIRS) --top-module $(RTL_LEVEL) $(VERILATOR_GFLAGS)
+LINT_FLAGS  = --lint-only -Wall --top-module $(RTL_LEVEL) $(VERILATOR_GFLAGS)
 RUN_BIN     := $(OBJ_DIR)/V$(RTL_LEVEL)
 
 # Common verilator flags
@@ -1262,7 +1293,7 @@ VERILATOR_BUILD_FLAGS = \
 .PHONY: dirs lint verilate verilate-fast run_verilator wave clean_verilator verilator_help stats
 
 dirs:
-	@$(MKDIR) "$(BUILD_DIR)" "$(OBJ_DIR)" "$(LOG_DIR)"
+	@$(MKDIR) "$(BUILD_DIR)" "$(BUILD_DIR)/gen" "$(OBJ_DIR)" "$(LOG_DIR)"
 
 # ============================================================
 # Lint — Verilator --lint-only -Wall (single pass; all warning classes)
@@ -1272,7 +1303,7 @@ dirs:
 # ============================================================
 VERILATOR_LINT_DIR := $(LINT_DIR)/verilator
 
-lint: dirs
+lint: dirs $(LEVEL_PARAM_PROFILE_SVH)
 	@printf "$(GREEN)[VERILATOR LINT]$(RESET)\n"
 	@mkdir -p "$(VERILATOR_LINT_DIR)"
 	@printf "$(CYAN)[INFO]$(RESET) Output: $(VERILATOR_LINT_DIR)/\n"
@@ -1318,7 +1349,7 @@ lint: dirs
 # as a dependency — make leaves a stale object and the link step fails with
 # undefined reference to VerilatedFst::*.  Drop tb_wrapper.o before each verilate.
 # ============================================================
-verilate: dirs
+verilate: dirs $(LEVEL_PARAM_PROFILE_SVH)
 ifeq ($(VERILATE_FAST),1)
 	@if [ -x "$(RUN_BIN)" ] && [ "$(RUN_BIN)" -nt "$(word 1,$(SV_SOURCES))" ]; then \
 		printf "$(YELLOW)[SKIP]$(RESET) Binary up-to-date vs first flist source: $(RUN_BIN)\n"; \
@@ -1350,7 +1381,7 @@ verilate-fast:
 	@$(MAKE) --no-print-directory verilate VERILATE_FAST=1
 
 # Rebuild only C++ without re-verilating (for testbench changes)
-rebuild-cpp: dirs
+rebuild-cpp: dirs $(LEVEL_PARAM_PROFILE_SVH)
 	@printf "$(GREEN)[REBUILDING C++ ONLY]$(RESET)\n"
 	$(VERILATOR) \
 		$(SV_SOURCES) \
@@ -1369,6 +1400,10 @@ COVERAGE_DATA_DIR := $(LOG_DIR)/verilator/coverage_data
 
 # Python runner
 VERILATOR_RUNNER := $(ROOT_DIR)/script/python/makefile/verilator_runner.py
+
+# Sim: print rtl/cfg profile + key params at t=0 (tb_wrapper +print_rtl_cfg)
+RTL_PRINT_CFG ?= 0
+export RTL_PRINT_CFG
 
 # Memory search directories
 VERILATOR_MEM_DIRS := $(BUILD_DIR)/tests/riscv-tests/mem \
@@ -3329,7 +3364,9 @@ coremark_help:
 	@echo -e "  perf log: results/logs/verilator/coremark/perf_pipeline.log (and verilator_run.log tail)"
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo -e "  $(CYAN)SIM_FAST=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
-	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP; L2 on by default$(RESET)"
+	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP; L2 on by default (rtl/cfg/minimal_soc.cfg)$(RESET)"
+	@echo -e "  $(CYAN)RTL_CFG_PROFILE=name$(RESET)      - $(CYAN)Override numeric RTL pack: full_soc | minimal_soc | openlane (rtl/cfg/*.cfg)$(RESET)"
+	@echo -e "  $(CYAN)RTL_PRINT_CFG=1$(RESET)          - $(CYAN)Log compiled RTL profile + cache/BP/UART summary at sim start$(RESET)"
 	@echo -e "  $(CYAN)MINIMAL_NO_L2=1$(RESET)         - $(CYAN)With MINIMAL_SOC: direct mem arbiter (faster sim, no L2)$(RESET)"
 	@echo -e "  $(CYAN)NO_L2_CACHE=1$(RESET)          - $(CYAN)Force memory arbiter instead of L2$(RESET)"
 	@echo -e "  $(CYAN)+uart_finish_pattern=STR$(RESET) - $(CYAN)Verilator plusarg: stop sim after TX sends this substring (default: CoreMark Complete!)$(RESET)"
@@ -7233,7 +7270,7 @@ check_slang:
 	}
 
 # Run svlint
-svlint: check_svlint $(SVLINT_CONFIG)
+svlint: check_svlint $(SVLINT_CONFIG) $(LEVEL_PARAM_PROFILE_SVH)
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  svlint - SystemVerilog Style Linter$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -7254,7 +7291,7 @@ svlint: check_svlint $(SVLINT_CONFIG)
 	fi
 
 # Run Slang linter (via pyslang)
-slang_lint: check_slang
+slang_lint: check_slang $(LEVEL_PARAM_PROFILE_SVH)
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Slang - SystemVerilog Compiler & Linter$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -7277,7 +7314,7 @@ slang_lint: check_slang
 	fi
 
 # Run Slang with more detailed output (via pyslang)
-slang_check: check_slang
+slang_check: check_slang $(LEVEL_PARAM_PROFILE_SVH)
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Slang - Full Compilation Check$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"

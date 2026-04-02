@@ -9,7 +9,8 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 ================================================================================
 Level RISC-V — Central Configuration Package
 ================================================================================
-All RTL configuration is centralized in this file.
+Most RTL configuration lives here; numeric build profiles (cache/BP/UART/RAM)
+are in rtl/cfg/*.cfg and included as build/gen/level_param_profile.svh.
 Modules import this package to access parameters.
 
 Sections:
@@ -36,13 +37,6 @@ package level_param;
   /* Match software: makefile CPU_CLK_HZ (env/common/cpu_clock.h). */
   localparam int CPU_CLK = 25_000_000;
   localparam int XLEN = 32;
-`ifdef LEVEL_OPENLANE
-  localparam int WRAPPER_RAM_SIZE_KB = 4;
-`else
-  // Main RAM depth for FPGA/sim (program + heap/stack). Match env/custom/link.ld LENGTH.
-  // Full 640×480@1bpp needs ~38 KiB VRAM; on 40 KiB FPGA the VGA reader clamps past-RAM fetches to black (see vga_fb_wishbone).
-  localparam int WRAPPER_RAM_SIZE_KB = 40;
-`endif
   localparam logic [31:0] RESET_VECTOR = 32'h8000_0000;
 
   // ============================================================================
@@ -50,66 +44,12 @@ package level_param;
   // ============================================================================
   localparam int BLK_SIZE = 128;  // Cache block size (bits)
 
-`ifdef LEVEL_OPENLANE
-  // ── LEVEL_OPENLANE: Smallest synthesis configuration (pilot compile) ──
-  localparam int IC_WAY = 2;
-  localparam int IC_CAPACITY = 1 * 1024 * 8;  // 1KB (bits)
-  localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
+  // Profile numerics: rtl/cfg/<profile>.cfg → build/gen/level_param_profile.svh (see Makefile / OpenLane prep)
+  `include "level_param_profile.svh"
 
-  localparam int DC_WAY = 2;
-  localparam int DC_CAPACITY = 1 * 1024 * 8;  // 1KB (bits)
-  localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
-  localparam int DC_MSHR_DEPTH = 2;
-  localparam int DC_NUM_BANK = 1;
-`elsif MINIMAL_SOC
-  // ── MINIMAL_SOC: Small cache (sufficient for CoreMark ~4KB working set) ──
-  // Instruction Cache: 2-way, 4KB — 2KB I$ + L2 still mis-orders heavy I-miss traffic in sim
-  localparam int IC_WAY = 2;
-  localparam int IC_CAPACITY = 4 * 1024 * 8;
-  localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
-
-  // Data Cache: 2-way, 2KB
-  localparam int DC_WAY = 2;
-  localparam int DC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits)
-  localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
-  localparam int DC_MSHR_DEPTH = 4;
-  localparam int DC_NUM_BANK = 2;
-`else
-  // ── FULL SOC: Large cache ──
-  // Instruction Cache
-  localparam int IC_WAY = 4;
-  localparam int IC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
-  localparam int IC_SIZE = IC_CAPACITY / IC_WAY;
-
-  // Data Cache
-  localparam int DC_WAY = 4;
-  localparam int DC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
-  localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
-  localparam int DC_MSHR_DEPTH = 4;
-  localparam int DC_NUM_BANK = 2;
-`endif
-
-  // L2 Cache (Yarok14-based non-blocking)
-`ifdef LEVEL_OPENLANE
-  localparam int L2_CACHE_SIZE_KB = 4;
-  localparam int L2_NUM_WAY = 2;
-  localparam int L2_MSHR_DEPTH = 2;
-  localparam int L2_NUM_BANKS = 1;
-`elsif MINIMAL_SOC
-  localparam int L2_CACHE_SIZE_KB = 8;
-  localparam int L2_NUM_WAY = 4;
-  localparam int L2_MSHR_DEPTH = 4;
-  localparam int L2_NUM_BANKS = 2;
-`else
-  localparam int L2_CACHE_SIZE_KB = 8;
-  localparam int L2_NUM_WAY = 4;
-  localparam int L2_MSHR_DEPTH = 4;
-  localparam int L2_NUM_BANKS = 2;
-`endif
   localparam int L2_LINE_SIZE_B = BLK_SIZE / 8;  // 16 bytes, matches L1 block
   localparam int L2_ADDR_WIDTH = XLEN;
   localparam int L2_DATA_WIDTH = XLEN;  // 32-bit words within line
-  localparam int L2_ECC_BITS = 8;  // SECDED for 32-bit word
 
   // L2 derived parameters
   localparam int L2_NUM_SETS = (L2_CACHE_SIZE_KB * 1024) / (L2_NUM_WAY * L2_LINE_SIZE_B);
@@ -181,49 +121,15 @@ package level_param;
     mesi_state_t            mesi;
   } l2_tag_entry_t;
 
-  // Align Buffer (Fetch unit)
-  localparam int ABUFF_SIZE = 512;
-  localparam int ABUFF_WAY = 1;
-
   // ============================================================================
   // 3. BRANCH PREDICTOR PARAMETERS
   // ============================================================================
-`ifdef LEVEL_OPENLANE
-  // ── LEVEL_OPENLANE: Smallest branch predictor configuration ──
-  localparam int PHT_SIZE = 32;
-  localparam int BTB_SIZE = 16;
-  localparam int GHR_SIZE = 6;
-  localparam int IBTC_SIZE = 4;
-  localparam int RAS_SIZE = 4;
-  localparam int LOOP_SIZE = 2;
-`elsif MINIMAL_SOC
-  // ── MINIMAL_SOC: Small BP (fast compile, adequate accuracy) ──
-  localparam int PHT_SIZE = 64;  // Pattern History Table entries
-  localparam int BTB_SIZE = 32;  // Branch Target Buffer entries
-  localparam int GHR_SIZE = 8;  // Global History Register bits
-  localparam int IBTC_SIZE = 8;  // Indirect Branch Target Cache
-  localparam int RAS_SIZE = 8;  // Return Address Stack depth
-  localparam int LOOP_SIZE = 4;
-`else
-  // ── FULL SOC: Large BP (high accuracy) ──
-  localparam int PHT_SIZE = 512;  // Pattern History Table entries
-  localparam int BTB_SIZE = 256;  // Branch Target Buffer entries
-  localparam int GHR_SIZE = 24;  // Global History Register bits
-  localparam int IBTC_SIZE = 32;  // Indirect Branch Target Cache
-  localparam int RAS_SIZE = 16;  // Return Address Stack depth
-  localparam int LOOP_SIZE = 8;
-`endif
-  localparam int BP_LOG_INTERVAL = 10000;
+  // (BP table sizes in rtl/cfg; BP_LOG_INTERVAL in generated profile include)
 
   // ============================================================================
   // 3.5. PREFETCHER PARAMETERS
   // ============================================================================
-  // Prefetch Type: 0=None, 1=NextLine (integrated with icache refill path)
-  localparam int PREFETCH_TYPE = 1;
-  localparam int STRIDE_TABLE_SIZE = 64;  // Stride prefetcher table entries
-  localparam int STRIDE_BITS = 12;  // Stride bit width
-  localparam int NUM_STREAMS = 4;  // Stream prefetcher stream count
-  localparam int PREFETCH_DEGREE = 4;  // How many lines ahead to prefetch
+  // Prefetch / align buffer / store buffer sizes: rtl/cfg → level_param_profile.svh
 
   // ============================================================================
   // 4. MULTIPLIER/DIVIDER PARAMETERS
@@ -239,13 +145,6 @@ package level_param;
   localparam int PROGRAM_SEQUENCE_LEN = 9;
   localparam logic [8*PROGRAM_SEQUENCE_LEN-1:0] PROGRAM_SEQUENCE = "LEVELTEST";
   localparam int UART_DATA_WIDTH = 8;
-`ifdef LEVEL_OPENLANE
-  localparam int UART_TX_FIFO_DEPTH = 32;
-  localparam int UART_RX_FIFO_DEPTH = 8;
-`else
-  localparam int UART_TX_FIFO_DEPTH = 1024;
-  localparam int UART_RX_FIFO_DEPTH = 32;
-`endif
   localparam int GPIO_WIDTH = 32;
   localparam int NUM_EXT_IRQ = 16;
 
@@ -443,9 +342,7 @@ package level_param;
     logic              uncached;    // Uncached bypass request
   } dc_mshr_entry_t;
 
-  // Store Buffer
-  localparam int SB_DEPTH = 8;
-  localparam int SB_PTR_W = $clog2(SB_DEPTH);
+  // Store Buffer depth / SB_PTR_W: rtl/cfg → level_param_profile.svh
 
   // ---------------------------------------------------------------------------
   // 9.3 Stall Reasons

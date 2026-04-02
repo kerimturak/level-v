@@ -883,14 +883,19 @@ module cpu
   // Enable with: +define+LOG_PERF_STALL or make verilate/run LOG_PERF_STALL=1
 `ifdef LOG_PERF_STALL
   perf_stall_counters i_perf_stall_counters (
-      .clk_i            (clk_i),
-      .rst_ni           (rst_ni),
-      .stall_cause      (stall_cause),
-      .fencei_flush_i   (fencei_flush),
-      .priority_flush_i (priority_flush),
-      .de_flush_en_i    (de_flush_en),
-      .ex_flush_en_i    (ex_flush_en),
-      .l2_miss_busy_i   (l2_miss_busy)
+      .clk_i              (clk_i),
+      .rst_ni             (rst_ni),
+      .stall_cause        (stall_cause),
+      .fencei_flush_i     (fencei_flush),
+      .priority_flush_i   (priority_flush),
+      .de_flush_en_i      (de_flush_en),
+      .ex_flush_en_i      (ex_flush_en),
+      .l2_miss_busy_i     (l2_miss_busy),
+      .raw_fencei_i       (me_fencei_stall),
+      .raw_imiss_i        (fe_imiss_stall),
+      .raw_dmiss_i        (me_dmiss_stall),
+      .raw_load_hazard_i  (fe_stall || de_stall),
+      .raw_alu_i          (ex_alu_stall)
   );
 `endif
 

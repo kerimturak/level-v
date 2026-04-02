@@ -11,6 +11,10 @@ Pipeline perf (enable: +define+LOG_PERF_STALL or make LOG_PERF_STALL=1)
 
 Stall cycles: cpu stall_cause != NO_STALL (priority per cpu.sv).
 
+Raw overlap: same five conditions as stall_cause priority chain, counted before
+mux — popcount per cycle shows how many causes are simultaneously true;
+sum(popcount) - stall_cycles = total cycles hidden under priority encoding.
+
 Flush events: once per cycle when the front-end / EX is squashed (priority order
 below). de_flush_en / ex_flush_en match the masked hazard_unit outputs in cpu.
 
@@ -32,7 +36,13 @@ module perf_stall_counters
   input logic       de_flush_en_i,
   input logic       ex_flush_en_i,
   // USE_L2_CACHE: nbmbmp_l2_cache.l2_miss_busy_o — L2 miss service cycles only (not stall_cause).
-  input logic       l2_miss_busy_i
+  input logic       l2_miss_busy_i,
+  // Raw stall layers (same tests as stall_cause mux in cpu.sv, unordered)
+  input logic       raw_fencei_i,
+  input logic       raw_imiss_i,
+  input logic       raw_dmiss_i,
+  input logic       raw_load_hazard_i,
+  input logic       raw_alu_i
 );
 
 `ifdef LOG_PERF_STALL
@@ -50,6 +60,11 @@ module perf_stall_counters
   logic [63:0] cnt_alu;
   logic [63:0] cnt_fencei;
   logic [63:0] cnt_l2_miss_cycles;
+  // Simultaneous raw stall causes (before stall_cause priority)
+  logic [63:0] sum_raw_stall_layers;  // Σ popcount per cycle (only when stalled)
+  logic [63:0] cycles_multi_raw_stall;  // cycles where 2+ raw causes active
+
+  wire [2:0] raw_layers = raw_fencei_i + raw_imiss_i + raw_dmiss_i + raw_load_hazard_i + raw_alu_i;
 
   // Pipeline squashes (effective after stall masking in cpu.sv)
   logic [63:0] flush_events_total;
@@ -72,6 +87,8 @@ module perf_stall_counters
       cnt_alu                 <= '0;
       cnt_fencei              <= '0;
       cnt_l2_miss_cycles      <= '0;
+      sum_raw_stall_layers    <= '0;
+      cycles_multi_raw_stall  <= '0;
       flush_events_total      <= '0;
       cnt_flush_ex_trap       <= '0;
       cnt_flush_de_trap       <= '0;
@@ -83,6 +100,8 @@ module perf_stall_counters
 
       if (stall_cause != NO_STALL) begin
         cycles_stall_total <= cycles_stall_total + 64'd1;
+        sum_raw_stall_layers <= sum_raw_stall_layers + 64'(raw_layers);
+        if (raw_layers >= 3'd2) cycles_multi_raw_stall <= cycles_multi_raw_stall + 64'd1;
         unique case (stall_cause)
           LOAD_RAW_STALL: cnt_load_raw <= cnt_load_raw + 64'd1;
           IMISS_STALL: cnt_imiss <= cnt_imiss + 64'd1;
@@ -144,6 +163,19 @@ module perf_stall_counters
              flush_events_total, pct_of(cycles_active, flush_events_total));
     $display("    Stall same cycle as flush: %0d  (%0d%% of active)",
              cycles_stall_with_flush, pct_of(cycles_active, cycles_stall_with_flush));
+    $display("    Raw stall overlap:     cycles w/ 2+ causes=%0d  (%0d%% of stall cyc)",
+             cycles_multi_raw_stall, pct_of(cycles_stall_total, cycles_multi_raw_stall));
+    begin
+      logic [63:0] extra_masked;
+      int unsigned avg_x1000;
+      extra_masked = sum_raw_stall_layers - cycles_stall_total;
+      if (cycles_stall_total != 64'd0)
+        avg_x1000 = int'(sum_raw_stall_layers * 64'd1000 / cycles_stall_total);
+      else
+        avg_x1000 = 0;
+      $display("      Σ raw layers (on stall cyc): %0d  extra under priority: %0d  avg layers: %0d.%03d",
+               sum_raw_stall_layers, extra_masked, avg_x1000 / 1000, avg_x1000 % 1000);
+    end
     $display(
         "    Flush ~bubble cyc (x2–x3 per event): %0d – %0d  (~%0d%%–%0d%% of active)",
         flush_events_total * 64'd2,
@@ -177,7 +209,12 @@ module perf_stall_counters
     priority_flush_i,
     de_flush_en_i,
     ex_flush_en_i,
-    l2_miss_busy_i
+    l2_miss_busy_i,
+    raw_fencei_i,
+    raw_imiss_i,
+    raw_dmiss_i,
+    raw_load_hazard_i,
+    raw_alu_i
   };
 `endif
 

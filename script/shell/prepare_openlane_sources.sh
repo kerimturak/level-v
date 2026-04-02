@@ -61,6 +61,12 @@ find "${SRC_DIR}" -maxdepth 1 -type f -name '*_sim.sv' -delete
 cp -f "${ROOT_DIR}/rtl/include"/*.svh "${INC_DIR}/"
 cp -f "${ROOT_DIR}/rtl/include"/*.svh "${SRC_DIR}/"
 
+PYTHON="${PYTHON:-python3}"
+echo "[openlane:prep] gen level_param_profile.svh (openlane cfg)"
+"${PYTHON}" "${ROOT_DIR}/script/python/gen_level_param_profile.py" openlane \
+  --out "${INC_DIR}/level_param_profile.svh"
+cp -f "${INC_DIR}/level_param_profile.svh" "${SRC_DIR}/"
+
 sv2v_convert() {
     local sv2v_def_args=()
     local sv2v_tmp_out="${SV2V_OUT}.sv2v_tmp.v"

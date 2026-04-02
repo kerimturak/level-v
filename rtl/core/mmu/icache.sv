@@ -187,8 +187,8 @@ module icache
   // Register the node read from BRAM to break combinational loops for PLRU
   logic [NUM_WAY-2:0] node_q;
   always_ff @(posedge clk_i) begin
-    if (!rst_ni) node_q <= '0;
-    else node_q <= nsram.rnode;
+    // No reset needed — PLRU data is don't-care until first cache fill
+    node_q <= nsram.rnode;
   end
 
   // PLRU logic
@@ -290,8 +290,7 @@ module icache
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       rsp_is_prefetch_q <= 1'b0;
-      pf_addr_q         <= '0;
-      pf_uncached_q     <= 1'b0;
+      // pf_addr_q/pf_uncached_q: no reset — guarded by rsp_is_prefetch_q
     end else begin
       if (lowX_res_i.valid) rsp_is_prefetch_q <= 1'b0;
       else if (lowX_req_o.valid && lowX_res_i.ready) rsp_is_prefetch_q <= issue_pf;

@@ -86,9 +86,8 @@ module next_line_prefetcher
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      state_q          <= ST_IDLE;
-      pf_line_q        <= '0;
-      last_miss_line_q <= '0;
+      state_q <= ST_IDLE;
+      // pf_line_q/last_miss_line_q: no reset — guarded by state FSM
     end else if (flush_i) begin
       state_q <= ST_IDLE;
     end else begin

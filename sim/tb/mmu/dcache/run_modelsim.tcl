@@ -8,7 +8,8 @@ if {[file exists work]} {
 vlib work
 
 # Compile RTL files
-vlog +incdir+../../../../rtl/include +incdir+../../../../rtl/pkg \
+# From repo root: make gen-rtl-cfg   (needs build/gen/level_param_profile.svh)
+vlog +incdir+../../../../rtl/include +incdir+../../../../rtl/pkg +incdir+../../../../build/gen \
      ../../../../rtl/pkg/level_param.sv \
      ../../../../rtl/ram/sp_bram.sv \
      ../../../../rtl/core/mmu/dcache.sv \
