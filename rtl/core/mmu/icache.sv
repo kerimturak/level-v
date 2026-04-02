@@ -12,29 +12,29 @@ THE SOFTWARE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY OF ANY KIND.
 module icache
   import level_param::*;
 #(
-    parameter type cache_req_t = logic,
-    parameter type cache_res_t = logic,
-    parameter type lowX_res_t  = logic,
-    parameter type lowX_req_t  = logic,
-    parameter      CACHE_SIZE  = 1024,
-    parameter      BLK_SIZE    = level_param::BLK_SIZE,
-    parameter      XLEN        = level_param::XLEN,
-    parameter      NUM_WAY     = 4,
+    parameter type cache_req_t            = logic,
+    parameter type cache_res_t            = logic,
+    parameter type lowX_res_t             = logic,
+    parameter type lowX_req_t             = logic,
+    parameter      CACHE_SIZE             = 1024,
+    parameter      BLK_SIZE               = level_param::BLK_SIZE,
+    parameter      XLEN                   = level_param::XLEN,
+    parameter      NUM_WAY                = 4,
     parameter bit  ENABLE_ICACHE_PREFETCH = 1'b0
 ) (
-    input  logic       clk_i,
-    input  logic       rst_ni,
-    input  logic       flush_i,
-    input  cache_req_t cache_req_i,
-    output cache_res_t cache_res_o,
-    input  lowX_res_t  lowX_res_i,
-    output lowX_req_t  lowX_req_o,
-    input  logic            prefetch_valid_i,
-    input  logic [XLEN-1:0] prefetch_addr_i,
-    input  logic            prefetch_uncached_i,
-    input  logic            prefetch_grand_i,
-    output logic            prefetch_ready_o,
-    output logic            prefetch_ack_o
+    input  logic                  clk_i,
+    input  logic                  rst_ni,
+    input  logic                  flush_i,
+    input  cache_req_t            cache_req_i,
+    output cache_res_t            cache_res_o,
+    input  lowX_res_t             lowX_res_i,
+    output lowX_req_t             lowX_req_o,
+    input  logic                  prefetch_valid_i,
+    input  logic       [XLEN-1:0] prefetch_addr_i,
+    input  logic                  prefetch_uncached_i,
+    input  logic                  prefetch_grand_i,
+    output logic                  prefetch_ready_o,
+    output logic                  prefetch_ack_o
 );
 
   // COMMON SIGNALS & Parameters
@@ -62,16 +62,23 @@ module icache
   logic                       cache_wr_en;
   logic                       lookup_ack;
   logic                       rsp_is_prefetch_q;
-  logic [XLEN-1:0]          pf_addr_q;
+  logic       [     XLEN-1:0] pf_addr_q;
   logic                       pf_uncached_q;
 
-  wire [IDX_WIDTH-1:0] pf_wr_idx = pf_addr_q[IDX_WIDTH+BOFFSET-1:BOFFSET];
+  wire        [IDX_WIDTH-1:0] pf_wr_idx = pf_addr_q[IDX_WIDTH+BOFFSET-1:BOFFSET];
 
-  wire issue_dem = !lookup_ack && cache_miss;
-  wire issue_pf  = ENABLE_ICACHE_PREFETCH && !lookup_ack && prefetch_valid_i && !cache_miss && !flush_i
-      && prefetch_grand_i && !prefetch_uncached_i;
+  // pf_stale_q: SRAM outputs are stale for one cycle after pf_fill because
+  // sp_bram write-first returns prefetch data, not the demand set's data.
+  logic                       pf_stale_q;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) pf_stale_q <= 1'b0;
+    else pf_stale_q <= pf_fill;
+  end
+
+  wire issue_dem = !lookup_ack && cache_miss && !pf_stale_q;
+  wire issue_pf = ENABLE_ICACHE_PREFETCH && !lookup_ack && prefetch_valid_i && !cache_miss && !flush_i && prefetch_grand_i && !prefetch_uncached_i && !pf_stale_q;
   wire demand_fill = !flush && lowX_res_i.valid && !rsp_is_prefetch_q && !cache_req_q.uncached && lookup_ack;
-  wire pf_fill       = ENABLE_ICACHE_PREFETCH && !flush && lowX_res_i.valid && rsp_is_prefetch_q && !pf_uncached_q;
+  wire pf_fill = ENABLE_ICACHE_PREFETCH && !flush && lowX_res_i.valid && rsp_is_prefetch_q && !pf_uncached_q;
 
   // Shared memory structures
   typedef struct packed {
@@ -100,12 +107,18 @@ module icache
   nsram_t nsram;
 
   // Request pipeline register
+  // Bug fix: only advance cache_req_q on demand fill, not prefetch response
+  // Bug fix: hold cache_req_q during pf_stale_q to prevent demand request loss
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       cache_req_q <= '0;
+    end else if (pf_stale_q) begin
+      // After prefetch fill, SRAM outputs are stale for one cycle.
+      // Preserve cache_req_q so the demand can be checked on the next cycle.
+      cache_req_q <= cache_req_q;
     end else begin
       if (cache_miss) begin
-        if (!lowX_res_i.valid || !cache_req_i.ready) cache_req_q <= cache_req_q;
+        if (!lowX_res_i.valid || rsp_is_prefetch_q || !cache_req_i.ready) cache_req_q <= cache_req_q;
         else cache_req_q <= cache_req_i;
       end else begin
         if (!cache_req_i.ready) cache_req_q <= flush && flush_index != IDX_WIDTH'(NUM_SET - 1) ? '0 : cache_req_q;
@@ -216,12 +229,12 @@ module icache
       if (cache_hit_vec[i]) cache_select_data = dsram.rdata[i];
     end
 
-    cache_miss = cache_req_q.valid && !flush && !(|(cache_valid_vec & cache_hit_vec));
-    cache_hit = cache_req_q.valid && !flush && (|(cache_valid_vec & cache_hit_vec));
+    // Suppress hit/miss during pf_stale_q — SRAM outputs belong to prefetch set, not demand set
+    cache_miss = cache_req_q.valid && !flush && !(|(cache_valid_vec & cache_hit_vec)) && !pf_stale_q;
+    cache_hit = cache_req_q.valid && !flush && (|(cache_valid_vec & cache_hit_vec)) && !pf_stale_q;
 
     rd_idx = cache_req_q.valid ? cache_req_q.addr[IDX_WIDTH+BOFFSET-1:BOFFSET] : cache_req_i.addr[IDX_WIDTH+BOFFSET-1:BOFFSET];
-    wr_idx = flush ? flush_index
-        : (pf_fill ? pf_wr_idx : (cache_miss ? cache_req_q.addr[IDX_WIDTH+BOFFSET-1:BOFFSET] : rd_idx));
+    wr_idx = flush ? flush_index : (pf_fill ? pf_wr_idx : (cache_miss ? cache_req_q.addr[IDX_WIDTH+BOFFSET-1:BOFFSET] : rd_idx));
 
     cache_wr_en = demand_fill || pf_fill || flush;
     cache_idx = cache_wr_en ? wr_idx : rd_idx;
@@ -231,15 +244,15 @@ module icache
 
   // I-Cache specific logic
   always_comb begin
+    // Note: during pf_fill, node_q is from the wrong set, so PLRU update is
+    // non-optimal for the prefetch set. Acceptable tradeoff for simplicity.
     nsram.rw_en = cache_wr_en || cache_hit;
     nsram.wnode = flush ? '0 : updated_node;
     nsram.idx   = cache_idx;
 
     tsram.way   = '0;
     tsram.idx   = cache_idx;
-    tsram.wtag  = flush ? '0
-        : (pf_fill ? {1'b1, pf_addr_q[XLEN-1 : IDX_WIDTH+BOFFSET]}
-           : {1'b1, cache_req_q.addr[XLEN-1 : IDX_WIDTH+BOFFSET]});
+    tsram.wtag  = flush ? '0 : (pf_fill ? {1'b1, pf_addr_q[XLEN-1 : IDX_WIDTH+BOFFSET]} : {1'b1, cache_req_q.addr[XLEN-1 : IDX_WIDTH+BOFFSET]});
     for (int i = 0; i < NUM_WAY; i++) tsram.way[i] = flush ? '1 : cache_wr_way[i] && cache_wr_en;
 
     dsram.way   = '0;
@@ -253,13 +266,15 @@ module icache
     lowX_req_o.valid    = issue_dem || issue_pf;
     lowX_req_o.ready    = !flush;
     // Prefetch must present a line-aligned address (lower BOFFSET bits zero)
-    lowX_req_o.addr     = issue_dem ? cache_req_q.addr
-        : {prefetch_addr_i[XLEN-1:BOFFSET], {BOFFSET{1'b0}}};
+    lowX_req_o.addr     = issue_dem ? cache_req_q.addr : {prefetch_addr_i[XLEN-1:BOFFSET], {BOFFSET{1'b0}}};
     lowX_req_o.uncached = issue_dem ? cache_req_q.uncached : 1'b0;
     cache_res_o.miss    = cache_miss;
-    cache_res_o.valid   = cache_req_i.ready && (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid));
-    cache_res_o.ready   = (!cache_miss || lowX_res_i.valid) && !flush;
-    cache_res_o.blk     = (cache_miss && lowX_res_i.valid) ? lowX_res_i.blk : cache_select_data;
+    // Bug fix: gate miss response path with !rsp_is_prefetch_q to prevent
+    // prefetch response data from being served as demand miss response.
+    // Use cache_miss (not demand_fill) so uncached requests are also handled.
+    cache_res_o.valid   = cache_req_i.ready && (cache_hit || (cache_miss && lowX_req_o.ready && lowX_res_i.valid && !rsp_is_prefetch_q));
+    cache_res_o.ready   = (!cache_miss || (lowX_res_i.valid && !rsp_is_prefetch_q)) && !flush && !pf_stale_q;
+    cache_res_o.blk     = (cache_miss && lowX_res_i.valid && !rsp_is_prefetch_q) ? lowX_res_i.blk : cache_select_data;
   end
 
   // Lookup acknowledgment logic
@@ -290,6 +305,8 @@ module icache
 
   assign prefetch_ready_o = ENABLE_ICACHE_PREFETCH && !flush_i && !lookup_ack && !cache_miss;
   assign prefetch_ack_o   = ENABLE_ICACHE_PREFETCH && issue_pf && lowX_req_o.valid && lowX_res_i.ready;
+
+
 
   // PLRU update function
   function automatic [NUM_WAY-2:0] update_node(input logic [NUM_WAY-2:0] node_in, input logic [NUM_WAY-1:0] hit_vec);

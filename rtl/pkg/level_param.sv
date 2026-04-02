@@ -219,7 +219,7 @@ package level_param;
   // 3.5. PREFETCHER PARAMETERS
   // ============================================================================
   // Prefetch Type: 0=None, 1=NextLine (integrated with icache refill path)
-  localparam int PREFETCH_TYPE = 0;
+  localparam int PREFETCH_TYPE = 1;
   localparam int STRIDE_TABLE_SIZE = 64;  // Stride prefetcher table entries
   localparam int STRIDE_BITS = 12;  // Stride bit width
   localparam int NUM_STREAMS = 4;  // Stream prefetcher stream count
