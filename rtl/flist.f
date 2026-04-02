@@ -40,6 +40,7 @@ rtl/core/stage04_memory/store_buffer.sv
 rtl/core/stage05_writeback/writeback.sv
 rtl/core/mmu/cache.sv
 rtl/core/mmu/dcache.sv
+rtl/core/mmu/dcache_nb.sv
 rtl/core/mmu/dcache_fencei.sv
 rtl/core/mmu/icache.sv
 rtl/core/mmu/memory_arbiter.sv

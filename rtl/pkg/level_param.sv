@@ -59,6 +59,8 @@ package level_param;
   localparam int DC_WAY = 2;
   localparam int DC_CAPACITY = 1 * 1024 * 8;  // 1KB (bits)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
+  localparam int DC_MSHR_DEPTH = 2;
+  localparam int DC_NUM_BANK = 1;
 `elsif MINIMAL_SOC
   // ── MINIMAL_SOC: Small cache (sufficient for CoreMark ~4KB working set) ──
   // Instruction Cache: 2-way, 4KB — 2KB I$ + L2 still mis-orders heavy I-miss traffic in sim
@@ -70,6 +72,8 @@ package level_param;
   localparam int DC_WAY = 2;
   localparam int DC_CAPACITY = 2 * 1024 * 8;  // 2KB (bits)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
+  localparam int DC_MSHR_DEPTH = 4;
+  localparam int DC_NUM_BANK = 2;
 `else
   // ── FULL SOC: Large cache ──
   // Instruction Cache
@@ -81,6 +85,8 @@ package level_param;
   localparam int DC_WAY = 4;
   localparam int DC_CAPACITY = 8 * 1024 * 8;  // 8KB (bits)
   localparam int DC_SIZE = DC_CAPACITY / DC_WAY;
+  localparam int DC_MSHR_DEPTH = 4;
+  localparam int DC_NUM_BANK = 2;
 `endif
 
   // L2 Cache (Yarok14-based non-blocking)
@@ -119,6 +125,9 @@ package level_param;
   // Flush cycle calculation (centralized for fetch reset stall)
   localparam int IC_NUM_SET = IC_CAPACITY / BLK_SIZE / IC_WAY;
   localparam int DC_NUM_SET = DC_CAPACITY / BLK_SIZE / DC_WAY;
+  localparam int DC_MSHR_PTR_W = DC_MSHR_DEPTH > 1 ? $clog2(DC_MSHR_DEPTH) : 1;
+  localparam int DC_BANK_SETS = DC_NUM_SET / DC_NUM_BANK;
+  localparam int DC_BANK_SEL_W = DC_NUM_BANK > 1 ? $clog2(DC_NUM_BANK) : 1;
 
 `ifdef USE_L2_CACHE
   localparam int MAX_FLUSH_CYCLES = (IC_NUM_SET > DC_NUM_SET) ? (IC_NUM_SET > L2_NUM_SETS ? IC_NUM_SET : L2_NUM_SETS) : (DC_NUM_SET > L2_NUM_SETS ? DC_NUM_SET : L2_NUM_SETS);
@@ -234,7 +243,7 @@ package level_param;
   localparam int UART_TX_FIFO_DEPTH = 32;
   localparam int UART_RX_FIFO_DEPTH = 8;
 `else
-  localparam int UART_TX_FIFO_DEPTH = 256;
+  localparam int UART_TX_FIFO_DEPTH = 1024;
   localparam int UART_RX_FIFO_DEPTH = 32;
 `endif
   localparam int GPIO_WIDTH = 32;
@@ -411,6 +420,28 @@ package level_param;
     HALF,
     WORD
   } rw_size_e;
+
+  // D-Cache MSHR entry states (non-blocking L1)
+  typedef enum logic [2:0] {
+    DC_MSHR_IDLE        = 3'b000,
+    DC_MSHR_PENDING     = 3'b001,  // Waiting to send fill request to L2
+    DC_MSHR_FILL_ACTIVE = 3'b010,  // Fill request sent, waiting for L2 response
+    DC_MSHR_WB_PENDING  = 3'b011,  // Victim writeback pending before fill
+    DC_MSHR_COMPLETE    = 3'b100   // Fill data returned, ready to write to arrays
+  } dc_mshr_state_t;
+
+  // D-Cache MSHR entry structure
+  typedef struct packed {
+    logic              valid;
+    dc_mshr_state_t    state;
+    logic [XLEN-1:0]   addr;        // Miss address (line-aligned)
+    logic              is_write;    // Was the miss a write?
+    rw_size_e          rw_size;     // Original request size
+    logic [31:0]       wdata;       // Write data (word-level)
+    logic              from_st;     // 1 = store port, 0 = load port
+    logic [DC_WAY-1:0] victim_way;  // Latched eviction way
+    logic              uncached;    // Uncached bypass request
+  } dc_mshr_entry_t;
 
   // Store Buffer
   localparam int SB_DEPTH = 8;
@@ -741,6 +772,7 @@ package level_param;
     logic [4:0]      rd_addr;
     logic [XLEN-1:0] alu_result;
     logic [XLEN-1:0] read_data;
+    logic            dcache_valid;
 `ifdef COMMIT_TRACER
     logic [XLEN-1:0] pc;
     fe_tracer_info_t fe_tracer;
@@ -753,7 +785,6 @@ package level_param;
     instr_type_e     instr_type;
     logic [XLEN-1:0] csr_wr_data;
     logic            csr_write_valid;  // CSR write was accepted (not rejected)
-    logic            dcache_valid;
     logic            flushed;          // Mark instruction as flushed, don't commit
 `endif
   } pipe4_t;

@@ -566,10 +566,10 @@ module cpu
           instr_type  : pipe3.instr_type,
           csr_wr_data : pipe3.csr_wr_data,
           csr_write_valid : pipe3.csr_write_valid,
-          dcache_valid : pipe3.dcache_valid,
           pc          : pipe3.pc,
           flushed     : pipe3.flushed,
         `endif
+          dcache_valid : pipe3.dcache_valid,
           pc_incr     : pipe3.pc_incr,
           rf_rw_en    : pipe3.rf_rw_en,
           result_src  : pipe3.result_src,
