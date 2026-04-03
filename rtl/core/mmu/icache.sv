@@ -67,6 +67,8 @@ module icache
 
   wire        [IDX_WIDTH-1:0] pf_wr_idx = pf_addr_q[IDX_WIDTH+BOFFSET-1:BOFFSET];
 
+  wire pf_fill = ENABLE_ICACHE_PREFETCH && !flush && lowX_res_i.valid && rsp_is_prefetch_q && !pf_uncached_q;
+
   // pf_stale_q: SRAM outputs are stale for one cycle after pf_fill because
   // sp_bram write-first returns prefetch data, not the demand set's data.
   logic                       pf_stale_q;
@@ -78,7 +80,6 @@ module icache
   wire issue_dem = !lookup_ack && cache_miss && !pf_stale_q;
   wire issue_pf = ENABLE_ICACHE_PREFETCH && !lookup_ack && prefetch_valid_i && !cache_miss && !flush_i && prefetch_grand_i && !prefetch_uncached_i && !pf_stale_q;
   wire demand_fill = !flush && lowX_res_i.valid && !rsp_is_prefetch_q && !cache_req_q.uncached && lookup_ack;
-  wire pf_fill = ENABLE_ICACHE_PREFETCH && !flush && lowX_res_i.valid && rsp_is_prefetch_q && !pf_uncached_q;
 
   // Shared memory structures
   typedef struct packed {

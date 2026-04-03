@@ -137,6 +137,9 @@ module memory
   logic uc_store_active;
   logic load_pending;
   logic uc_drain_pending;
+  // Prefetch / next-line (Questa vlog: declare before first assign/use)
+  logic pf_active;
+  logic pf_fire;
 
   // No serialization — load and store ports are independent
   logic ld_port_busy;
@@ -166,18 +169,19 @@ module memory
   rw_size_e uc_size_q;
 
   logic     uc_store_fire;
-  assign uc_store_fire = (uncached_store_fire && sb_empty && !st_port_busy) || (uc_drain_pending && sb_empty && !st_port_busy);
+  assign uc_store_fire = ((uncached_store_fire && sb_empty && !st_port_busy) || (uc_drain_pending && sb_empty && !st_port_busy)) && st_dcache_res.ready;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       uc_drain_pending <= 1'b0;
     end else begin
-      if (uncached_store_fire && !sb_empty) begin
+      if (uncached_store_fire && !uc_store_fire) begin
+        // UC store requested but couldn't fire (SB not empty / port busy / dcache not ready)
         uc_drain_pending <= 1'b1;
         uc_addr_q <= ex_data_req_i.addr;
         uc_data_q <= ex_data_req_i.data;
         uc_size_q <= ex_data_req_i.rw_size;
-      end else if (uc_drain_pending && sb_empty) begin
+      end else if (uc_store_fire) begin
         uc_drain_pending <= 1'b0;
       end
     end
@@ -204,8 +208,7 @@ module memory
   // Miss handling is dcache's responsibility via MSHR — SB pops immediately.
   assign sb_drain_ack = drain_fire || (drain_active && st_dcache_res.valid);
 
-  // Transaction state tracking
-  logic pf_active;  // prefetch in-flight on LD port
+  // Transaction state tracking (pf_active declared above)
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
@@ -289,8 +292,7 @@ module memory
   // no flush, and prefetcher has a request
   assign pf_ready = !load_req_fire && !load_active && !pf_active && !load_pending && !uc_drain_pending && !fe_flush_cache_i && ld_dcache_res.ready;
 
-  logic pf_fire;
-  assign pf_fire = pf_valid && pf_ready;
+  assign pf_fire  = pf_valid && pf_ready;
 
   // Debug counters (simulation only)
   int unsigned dbg_nlp_miss, dbg_nlp_issued;
@@ -459,6 +461,127 @@ module memory
       .cache_req_i(ld_dcache_req),
       .cache_res_i(ld_dcache_res)
   );
+`endif
+
+  // -------------------------------------------------------------------
+  // Uncached store transaction logger (LOG_UC_STORE=1)
+  // -------------------------------------------------------------------
+`ifdef LOG_UC_STORE
+  // synthesis translate_off
+  integer uc_log_fd;
+  string  uc_log_path;
+
+  // Transaction counters
+  int unsigned uc_started, uc_completed;
+  // Stuck watchdog
+  int unsigned uc_active_cycles;
+  localparam int UC_STUCK_THRESH = 1000;
+
+  // Edge detectors (previous-cycle values)
+  logic uc_store_fire_q, uc_store_active_q, st_dcache_res_valid_q;
+  logic st_bypass_active_prev;
+
+  initial begin
+    if (!$value$plusargs("uc_store_log=%s", uc_log_path)) uc_log_path = "uc_store_trace.log";
+    uc_log_fd = $fopen(uc_log_path, "w");
+    if (uc_log_fd == 0) $display("[UC_STORE_LOG] ERROR: Cannot open %s", uc_log_path);
+    else begin
+      $display("[UC_STORE_LOG] Writing to: %s", uc_log_path);
+      $fwrite(uc_log_fd, "# Uncached Store Transaction Trace\n");
+      $fwrite(uc_log_fd, "# pipe_st: 0=IDLE 1=TAG_LOOKUP 2=HIT_RESPOND 3=BYPASS\n");
+      $fwrite(uc_log_fd, "# mem_st:  0=MEM_IDLE 1=MEM_WB_SEND 2=MEM_FILL_SEND\n");
+      $fwrite(uc_log_fd, "#\n");
+      $fflush(uc_log_fd);
+    end
+  end
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      uc_started            <= 0;
+      uc_completed          <= 0;
+      uc_active_cycles      <= 0;
+      uc_store_fire_q       <= 1'b0;
+      uc_store_active_q     <= 1'b0;
+      st_dcache_res_valid_q <= 1'b0;
+      st_bypass_active_prev <= 1'b0;
+    end else if (uc_log_fd != 0) begin
+      // Edge detectors
+      uc_store_fire_q       <= uc_store_fire;
+      uc_store_active_q     <= uc_store_active;
+      st_dcache_res_valid_q <= st_dcache_res.valid;
+      st_bypass_active_prev <= i_dcache.st_bypass_active;
+
+      // Stuck watchdog
+      if (uc_store_active) uc_active_cycles <= uc_active_cycles + 1;
+      else uc_active_cycles <= 0;
+
+      // --- Event markers ---
+
+      // [UC_REQ] — uc_store_fire rising edge
+      if (uc_store_fire && !uc_store_fire_q) begin
+        uc_started <= uc_started + 1;
+        $fwrite(uc_log_fd, "%0t [UC_REQ] addr=%08x data=%08x size=%0d sb_empty=%b st_port_busy=%b uc_drain_pend=%b\n", $time, uc_drain_pending ? uc_addr_q : ex_data_req_i.addr,
+                uc_drain_pending ? uc_data_q : ex_data_req_i.data, int'(uc_drain_pending ? uc_size_q : ex_data_req_i.rw_size), sb_empty, st_port_busy, uc_drain_pending);
+        $fflush(uc_log_fd);
+      end
+
+      // [UC_BYPASS_ENTER] — st_pipe_state transitions to PIPE_BYPASS
+      if (i_dcache.st_bypass_active && !st_bypass_active_prev) begin
+        $fwrite(uc_log_fd, "%0t [UC_BYPASS_ENTER] pipe_st=%0d\n", $time, int'(i_dcache.st_pipe_state));
+        $fflush(uc_log_fd);
+      end
+
+      // [UC_LOWX_OUT] — lowX request going out for uncached store
+      if (lx_dreq_o.valid && lx_dreq_o.uncached && lx_dreq_o.rw) begin
+        $fwrite(uc_log_fd, "%0t [UC_LOWX_OUT] addr=%08x rw=%b uncached=%b mem_st=%0d\n", $time, lx_dreq_o.addr, lx_dreq_o.rw, lx_dreq_o.uncached, int'(i_dcache.mem_state));
+        $fflush(uc_log_fd);
+      end
+
+      // [UC_LOWX_RESP] — lowX response while bypass active
+      if (lx_dres_i.valid && i_dcache.st_bypass_active) begin
+        $fwrite(uc_log_fd, "%0t [UC_LOWX_RESP] data[31:0]=%08x ld_bypass=%b fi_wb=%b pipe_st=%0d\n", $time, lx_dres_i.data[31:0], i_dcache.ld_bypass_active, i_dcache.fi_writeback_req,
+                int'(i_dcache.st_pipe_state));
+        $fflush(uc_log_fd);
+      end
+
+      // [UC_DONE] — st_dcache_res.valid clears uc_store_active
+      if (st_dcache_res.valid && uc_store_active) begin
+        uc_completed <= uc_completed + 1;
+        $fwrite(uc_log_fd, "%0t [UC_DONE] cycles=%0d pipe_st=%0d\n", $time, uc_active_cycles, int'(i_dcache.st_pipe_state));
+        $fflush(uc_log_fd);
+      end
+
+      // [UC_STUCK] — uc_store_active held too long
+      if (uc_active_cycles == UC_STUCK_THRESH) begin
+        $fwrite(uc_log_fd, "%0t [UC_STUCK] uc_active=%b st_res_v=%b bypass=%b pipe_st=%0d mem_st=%0d lowX_req_v=%b lowX_res_v=%b drain_a=%b uc_pend=%b stall=%b\n", $time, uc_store_active,
+                st_dcache_res.valid, i_dcache.st_bypass_active, int'(i_dcache.st_pipe_state), int'(i_dcache.mem_state), lx_dreq_o.valid, lx_dres_i.valid, drain_active, uc_drain_pending,
+                dmiss_stall_o);
+        $fflush(uc_log_fd);
+      end
+
+      // --- Per-cycle trace (only when any UC signal is active) ---
+      if (uc_store_fire || uc_store_active || uncached_store_fire || uc_drain_pending || (i_dcache.st_bypass_active && i_dcache.st_req_q.uncached)) begin
+        $fwrite(
+            uc_log_fd,
+            "%0t | uc_sfire=%b uc_active=%b st_req_v=%b st_res_v=%b st_res_rdy=%b bypass=%b pipe_st=%0d mem_st=%0d lowX_req_v=%b lowX_res_v=%b lowX_d=%08x drain_a=%b drain_f=%b uc_pend=%b st_busy=%b stall=%b | addr=%08x\n",
+            $time, uc_store_fire, uc_store_active, st_dcache_req.valid, st_dcache_res.valid, st_dcache_res.ready, i_dcache.st_bypass_active, int'(i_dcache.st_pipe_state), int'(i_dcache.mem_state),
+            lx_dreq_o.valid, lx_dres_i.valid, lx_dres_i.data[31:0], drain_active, drain_fire, uc_drain_pending, st_port_busy, dmiss_stall_o, st_dcache_req.valid ? st_dcache_req.addr : 32'h0);
+        $fflush(uc_log_fd);
+      end
+    end
+  end
+
+  final begin
+    if (uc_log_fd != 0) begin
+      $fwrite(uc_log_fd, "\n# === SUMMARY ===\n");
+      $fwrite(uc_log_fd, "# uc_stores_started  = %0d\n", uc_started);
+      $fwrite(uc_log_fd, "# uc_stores_completed = %0d\n", uc_completed);
+      $fwrite(uc_log_fd, "# uc_stores_hung      = %0d\n", uc_started - uc_completed);
+      $fclose(uc_log_fd);
+    end
+    $display("[UC_STORE_LOG] started=%0d completed=%0d hung=%0d", uc_started, uc_completed, uc_started - uc_completed);
+  end
+  // synthesis translate_on
 `endif
 
   // -------------------------------------------------------------------

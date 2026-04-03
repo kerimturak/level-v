@@ -21,6 +21,7 @@
 // LOG_BP        : Branch predictor statistics (gshare_bp.sv)
 // LOG_BP_VERBOSE: Detailed per-branch logging (gshare_bp.sv)
 // LOG_CACHE     : Cache request/response table logging (cache_logger.sv)
+// LOG_UC_STORE  : Uncached store transaction trace (memory.sv — cycle-level debug)
 // LOG_PERF_STALL: stall_cause cycle counts + flush-event counts (BP miss, traps, FENCE.I, …); sim end
 
 // ============================================================================

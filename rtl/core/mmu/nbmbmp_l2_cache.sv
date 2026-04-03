@@ -552,6 +552,12 @@ module nbmbmp_l2_cache
   wire d_l2_miss_phase = d_mshr_alloc_req || (d_pipe_state == PIPE_WB_EVICT) || (d_pipe_state == PIPE_MISS_WAIT) || (d_pipe_state == PIPE_FILL_RESPOND);
   assign l2_miss_busy_o = i_l2_miss_phase || d_l2_miss_phase;
 
+  // Questa vlog: declare before bypass_active / fill_req_valid uses these
+  logic i_bypass_active;
+  logic d_bypass_active;
+  assign i_bypass_active = (i_pipe_state == PIPE_BYPASS);
+  assign d_bypass_active = (d_pipe_state == PIPE_BYPASS);
+
   wire bypass_active = i_bypass_active || d_bypass_active;
   assign fill_req_valid = (i_miss_wait || d_miss_wait) && mshr_pending_valid && !mem_busy && !bypass_active;
   assign wb_req_valid = (i_wb_req || d_wb_req) && !mem_busy && !bypass_active;
@@ -733,10 +739,6 @@ module nbmbmp_l2_cache
   // =========================================================================
   // Bypass mux — both pipes can bypass
   // =========================================================================
-  logic i_bypass_active;
-  logic d_bypass_active;
-  assign i_bypass_active = (i_pipe_state == PIPE_BYPASS);
-  assign d_bypass_active = (d_pipe_state == PIPE_BYPASS);
 
   always_comb begin
     if (i_bypass_active && !cached_req.valid) begin

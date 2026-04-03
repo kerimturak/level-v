@@ -331,15 +331,20 @@ package level_param;
 
   // D-Cache MSHR entry structure
   typedef struct packed {
-    logic              valid;
-    dc_mshr_state_t    state;
-    logic [XLEN-1:0]   addr;        // Miss address (line-aligned)
-    logic              is_write;    // Was the miss a write?
-    rw_size_e          rw_size;     // Original request size
-    logic [31:0]       wdata;       // Write data (word-level)
-    logic              from_st;     // 1 = store port, 0 = load port
-    logic [DC_WAY-1:0] victim_way;  // Latched eviction way
-    logic              uncached;    // Uncached bypass request
+    logic                valid;
+    dc_mshr_state_t      state;
+    logic [XLEN-1:0]     addr;         // Miss address (line-aligned)
+    logic                is_write;     // Was the miss a write?
+    rw_size_e            rw_size;      // Original request size
+    logic [31:0]         wdata;        // Write data (word-level)
+    logic                from_st;      // 1 = store port, 0 = load port
+    logic [DC_WAY-1:0]   victim_way;   // Latched eviction way
+    logic                uncached;     // Uncached bypass request
+    // Miss-under-miss: eviction data stored in MSHR for autonomous WB
+    logic                evict_dirty;  // Victim line was dirty
+    logic [XLEN-1:0]     evict_addr;   // Victim writeback address
+    logic [BLK_SIZE-1:0] evict_data;   // Victim writeback data
+    logic [BLK_SIZE-1:0] fill_data;    // Fill data from L2 (set on COMPLETE)
   } dc_mshr_entry_t;
 
   // Store Buffer depth / SB_PTR_W: rtl/cfg → level_param_profile.svh

@@ -164,6 +164,15 @@ int main(int argc, char** argv) {
         clock_cycle(top, main_time, tracep);
     }
 
+    const uint64_t cyc = (main_time / 2);
+    const bool finished_clean = contextp->gotFinish();
+    if (!finished_clean && cyc >= MAX_CYCLES) {
+        // Machine-readable tag for log scrapers (batch summaries, CI).
+        std::cout << "[SIM_STOP] INCOMPLETE_MAX_CYCLES no_finish=1 cycles=" << cyc << std::endl;
+        std::cerr << "[ERROR] Stopped at MAX_CYCLES=" << MAX_CYCLES
+                  << " without $finish — RTL may be deadlocked, or raise MAX_CYCLES." << std::endl;
+    }
+
 #if VM_TRACE_FST || VM_TRACE
     tfp->close();
     delete tfp;
@@ -182,9 +191,9 @@ int main(int argc, char** argv) {
 
     Verilated::flushCall();
 
-    std::cout << "[INFO] Simulation finished after " << (main_time / 2) << " cycles." << std::endl;
+    std::cout << "[INFO] Simulation finished after " << cyc << " cycles." << std::endl;
 
     delete top;
     delete contextp;
-    return 0;
+    return (finished_clean || cyc < MAX_CYCLES) ? 0 : 1;
 }

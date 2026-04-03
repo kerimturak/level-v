@@ -964,6 +964,11 @@ ifeq ($(LOG_BP_VERBOSE),1)
   SV_DEFINES += +define+LOG_BP +define+LOG_BP_VERBOSE
 endif
 
+# Uncached store transaction trace (memory.sv) - LOG_UC_STORE=1
+ifeq ($(LOG_UC_STORE),1)
+  SV_DEFINES += +define+LOG_UC_STORE
+endif
+
 # ===========================================
 # TRACE CONTROLS
 # ===========================================
@@ -2247,7 +2252,9 @@ run_flist:
 	@echo -n "" > $(FAIL_LIST_FILE)
 	@echo -e "$(GREEN)Running tests from list file:$(RESET) $(FLIST)"
 	@echo -e "$(CYAN)Output directory:$(RESET) $(RESULTS_DIR)/logs/$(SIM)/"
-	@PASS=0; FAIL=0; TOTAL=0; \
+	@PASS=0; FAIL=0; TOTAL=0; WARN_COMPARE=0; \
+	WARN_LIST="$(RESULTS_DIR)/logs/compare_tail_warn_tests.list"; \
+	: > "$$WARN_LIST"; \
 	while IFS= read -r test || [ -n "$${test}" ]; do \
 		test="$${test%% }"; test="$${test## }"; \
 		if echo "$${test}" | grep -E '^\s*#' >/dev/null || [ -z "$${test}" ]; then continue; fi; \
@@ -2282,7 +2289,10 @@ run_flist:
 				RTL_EXTRA=$$(grep "RTL Extra Entries" "$${TEST_LOG_DIR}/diff.log" | awk '{print $$NF}'); \
 				SPIKE_EXTRA=$$(grep "Spike Extra Entries" "$${TEST_LOG_DIR}/diff.log" | awk '{print $$NF}'); \
 				if [ "$${RTL_EXTRA:-0}" != "0" ] || [ "$${SPIKE_EXTRA:-0}" != "0" ]; then \
+					echo "$${test}" >> "$$WARN_LIST"; \
+					WARN_COMPARE=$$((WARN_COMPARE + 1)); \
 					echo -e "$(YELLOW)⚠ $${test} PASSED (RTL: $$RTL_EXTRA extra, Spike: $$SPIKE_EXTRA extra)$(RESET)"; \
+					echo -e "$(YELLOW)    ↳ Often: RTL trace shorter than Spike (deadlock before PASS, MAX_CYCLES, or trace gating)$(RESET)"; \
 				else \
 					echo -e "$(GREEN)$(SUCCESS) $${test} PASSED$(RESET)"; \
 				fi; \
@@ -2310,6 +2320,12 @@ run_flist:
 	echo -e "$(GREEN)✅ Passed: $${PASS}$(RESET)"; \
 	echo -e "$(RED)$(ERROR) Failed: $${FAIL}$(RESET)"; \
 	echo -e "$(CYAN)📊 Total:  $${TOTAL}$(RESET)"; \
+	if [ "$${WARN_COMPARE:-0}" -gt 0 ]; then \
+		echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
+		echo -e "$(YELLOW)⚠ Trace/compare: $${WARN_COMPARE} passed test(s) have RTL vs Spike log length mismatch$(RESET)"; \
+		echo -e "$(YELLOW)  (not a PC mismatch on the shared prefix — usually RTL sim stopped early: deadlock, MAX_CYCLES, or commit log skipped)$(RESET)"; \
+		echo -e "$(YELLOW)  List: $$WARN_LIST$(RESET)"; \
+	fi; \
 	echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
 	echo -e "$(GREEN)Passed tests:$(RESET) $(PASS_LIST_FILE)"; \
 	echo -e "$(RED)Failed tests:$(RESET) $(FAIL_LIST_FILE)"; \
@@ -2317,7 +2333,11 @@ run_flist:
 		echo -e "$(RED)$(WARN)  $${FAIL} test(s) failed$(RESET)"; \
 		exit 1; \
 	else \
-		echo -e "$(GREEN)🎉 All tests passed!$(RESET)"; \
+		if [ "$${WARN_COMPARE:-0}" -gt 0 ]; then \
+			echo -e "$(YELLOW)🎉 All tests passed — with trace/compare warnings above (review before trusting).$(RESET)"; \
+		else \
+			echo -e "$(GREEN)🎉 All tests passed!$(RESET)"; \
+		fi; \
 	fi
 
 
@@ -3113,7 +3133,8 @@ imperas_help:
 # ============================================================
 
 # Default iteration count (adjust for ~10 second runtime)
-COREMARK_ITERATIONS ?= 1
+# At 25 MHz, ~418 K cycles/iteration → need ≥600 for 10 s
+COREMARK_ITERATIONS ?= 800
 
 # Paths
 COREMARK_SRC_DIR     := $(SUBREPO_DIR)/coremark
@@ -3443,9 +3464,12 @@ FLIST_BRANCH    := $(TEST_LIST_DIR)/branch_test.flist
 # Batch suites → run_flist (single template)
 # $(1)=target $(2)=banner $(3)=FLIST variable name $(4)=TEST_TYPE $(5)=MAX_* variable name $(6)=extra make arguments)
 # -----------------------------------------
-ISA_MAX_CYCLES ?= 10000
-CSR_MAX_CYCLES ?= 10000
-EXC_MAX_CYCLES ?= 10000
+# Default batch limits for ISA/CSR/exception suites. 10k cycles is too low for
+# I$/D$ miss-heavy riscv-tests (e.g. rv32ui-p-ld_st): RTL hits the cap before
+# <pass>, leaving a short commit_trace vs Spike → bogus “PASSED” + huge Spike extra.
+ISA_MAX_CYCLES ?= 100000
+CSR_MAX_CYCLES ?= 100000
+EXC_MAX_CYCLES ?= 100000
 BRANCH_MAX_CYCLES ?= 100000
 
 define SUITE_RUN_FLIST

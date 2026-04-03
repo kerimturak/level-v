@@ -1,19 +1,24 @@
 /*
- * Non-Blocking Dual-Port D-Cache with MSHR
+ * Non-Blocking Dual-Port D-Cache with MSHR — Miss-Under-Miss
  *
  * Architecture:
  *   Load port (ld)  ──► LD-pipe FSM ──┐
- *                                      ├──► shared mem controller → lowX (L2)
- *   Store port (st) ──► ST-pipe FSM ──┘
+ *                                      ├──► shared MSHR ──► mem controller → lowX (L2)
+ *   Store port (st) ──► ST-pipe FSM ──┘          │
+ *                                           fill writer ──► SRAM write-back + response
  *
  * Design:
- *   - Dual-port dp_bram: Port A = LD pipe reads, Port B = ST pipe reads/writes + fill writes
+ *   - Miss-under-miss: pipes return to IDLE after MSHR allocation, freeing the port
+ *     for new requests while fills are in-flight.
+ *   - MSHR entries store eviction data for autonomous writeback by memory controller.
+ *   - Fill writer monitors MSHR_COMPLETE entries, arbitrates SRAM write ports, writes
+ *     fill data, and generates response pulses back to memory.sv.
+ *   - Dual-port dp_bram: Port A = LD pipe reads + LD fill writes,
+ *                         Port B = ST pipe reads/writes + ST fill writes
  *   - Register-based PLRU (dual read, merged update)
  *   - Register-based dirty array (dual read, merged update)
- *   - Central MSHR (DC_MSHR_DEPTH entries) for miss tracking & coalescing
- *   - Shared memory controller for victim writeback + fill fetch
  *   - Parametric multi-bank support (DC_NUM_BANK)
- *   - Set-conflict hazard protection between pipelines
+ *   - Set-conflict hazard protection between pipelines and fill writer
  *   - fence.i dirty writeback via dcache_fencei helper
  *
  * Pipeline timing (per pipe):
@@ -21,7 +26,8 @@
  *   Cycle 1 (TAG_LOOKUP): Registered SRAM outputs settle; hit/miss resolved combinationally.
  *                          LD hit → respond same cycle, return to IDLE (1-cycle hit).
  *                          ST hit → HIT_RESPOND (SRAM write next cycle, 2-cycle hit).
- *                          Miss → MSHR + evict/fill.
+ *                          Miss → allocate MSHR (with eviction data) → return to IDLE.
+ *   Fill writer:           Asynchronously writes completed fills to SRAM and responds.
  */
 `timescale 1ns / 1ps
 `include "level_defines.svh"
@@ -77,14 +83,10 @@ module dcache_nb
   // ===========================================================================
   // FSM enums
   // ===========================================================================
-  typedef enum logic [2:0] {
+  typedef enum logic [1:0] {
     PIPE_IDLE,
     PIPE_TAG_LOOKUP,
-    PIPE_RESOLVE,
     PIPE_HIT_RESPOND,
-    PIPE_WB_EVICT,
-    PIPE_MISS_WAIT,
-    PIPE_FILL_RESPOND,
     PIPE_BYPASS
   } pipe_state_t;
 
@@ -162,9 +164,13 @@ module dcache_nb
   logic [  NUM_WAY-1:0] fi_way_onehot;
   logic [IDX_WIDTH-1:0] fi_set_idx_q;
 
-  assign ld_sram_idx = flush_active ? flush_cnt : (ld_pipe_state == PIPE_IDLE) ? ld_next_set : ld_req_set;
+  // Forward-declare fill writer signals needed for SRAM address mux
+  logic fw_ld_writing_fwd, fw_st_writing_fwd;
+  logic [IDX_WIDTH-1:0] fw_ld_set_fwd, fw_st_set_fwd;
 
-  assign st_sram_idx = fi_active ? fi_set_idx_q : (st_pipe_state == PIPE_IDLE) ? st_next_set : st_req_set;
+  assign ld_sram_idx = flush_active ? flush_cnt : fw_ld_writing_fwd ? fw_ld_set_fwd : (ld_pipe_state == PIPE_IDLE) ? ld_next_set : ld_req_set;
+
+  assign st_sram_idx = fi_active ? fi_set_idx_q : fw_st_writing_fwd ? fw_st_set_fwd : (st_pipe_state == PIPE_IDLE) ? st_next_set : st_req_set;
 
   // Bank decode
   logic [BANK_SEL_W-1:0] ld_bank_sel, st_bank_sel;
@@ -380,12 +386,14 @@ module dcache_nb
   end
   /* verilator lint_on UNOPTFLAT */
 
-  // Latched victim way (stable during miss handling)
+  // Latched victim way — no longer used by pipe FSM for miss handling;
+  // eviction way is stored directly in MSHR entry during allocation.
+  // Kept for potential future use.
   logic [NUM_WAY-1:0] ld_victim_way_q, st_victim_way_q;
 
   logic [NUM_WAY-1:0] ld_evict_way_sel, st_evict_way_sel;
-  assign ld_evict_way_sel = ((ld_pipe_state == PIPE_WB_EVICT) || (ld_pipe_state == PIPE_MISS_WAIT) || (ld_pipe_state == PIPE_FILL_RESPOND)) ? ld_victim_way_q : ld_evict_way;
-  assign st_evict_way_sel = ((st_pipe_state == PIPE_WB_EVICT) || (st_pipe_state == PIPE_MISS_WAIT) || (st_pipe_state == PIPE_FILL_RESPOND)) ? st_victim_way_q : st_evict_way;
+  assign ld_evict_way_sel = ld_evict_way;
+  assign st_evict_way_sel = st_evict_way;
 
   // ===========================================================================
   // Per-pipe eviction data
@@ -467,7 +475,6 @@ module dcache_nb
   logic ld_mshr_full, st_mshr_full;
   logic ld_mshr_do_alloc, st_mshr_do_alloc;
   logic ld_fill_complete, st_fill_complete;
-  logic ld_wb_req, st_wb_req;
   logic ld_fill_writing, st_fill_writing;
   logic ld_resolve_stall, st_resolve_stall;
   logic dual_miss_same_set;
@@ -543,59 +550,106 @@ module dcache_nb
   mem_state_t                mem_state;
   logic                      wb_from_st;
 
-  // Fill routing to pipes
+  // Fill routing to pipes (via fill writer, not pipe FSM)
   assign ld_fill_complete = fill_resp_valid && !mshr_fill_from_st;
   assign st_fill_complete = fill_resp_valid && mshr_fill_from_st;
 
-  // WB/fill requests
-  assign ld_wb_req = (ld_pipe_state == PIPE_WB_EVICT);
-  assign st_wb_req = (st_pipe_state == PIPE_WB_EVICT);
-
+  // WB requests now come from MSHR (autonomous), no pipe involvement
   logic ld_miss_wait, st_miss_wait;
-  assign ld_miss_wait = (ld_pipe_state == PIPE_MISS_WAIT);
-  assign st_miss_wait = (st_pipe_state == PIPE_MISS_WAIT);
+  assign ld_miss_wait = 1'b0;  // pipes no longer have MISS_WAIT state
+  assign st_miss_wait = 1'b0;
 
+  // Memory controller servicing: autonomous from MSHR state
   logic fill_req_valid, wb_req_valid;
-  assign fill_req_valid = (ld_miss_wait || st_miss_wait) && mshr_pending_valid && !mem_busy;
-  assign wb_req_valid = (ld_wb_req || st_wb_req) && !mem_busy;
+  assign fill_req_valid = mshr_pending_valid && !mem_busy;
+  assign wb_req_valid   = mshr_wb_valid && !mem_busy;
+
+  // Forward declarations — Mentor/Questa vlog requires names before first use
+  // (assigns for these signals appear in the fill-writer / pipe sections below).
+  logic fw_ld_writing, fw_st_writing;
+  logic [IDX_WIDTH-1:0] fw_ld_set, fw_st_set;
+  logic ld_pipe_retrying, st_pipe_retrying;
+  logic ld_pipe_accept, st_pipe_accept;
+  logic ld_hit_respond;
 
   // ===========================================================================
   // Set-conflict hazard detection
   // ===========================================================================
 
+  // Fill writer drives SRAM writes — stall pipe if it's writing to the same set
+  assign ld_fill_writing = fw_ld_writing;
+  assign st_fill_writing = fw_st_writing;
 
-  assign ld_fill_writing = (ld_pipe_state == PIPE_FILL_RESPOND);
-  assign st_fill_writing = (st_pipe_state == PIPE_FILL_RESPOND);
+  // When fill writer preempts a retrying pipe, the SRAM reads are from the fill
+  // set, not the pipe set. Force 1-cycle re-read stall after preemption.
+  logic ld_fw_preempted_q, st_fw_preempted_q;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      ld_fw_preempted_q <= 1'b0;
+      st_fw_preempted_q <= 1'b0;
+    end else begin
+      ld_fw_preempted_q <= fw_ld_writing && ld_pipe_retrying;
+      st_fw_preempted_q <= fw_st_writing && st_pipe_retrying;
+    end
+  end
 
-  assign ld_resolve_stall = (ld_pipe_state == PIPE_TAG_LOOKUP) && (st_fill_writing && st_req_set == ld_req_set);
-  assign st_resolve_stall = (st_pipe_state == PIPE_TAG_LOOKUP) && (ld_fill_writing && ld_req_set == st_req_set);
+  assign ld_resolve_stall = (ld_pipe_state == PIPE_TAG_LOOKUP) && ((st_fill_writing && fw_st_set == ld_req_set) ||  // cross-port fill conflict
+      (fw_ld_writing && ld_pipe_retrying) ||  // same-port fill preemption
+      ld_fw_preempted_q);  // re-read after preemption
+
+  assign st_resolve_stall = (st_pipe_state == PIPE_TAG_LOOKUP) && ((ld_fill_writing && fw_ld_set == st_req_set) ||  // cross-port fill conflict
+      (fw_st_writing && st_pipe_retrying) ||  // same-port fill preemption
+      st_fw_preempted_q);  // re-read after preemption
 
   // If both pipes miss same set, ST defers to LD
   assign dual_miss_same_set = (ld_pipe_state == PIPE_TAG_LOOKUP) && ld_miss && (st_pipe_state == PIPE_TAG_LOOKUP) && st_miss && (ld_req_set == st_req_set);
 
+  // Also stall TAG_LOOKUP if the set has an in-flight MSHR entry (fill writer may
+  // write to that set at any time). This prevents SRAM read/write port conflicts.
+  logic ld_mshr_set_conflict, st_mshr_set_conflict;
+  always_comb begin
+    ld_mshr_set_conflict = 1'b0;
+    st_mshr_set_conflict = 1'b0;
+    for (int i = 0; i < MSHR_DEPTH; i++) begin
+      if (mshr_entries[i].valid && mshr_entries[i].state == DC_MSHR_COMPLETE) begin
+        if (!mshr_entries[i].from_st && mshr_entries[i].addr[IDX_WIDTH+BOFFSET-1:BOFFSET] == ld_req_set) ld_mshr_set_conflict = 1'b1;
+        if (mshr_entries[i].from_st && mshr_entries[i].addr[IDX_WIDTH+BOFFSET-1:BOFFSET] == st_req_set) st_mshr_set_conflict = 1'b1;
+      end
+    end
+  end
+
+  // 1-cycle LD hit: TAG_LOOKUP when hit resolves (needs ld_mshr_set_conflict above)
+  assign ld_hit_respond = (ld_pipe_state == PIPE_TAG_LOOKUP) && ld_hit_any && !ld_resolve_stall && !ld_mshr_set_conflict && !(ld_mshr_any_match && ld_miss && !ld_req_q.uncached);
+
   // ===========================================================================
   // MSHR state machine
   // ===========================================================================
-  logic ld_mshr_resp_accepted, st_mshr_resp_accepted;
+  // Fill writer control signals (forward declarations)
+  logic fw_ld_done, fw_st_done, fw_ld_accepted, fw_st_accepted;
+  logic [MSHR_PTR_W-1:0] fw_ld_idx, fw_st_idx;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       for (int i = 0; i < MSHR_DEPTH; i++) mshr_entries[i] <= '0;
     end else begin
-      // LD-pipe allocation
+      // LD-pipe allocation (with eviction data for autonomous WB)
       if (ld_mshr_do_alloc) begin
-        mshr_entries[mshr_free_idx].valid      <= 1'b1;
-        mshr_entries[mshr_free_idx].state      <= ld_evict_dirty ? DC_MSHR_WB_PENDING : DC_MSHR_PENDING;
-        mshr_entries[mshr_free_idx].addr       <= ld_req_q.addr;
-        mshr_entries[mshr_free_idx].is_write   <= ld_req_q.is_write;
-        mshr_entries[mshr_free_idx].rw_size    <= ld_req_q.rw_size;
-        mshr_entries[mshr_free_idx].wdata      <= ld_req_q.wdata;
-        mshr_entries[mshr_free_idx].from_st    <= 1'b0;
-        mshr_entries[mshr_free_idx].victim_way <= ld_evict_way;
-        mshr_entries[mshr_free_idx].uncached   <= 1'b0;
+        mshr_entries[mshr_free_idx].valid       <= 1'b1;
+        mshr_entries[mshr_free_idx].state       <= ld_evict_dirty ? DC_MSHR_WB_PENDING : DC_MSHR_PENDING;
+        mshr_entries[mshr_free_idx].addr        <= ld_req_q.addr;
+        mshr_entries[mshr_free_idx].is_write    <= ld_req_q.is_write;
+        mshr_entries[mshr_free_idx].rw_size     <= ld_req_q.rw_size;
+        mshr_entries[mshr_free_idx].wdata       <= ld_req_q.wdata;
+        mshr_entries[mshr_free_idx].from_st     <= 1'b0;
+        mshr_entries[mshr_free_idx].victim_way  <= ld_evict_way;
+        mshr_entries[mshr_free_idx].uncached    <= 1'b0;
+        mshr_entries[mshr_free_idx].evict_dirty <= ld_evict_dirty;
+        mshr_entries[mshr_free_idx].evict_addr  <= ld_evict_addr;
+        mshr_entries[mshr_free_idx].evict_data  <= ld_evict_data;
+        mshr_entries[mshr_free_idx].fill_data   <= '0;
       end
 
-      // ST-pipe allocation
+      // ST-pipe allocation (with eviction data for autonomous WB)
       if (st_mshr_do_alloc) begin
         automatic logic [MSHR_PTR_W-1:0] st_idx;
         if (ld_mshr_do_alloc) begin
@@ -604,50 +658,64 @@ module dcache_nb
         end else begin
           st_idx = mshr_free_idx;
         end
-        mshr_entries[st_idx].valid      <= 1'b1;
-        mshr_entries[st_idx].state      <= st_evict_dirty ? DC_MSHR_WB_PENDING : DC_MSHR_PENDING;
-        mshr_entries[st_idx].addr       <= st_req_q.addr;
-        mshr_entries[st_idx].is_write   <= st_req_q.is_write;
-        mshr_entries[st_idx].rw_size    <= st_req_q.rw_size;
-        mshr_entries[st_idx].wdata      <= st_req_q.wdata;
-        mshr_entries[st_idx].from_st    <= 1'b1;
-        mshr_entries[st_idx].victim_way <= st_evict_way;
-        mshr_entries[st_idx].uncached   <= 1'b0;
+        mshr_entries[st_idx].valid       <= 1'b1;
+        mshr_entries[st_idx].state       <= st_evict_dirty ? DC_MSHR_WB_PENDING : DC_MSHR_PENDING;
+        mshr_entries[st_idx].addr        <= st_req_q.addr;
+        mshr_entries[st_idx].is_write    <= st_req_q.is_write;
+        mshr_entries[st_idx].rw_size     <= st_req_q.rw_size;
+        mshr_entries[st_idx].wdata       <= st_req_q.wdata;
+        mshr_entries[st_idx].from_st     <= 1'b1;
+        mshr_entries[st_idx].victim_way  <= st_evict_way;
+        mshr_entries[st_idx].uncached    <= 1'b0;
+        mshr_entries[st_idx].evict_dirty <= st_evict_dirty;
+        mshr_entries[st_idx].evict_addr  <= st_evict_addr;
+        mshr_entries[st_idx].evict_data  <= st_evict_data;
+        mshr_entries[st_idx].fill_data   <= '0;
       end
 
       // Fill issued → PENDING → FILL_ACTIVE
       if (fill_issued) mshr_entries[mshr_pending_idx].state <= DC_MSHR_FILL_ACTIVE;
 
-      // Fill response → FILL_ACTIVE → COMPLETE
-      if (fill_resp_valid && |mshr_fill_match_vec) mshr_entries[mshr_fill_entry_idx].state <= DC_MSHR_COMPLETE;
+      // Fill response → FILL_ACTIVE → COMPLETE (with fill data stored)
+      if (fill_resp_valid && |mshr_fill_match_vec) begin
+        mshr_entries[mshr_fill_entry_idx].state     <= DC_MSHR_COMPLETE;
+        mshr_entries[mshr_fill_entry_idx].fill_data <= fill_resp_data;
+      end
 
-      // Response accepted → clear entry
-      if (ld_mshr_resp_accepted) begin
+      // Fill writer accepted → clear entry
+      if (fw_ld_accepted) begin
         for (int i = 0; i < MSHR_DEPTH; i++)
-        if (mshr_entries[i].valid && mshr_entries[i].state == DC_MSHR_COMPLETE && !mshr_entries[i].from_st) begin
+        if (mshr_entries[i].valid && mshr_entries[i].state == DC_MSHR_IDLE && !mshr_entries[i].from_st) begin
           mshr_entries[i].valid <= 1'b0;
-          mshr_entries[i].state <= DC_MSHR_IDLE;
           break;
         end
       end
-      if (st_mshr_resp_accepted) begin
+      if (fw_st_accepted) begin
         for (int i = 0; i < MSHR_DEPTH; i++)
-        if (mshr_entries[i].valid && mshr_entries[i].state == DC_MSHR_COMPLETE && mshr_entries[i].from_st) begin
+        if (mshr_entries[i].valid && mshr_entries[i].state == DC_MSHR_IDLE && mshr_entries[i].from_st) begin
           mshr_entries[i].valid <= 1'b0;
-          mshr_entries[i].state <= DC_MSHR_IDLE;
           break;
         end
       end
 
-      // WB done → WB_PENDING → PENDING
+      // WB done → WB_PENDING → PENDING (memory controller handled WB from MSHR data)
       if (mshr_wb_valid && wb_done) begin
         for (int i = 0; i < MSHR_DEPTH; i++) if (mshr_entries[i].valid && mshr_entries[i].state == DC_MSHR_WB_PENDING) mshr_entries[i].state <= DC_MSHR_PENDING;
+      end
+
+      // Fill writer writes SRAM → COMPLETE → IDLE (entry pending dealloc)
+      if (fw_ld_done) begin
+        mshr_entries[fw_ld_idx].state <= DC_MSHR_IDLE;
+      end
+      if (fw_st_done) begin
+        mshr_entries[fw_st_idx].state <= DC_MSHR_IDLE;
       end
     end
   end
 
   // ===========================================================================
-  // Memory controller FSM
+  // Memory controller FSM — autonomous from pipe state
+  // WB data comes from MSHR eviction fields; fills serviced by MSHR state.
   // ===========================================================================
   assign mem_busy = (mem_state != MEM_IDLE);
 
@@ -655,6 +723,20 @@ module dcache_nb
   logic ld_bypass_active, st_bypass_active;
   assign ld_bypass_active = (ld_pipe_state == PIPE_BYPASS);
   assign st_bypass_active = (st_pipe_state == PIPE_BYPASS);
+
+  // Select WB entry from MSHR (first WB_PENDING entry)
+  logic [MSHR_PTR_W-1:0] mshr_wb_idx;
+  logic [      XLEN-1:0] mshr_wb_addr;
+  logic [  BLK_SIZE-1:0] mshr_wb_data;
+  logic                  mshr_wb_from_st;
+
+  always_comb begin
+    mshr_wb_idx = '0;
+    for (int i = MSHR_DEPTH - 1; i >= 0; i--) if (mshr_wb_vec[i]) mshr_wb_idx = MSHR_PTR_W'(i);
+    mshr_wb_addr    = mshr_entries[mshr_wb_idx].evict_addr;
+    mshr_wb_data    = mshr_entries[mshr_wb_idx].evict_data;
+    mshr_wb_from_st = mshr_entries[mshr_wb_idx].from_st;
+  end
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
@@ -674,16 +756,10 @@ module dcache_nb
       unique case (mem_state)
         MEM_IDLE: begin
           if (wb_req_valid) begin
-            mem_state <= MEM_WB_SEND;
-            if (st_wb_req && !ld_wb_req) begin
-              mem_addr_q <= st_evict_addr;
-              mem_data_q <= st_evict_data;
-              wb_from_st <= 1'b1;
-            end else begin
-              mem_addr_q <= ld_evict_addr;
-              mem_data_q <= ld_evict_data;
-              wb_from_st <= 1'b0;
-            end
+            mem_state  <= MEM_WB_SEND;
+            mem_addr_q <= mshr_wb_addr;
+            mem_data_q <= mshr_wb_data;
+            wb_from_st <= mshr_wb_from_st;
           end else if (fill_req_valid) begin
             mem_state   <= MEM_FILL_SEND;
             mem_addr_q  <= {mshr_pending_addr[XLEN-1:BOFFSET], {BOFFSET{1'b0}}};
@@ -767,12 +843,27 @@ module dcache_nb
   end
 
   // ===========================================================================
-  // Write-merge for fill write (MSHR write data merged into fill line)
+  // Write-merge function: merge store data into a fill line
+  // Used by fill writer when writing completed fills to SRAM.
   // ===========================================================================
+  function automatic [BLK_SIZE-1:0] merge_fill_data(input logic [BLK_SIZE-1:0] raw_data, input logic do_merge, input logic [XLEN-1:0] maddr, input logic [31:0] mdata, input rw_size_e msize);
+    logic [BLK_SIZE-1:0] merged;
+    merged = raw_data;
+    if (do_merge) begin
+      case (msize)
+        WORD:    merged[maddr[BOFFSET-1:2]*32+:32] = mdata;
+        HALF:    merged[maddr[BOFFSET-1:1]*16+:16] = mdata[15:0];
+        BYTE:    merged[maddr[BOFFSET-1:0]*8+:8] = mdata[7:0];
+        NO_SIZE: ;
+      endcase
+    end
+    return merged;
+  endfunction
+
+  // Legacy fill_merged_data — used by fill writer for the currently completing entry
   logic [BLK_SIZE-1:0] fill_merged_data;
   always_comb begin
     fill_merged_data = fill_resp_data;
-    // If the MSHR entry was a write, merge store data into the fill line
     if (mshr_entries[mshr_fill_entry_idx].is_write) begin
       automatic logic [XLEN-1:0] maddr = mshr_entries[mshr_fill_entry_idx].addr;
       automatic logic [    31:0] mdata = mshr_entries[mshr_fill_entry_idx].wdata;
@@ -786,7 +877,107 @@ module dcache_nb
   end
 
   // ===========================================================================
-  // LD-pipe SRAM control
+  // Fill writer — autonomous SRAM write-back for completed MSHR entries
+  //
+  // Monitors MSHR COMPLETE entries and writes fill data to SRAM when the
+  // corresponding pipe's SRAM port is available. Generates response pulses
+  // back to memory.sv. Uses Port A for LD-originated fills, Port B for
+  // ST-originated fills.
+  // ===========================================================================
+  // fw_ld_writing/fw_st_writing/fw_ld_set/fw_st_set forward-declared above
+  // fw_ld_done, fw_st_done, fw_ld_accepted, fw_st_accepted, fw_ld_idx, fw_st_idx
+  // are forward-declared above (before MSHR state machine)
+
+  // Fill writer merge: compute merged data from MSHR entry's fill_data + store merge
+  logic [BLK_SIZE-1:0] fw_ld_merged, fw_st_merged;
+  logic [NUM_WAY-1:0] fw_ld_way, fw_st_way;
+  logic [TAG_SIZE-1:0] fw_ld_tag, fw_st_tag;
+  logic [WOFFSET-1:0] fw_ld_word_idx, fw_st_word_idx;
+
+  // Find COMPLETE entries for each port
+  logic [MSHR_DEPTH-1:0] fw_ld_complete_vec, fw_st_complete_vec;
+  logic fw_ld_pending, fw_st_pending;
+
+  always_comb begin
+    for (int i = 0; i < MSHR_DEPTH; i++) begin
+      fw_ld_complete_vec[i] = mshr_entries[i].valid && (mshr_entries[i].state == DC_MSHR_COMPLETE) && !mshr_entries[i].from_st;
+      fw_st_complete_vec[i] = mshr_entries[i].valid && (mshr_entries[i].state == DC_MSHR_COMPLETE) && mshr_entries[i].from_st;
+    end
+    fw_ld_pending = |fw_ld_complete_vec;
+    fw_st_pending = |fw_st_complete_vec;
+
+    fw_ld_idx = '0;
+    for (int i = MSHR_DEPTH - 1; i >= 0; i--) if (fw_ld_complete_vec[i]) fw_ld_idx = MSHR_PTR_W'(i);
+    fw_st_idx = '0;
+    for (int i = MSHR_DEPTH - 1; i >= 0; i--) if (fw_st_complete_vec[i]) fw_st_idx = MSHR_PTR_W'(i);
+  end
+
+  // Fill writer can write when corresponding pipe's SRAM port is available:
+  //   1. Pipe is IDLE and not accepting a new request, OR
+  //   2. Pipe is stuck retrying in TAG_LOOKUP (mshr match / set conflict / full)
+  //      — the SRAM port is just re-reading stale data, safe to preempt.
+  // Case 2 breaks the deadlock where the pipe waits for MSHR to drain but the
+  // fill writer waits for the pipe to go IDLE.
+  //
+  // Note: ld_pipe_retrying / st_pipe_retrying intentionally exclude ld_resolve_stall
+  // and st_resolve_stall to avoid circular dependency (resolve_stall depends on
+  // fill writer state which depends on pipe_retrying).
+  logic fw_ld_can_write, fw_st_can_write;
+
+  assign ld_pipe_retrying = (ld_pipe_state == PIPE_TAG_LOOKUP) && (ld_mshr_set_conflict || ld_mshr_full || ld_fw_preempted_q || (ld_mshr_any_match && ld_miss && !ld_req_q.uncached));
+
+  assign st_pipe_retrying = (st_pipe_state == PIPE_TAG_LOOKUP) &&
+    (st_mshr_set_conflict || st_mshr_full || st_fw_preempted_q || dual_miss_same_set ||
+     (st_mshr_any_match && st_miss && !st_req_q.uncached));
+
+  assign fw_ld_can_write = fw_ld_pending && !flush_active && !fi_active && ((ld_pipe_state == PIPE_IDLE && !ld_pipe_accept) || ld_pipe_retrying);
+  assign fw_st_can_write = fw_st_pending && !flush_active && !fi_active && ((st_pipe_state == PIPE_IDLE && !st_pipe_accept) || st_pipe_retrying);
+
+  // Compute merged fill data for the entry being written
+  always_comb begin
+    fw_ld_merged   = merge_fill_data(mshr_entries[fw_ld_idx].fill_data, mshr_entries[fw_ld_idx].is_write, mshr_entries[fw_ld_idx].addr, mshr_entries[fw_ld_idx].wdata, mshr_entries[fw_ld_idx].rw_size);
+    fw_st_merged   = merge_fill_data(mshr_entries[fw_st_idx].fill_data, mshr_entries[fw_st_idx].is_write, mshr_entries[fw_st_idx].addr, mshr_entries[fw_st_idx].wdata, mshr_entries[fw_st_idx].rw_size);
+    fw_ld_way      = mshr_entries[fw_ld_idx].victim_way;
+    fw_st_way      = mshr_entries[fw_st_idx].victim_way;
+    fw_ld_tag      = mshr_entries[fw_ld_idx].addr[XLEN-1:IDX_WIDTH+BOFFSET];
+    fw_st_tag      = mshr_entries[fw_st_idx].addr[XLEN-1:IDX_WIDTH+BOFFSET];
+    fw_ld_set      = mshr_entries[fw_ld_idx].addr[IDX_WIDTH+BOFFSET-1:BOFFSET];
+    fw_st_set      = mshr_entries[fw_st_idx].addr[IDX_WIDTH+BOFFSET-1:BOFFSET];
+    fw_ld_word_idx = mshr_entries[fw_ld_idx].addr[(WOFFSET+2)-1:2];
+    fw_st_word_idx = mshr_entries[fw_st_idx].addr[(WOFFSET+2)-1:2];
+  end
+
+  // Fill writer: 1-cycle write to SRAM + response generation
+  // fw_*_writing is high for exactly 1 cycle when writing
+  assign fw_ld_writing     = fw_ld_can_write;
+  assign fw_st_writing     = fw_st_can_write;
+
+  // Connect forward-declared signals for SRAM address mux
+  assign fw_ld_writing_fwd = fw_ld_writing;
+  assign fw_st_writing_fwd = fw_st_writing;
+  assign fw_ld_set_fwd     = fw_ld_set;
+  assign fw_st_set_fwd     = fw_st_set;
+
+  // fw_*_done: signals MSHR state machine to transition COMPLETE → IDLE
+  assign fw_ld_done        = fw_ld_writing;
+  assign fw_st_done        = fw_st_writing;
+
+  // fw_*_accepted: signals MSHR to deallocate entry (1 cycle after done)
+  logic fw_ld_done_q, fw_st_done_q;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      fw_ld_done_q <= 1'b0;
+      fw_st_done_q <= 1'b0;
+    end else begin
+      fw_ld_done_q <= fw_ld_done;
+      fw_st_done_q <= fw_st_done;
+    end
+  end
+  assign fw_ld_accepted = fw_ld_done_q;
+  assign fw_st_accepted = fw_st_done_q;
+
+  // ===========================================================================
+  // LD-pipe SRAM control (pipe operations + fill writer)
   // ===========================================================================
   always_comb begin
     ld_tag_we    = '0;
@@ -797,16 +988,16 @@ module dcache_nb
     if (flush_active) begin
       ld_tag_we    = '1;
       ld_tag_wdata = '0;
-    end else if (ld_fill_complete) begin
-      ld_tag_we    = ld_evict_way_sel;
-      ld_tag_wdata = {1'b1, ld_req_tag};
-      ld_data_we   = ld_evict_way_sel;
-      ld_data_wdata = fill_merged_data;
+    end else if (fw_ld_writing) begin
+      ld_tag_we    = fw_ld_way;
+      ld_tag_wdata = {1'b1, fw_ld_tag};
+      ld_data_we   = fw_ld_way;
+      ld_data_wdata = fw_ld_merged;
     end
   end
 
   // ===========================================================================
-  // ST-pipe SRAM control
+  // ST-pipe SRAM control (pipe operations + fill writer)
   // ===========================================================================
   always_comb begin
     st_tag_we    = '0;
@@ -817,11 +1008,11 @@ module dcache_nb
     if (st_pipe_state == PIPE_HIT_RESPOND && st_req_q.is_write) begin
       st_data_we    = st_hit_way_oh_raw;
       st_data_wdata = st_hit_wr_merged;
-    end else if (st_fill_complete) begin
-      st_tag_we    = st_evict_way_sel;
-      st_tag_wdata = {1'b1, st_req_tag};
-      st_data_we   = st_evict_way_sel;
-      st_data_wdata = fill_merged_data;
+    end else if (fw_st_writing) begin
+      st_tag_we    = fw_st_way;
+      st_tag_wdata = {1'b1, fw_st_tag};
+      st_data_we   = fw_st_way;
+      st_data_wdata = fw_st_merged;
     end
   end
 
@@ -834,9 +1025,9 @@ module dcache_nb
     if (ld_hit_respond) begin
       ld_plru_wr    = 1'b1;
       ld_plru_wdata = ld_updated_node;
-    end else if (ld_pipe_state == PIPE_FILL_RESPOND) begin
+    end else if (fw_ld_writing) begin
       ld_plru_wr    = 1'b1;
-      ld_plru_wdata = update_node(ld_plru_rdata, ld_evict_way_sel);
+      ld_plru_wdata = update_node(plru_reg[fw_ld_set], fw_ld_way);
     end
   end
 
@@ -846,9 +1037,9 @@ module dcache_nb
     if (st_pipe_state == PIPE_HIT_RESPOND) begin
       st_plru_wr    = 1'b1;
       st_plru_wdata = st_updated_node;
-    end else if (st_pipe_state == PIPE_FILL_RESPOND) begin
+    end else if (fw_st_writing) begin
       st_plru_wr    = 1'b1;
-      st_plru_wdata = update_node(st_plru_rdata, st_evict_way_sel);
+      st_plru_wdata = update_node(plru_reg[fw_st_set], fw_st_way);
     end
   end
 
@@ -863,19 +1054,19 @@ module dcache_nb
   // ===========================================================================
   always_comb begin
     ld_dirty_wr  = 1'b0;
-    ld_dirty_idx = ld_req_set;
+    ld_dirty_idx = fw_ld_writing ? fw_ld_set : ld_req_set;
     ld_dirty_way = '0;
     ld_dirty_val = 1'b0;
-    if (ld_fill_complete) begin
+    if (fw_ld_writing) begin
       ld_dirty_wr  = 1'b1;
-      ld_dirty_way = ld_evict_way_sel;
-      ld_dirty_val = ld_req_q.is_write;
+      ld_dirty_way = fw_ld_way;
+      ld_dirty_val = mshr_entries[fw_ld_idx].is_write;
     end
   end
 
   always_comb begin
     st_dirty_wr  = 1'b0;
-    st_dirty_idx = fi_active ? fi_set_idx_q : st_req_set;
+    st_dirty_idx = fi_active ? fi_set_idx_q : (fw_st_writing ? fw_st_set : st_req_set);
     st_dirty_way = '0;
     st_dirty_val = 1'b0;
     if (fi_mark_clean) begin
@@ -886,10 +1077,10 @@ module dcache_nb
       st_dirty_wr  = 1'b1;
       st_dirty_way = st_hit_way_oh_raw;
       st_dirty_val = 1'b1;
-    end else if (st_fill_complete) begin
+    end else if (fw_st_writing) begin
       st_dirty_wr  = 1'b1;
-      st_dirty_way = st_evict_way_sel;
-      st_dirty_val = st_req_q.is_write;
+      st_dirty_way = fw_st_way;
+      st_dirty_val = mshr_entries[fw_st_idx].is_write;
     end
   end
 
@@ -943,20 +1134,16 @@ module dcache_nb
   assign fencei_stall_o = fi_active || (flush_i && !pipes_idle_o);
 
   // ===========================================================================
-  // LD-pipe FSM
+  // LD-pipe FSM — miss-under-miss: returns to IDLE after MSHR allocation
   // ===========================================================================
-  logic ld_pipe_accept;
-  assign ld_pipe_accept = (ld_pipe_state == PIPE_IDLE) && !flush_active && !fi_active && ld_req_i.valid;
+  assign ld_pipe_accept = (ld_pipe_state == PIPE_IDLE) && !flush_active && !fi_active && !fw_ld_writing && ld_req_i.valid;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      ld_pipe_state         <= PIPE_IDLE;
-      ld_req_q              <= '0;
-      ld_mshr_resp_accepted <= 1'b0;
-      ld_victim_way_q       <= '0;
+      ld_pipe_state   <= PIPE_IDLE;
+      ld_req_q        <= '0;
+      ld_victim_way_q <= '0;
     end else begin
-      ld_mshr_resp_accepted <= 1'b0;
-
       unique case (ld_pipe_state)
         PIPE_IDLE: begin
           if (ld_pipe_accept) begin
@@ -970,30 +1157,16 @@ module dcache_nb
         end
 
         PIPE_TAG_LOOKUP: begin
-          // SRAM data valid this cycle — resolve hit/miss combinationally
-          if (ld_resolve_stall || (ld_mshr_any_match && ld_miss && !ld_req_q.uncached)) begin
-            ld_pipe_state <= PIPE_TAG_LOOKUP;  // retry (re-read same set)
+          if (ld_resolve_stall || ld_mshr_set_conflict || (ld_mshr_any_match && ld_miss && !ld_req_q.uncached)) begin
+            ld_pipe_state <= PIPE_TAG_LOOKUP;  // retry
           end else if (ld_hit_any) begin
-            // 1-cycle hit: respond combinationally this cycle, return to IDLE
-            ld_pipe_state <= PIPE_IDLE;
+            ld_pipe_state <= PIPE_IDLE;  // 1-cycle hit
           end else if (ld_mshr_full) begin
             ld_pipe_state <= PIPE_TAG_LOOKUP;  // structural stall — retry
-          end else if (ld_evict_dirty) begin
-            ld_victim_way_q <= ld_evict_way;
-            ld_pipe_state   <= PIPE_WB_EVICT;
           end else begin
-            ld_victim_way_q <= ld_evict_way;
-            ld_pipe_state   <= PIPE_MISS_WAIT;
+            // Miss: MSHR allocated this cycle (via ld_mshr_do_alloc), return to IDLE
+            ld_pipe_state <= PIPE_IDLE;
           end
-        end
-
-        PIPE_WB_EVICT: if (wb_done && !wb_from_st) ld_pipe_state <= PIPE_MISS_WAIT;
-
-        PIPE_MISS_WAIT: if (ld_fill_complete) ld_pipe_state <= PIPE_FILL_RESPOND;
-
-        PIPE_FILL_RESPOND: begin
-          ld_mshr_resp_accepted <= 1'b1;
-          ld_pipe_state <= PIPE_IDLE;
         end
 
         PIPE_BYPASS: if (lowX_res_i.valid && !st_bypass_active && !fi_writeback_req) ld_pipe_state <= PIPE_IDLE;
@@ -1004,20 +1177,62 @@ module dcache_nb
   end
 
   // ===========================================================================
-  // ST-pipe FSM
+  // DEBUG: dcache miss-under-miss diagnostics
   // ===========================================================================
-  logic st_pipe_accept;
-  assign st_pipe_accept = (st_pipe_state == PIPE_IDLE) && !flush_active && !fi_active && st_req_i.valid;
+`ifdef VERILATOR
+  // synopsys translate_off
+  always_ff @(posedge clk_i)
+    if (rst_ni && !flush_active) begin
+      // LD pipe stall diagnosis
+      if (ld_pipe_state == PIPE_TAG_LOOKUP) begin
+        if (ld_resolve_stall) $display("[DCACHE-DBG] %0t LD TAG_LOOKUP STALL: resolve_stall addr=%08x set=%0d", $time, ld_req_q.addr, ld_req_set);
+        if (ld_mshr_set_conflict) $display("[DCACHE-DBG] %0t LD TAG_LOOKUP STALL: mshr_set_conflict addr=%08x set=%0d", $time, ld_req_q.addr, ld_req_set);
+        if (ld_mshr_any_match && ld_miss && !ld_req_q.uncached)
+          $display("[DCACHE-DBG] %0t LD TAG_LOOKUP STALL: mshr_match addr=%08x set=%0d hit_any=%0b miss=%0b", $time, ld_req_q.addr, ld_req_set, ld_hit_any, ld_miss);
+        if (ld_hit_any && !ld_resolve_stall && !ld_mshr_set_conflict && !(ld_mshr_any_match && ld_miss && !ld_req_q.uncached))
+          $display("[DCACHE-DBG] %0t LD TAG_LOOKUP HIT addr=%08x set=%0d", $time, ld_req_q.addr, ld_req_set);
+        if (ld_miss && !ld_mshr_any_match && !ld_mshr_full && !ld_resolve_stall && !ld_mshr_set_conflict)
+          $display("[DCACHE-DBG] %0t LD TAG_LOOKUP MISS→MSHR addr=%08x set=%0d", $time, ld_req_q.addr, ld_req_set);
+      end
+      // ST pipe stall diagnosis
+      if (st_pipe_state == PIPE_TAG_LOOKUP) begin
+        if (st_resolve_stall) $display("[DCACHE-DBG] %0t ST TAG_LOOKUP STALL: resolve_stall addr=%08x set=%0d", $time, st_req_q.addr, st_req_set);
+        if (st_mshr_set_conflict) $display("[DCACHE-DBG] %0t ST TAG_LOOKUP STALL: mshr_set_conflict addr=%08x set=%0d", $time, st_req_q.addr, st_req_set);
+        if (st_mshr_any_match && st_miss && !st_req_q.uncached) $display("[DCACHE-DBG] %0t ST TAG_LOOKUP STALL: mshr_match addr=%08x set=%0d", $time, st_req_q.addr, st_req_set);
+        if (st_hit_any && !st_resolve_stall && !st_mshr_set_conflict && !dual_miss_same_set && !(st_mshr_any_match && st_miss && !st_req_q.uncached))
+          $display("[DCACHE-DBG] %0t ST TAG_LOOKUP HIT addr=%08x set=%0d", $time, st_req_q.addr, st_req_set);
+        if (st_miss && !st_mshr_any_match && !st_mshr_full && !st_resolve_stall && !st_mshr_set_conflict && !dual_miss_same_set)
+          $display("[DCACHE-DBG] %0t ST TAG_LOOKUP MISS→MSHR addr=%08x set=%0d", $time, st_req_q.addr, st_req_set);
+      end
+      // Fill writer events
+      if (fw_ld_writing) $display("[DCACHE-DBG] %0t FW_LD_WRITE set=%0d idx=%0d way=%0b tag=%06x", $time, fw_ld_set, fw_ld_idx, fw_ld_way, fw_ld_tag);
+      if (fw_st_writing) $display("[DCACHE-DBG] %0t FW_ST_WRITE set=%0d idx=%0d way=%0b tag=%06x", $time, fw_st_set, fw_st_idx, fw_st_way, fw_st_tag);
+      // MSHR alloc events
+      if (ld_mshr_do_alloc) $display("[DCACHE-DBG] %0t LD_MSHR_ALLOC idx=%0d addr=%08x evict_dirty=%0b", $time, mshr_free_idx, ld_req_q.addr, ld_evict_dirty);
+      if (st_mshr_do_alloc) $display("[DCACHE-DBG] %0t ST_MSHR_ALLOC idx=%0d addr=%08x evict_dirty=%0b", $time, mshr_free_idx, st_req_q.addr, st_evict_dirty);
+      // Fill response
+      if (fill_resp_valid) $display("[DCACHE-DBG] %0t FILL_RESP from_st=%0b entry=%0d", $time, mshr_fill_from_st, mshr_fill_entry_idx);
+      // MSHR state dump (compact)
+      for (int i = 0; i < MSHR_DEPTH; i++) begin
+        if (mshr_entries[i].valid) $display("[DCACHE-DBG] %0t MSHR[%0d] state=%0d addr=%08x from_st=%0b", $time, i, mshr_entries[i].state, mshr_entries[i].addr, mshr_entries[i].from_st);
+      end
+      // Memory controller
+      if (mem_state != MEM_IDLE) $display("[DCACHE-DBG] %0t MEM_STATE=%0d addr=%08x", $time, mem_state, mem_addr_q);
+    end
+  // synopsys translate_on
+`endif
+
+  // ===========================================================================
+  // ST-pipe FSM — miss-under-miss: returns to IDLE after MSHR allocation
+  // ===========================================================================
+  assign st_pipe_accept = (st_pipe_state == PIPE_IDLE) && !flush_active && !fi_active && !fw_st_writing && st_req_i.valid;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      st_pipe_state         <= PIPE_IDLE;
-      st_req_q              <= '0;
-      st_mshr_resp_accepted <= 1'b0;
-      st_victim_way_q       <= '0;
+      st_pipe_state   <= PIPE_IDLE;
+      st_req_q        <= '0;
+      st_victim_way_q <= '0;
     end else begin
-      st_mshr_resp_accepted <= 1'b0;
-
       unique case (st_pipe_state)
         PIPE_IDLE: begin
           if (st_pipe_accept) begin
@@ -1031,32 +1246,19 @@ module dcache_nb
         end
 
         PIPE_TAG_LOOKUP: begin
-          // SRAM data valid this cycle — resolve hit/miss combinationally
-          if (st_resolve_stall || dual_miss_same_set || (st_mshr_any_match && st_miss && !st_req_q.uncached)) begin
-            st_pipe_state <= PIPE_TAG_LOOKUP;  // retry (re-read same set)
+          if (st_resolve_stall || st_mshr_set_conflict || dual_miss_same_set || (st_mshr_any_match && st_miss && !st_req_q.uncached)) begin
+            st_pipe_state <= PIPE_TAG_LOOKUP;  // retry
           end else if (st_hit_any) begin
             st_pipe_state <= PIPE_HIT_RESPOND;
           end else if (st_mshr_full) begin
             st_pipe_state <= PIPE_TAG_LOOKUP;  // structural stall — retry
-          end else if (st_evict_dirty) begin
-            st_victim_way_q <= st_evict_way;
-            st_pipe_state   <= PIPE_WB_EVICT;
           end else begin
-            st_victim_way_q <= st_evict_way;
-            st_pipe_state   <= PIPE_MISS_WAIT;
+            // Miss: MSHR allocated this cycle, return to IDLE
+            st_pipe_state <= PIPE_IDLE;
           end
         end
 
         PIPE_HIT_RESPOND: st_pipe_state <= PIPE_IDLE;
-
-        PIPE_WB_EVICT: if (wb_done && wb_from_st) st_pipe_state <= PIPE_MISS_WAIT;
-
-        PIPE_MISS_WAIT: if (st_fill_complete) st_pipe_state <= PIPE_FILL_RESPOND;
-
-        PIPE_FILL_RESPOND: begin
-          st_mshr_resp_accepted <= 1'b1;
-          st_pipe_state <= PIPE_IDLE;
-        end
 
         PIPE_BYPASS: begin
           if (lowX_res_i.valid && !ld_bypass_active && !fi_writeback_req) st_pipe_state <= PIPE_IDLE;
@@ -1074,42 +1276,46 @@ module dcache_nb
   assign ld_word_idx = ld_req_q.addr[(WOFFSET+2)-1:2];
   assign st_word_idx = st_req_q.addr[(WOFFSET+2)-1:2];
 
-  // 1-cycle LD hit: respond in TAG_LOOKUP when hit detected
-  logic ld_hit_respond;
-  assign ld_hit_respond = (ld_pipe_state == PIPE_TAG_LOOKUP) && ld_hit_any && !ld_resolve_stall && !(ld_mshr_any_match && ld_miss && !ld_req_q.uncached);
+  // ld_hit_respond assigned above (after ld_resolve_stall)
 
-  // LD response
+  // LD response: hit from pipe OR fill from fill writer
   always_comb begin
     ld_res_o.valid = 1'b0;
     ld_res_o.miss  = 1'b0;
-    ld_res_o.ready = (ld_pipe_state == PIPE_IDLE) && !flush_active && !fi_active;
+    ld_res_o.ready = (ld_pipe_state == PIPE_IDLE) && !flush_active && !fi_active && !fw_ld_writing;
     ld_res_o.data  = '0;
 
     if (ld_hit_respond) begin
       ld_res_o.valid = 1'b1;
       ld_res_o.data  = ld_select_data[ld_word_idx*32+:32];
-    end else if (ld_pipe_state == PIPE_FILL_RESPOND) begin
+    end else if (fw_ld_writing) begin
+      // Fill writer is writing SRAM — also generate response to memory.sv
       ld_res_o.valid = 1'b1;
-      ld_res_o.data  = fill_merged_data[ld_word_idx*32+:32];
+      ld_res_o.data  = fw_ld_merged[fw_ld_word_idx*32+:32];
     end else if (ld_bypass_active && lowX_res_i.valid && !st_bypass_active && !fi_writeback_req) begin
       ld_res_o.valid = 1'b1;
       ld_res_o.data  = lowX_res_i.data[ld_word_idx*32+:32];
     end
   end
 
-  // ST response
+  // ST miss accepted: MSHR allocated, store data captured — signal memory.sv immediately
+  logic st_miss_accepted;
+  assign st_miss_accepted = st_mshr_do_alloc;
+
+  // ST response: hit from pipe, miss-accepted, fill from fill writer, or bypass
   always_comb begin
     st_res_o.valid = 1'b0;
     st_res_o.miss  = 1'b0;
-    st_res_o.ready = (st_pipe_state == PIPE_IDLE) && !flush_active && !fi_active;
+    st_res_o.ready = (st_pipe_state == PIPE_IDLE) && !flush_active && !fi_active && !fw_st_writing;
     st_res_o.data  = '0;
 
     if (st_pipe_state == PIPE_HIT_RESPOND) begin
       st_res_o.valid = 1'b1;
       st_res_o.data  = st_select_data[st_word_idx*32+:32];
-    end else if (st_pipe_state == PIPE_FILL_RESPOND) begin
+    end else if (st_miss_accepted) begin
+      // Store miss: MSHR captured the data, tell memory.sv the store port is done
       st_res_o.valid = 1'b1;
-      st_res_o.data  = fill_merged_data[st_word_idx*32+:32];
+      st_res_o.data  = '0;
     end else if (st_bypass_active && lowX_res_i.valid && !ld_bypass_active && !fi_writeback_req) begin
       st_res_o.valid = 1'b1;
       st_res_o.data  = lowX_res_i.data[st_word_idx*32+:32];
