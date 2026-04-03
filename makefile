@@ -969,6 +969,16 @@ ifeq ($(LOG_UC_STORE),1)
   SV_DEFINES += +define+LOG_UC_STORE
 endif
 
+# L2 MSHR slot lifecycle trace (nbmbmp_l2_cache.sv) - LOG_L2_MSHR=1
+ifeq ($(LOG_L2_MSHR),1)
+  SV_DEFINES += +define+LOG_L2_MSHR
+endif
+
+# dcache multi-fill mem controller trace (dcache_nb.sv) - LOG_DC_MFILL=1
+ifeq ($(LOG_DC_MFILL),1)
+  SV_DEFINES += +define+LOG_DC_MFILL
+endif
+
 # ===========================================
 # TRACE CONTROLS
 # ===========================================

@@ -366,8 +366,8 @@ module nbmbmp_l2_cache
   end
 
   logic [L2_NUM_WAY-1:0] i_evict_way_sel, d_evict_way_sel;
-  assign i_evict_way_sel = ((i_pipe_state == PIPE_WB_EVICT) || (i_pipe_state == PIPE_MISS_WAIT) || (i_pipe_state == PIPE_FILL_RESPOND)) ? i_victim_way_q : i_evict_way;
-  assign d_evict_way_sel = ((d_pipe_state == PIPE_WB_EVICT) || (d_pipe_state == PIPE_MISS_WAIT) || (d_pipe_state == PIPE_FILL_RESPOND)) ? d_victim_way_q : d_evict_way;
+  assign i_evict_way_sel = ((i_pipe_state == PIPE_MISS_WAIT) || (i_pipe_state == PIPE_FILL_RESPOND)) ? i_victim_way_q : i_evict_way;
+  assign d_evict_way_sel = ((d_pipe_state == PIPE_MISS_WAIT) || (d_pipe_state == PIPE_FILL_RESPOND)) ? d_victim_way_q : d_evict_way;
 
   // =========================================================================
   // Per-pipe eviction data
@@ -454,9 +454,7 @@ module nbmbmp_l2_cache
   logic                     d_mshr_do_alloc;
   logic                     i_fill_complete;
   logic                     d_fill_complete;
-  // WB request from eit
-  logic                     i_wb_req;
-  logic                     d_wb_req;
+
 
   assign i_mshr_alloc_req = (i_pipe_state == PIPE_TAG_LOOKUP) && !i_hit_any && !i_resolve_stall;
   assign d_mshr_alloc_req = (d_pipe_state == PIPE_TAG_LOOKUP) && !d_hit_any && !d_resolve_stall;
@@ -507,6 +505,33 @@ module nbmbmp_l2_cache
     mshr_resp_valid = |mshr_complete_vec;
   end
 
+  // D-port COMPLETE scanner (fire-and-forget fill writer)
+  logic                     d_mshr_complete_dport;
+  logic [L2_MSHR_PTR_W-1:0] d_fill_mshr_idx;
+
+  always_comb begin
+    d_mshr_complete_dport = 1'b0;
+    d_fill_mshr_idx = '0;
+    for (int i = L2_MSHR_DEPTH - 1; i >= 0; i--) begin
+      if (mshr_complete_vec[i] && mshr_entries[i].from_dport) begin
+        d_mshr_complete_dport = 1'b1;
+        d_fill_mshr_idx = L2_MSHR_PTR_W'(i);
+      end
+    end
+  end
+
+  // D-port "any active" — gates dcache_res_o.ready to prevent duplicate accepts
+  // (dcache keeps valid=1 until response; L2 must not re-accept while MSHR in flight)
+  logic d_mshr_any_active;
+  always_comb begin
+    d_mshr_any_active = 1'b0;
+    for (int i = 0; i < L2_MSHR_DEPTH; i++) if (mshr_entries[i].valid && mshr_entries[i].from_dport) d_mshr_any_active = 1'b1;
+  end
+
+  // D-pipe fill writer registers
+  logic [     BLK_SIZE-1:0] d_fill_data_q;
+  logic [L2_MSHR_PTR_W-1:0] d_fill_mshr_idx_q;
+
   always_comb begin
     for (int i = 0; i < L2_MSHR_DEPTH; i++) mshr_wb_vec[i] = mshr_entries[i].valid && (mshr_entries[i].state == MSHR_WB_PENDING);
     mshr_wb_valid = |mshr_wb_vec;
@@ -528,6 +553,7 @@ module nbmbmp_l2_cache
   logic       [L2_ADDR_WIDTH-1:0] mem_addr_q;
   logic       [     BLK_SIZE-1:0] mem_data_q;
   mem_state_t                     mem_state;
+  logic       [L2_MSHR_PTR_W-1:0] wb_entry_idx_q;  // Which MSHR entry is being written back
 
   // Which pipe requested the current writeback
   logic                           wb_from_dport;
@@ -536,20 +562,28 @@ module nbmbmp_l2_cache
   assign i_fill_complete = fill_resp_valid && !mshr_fill_from_dport;
   assign d_fill_complete = fill_resp_valid && mshr_fill_from_dport;
 
-  // WB request from either pipe
-  assign i_wb_req = (i_pipe_state == PIPE_WB_EVICT);
-  assign d_wb_req = (d_pipe_state == PIPE_WB_EVICT);
+  // WB scanner — first MSHR_WB_PENDING entry (autonomous, no pipe dependency)
+  logic [L2_MSHR_PTR_W-1:0] mshr_wb_idx;
+  logic [L2_ADDR_WIDTH-1:0] mshr_wb_addr;
+  logic [     BLK_SIZE-1:0] mshr_wb_data;
+  logic                     mshr_wb_from_dport;
 
-  // Eviction data/addr for memory controller (latched per pipe)
-  logic [    XLEN-1:0] wb_addr_latch;
-  logic [BLK_SIZE-1:0] wb_data_latch;
+  always_comb begin
+    mshr_wb_idx = '0;
+    for (int i = L2_MSHR_DEPTH - 1; i >= 0; i--) if (mshr_wb_vec[i]) mshr_wb_idx = L2_MSHR_PTR_W'(i);
+    mshr_wb_addr       = mshr_entries[mshr_wb_idx].evict_addr;
+    mshr_wb_data       = mshr_entries[mshr_wb_idx].evict_data;
+    mshr_wb_from_dport = mshr_entries[mshr_wb_idx].from_dport;
+  end
 
-  // Fill request from either pipe in MISS_WAIT
+  // Eviction data/addr sourced from MSHR (no longer pipe-latched)
+
+  // Fill request from MSHR PENDING (autonomous — no pipe MISS_WAIT dependency)
   assign i_miss_wait = (i_pipe_state == PIPE_MISS_WAIT);
   assign d_miss_wait = (d_pipe_state == PIPE_MISS_WAIT);
 
-  wire i_l2_miss_phase = i_mshr_alloc_req || (i_pipe_state == PIPE_WB_EVICT) || (i_pipe_state == PIPE_MISS_WAIT) || (i_pipe_state == PIPE_FILL_RESPOND);
-  wire d_l2_miss_phase = d_mshr_alloc_req || (d_pipe_state == PIPE_WB_EVICT) || (d_pipe_state == PIPE_MISS_WAIT) || (d_pipe_state == PIPE_FILL_RESPOND);
+  wire i_l2_miss_phase = i_mshr_alloc_req || (i_pipe_state == PIPE_MISS_WAIT) || (i_pipe_state == PIPE_FILL_RESPOND);
+  wire d_l2_miss_phase = d_mshr_alloc_req || (d_pipe_state == PIPE_FILL_RESPOND) || d_mshr_complete_dport;
   assign l2_miss_busy_o = i_l2_miss_phase || d_l2_miss_phase;
 
   // Questa vlog: declare before bypass_active / fill_req_valid uses these
@@ -559,8 +593,8 @@ module nbmbmp_l2_cache
   assign d_bypass_active = (d_pipe_state == PIPE_BYPASS);
 
   wire bypass_active = i_bypass_active || d_bypass_active;
-  assign fill_req_valid = (i_miss_wait || d_miss_wait) && mshr_pending_valid && !mem_busy && !bypass_active;
-  assign wb_req_valid = (i_wb_req || d_wb_req) && !mem_busy && !bypass_active;
+  assign fill_req_valid = mshr_pending_valid && !mem_busy && !bypass_active;
+  assign wb_req_valid = mshr_wb_valid && !mem_busy && !bypass_active;
 
   // =========================================================================
   // Set-conflict hazard detection
@@ -587,13 +621,18 @@ module nbmbmp_l2_cache
     end else begin
       // I-pipe allocation
       if (i_mshr_do_alloc) begin
-        mshr_entries[mshr_free_idx].valid      <= 1'b1;
-        mshr_entries[mshr_free_idx].state      <= MSHR_PENDING;
-        mshr_entries[mshr_free_idx].addr       <= i_req_q.addr;
-        mshr_entries[mshr_free_idx].is_write   <= 1'b0;
-        mshr_entries[mshr_free_idx].wdata      <= '0;
-        mshr_entries[mshr_free_idx].wstrb      <= '0;
-        mshr_entries[mshr_free_idx].from_dport <= 1'b0;
+        mshr_entries[mshr_free_idx].valid       <= 1'b1;
+        mshr_entries[mshr_free_idx].state       <= i_evict_dirty ? MSHR_WB_PENDING : MSHR_PENDING;
+        mshr_entries[mshr_free_idx].addr        <= i_req_q.addr;
+        mshr_entries[mshr_free_idx].is_write    <= 1'b0;
+        mshr_entries[mshr_free_idx].wdata       <= '0;
+        mshr_entries[mshr_free_idx].wstrb       <= '0;
+        mshr_entries[mshr_free_idx].from_dport  <= 1'b0;
+        mshr_entries[mshr_free_idx].victim_way  <= i_evict_way;
+        mshr_entries[mshr_free_idx].evict_dirty <= i_evict_dirty;
+        mshr_entries[mshr_free_idx].evict_addr  <= i_evict_addr;
+        mshr_entries[mshr_free_idx].evict_data  <= i_evict_data;
+        mshr_entries[mshr_free_idx].fill_data   <= '0;
       end
 
       // D-pipe allocation (uses next free after I-pipe if both allocate)
@@ -605,13 +644,18 @@ module nbmbmp_l2_cache
         end else begin
           d_idx = mshr_free_idx;
         end
-        mshr_entries[d_idx].valid      <= 1'b1;
-        mshr_entries[d_idx].state      <= MSHR_PENDING;
-        mshr_entries[d_idx].addr       <= d_req_q.addr;
-        mshr_entries[d_idx].is_write   <= d_req_wr;
-        mshr_entries[d_idx].wdata      <= d_req_q.wdata;
-        mshr_entries[d_idx].wstrb      <= d_req_q.wstrb;
-        mshr_entries[d_idx].from_dport <= 1'b1;
+        mshr_entries[d_idx].valid       <= 1'b1;
+        mshr_entries[d_idx].state       <= d_evict_dirty ? MSHR_WB_PENDING : MSHR_PENDING;
+        mshr_entries[d_idx].addr        <= d_req_q.addr;
+        mshr_entries[d_idx].is_write    <= d_req_wr;
+        mshr_entries[d_idx].wdata       <= d_req_q.wdata;
+        mshr_entries[d_idx].wstrb       <= d_req_q.wstrb;
+        mshr_entries[d_idx].from_dport  <= 1'b1;
+        mshr_entries[d_idx].victim_way  <= d_evict_way;
+        mshr_entries[d_idx].evict_dirty <= d_evict_dirty;
+        mshr_entries[d_idx].evict_addr  <= d_evict_addr;
+        mshr_entries[d_idx].evict_data  <= d_evict_data;
+        mshr_entries[d_idx].fill_data   <= '0;
       end
 
       // Fill issued → PENDING → FILL_ACTIVE
@@ -621,8 +665,11 @@ module nbmbmp_l2_cache
       // CoreMark CRC with small L1 + L2).
       if (fill_issued) mshr_entries[mshr_pending_idx].state <= MSHR_FILL_ACTIVE;
 
-      // Fill response → FILL_ACTIVE → COMPLETE
-      if (fill_resp_valid && |mshr_fill_match_vec) mshr_entries[mshr_fill_entry_idx].state <= MSHR_COMPLETE;
+      // Fill response → FILL_ACTIVE → COMPLETE (store fill data)
+      if (fill_resp_valid && |mshr_fill_match_vec) begin
+        mshr_entries[mshr_fill_entry_idx].state     <= MSHR_COMPLETE;
+        mshr_entries[mshr_fill_entry_idx].fill_data <= fill_resp_data;
+      end
 
       // Response accepted → clear entry
       if (i_mshr_resp_accepted) begin
@@ -634,17 +681,13 @@ module nbmbmp_l2_cache
         end
       end
       if (d_mshr_resp_accepted) begin
-        for (int i = 0; i < L2_MSHR_DEPTH; i++)
-        if (mshr_entries[i].valid && mshr_entries[i].state == MSHR_COMPLETE && mshr_entries[i].from_dport) begin
-          mshr_entries[i].valid <= 1'b0;
-          mshr_entries[i].state <= MSHR_IDLE;
-          break;
-        end
+        mshr_entries[d_fill_mshr_idx_q].valid <= 1'b0;
+        mshr_entries[d_fill_mshr_idx_q].state <= MSHR_IDLE;
       end
 
-      // WB done → WB_PENDING → PENDING
-      if (mshr_wb_valid && wb_done) begin
-        for (int i = 0; i < L2_MSHR_DEPTH; i++) if (mshr_entries[i].valid && mshr_entries[i].state == MSHR_WB_PENDING) mshr_entries[i].state <= MSHR_PENDING;
+      // WB done → only the specific entry transitions WB_PENDING → PENDING
+      if (wb_done) begin
+        mshr_entries[wb_entry_idx_q].state <= MSHR_PENDING;
       end
     end
   end
@@ -657,12 +700,12 @@ module nbmbmp_l2_cache
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       mem_state       <= MEM_IDLE;
-      // mem_addr_q/mem_data_q/fill_resp_data/wb_addr_latch/wb_data_latch:
-      // no reset — guarded by mem_state FSM and valid signals
+      // mem_addr_q/mem_data_q/fill_resp_data: no reset — guarded by mem_state FSM
       fill_resp_valid <= 1'b0;
       fill_issued     <= 1'b0;
       wb_done         <= 1'b0;
       wb_from_dport   <= 1'b0;
+      wb_entry_idx_q  <= '0;
     end else begin
       fill_resp_valid <= 1'b0;
       fill_issued     <= 1'b0;
@@ -671,16 +714,11 @@ module nbmbmp_l2_cache
       unique case (mem_state)
         MEM_IDLE: begin
           if (wb_req_valid) begin
-            mem_state <= MEM_WB_SEND;
-            if (d_wb_req && !i_wb_req) begin
-              mem_addr_q    <= d_evict_addr;
-              mem_data_q    <= d_evict_data;
-              wb_from_dport <= 1'b1;
-            end else begin
-              mem_addr_q    <= i_evict_addr;
-              mem_data_q    <= i_evict_data;
-              wb_from_dport <= 1'b0;
-            end
+            mem_state      <= MEM_WB_SEND;
+            mem_addr_q     <= mshr_wb_addr;
+            mem_data_q     <= mshr_wb_data;
+            wb_from_dport  <= mshr_wb_from_dport;
+            wb_entry_idx_q <= mshr_wb_idx;
           end else if (fill_req_valid) begin
             mem_state   <= MEM_FILL_SEND;
             mem_addr_q  <= {mshr_pending_addr[L2_ADDR_WIDTH-1:L2_OFFSET_BITS], {L2_OFFSET_BITS{1'b0}}};
@@ -822,12 +860,12 @@ module nbmbmp_l2_cache
     if (d_hit_respond && d_req_wr) begin
       d_data_we    = d_hit_way_oh;
       d_data_wdata = d_hit_wr_merged;
-    end else if (d_fill_complete) begin
+    end else if (d_pipe_state == PIPE_FILL_RESPOND) begin
       d_tag_we    = d_evict_way_sel;
       d_tag_wdata = {1'b1, d_req_tag};
       d_data_we   = d_evict_way_sel;
-      d_data_wdata = d_req_wr ? merge_fill_data(fill_resp_data, d_req_q.wdata, d_req_q.wstrb)
-                                : fill_resp_data;
+      d_data_wdata = d_req_wr ? merge_fill_data(d_fill_data_q, d_req_q.wdata, d_req_q.wstrb)
+                                : d_fill_data_q;
     end
   end
 
@@ -888,7 +926,7 @@ module nbmbmp_l2_cache
       d_dirty_wr  = 1'b1;
       d_dirty_way = d_hit_way_oh;
       d_dirty_val = 1'b1;
-    end else if (d_fill_complete) begin
+    end else if (d_pipe_state == PIPE_FILL_RESPOND) begin
       d_dirty_wr  = 1'b1;
       d_dirty_way = d_evict_way_sel;
       d_dirty_val = d_req_wr;
@@ -930,16 +968,17 @@ module nbmbmp_l2_cache
           end else if (i_hit_any) begin
             // 2-cycle hit: respond combinationally this cycle, return to IDLE
             i_pipe_state <= PIPE_IDLE;
-          end else if (i_evict_dirty) begin
-            i_victim_way_q <= i_evict_way;
-            i_pipe_state   <= PIPE_WB_EVICT;
-          end else begin
+          end else if (i_mshr_do_alloc) begin
+            // Miss: MSHR allocated (with evict data if dirty), go to MISS_WAIT
             i_victim_way_q <= i_evict_way;
             i_pipe_state   <= PIPE_MISS_WAIT;
+          end else begin
+            // MSHR full, retry next cycle
+            i_pipe_state <= PIPE_TAG_LOOKUP;
           end
         end
 
-        PIPE_WB_EVICT: if (wb_done && !wb_from_dport) i_pipe_state <= PIPE_MISS_WAIT;
+        PIPE_WB_EVICT: i_pipe_state <= PIPE_MISS_WAIT;  // legacy — should not be reached
 
         PIPE_MISS_WAIT: if (i_fill_complete) i_pipe_state <= PIPE_FILL_RESPOND;
 
@@ -956,22 +995,35 @@ module nbmbmp_l2_cache
   end
 
   // =========================================================================
-  // D-pipe FSM
+  // D-pipe FSM (fire-and-forget: miss → MSHR alloc → IDLE)
   // =========================================================================
   logic d_pipe_accept;
-  assign d_pipe_accept = (d_pipe_state == PIPE_IDLE) && !flush_active && dcache_req_i.valid;
+  assign d_pipe_accept = (d_pipe_state == PIPE_IDLE) && !flush_active && dcache_req_i.valid && !d_mshr_complete_dport && !d_mshr_any_active;
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       d_pipe_state         <= PIPE_IDLE;
-      // d_req_q/d_victim_way_q: no reset — guarded by pipe state FSM
       d_mshr_resp_accepted <= 1'b0;
+      d_fill_data_q        <= '0;
+      d_fill_mshr_idx_q    <= '0;
     end else begin
       d_mshr_resp_accepted <= 1'b0;
 
       unique case (d_pipe_state)
         PIPE_IDLE: begin
-          if (d_pipe_accept) begin
+          if (d_mshr_complete_dport && !flush_active) begin
+            // Fill-write: load MSHR entry data for SRAM write next cycle
+            d_req_q.addr       <= mshr_entries[d_fill_mshr_idx].addr;
+            d_req_q.is_write   <= mshr_entries[d_fill_mshr_idx].is_write;
+            d_req_q.wdata      <= mshr_entries[d_fill_mshr_idx].wdata;
+            d_req_q.wstrb      <= mshr_entries[d_fill_mshr_idx].wstrb;
+            d_req_q.uncached   <= 1'b0;
+            d_req_q.from_dport <= 1'b1;
+            d_victim_way_q     <= mshr_entries[d_fill_mshr_idx].victim_way;
+            d_fill_data_q      <= mshr_entries[d_fill_mshr_idx].fill_data;
+            d_fill_mshr_idx_q  <= d_fill_mshr_idx;
+            d_pipe_state       <= PIPE_FILL_RESPOND;
+          end else if (d_pipe_accept) begin
             d_req_q.addr       <= dcache_req_i.addr;
             d_req_q.is_write   <= dcache_req_i.rw;
             d_req_q.rw_size    <= dcache_req_i.rw_size;
@@ -993,24 +1045,22 @@ module nbmbmp_l2_cache
         end
 
         PIPE_TAG_LOOKUP: begin
-          // SRAM data valid this cycle — resolve hit/miss combinationally
           if (d_resolve_stall || dual_miss_same_set || (d_mshr_any_match && !d_hit_any)) begin
-            d_pipe_state <= PIPE_TAG_LOOKUP;  // retry (re-read same set)
+            d_pipe_state <= PIPE_TAG_LOOKUP;  // retry
           end else if (d_hit_any) begin
-            // 2-cycle hit: respond combinationally this cycle, return to IDLE
             d_pipe_state <= PIPE_IDLE;
-          end else if (d_evict_dirty) begin
-            d_victim_way_q <= d_evict_way;
-            d_pipe_state   <= PIPE_WB_EVICT;
+          end else if (d_mshr_do_alloc) begin
+            // Fire-and-forget: MSHR alloc succeeded, return to IDLE immediately
+            d_pipe_state <= PIPE_IDLE;
           end else begin
-            d_victim_way_q <= d_evict_way;
-            d_pipe_state   <= PIPE_MISS_WAIT;
+            // MSHR full or alloc failed, retry next cycle
+            d_pipe_state <= PIPE_TAG_LOOKUP;
           end
         end
 
-        PIPE_WB_EVICT: if (wb_done && wb_from_dport) d_pipe_state <= PIPE_MISS_WAIT;
+        PIPE_WB_EVICT: d_pipe_state <= PIPE_IDLE;  // legacy — should not be reached
 
-        PIPE_MISS_WAIT: if (d_fill_complete) d_pipe_state <= PIPE_FILL_RESPOND;
+        PIPE_MISS_WAIT: if (d_fill_complete) d_pipe_state <= PIPE_FILL_RESPOND;  // legacy
 
         PIPE_FILL_RESPOND: begin
           d_mshr_resp_accepted <= 1'b1;
@@ -1055,7 +1105,7 @@ module nbmbmp_l2_cache
       d_resp_data  = d_req_wr ? d_req_q.wdata : d_select_data;
     end else if (d_pipe_state == PIPE_FILL_RESPOND) begin
       d_resp_valid = 1'b1;
-      d_resp_data  = fill_resp_data;
+      d_resp_data  = d_fill_data_q;
     end else if (d_bypass_done) begin
       d_resp_valid = 1'b1;
       d_resp_data  = mem_res_i.data;
@@ -1067,7 +1117,7 @@ module nbmbmp_l2_cache
   assign icache_res_o.blk   = i_resp_data;
 
   assign dcache_res_o.valid = d_resp_valid;
-  assign dcache_res_o.ready = (d_pipe_state == PIPE_IDLE) && !flush_active;
+  assign dcache_res_o.ready = (d_pipe_state == PIPE_IDLE) && !flush_active && !d_mshr_any_active;
   assign dcache_res_o.data  = d_resp_data;
 
   // =========================================================================
@@ -1137,6 +1187,179 @@ module nbmbmp_l2_cache
     end
     return way;
   endfunction
+
+  // =========================================================================
+  // L2 MSHR & mem controller logger (LOG_L2_MSHR=1)
+  // =========================================================================
+`ifdef LOG_L2_MSHR
+  // synthesis translate_off
+  integer l2m_log_fd;
+  string  l2m_log_path;
+
+  // Counters
+  int unsigned l2m_i_allocs, l2m_d_allocs, l2m_fills_issued, l2m_fills_done;
+  int unsigned l2m_wb_issued, l2m_wb_done, l2m_i_hits, l2m_d_hits;
+  int unsigned l2m_max_active, l2m_cycles_multi;
+
+  // Previous-cycle edge detection
+  logic        [L2_MSHR_DEPTH-1:0] mshr_valid_q;
+
+  // Working variables (declared at module scope for Verilator compatibility)
+  int unsigned                     l2m_active_now;
+  logic        [L2_MSHR_DEPTH-1:0] l2m_valid_now;
+
+  initial begin
+    if (!$value$plusargs("l2_mshr_log=%s", l2m_log_path)) l2m_log_path = "l2_mshr_trace.log";
+    l2m_log_fd = $fopen(l2m_log_path, "w");
+    if (l2m_log_fd == 0) $display("[LOG_L2_MSHR] ERROR: Cannot open %s", l2m_log_path);
+    else begin
+      $display("[LOG_L2_MSHR] Writing to: %s", l2m_log_path);
+      $fwrite(l2m_log_fd, "# L2 MSHR Lifecycle Trace\n");
+      $fwrite(l2m_log_fd, "# mshr_state: 0=IDLE 1=PENDING 2=FILL_ACTIVE 3=WB_PENDING 4=COMPLETE\n");
+      $fwrite(l2m_log_fd, "# pipe_state: 0=IDLE 1=TAG_LOOKUP 2=MISS_WAIT 3=FILL_RESPOND 4=WB_EVICT 5=BYPASS\n");
+      $fwrite(l2m_log_fd, "# mem_state:  0=MEM_IDLE 1=MEM_WB_SEND 2=MEM_FILL_SEND\n");
+      $fwrite(l2m_log_fd, "#\n");
+      $fflush(l2m_log_fd);
+    end
+  end
+
+  // Count currently active MSHR entries
+  function automatic int unsigned count_active_mshr();
+    int unsigned cnt;
+    cnt = 0;
+    for (int i = 0; i < L2_MSHR_DEPTH; i++) if (mshr_entries[i].valid) cnt = cnt + 1;
+    return cnt;
+  endfunction
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      l2m_i_allocs     <= 0;
+      l2m_d_allocs     <= 0;
+      l2m_fills_issued <= 0;
+      l2m_fills_done   <= 0;
+      l2m_wb_issued    <= 0;
+      l2m_wb_done      <= 0;
+      l2m_i_hits       <= 0;
+      l2m_d_hits       <= 0;
+      l2m_max_active   <= 0;
+      l2m_cycles_multi <= 0;
+      mshr_valid_q     <= '0;
+    end else if (l2m_log_fd != 0) begin
+      // Track previous valid
+      for (int i = 0; i < L2_MSHR_DEPTH; i++) mshr_valid_q[i] <= mshr_entries[i].valid;
+
+      // Max active tracking
+      l2m_active_now = count_active_mshr();
+      if (l2m_active_now > l2m_max_active) l2m_max_active <= l2m_active_now;
+      if (l2m_active_now > 1) l2m_cycles_multi <= l2m_cycles_multi + 1;
+
+      // --- Event markers ---
+
+      // [L2_I_HIT] — I-pipe hit
+      if (i_hit_respond) begin
+        l2m_i_hits <= l2m_i_hits + 1;
+      end
+
+      // [L2_D_HIT] — D-pipe hit
+      if (d_hit_respond) begin
+        l2m_d_hits <= l2m_d_hits + 1;
+      end
+
+      // [L2_I_ALLOC] — I-pipe MSHR allocation
+      if (i_mshr_do_alloc) begin
+        l2m_i_allocs <= l2m_i_allocs + 1;
+        $fwrite(l2m_log_fd, "%0t [L2_I_ALLOC] slot=%0d addr=%08x active=%0d free=%b\n", $time, mshr_free_idx, i_req_q.addr, l2m_active_now, mshr_free_vec);
+        $fflush(l2m_log_fd);
+      end
+
+      // [L2_D_ALLOC] — D-pipe MSHR allocation
+      if (d_mshr_do_alloc) begin
+        l2m_d_allocs <= l2m_d_allocs + 1;
+        $fwrite(l2m_log_fd, "%0t [L2_D_ALLOC] addr=%08x wr=%b active=%0d free=%b d_full=%b\n", $time, d_req_q.addr, d_req_wr, l2m_active_now, mshr_free_vec, d_mshr_full);
+        $fflush(l2m_log_fd);
+      end
+
+      // [L2_FILL_ISSUE] — Memory controller issues fill
+      if (fill_issued) begin
+        l2m_fills_issued <= l2m_fills_issued + 1;
+        $fwrite(l2m_log_fd, "%0t [L2_FILL_ISSUE] slot=%0d addr=%08x dport=%b pend_vec=%b\n", $time, mshr_pending_idx, mshr_pending_addr, mshr_pending_dport, mshr_pending_vec);
+        $fflush(l2m_log_fd);
+      end
+
+      // [L2_FILL_DONE] — Fill response from memory
+      if (fill_resp_valid) begin
+        l2m_fills_done <= l2m_fills_done + 1;
+        $fwrite(l2m_log_fd, "%0t [L2_FILL_DONE] slot=%0d dport=%b data[31:0]=%08x\n", $time, mshr_fill_entry_idx, mshr_fill_from_dport, fill_resp_data[31:0]);
+        $fflush(l2m_log_fd);
+      end
+
+      // [L2_WB_START] — Writeback begins
+      if (mem_state == MEM_IDLE && wb_req_valid) begin
+        l2m_wb_issued <= l2m_wb_issued + 1;
+        $fwrite(l2m_log_fd, "%0t [L2_WB_START] wb_valid=%b dport=%b addr=%08x slot=%0d\n", $time, mshr_wb_valid, mshr_wb_from_dport, mshr_wb_addr, mshr_wb_idx);
+        $fflush(l2m_log_fd);
+      end
+
+      // [L2_WB_DONE] — Writeback completes
+      if (wb_done) begin
+        l2m_wb_done <= l2m_wb_done + 1;
+        $fwrite(l2m_log_fd, "%0t [L2_WB_DONE] dport=%b\n", $time, wb_from_dport);
+        $fflush(l2m_log_fd);
+      end
+
+      // [L2_RESP_I] — I-pipe MSHR response accepted
+      if (i_mshr_resp_accepted) begin
+        $fwrite(l2m_log_fd, "%0t [L2_RESP_I] active=%0d\n", $time, l2m_active_now);
+        $fflush(l2m_log_fd);
+      end
+
+      // [L2_RESP_D] — D-pipe MSHR response accepted
+      if (d_mshr_resp_accepted) begin
+        $fwrite(l2m_log_fd, "%0t [L2_RESP_D] active=%0d\n", $time, l2m_active_now);
+        $fflush(l2m_log_fd);
+      end
+
+      // --- Periodic MSHR snapshot (every time slot count changes) ---
+      for (int i = 0; i < L2_MSHR_DEPTH; i++) l2m_valid_now[i] = mshr_entries[i].valid;
+      if (l2m_valid_now != mshr_valid_q) begin
+        $fwrite(l2m_log_fd, "%0t [L2_SNAP]", $time);
+        for (int i = 0; i < L2_MSHR_DEPTH; i++) begin
+          if (mshr_entries[i].valid) $fwrite(l2m_log_fd, " s%0d{st=%0d a=%08x dp=%b}", i, int'(mshr_entries[i].state), mshr_entries[i].addr, mshr_entries[i].from_dport);
+          else $fwrite(l2m_log_fd, " s%0d{free}", i);
+        end
+        $fwrite(l2m_log_fd, " | i_ps=%0d d_ps=%0d ms=%0d\n", int'(i_pipe_state), int'(d_pipe_state), int'(mem_state));
+        $fflush(l2m_log_fd);
+      end
+
+      // --- Stall/blocking indicators ---
+      // Log when MSHR has pending fills but mem_busy or bypass blocks them
+      if (mshr_pending_valid && (mem_busy || bypass_active)) begin
+        $fwrite(l2m_log_fd, "%0t [L2_FILL_BLOCKED] pending=%b mem_busy=%b bypass=%b ms=%0d\n", $time, mshr_pending_vec, mem_busy, bypass_active, int'(mem_state));
+        $fflush(l2m_log_fd);
+      end
+    end
+  end
+
+  final begin
+    if (l2m_log_fd != 0) begin
+      $fwrite(l2m_log_fd, "\n# === L2 MSHR SUMMARY ===\n");
+      $fwrite(l2m_log_fd, "# i_allocs      = %0d\n", l2m_i_allocs);
+      $fwrite(l2m_log_fd, "# d_allocs      = %0d\n", l2m_d_allocs);
+      $fwrite(l2m_log_fd, "# i_hits        = %0d\n", l2m_i_hits);
+      $fwrite(l2m_log_fd, "# d_hits        = %0d\n", l2m_d_hits);
+      $fwrite(l2m_log_fd, "# fills_issued  = %0d\n", l2m_fills_issued);
+      $fwrite(l2m_log_fd, "# fills_done    = %0d\n", l2m_fills_done);
+      $fwrite(l2m_log_fd, "# wb_issued     = %0d\n", l2m_wb_issued);
+      $fwrite(l2m_log_fd, "# wb_done       = %0d\n", l2m_wb_done);
+      $fwrite(l2m_log_fd, "# max_active    = %0d / %0d\n", l2m_max_active, L2_MSHR_DEPTH);
+      $fwrite(l2m_log_fd, "# cycles_multi  = %0d (>1 MSHR active)\n", l2m_cycles_multi);
+      $fclose(l2m_log_fd);
+    end
+    $display("[LOG_L2_MSHR] i_alloc=%0d d_alloc=%0d fills=%0d/%0d wb=%0d/%0d max_active=%0d/%0d cycles_multi=%0d", l2m_i_allocs, l2m_d_allocs, l2m_fills_issued, l2m_fills_done, l2m_wb_issued,
+             l2m_wb_done, l2m_max_active, L2_MSHR_DEPTH, l2m_cycles_multi);
+  end
+  // synthesis translate_on
+`endif
 
 
 endmodule

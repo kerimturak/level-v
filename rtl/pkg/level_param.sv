@@ -104,13 +104,20 @@ package level_param;
 
   // L2 MSHR entry structure
   typedef struct packed {
-    logic                     valid;
-    mshr_state_t              state;
-    logic [L2_ADDR_WIDTH-1:0] addr;
-    logic                     is_write;
-    logic [BLK_SIZE-1:0]      wdata;
-    logic [BLK_SIZE/8-1:0]    wstrb;
-    logic                     from_dport;
+    logic                      valid;
+    mshr_state_t               state;
+    logic [L2_ADDR_WIDTH-1:0]  addr;
+    logic                      is_write;
+    logic [BLK_SIZE-1:0]       wdata;
+    logic [BLK_SIZE/8-1:0]     wstrb;
+    logic                      from_dport;
+    // Eviction data stored in MSHR for autonomous WB
+    logic [L2_NUM_WAY-1:0]     victim_way;
+    logic                      evict_dirty;
+    logic [L2_ADDR_WIDTH-1:0]  evict_addr;
+    logic [BLK_SIZE-1:0]       evict_data;
+    // Fill data from memory (set on COMPLETE)
+    logic [BLK_SIZE-1:0]       fill_data;
   } l2_mshr_entry_t;
 
   // L2 tag entry structure

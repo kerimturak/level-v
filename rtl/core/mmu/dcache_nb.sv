@@ -1358,4 +1358,160 @@ module dcache_nb
     return way;
   endfunction
 
+  // ===========================================================================
+  // dcache multi-fill mem controller logger (LOG_DC_MFILL=1)
+  // ===========================================================================
+`ifdef LOG_DC_MFILL
+  // synthesis translate_off
+  integer dcm_log_fd;
+  string  dcm_log_path;
+
+  // Counters
+  int unsigned dcm_ld_allocs, dcm_st_allocs, dcm_fills_issued, dcm_fills_done;
+  int unsigned dcm_wb_issued, dcm_wb_done;
+  int unsigned dcm_max_active, dcm_cycles_multi;
+  int unsigned dcm_lowx_req_cycles, dcm_lowx_busy_cycles;
+
+  // Edge detection
+  logic [MSHR_DEPTH-1:0] dcm_mshr_valid_q;
+
+  // Working variables (module scope for Verilator)
+  int unsigned dcm_active_now;
+  logic [MSHR_DEPTH-1:0] dcm_valid_now;
+
+  initial begin
+    if (!$value$plusargs("dc_mfill_log=%s", dcm_log_path)) dcm_log_path = "dc_mfill_trace.log";
+    dcm_log_fd = $fopen(dcm_log_path, "w");
+    if (dcm_log_fd == 0) $display("[LOG_DC_MFILL] ERROR: Cannot open %s", dcm_log_path);
+    else begin
+      $display("[LOG_DC_MFILL] Writing to: %s", dcm_log_path);
+      $fwrite(dcm_log_fd, "# dcache Multi-Fill Mem Controller Trace\n");
+      $fwrite(dcm_log_fd, "# mshr_state: 0=IDLE 1=PENDING 2=FILL_ACTIVE 3=WB_PENDING 4=COMPLETE\n");
+      $fwrite(dcm_log_fd, "# pipe_state: 0=IDLE 1=TAG_LOOKUP 2=HIT_RESPOND 3=BYPASS\n");
+      $fwrite(dcm_log_fd, "# mem_state:  0=MEM_IDLE 1=MEM_WB_SEND 2=MEM_FILL_SEND\n");
+      $fwrite(dcm_log_fd, "#\n");
+      $fflush(dcm_log_fd);
+    end
+  end
+
+  function automatic int unsigned dc_count_active_mshr();
+    int unsigned cnt;
+    cnt = 0;
+    for (int i = 0; i < MSHR_DEPTH; i++)
+      if (mshr_entries[i].valid) cnt = cnt + 1;
+    return cnt;
+  endfunction
+
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      dcm_ld_allocs       <= 0;
+      dcm_st_allocs       <= 0;
+      dcm_fills_issued    <= 0;
+      dcm_fills_done      <= 0;
+      dcm_wb_issued       <= 0;
+      dcm_wb_done         <= 0;
+      dcm_max_active      <= 0;
+      dcm_cycles_multi    <= 0;
+      dcm_lowx_req_cycles <= 0;
+      dcm_lowx_busy_cycles <= 0;
+      dcm_mshr_valid_q    <= '0;
+    end else if (dcm_log_fd != 0) begin
+      for (int i = 0; i < MSHR_DEPTH; i++) dcm_mshr_valid_q[i] <= mshr_entries[i].valid;
+
+      dcm_active_now = dc_count_active_mshr();
+      if (dcm_active_now > dcm_max_active) dcm_max_active <= dcm_active_now;
+      if (dcm_active_now > 1) dcm_cycles_multi <= dcm_cycles_multi + 1;
+
+      // lowX utilization
+      if (lowX_req_o.valid) dcm_lowx_req_cycles <= dcm_lowx_req_cycles + 1;
+      if (mem_busy) dcm_lowx_busy_cycles <= dcm_lowx_busy_cycles + 1;
+
+      // [DC_LD_ALLOC]
+      if (ld_mshr_do_alloc) begin
+        dcm_ld_allocs <= dcm_ld_allocs + 1;
+        $fwrite(dcm_log_fd, "%0t [DC_LD_ALLOC] slot=%0d addr=%08x active=%0d free=%b\n",
+                $time, mshr_free_idx, ld_req_q.addr, dcm_active_now, mshr_free_vec);
+        $fflush(dcm_log_fd);
+      end
+
+      // [DC_ST_ALLOC]
+      if (st_mshr_do_alloc) begin
+        dcm_st_allocs <= dcm_st_allocs + 1;
+        $fwrite(dcm_log_fd, "%0t [DC_ST_ALLOC] addr=%08x active=%0d free=%b\n",
+                $time, st_req_q.addr, dcm_active_now, mshr_free_vec);
+        $fflush(dcm_log_fd);
+      end
+
+      // [DC_FILL_ISSUE]
+      if (fill_issued) begin
+        dcm_fills_issued <= dcm_fills_issued + 1;
+        $fwrite(dcm_log_fd, "%0t [DC_FILL_ISSUE] slot=%0d addr=%08x from_st=%b pend=%b ms=%0d\n",
+                $time, mshr_pending_idx, mshr_pending_addr, mshr_pending_from_st,
+                mshr_pending_vec, int'(mem_state));
+        $fflush(dcm_log_fd);
+      end
+
+      // [DC_FILL_DONE]
+      if (fill_resp_valid) begin
+        dcm_fills_done <= dcm_fills_done + 1;
+        $fwrite(dcm_log_fd, "%0t [DC_FILL_DONE] slot=%0d from_st=%b data[31:0]=%08x\n",
+                $time, mshr_fill_entry_idx, mshr_fill_from_st, fill_resp_data[31:0]);
+        $fflush(dcm_log_fd);
+      end
+
+      // [DC_WB_START]
+      if (mem_state == MEM_IDLE && wb_req_valid) begin
+        dcm_wb_issued <= dcm_wb_issued + 1;
+        $fwrite(dcm_log_fd, "%0t [DC_WB_START] addr=%08x from_st=%b wb_vec=%b\n",
+                $time, mshr_wb_addr, mshr_wb_from_st, mshr_wb_vec);
+        $fflush(dcm_log_fd);
+      end
+
+      // [DC_WB_DONE]
+      if (wb_done) begin
+        dcm_wb_done <= dcm_wb_done + 1;
+        $fwrite(dcm_log_fd, "%0t [DC_WB_DONE] from_st=%b\n", $time, wb_from_st);
+        $fflush(dcm_log_fd);
+      end
+
+      // MSHR snapshot on change
+      for (int i = 0; i < MSHR_DEPTH; i++) dcm_valid_now[i] = mshr_entries[i].valid;
+      if (dcm_valid_now != dcm_mshr_valid_q) begin
+        $fwrite(dcm_log_fd, "%0t [DC_SNAP]", $time);
+        for (int i = 0; i < MSHR_DEPTH; i++) begin
+          if (mshr_entries[i].valid)
+            $fwrite(dcm_log_fd, " s%0d{st=%0d a=%08x}", i,
+                    int'(mshr_entries[i].state), mshr_entries[i].addr);
+          else
+            $fwrite(dcm_log_fd, " s%0d{free}", i);
+        end
+        $fwrite(dcm_log_fd, " | ld_ps=%0d st_ps=%0d ms=%0d lowX_rdy=%b\n",
+                int'(ld_pipe_state), int'(st_pipe_state), int'(mem_state), lowX_res_i.ready);
+        $fflush(dcm_log_fd);
+      end
+    end
+  end
+
+  final begin
+    if (dcm_log_fd != 0) begin
+      $fwrite(dcm_log_fd, "\n# === DC MULTI-FILL SUMMARY ===\n");
+      $fwrite(dcm_log_fd, "# ld_allocs       = %0d\n", dcm_ld_allocs);
+      $fwrite(dcm_log_fd, "# st_allocs       = %0d\n", dcm_st_allocs);
+      $fwrite(dcm_log_fd, "# fills_issued    = %0d\n", dcm_fills_issued);
+      $fwrite(dcm_log_fd, "# fills_done      = %0d\n", dcm_fills_done);
+      $fwrite(dcm_log_fd, "# wb_issued       = %0d\n", dcm_wb_issued);
+      $fwrite(dcm_log_fd, "# wb_done         = %0d\n", dcm_wb_done);
+      $fwrite(dcm_log_fd, "# max_active      = %0d / %0d\n", dcm_max_active, MSHR_DEPTH);
+      $fwrite(dcm_log_fd, "# cycles_multi    = %0d (>1 MSHR active)\n", dcm_cycles_multi);
+      $fwrite(dcm_log_fd, "# lowx_req_cycles = %0d\n", dcm_lowx_req_cycles);
+      $fwrite(dcm_log_fd, "# lowx_busy_cycles= %0d\n", dcm_lowx_busy_cycles);
+      $fclose(dcm_log_fd);
+    end
+    $display("[LOG_DC_MFILL] ld_alloc=%0d st_alloc=%0d fills=%0d/%0d wb=%0d/%0d max_active=%0d/%0d",
+             dcm_ld_allocs, dcm_st_allocs, dcm_fills_issued, dcm_fills_done,
+             dcm_wb_issued, dcm_wb_done, dcm_max_active, MSHR_DEPTH);
+  end
+  // synthesis translate_on
+`endif
+
 endmodule
