@@ -930,8 +930,13 @@ module dcache_nb
     (st_mshr_set_conflict || st_mshr_full || st_fw_preempted_q || dual_miss_same_set ||
      (st_mshr_any_match && st_miss && !st_req_q.uncached));
 
-  assign fw_ld_can_write = fw_ld_pending && !flush_active && !fi_active && ((ld_pipe_state == PIPE_IDLE && !ld_pipe_accept) || ld_pipe_retrying);
-  assign fw_st_can_write = fw_st_pending && !flush_active && !fi_active && ((st_pipe_state == PIPE_IDLE && !st_pipe_accept) || st_pipe_retrying);
+  // Fill writer gets unconditional priority when pipe is IDLE.
+  // Previous code used !*_pipe_accept here, but *_pipe_accept depends on
+  // !fw_*_writing creating a combinatorial loop (LUTLP-1 / Synth 8-295).
+  // Since *_pipe_accept already checks !fw_*_writing, the fill writer
+  // naturally blocks new pipe accepts when it writes — no need to check accept.
+  assign fw_ld_can_write = fw_ld_pending && !flush_active && !fi_active && ((ld_pipe_state == PIPE_IDLE) || ld_pipe_retrying);
+  assign fw_st_can_write = fw_st_pending && !flush_active && !fi_active && ((st_pipe_state == PIPE_IDLE) || st_pipe_retrying);
 
   // Compute merged fill data for the entry being written
   always_comb begin
