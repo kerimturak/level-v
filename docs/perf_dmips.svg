@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" role="img" aria-labelledby="title desc">
+  <title id="title">Level-V Dhrystone performance snapshot</title>
+  <desc id="desc">A normalized bar chart showing a 1.00 baseline and Level-V at 1.51 DMIPS per MHz, plus callouts for 37.63 DMIPS at 25 MHz and 66,112 Dhrystones per second.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#111520"/>
+      <stop offset="100%" stop-color="#2a2337"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#23192f"/>
+      <stop offset="100%" stop-color="#17111f"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="900" height="340" rx="28" fill="url(#bg)"/>
+  <rect x="26" y="24" width="848" height="292" rx="22" fill="none" stroke="#493d5d"/>
+
+  <text x="52" y="62" fill="#f9f5ef" font-size="30" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Performance snapshot: Dhrystone</text>
+  <text x="52" y="91" fill="#c9bbd7" font-size="15" font-family="Segoe UI, Arial, sans-serif">Verilator RTL sim, 200 iterations, normalized view for quick README scanning</text>
+
+  <line x1="220" y1="238" x2="560" y2="238" stroke="#6f5f85" stroke-width="3"/>
+  <line x1="220" y1="109" x2="220" y2="246" stroke="#3c324c" stroke-width="1"/>
+  <line x1="356" y1="109" x2="356" y2="246" stroke="#3c324c" stroke-width="1"/>
+  <line x1="492" y1="109" x2="492" y2="246" stroke="#3c324c" stroke-width="1"/>
+  <line x1="560" y1="109" x2="560" y2="246" stroke="#3c324c" stroke-width="1"/>
+
+  <text x="220" y="264" text-anchor="middle" fill="#c9bbd7" font-size="12" font-family="Segoe UI, Arial, sans-serif">0.0</text>
+  <text x="356" y="264" text-anchor="middle" fill="#c9bbd7" font-size="12" font-family="Segoe UI, Arial, sans-serif">1.0</text>
+  <text x="492" y="264" text-anchor="middle" fill="#c9bbd7" font-size="12" font-family="Segoe UI, Arial, sans-serif">2.0</text>
+  <text x="560" y="264" text-anchor="middle" fill="#c9bbd7" font-size="12" font-family="Segoe UI, Arial, sans-serif">2.5</text>
+
+  <text x="52" y="147" fill="#f1eaf9" font-size="18" font-weight="600" font-family="Segoe UI, Arial, sans-serif">1.00 baseline</text>
+  <rect x="220" y="130" width="136" height="22" rx="11" fill="#857695"/>
+  <text x="372" y="147" fill="#f1eaf9" font-size="15" font-family="Segoe UI, Arial, sans-serif">Reference scale</text>
+
+  <text x="52" y="199" fill="#ffffff" font-size="20" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Level-V</text>
+  <rect x="220" y="182" width="205" height="24" rx="12" fill="url(#bar)"/>
+  <text x="441" y="200" fill="#fff2e5" font-size="16" font-weight="700" font-family="Segoe UI, Arial, sans-serif">1.51 DMIPS/MHz</text>
+
+  <rect x="610" y="78" width="238" height="188" rx="20" fill="url(#panel)" stroke="#5a4b6e"/>
+  <text x="638" y="114" fill="#f8b76b" font-size="15" font-weight="700" font-family="Segoe UI, Arial, sans-serif">25 MHz equivalent</text>
+  <text x="638" y="156" fill="#ffffff" font-size="38" font-weight="700" font-family="Segoe UI, Arial, sans-serif">37.63</text>
+  <text x="638" y="181" fill="#dccfe7" font-size="16" font-family="Segoe UI, Arial, sans-serif">DMIPS total</text>
+  <text x="638" y="218" fill="#fff2e5" font-size="18" font-weight="600" font-family="Segoe UI, Arial, sans-serif">66,112 Dhrystones/s</text>
+  <text x="638" y="241" fill="#c9bbd7" font-size="14" font-family="Segoe UI, Arial, sans-serif">75,629 cycles over 200 iterations</text>
+
+  <text x="52" y="301" fill="#c9bbd7" font-size="13" font-family="Segoe UI, Arial, sans-serif">The detailed table later in the README keeps the exact toolchain flags, formulas, and workload notes for apples-to-apples reproduction.</text>
+</svg>

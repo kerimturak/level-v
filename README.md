@@ -2,6 +2,7 @@
   <img src="https://img.shields.io/badge/ISA-RV32IMC-283272?style=for-the-badge&logo=riscv&logoColor=white" alt="RISC-V">
   <img src="https://img.shields.io/badge/HDL-SystemVerilog-9333EA?style=for-the-badge" alt="SystemVerilog">
   <img src="https://img.shields.io/badge/Pipeline-5--stage-16A34A?style=for-the-badge" alt="Pipeline">
+  <img src="https://img.shields.io/badge/Status-Sim%20active%20%7C%20FPGA%20paused-0F766E?style=for-the-badge" alt="Project status">
   <img src="https://img.shields.io/badge/License-GPLv3-D92A2A?style=for-the-badge&logo=gnu&logoColor=white" alt="GPLv3">
   <br/><br/>
   <a href="https://kerimturak.github.io/level-v/"><img src="https://img.shields.io/badge/docs-mkdocs-00A67E?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation"></a>
@@ -11,25 +12,35 @@
 # Level RISC-V
 
 <p align="center">
-  <img src="docs/level-v-logo.png" alt="Level SoC block diagram" width="720"/>
+  <img src="docs/level-v-logo.png" alt="Level-V logo" width="720"/>
+</p>
+
+## Performance snapshot
+
+<p align="center">
+  <img src="docs/perf_coremark.svg" alt="Level-V CoreMark performance snapshot" width="720"/>
 </p>
 
 <p align="center">
-  <img src="docs/level-v.svg" alt="Level SoC block diagram" width="720"/>
+  <img src="docs/perf_dmips.svg" alt="Level-V Dhrystone performance snapshot" width="720"/>
 </p>
 
+Normalized bars use `1.00` as a fixed visual baseline for fast scanning. Detailed methodology, raw counters, and reproduction commands stay in [Benchmark scores](#benchmark-scores).
 
-A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / machine mode, caches, Wishbone, and a small SoC (UART, GPIO, SPI, I2C, timers, PLIC, and more). Built for learning, research, FPGA bring-up, and flow automation—not a minimal toy core.
+> Status: RTL simulation, verification, and benchmark automation are active. FPGA bring-up is paused until hardware and a stable implementation flow are back in hand.
+
+A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / machine mode, caches, Wishbone, and a small SoC (UART, GPIO, SPI, I2C, timers, PLIC, and more). Built for learning, research, FPGA bring-up, and flow automation - not a minimal toy core.
+
+## Why Level-V?
+
+- It is not a minimal core: the front-end includes RV32C handling, an align buffer, branch prediction, and cache-backed fetch.
+- It is built for verification work: Spike comparison, riscv-tests, riscv-arch-test, Imperas flows, and optional riscv-dv / formal hooks are already integrated.
+- It is parameterized for experiments: prefetch mode, cache hierarchy, multiplier/divider implementation, and simulation profiles are all configurable.
+- It is easy to inspect: commit traces, Konata exports, dashboards, and memory-size reports are first-class workflows.
 
 <p align="center">
-  <img src="docs/mcu_diagram.png" alt="Level SoC block diagram" width="720"/>
+  <img src="docs/why_level_v.svg" alt="Level-V architecture and workflow snapshot" width="720"/>
 </p>
-
----
-
-## Project status
-
-RTL simulation, verification, and benchmark harnesses remain usable, but **downstream work is on hold: there is no FPGA board in hand**, so bitstream bring-up, in-system measurement, and the **FPGA column in the score table** are not being filled yet. Resume when hardware and a stable Vivado (or other) flow are available.
 
 ---
 
@@ -44,6 +55,16 @@ RTL simulation, verification, and benchmark harnesses remain usable, but **downs
 | **Verify** | riscv-tests, riscv-arch-test, Imperas flows, Spike trace compare, optional formal / RISC-V DV |
 | **Observability** | Spike-style commit trace, Konata pipeline export, **HTML test dashboard** (`make dashboard`) |
 
+## Architecture at a glance
+
+<p align="center">
+  <img src="docs/level-v.svg" alt="Level-V core block diagram" width="720"/>
+</p>
+
+<p align="center">
+  <img src="docs/mcu_diagram.png" alt="Level-V SoC block diagram" width="720"/>
+</p>
+
 ### Memory hierarchy (detail)
 
 | Block | Role |
@@ -54,7 +75,13 @@ RTL simulation, verification, and benchmark harnesses remain usable, but **downs
 
 ### Test dashboard
 
-After runs under `results/logs/<sim>/`, **`make dashboard`** builds a browsable HTML report (pass/fail, diff stats, grouping by test family). Illustrative preview:
+After runs under `results/logs/<sim>/`, **`make dashboard`** builds a browsable HTML report for:
+
+- ISA, benchmark, and regression-family grouping
+- pass/fail summaries plus Spike diff drill-down
+- quick navigation from failing runs into logs and artifacts
+
+Illustrative preview:
 
 <p align="center">
   <img src="docs/dashboard_preview.png" alt="Level-V test dashboard preview1" width="640"/>
@@ -272,7 +299,7 @@ Sorted by name (one row per `.elf` under `build/tests/embench/elf/` after `make 
 | Tools | [docs/tools.md](docs/tools.md) |
 | Simulation overview | [docs/sim/overview.md](docs/sim/overview.md) |
 | CoreMark | [docs/COREMARK_QUICK_START.md](docs/COREMARK_QUICK_START.md) |
-| Performance tuning | [PERFORMANCE.md](PERFORMANCE.md) |
+| Performance logging | [docs/PERF_PIPELINE_LOG.md](docs/PERF_PIPELINE_LOG.md) |
 
 ---
 

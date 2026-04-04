@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
+  <title id="title">Why Level-V infographic</title>
+  <desc id="desc">An infographic summarizing Level-V as a five-stage RV32IMC core with realistic front-end and cache hierarchy, verification-oriented workflows, experimentation knobs, and strong observability.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f4f7f8"/>
+      <stop offset="100%" stop-color="#e8efee"/>
+    </linearGradient>
+    <linearGradient id="card1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dff6ef"/>
+      <stop offset="100%" stop-color="#cbede1"/>
+    </linearGradient>
+    <linearGradient id="card2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e6f0ff"/>
+      <stop offset="100%" stop-color="#d7e6ff"/>
+    </linearGradient>
+    <linearGradient id="card3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff2dd"/>
+      <stop offset="100%" stop-color="#fde7c2"/>
+    </linearGradient>
+    <linearGradient id="card4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f5e8ff"/>
+      <stop offset="100%" stop-color="#ead9fb"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="960" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="22" y="22" width="916" height="316" rx="24" fill="none" stroke="#d3dddd"/>
+
+  <text x="44" y="60" fill="#11212c" font-size="30" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Why Level-V?</text>
+  <text x="44" y="90" fill="#47606f" font-size="15" font-family="Segoe UI, Arial, sans-serif">A documented RV32IMC core built for experiments, verification workflows, and realistic cache-aware bring-up.</text>
+
+  <text x="616" y="58" fill="#385261" font-size="13" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Pipeline</text>
+  <rect x="612" y="70" width="54" height="34" rx="10" fill="#123142"/>
+  <rect x="672" y="70" width="54" height="34" rx="10" fill="#20526c"/>
+  <rect x="732" y="70" width="54" height="34" rx="10" fill="#00a67e"/>
+  <rect x="792" y="70" width="54" height="34" rx="10" fill="#f59e0b"/>
+  <rect x="852" y="70" width="54" height="34" rx="10" fill="#d92a2a"/>
+  <text x="639" y="92" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700" font-family="Segoe UI, Arial, sans-serif">IF</text>
+  <text x="699" y="92" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700" font-family="Segoe UI, Arial, sans-serif">ID</text>
+  <text x="759" y="92" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700" font-family="Segoe UI, Arial, sans-serif">EX</text>
+  <text x="819" y="92" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700" font-family="Segoe UI, Arial, sans-serif">MEM</text>
+  <text x="879" y="92" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700" font-family="Segoe UI, Arial, sans-serif">WB</text>
+
+  <rect x="40" y="132" width="208" height="176" rx="20" fill="url(#card1)" stroke="#b7dccd"/>
+  <rect x="268" y="132" width="208" height="176" rx="20" fill="url(#card2)" stroke="#c3d5f0"/>
+  <rect x="496" y="132" width="208" height="176" rx="20" fill="url(#card3)" stroke="#ebd3a3"/>
+  <rect x="724" y="132" width="196" height="176" rx="20" fill="url(#card4)" stroke="#d7c5ee"/>
+
+  <text x="60" y="166" fill="#0b5947" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Real front-end</text>
+  <text x="60" y="194" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">RV32C decode, align buffer,</text>
+  <text x="60" y="214" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">tournament predictor, BTB,</text>
+  <text x="60" y="234" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">RAS, and cache-backed fetch.</text>
+
+  <text x="288" y="166" fill="#1f4f8f" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Real memory system</text>
+  <text x="288" y="194" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">L1 I$/D$ by default, optional</text>
+  <text x="288" y="214" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">non-blocking multi-bank L2,</text>
+  <text x="288" y="234" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">plus next-line prefetch mode.</text>
+
+  <text x="516" y="166" fill="#9a5d00" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Verification first</text>
+  <text x="516" y="194" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">Spike diff, riscv-tests,</text>
+  <text x="516" y="214" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">riscv-arch-test, Imperas,</text>
+  <text x="516" y="234" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">optional riscv-dv and formal.</text>
+
+  <text x="744" y="166" fill="#6b33a3" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Observe everything</text>
+  <text x="744" y="194" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">Commit trace, Konata,</text>
+  <text x="744" y="214" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">HTML dashboards, memory</text>
+  <text x="744" y="234" fill="#23414d" font-size="14" font-family="Segoe UI, Arial, sans-serif">reports, and sim profiles.</text>
+
+  <text x="60" y="284" fill="#4f6772" font-size="13" font-family="Segoe UI, Arial, sans-serif">Not just a boot ROM demo core: the repo is set up for iteration, profiling, and regression work.</text>
+</svg>
