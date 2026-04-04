@@ -449,4 +449,52 @@ module align_buffer
 
   end
 
+  // ============================================================================
+  // Align Buffer Diagnostic Counters (enable: +define+LOG_PERF_STALL)
+  // ============================================================================
+`ifdef LOG_PERF_STALL
+  logic [63:0] abuff_lookups = '0;  // Total valid lookup requests
+  logic [63:0] abuff_hits = '0;  // Both banks hit (no icache needed)
+  logic [63:0] abuff_misses = '0;  // At least one bank miss (icache request)
+  logic [63:0] abuff_miss_cycles = '0;  // Total cycles spent waiting for response
+  logic [63:0] abuff_dbl_misses = '0;  // Double-miss events (unaligned boundary)
+  logic        abuff_in_miss = '0;  // Currently waiting for miss resolution
+
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && !flush_i) begin
+      if (buff_req_i.valid) begin
+        abuff_lookups <= abuff_lookups + 64'd1;
+        if (&hit_state) abuff_hits <= abuff_hits + 64'd1;
+        else if (|miss_state && !abuff_in_miss) begin
+          abuff_misses <= abuff_misses + 64'd1;
+          if (&miss_state && unalign) abuff_dbl_misses <= abuff_dbl_misses + 64'd1;
+        end
+      end
+
+      // Track miss-wait cycles
+      if (|miss_state && buff_req_i.valid && !buff_res_o.valid) begin
+        abuff_miss_cycles <= abuff_miss_cycles + 64'd1;
+        abuff_in_miss <= 1'b1;
+      end else begin
+        abuff_in_miss <= 1'b0;
+      end
+    end
+  end
+
+  final begin
+    $display("");
+    $display("================================================================================");
+    $display(" ALIGN_BUFFER — diagnostic counters");
+    $display("--------------------------------------------------------------------------------");
+    $display("  Config: CACHE_SIZE=%0d bits (%0d bytes, %0d KB), NUM_SET=%0d, BLK=%0d bits, WAY=%0d", CACHE_SIZE, CACHE_SIZE / 8, CACHE_SIZE / 8 / 1024, NUM_SET, BLK_SIZE, NUM_WAY);
+    $display("  Lookups:        %0d", abuff_lookups);
+    $display("  Hits:           %0d  (%0d%%)", abuff_hits, abuff_lookups > 0 ? abuff_hits * 64'd100 / abuff_lookups : 64'd0);
+    $display("  Misses:         %0d  (%0d%%)", abuff_misses, abuff_lookups > 0 ? abuff_misses * 64'd100 / abuff_lookups : 64'd0);
+    $display("  Double misses:  %0d", abuff_dbl_misses);
+    $display("  Miss wait cyc:  %0d  (avg %.1f cyc/miss)", abuff_miss_cycles, abuff_misses > 0 ? real'(abuff_miss_cycles) / real'(abuff_misses) : 0.0);
+    $display("================================================================================");
+    $display("");
+  end
+`endif
+
 endmodule

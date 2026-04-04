@@ -292,7 +292,7 @@ Results below are from Verilator RTL simulation at `CPU_CLK_HZ=25_000_000`. If y
 
 | Benchmark | Workload | Verilator / RTL sim | FPGA (target board) | Toolchain + optimization flags | Notes |
 | --------- | -------- | ------------------- | ------------------- | ------------------------------ | ----- |
-| CoreMark | 10 iterations | **2.43 CoreMark/MHz**<br>**60.65 CoreMarks @ 25 MHz**<br>4,121,913 ticks | — | `riscv32-unknown-elf-gcc`<br>`-O2 -g -march=rv32imc_zicsr -mabi=ilp32 -fno-builtin -fno-common -nostdlib -nostartfiles -DPERFORMANCE_RUN=1 -DITERATIONS=10 -lm -lgcc` | Quick comparison run. Runtime is under 10 s, so this is useful for relative comparison but not an official EEMBC-valid CoreMark publication score. |
+| CoreMark | 10 iterations | **2.62 CoreMark/MHz**<br>**65.38 CoreMarks @ 25 MHz**<br>3,824,420 ticks | — | `riscv32-unknown-elf-gcc`<br>`-O2 -g -march=rv32imc_zicsr -mabi=ilp32 -fno-builtin -fno-common -nostdlib -nostartfiles -DPERFORMANCE_RUN=1 -DITERATIONS=10 -lm -lgcc` | Quick comparison run. Runtime is under 10 s, so this is useful for relative comparison but not an official EEMBC-valid CoreMark publication score. |
 | Dhrystone 2.1 | 100 iterations | **~66,089 Dhrystones/s**<br>**1.50 DMIPS/MHz**<br>**~37.61 DMIPS @ 25 MHz**<br>37,828 total cycles | — | `riscv32-unknown-elf-gcc`<br>`-O3 -march=rv32imc_zicsr -mabi=ilp32 -fno-inline -funroll-loops -static -nostdlib -nostartfiles -DTIME -DDHRY_ITERS=100 -Wl,--gc-sections` | Verilator RTL sim at 25 MHz equivalent clock; ~378 cycles/iter; benchmark self-check completed. |
 | Embench-IoT | suite geomean | — | — | varies by benchmark | Use host-side geomean over per-benchmark metrics; keep linker/RAM settings fixed when comparing. |
 
@@ -305,7 +305,7 @@ Results below are from Verilator RTL simulation at `CPU_CLK_HZ=25_000_000`. If y
 | Run command | `make run_coremark COREMARK_ITERATIONS=10 SIM_UART_MONITOR=1 MAX_CYCLES=10000000` | `make dhrystone_run DHRY_ITERS=100 SIM_UART_MONITOR=1 MAX_CYCLES=5000000` |
 | ISA / ABI | `-march=rv32imc_zicsr -mabi=ilp32` | `-march=rv32imc_zicsr -mabi=ilp32` |
 | Clock define | `-DCPU_CLK_HZ=25000000UL` | `-DCPU_CLK_HZ=25000000UL` |
-| Raw counter | `total_ticks = 4,121,913` | `total_cycles = 37,828` |
+| Raw counter | `total_ticks = 3,824,420` | `total_cycles = 37,828` |
 | Score formula | `CoreMark/MHz = iterations * 1e6 / total_ticks` | `Dhrystones/s = iterations * Fclk / total_cycles`<br>`DMIPS/MHz = (Dhrystones/s / 1757) / Fclk_MHz` |
 
 ---
