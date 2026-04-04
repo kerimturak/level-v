@@ -288,16 +288,25 @@ OpenLane flow assets live under `asic/openlane/`. Example GDS snapshot:
 
 ## Benchmark scores
 
-Fill in after locked configuration (RTL profile, compiler flags, clock). For methodology and simulation-oriented tuning notes, see [PERFORMANCE.md](PERFORMANCE.md).
+Results below are from Verilator RTL simulation at `CPU_CLK_HZ=25_000_000`. If you want an apples-to-apples comparison against another core, keep the workload, ISA/ABI, clock, linker constraints, and compiler flags identical. Both runs use the repo's `riscv32-unknown-elf-gcc` toolchain; the CoreMark UART banner reported `GCC15.1.0`.
 
-| Benchmark | Metric | Verilator / RTL sim | FPGA (target board) | Notes |
-| --------- | -------------------------------------- | ------------------- | ------------------- | ---------------------------------------- |
-| CoreMark | CoreMark/MHz | | | e.g. iterations & linker match FPGA RAM |
-| CoreMark | Total CoreMarks @ Fclk | | | |
-| Dhrystone | Dhrystones/s | | ~60.8k | Dhrystone 2.1, 10⁵ runs, total cycles 41 100 036, **Fclk = 25 MHz** (`rtl/pkg/level_param.sv` `CPU_CLK`); Dhrystones/s ≈ iters·Fclk/total_cycles |
-| Dhrystone | DMIPS/MHz | | ~1.39 | DMIPS = (Dhrystones/s)/1757; **~35 DMIPS** @ 25 MHz; **~411 cycles/iter**; rescale if your PLL ≠ 25 MHz |
-| Embench | Normalized score (geomean) | | | Host-side geomean from per-bench metrics |
-| Embench | Per-bench `EMBENCH_MCYCLES` (optional) | | | UART / log aggregate |
+| Benchmark | Workload | Verilator / RTL sim | FPGA (target board) | Toolchain + optimization flags | Notes |
+| --------- | -------- | ------------------- | ------------------- | ------------------------------ | ----- |
+| CoreMark | 10 iterations | **2.43 CoreMark/MHz**<br>**60.65 CoreMarks @ 25 MHz**<br>4,121,913 ticks | — | `riscv32-unknown-elf-gcc`<br>`-O2 -g -march=rv32imc_zicsr -mabi=ilp32 -fno-builtin -fno-common -nostdlib -nostartfiles -DPERFORMANCE_RUN=1 -DITERATIONS=10 -lm -lgcc` | Quick comparison run. Runtime is under 10 s, so this is useful for relative comparison but not an official EEMBC-valid CoreMark publication score. |
+| Dhrystone 2.1 | 100 iterations | **~66,089 Dhrystones/s**<br>**1.50 DMIPS/MHz**<br>**~37.61 DMIPS @ 25 MHz**<br>37,828 total cycles | — | `riscv32-unknown-elf-gcc`<br>`-O3 -march=rv32imc_zicsr -mabi=ilp32 -fno-inline -funroll-loops -static -nostdlib -nostartfiles -DTIME -DDHRY_ITERS=100 -Wl,--gc-sections` | Verilator RTL sim at 25 MHz equivalent clock; ~378 cycles/iter; benchmark self-check completed. |
+| Embench-IoT | suite geomean | — | — | varies by benchmark | Use host-side geomean over per-benchmark metrics; keep linker/RAM settings fixed when comparing. |
+
+### Reproduction details
+
+| Item | CoreMark | Dhrystone |
+| ---- | -------- | --------- |
+| Source | `subrepo/coremark` | `env/dhrystone` |
+| Build command | `make coremark COREMARK_ITERATIONS=10` | `make dhrystone DHRY_ITERS=100` |
+| Run command | `make run_coremark COREMARK_ITERATIONS=10 SIM_UART_MONITOR=1 MAX_CYCLES=10000000` | `make dhrystone_run DHRY_ITERS=100 SIM_UART_MONITOR=1 MAX_CYCLES=5000000` |
+| ISA / ABI | `-march=rv32imc_zicsr -mabi=ilp32` | `-march=rv32imc_zicsr -mabi=ilp32` |
+| Clock define | `-DCPU_CLK_HZ=25000000UL` | `-DCPU_CLK_HZ=25000000UL` |
+| Raw counter | `total_ticks = 4,121,913` | `total_cycles = 37,828` |
+| Score formula | `CoreMark/MHz = iterations * 1e6 / total_ticks` | `Dhrystones/s = iterations * Fclk / total_cycles`<br>`DMIPS/MHz = (Dhrystones/s / 1757) / Fclk_MHz` |
 
 ---
 

@@ -82,6 +82,11 @@ module gshare_bp
   ras_t                              restore;
   ras_t                              popped;
 
+  // GHR folding: XOR-fold full GHR_SIZE bits into $clog2(PHT_SIZE) index bits
+  // so all history contributes to pattern correlation
+  logic [$clog2(PHT_SIZE)-1:0] ghr_spec_folded;
+  logic [$clog2(PHT_SIZE)-1:0] ghr_folded;
+
   // Index calculation
   logic [      $clog2(PHT_SIZE)-1:0] pht_rd_idx;
   logic [      $clog2(PHT_SIZE)-1:0] pht_wr_idx;
@@ -153,13 +158,47 @@ module gshare_bp
   end
 
   // ============================================================================
+  // GHR FOLDING
+  // ============================================================================
+  // XOR-fold full GHR (GHR_SIZE bits) into PHT index width ($clog2(PHT_SIZE) bits).
+  // Without folding, only the lower bits of GHR participate in indexing,
+  // wasting the longer-range history information.
+  //
+  // Approach: pad GHR to a multiple of IDX_W, then XOR-fold fixed-width slices.
+  localparam int IDX_W      = $clog2(PHT_SIZE);
+  localparam int NUM_CHUNKS = (GHR_SIZE + IDX_W - 1) / IDX_W;  // ceil division
+  localparam int PAD_W      = NUM_CHUNKS * IDX_W;
+
+  logic [PAD_W-1:0] ghr_spec_padded;
+  logic [PAD_W-1:0] ghr_padded;
+  logic [IDX_W-1:0] ghr_spec_fold_arr [NUM_CHUNKS];
+  logic [IDX_W-1:0] ghr_fold_arr      [NUM_CHUNKS];
+
+  always_comb begin
+    ghr_spec_padded = PAD_W'(ghr_spec);  // zero-extend
+    ghr_padded      = PAD_W'(ghr);
+
+    for (int c = 0; c < NUM_CHUNKS; c++) begin
+      ghr_spec_fold_arr[c] = ghr_spec_padded[c*IDX_W +: IDX_W];
+      ghr_fold_arr[c]      = ghr_padded[c*IDX_W +: IDX_W];
+    end
+
+    ghr_spec_folded = '0;
+    ghr_folded      = '0;
+    for (int c = 0; c < NUM_CHUNKS; c++) begin
+      ghr_spec_folded ^= ghr_spec_fold_arr[c];
+      ghr_folded      ^= ghr_fold_arr[c];
+    end
+  end
+
+  // ============================================================================
   // INDEX CALCULATION
   // ============================================================================
-  // GSHARE uses PC XOR GHR for better pattern correlation
+  // GSHARE uses PC XOR folded GHR for better pattern correlation
   // Bimodal uses PC only for simple local prediction
   always_comb begin
-    // GSHARE Read: PC XOR speculative GHR
-    pht_rd_idx     = pc_i[$clog2(PHT_SIZE):1] ^ ghr_spec[$clog2(PHT_SIZE)-1:0];
+    // GSHARE Read: PC XOR folded speculative GHR
+    pht_rd_idx     = pc_i[$clog2(PHT_SIZE):1] ^ ghr_spec_folded;
     btb_rd_idx     = pc_i[$clog2(BTB_SIZE):1];
     ibtc_rd_idx    = pc_i[$clog2(IBTC_SIZE):1];
     loop_idx       = pc_i[$clog2(LOOP_SIZE):1];
@@ -167,8 +206,8 @@ module gshare_bp
     // Bimodal uses PC only (no GHR correlation)
     bimodal_rd_idx = pc_i[$clog2(PHT_SIZE):1];
 
-    // Write indexes use committed GHR for accuracy
-    pht_wr_idx     = ex_info_i.pc[$clog2(PHT_SIZE):1] ^ ghr[$clog2(PHT_SIZE)-1:0];
+    // Write indexes use committed folded GHR for accuracy
+    pht_wr_idx     = ex_info_i.pc[$clog2(PHT_SIZE):1] ^ ghr_folded;
     bimodal_wr_idx = ex_info_i.pc[$clog2(PHT_SIZE):1];
     btb_wr_idx     = ex_info_i.pc[$clog2(BTB_SIZE):1];
     ibtc_wr_idx    = ex_info_i.pc[$clog2(IBTC_SIZE):1];
