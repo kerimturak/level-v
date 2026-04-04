@@ -84,8 +84,8 @@ module gshare_bp
 
   // GHR folding: XOR-fold full GHR_SIZE bits into $clog2(PHT_SIZE) index bits
   // so all history contributes to pattern correlation
-  logic [$clog2(PHT_SIZE)-1:0] ghr_spec_folded;
-  logic [$clog2(PHT_SIZE)-1:0] ghr_folded;
+  logic [      $clog2(PHT_SIZE)-1:0] ghr_spec_folded;
+  logic [      $clog2(PHT_SIZE)-1:0] ghr_folded;
 
   // Index calculation
   logic [      $clog2(PHT_SIZE)-1:0] pht_rd_idx;
@@ -165,29 +165,29 @@ module gshare_bp
   // wasting the longer-range history information.
   //
   // Approach: pad GHR to a multiple of IDX_W, then XOR-fold fixed-width slices.
-  localparam int IDX_W      = $clog2(PHT_SIZE);
+  localparam int IDX_W = $clog2(PHT_SIZE);
   localparam int NUM_CHUNKS = (GHR_SIZE + IDX_W - 1) / IDX_W;  // ceil division
-  localparam int PAD_W      = NUM_CHUNKS * IDX_W;
+  localparam int PAD_W = NUM_CHUNKS * IDX_W;
 
   logic [PAD_W-1:0] ghr_spec_padded;
   logic [PAD_W-1:0] ghr_padded;
-  logic [IDX_W-1:0] ghr_spec_fold_arr [NUM_CHUNKS];
-  logic [IDX_W-1:0] ghr_fold_arr      [NUM_CHUNKS];
+  logic [IDX_W-1:0] ghr_spec_fold_arr[NUM_CHUNKS];
+  logic [IDX_W-1:0] ghr_fold_arr     [NUM_CHUNKS];
 
   always_comb begin
     ghr_spec_padded = PAD_W'(ghr_spec);  // zero-extend
     ghr_padded      = PAD_W'(ghr);
 
     for (int c = 0; c < NUM_CHUNKS; c++) begin
-      ghr_spec_fold_arr[c] = ghr_spec_padded[c*IDX_W +: IDX_W];
-      ghr_fold_arr[c]      = ghr_padded[c*IDX_W +: IDX_W];
+      ghr_spec_fold_arr[c] = ghr_spec_padded[c*IDX_W+:IDX_W];
+      ghr_fold_arr[c]      = ghr_padded[c*IDX_W+:IDX_W];
     end
 
     ghr_spec_folded = '0;
     ghr_folded      = '0;
     for (int c = 0; c < NUM_CHUNKS; c++) begin
       ghr_spec_folded ^= ghr_spec_fold_arr[c];
-      ghr_folded      ^= ghr_fold_arr[c];
+      ghr_folded ^= ghr_fold_arr[c];
     end
   end
 
