@@ -4,6 +4,9 @@ SHELL := /bin/bash
 ROOT_DIR := $(shell cd ../../.. && pwd)
 RTL_DIR := $(ROOT_DIR)/rtl
 INC_DIR := $(RTL_DIR)/include
+GEN_DIR := $(ROOT_DIR)/build/gen
+GEN_PY := $(ROOT_DIR)/script/python/gen_level_param_profile.py
+PROFILE_SVH := $(GEN_DIR)/level_param_profile.svh
 TB_DIR := $(ROOT_DIR)/sim/tb/memory_arbiter
 BUILD_DIR := $(ROOT_DIR)/build/tb_memory_arbiter
 OBJ_DIR := $(BUILD_DIR)/obj_dir
@@ -24,6 +27,7 @@ VERILATOR_FLAGS := \
 	-j 4 \
 	--top-module tb_memory_arbiter \
 	-I$(INC_DIR) \
+	-I$(GEN_DIR) \
 	--timing \
 	--trace-fst \
 	--Mdir $(OBJ_DIR) \
@@ -37,9 +41,13 @@ BIN := $(OBJ_DIR)/Vtb_memory_arbiter
 all: run
 
 dirs:
-	@mkdir -p $(BUILD_DIR) $(OBJ_DIR) $(RESULTS_DIR)
+	@mkdir -p $(BUILD_DIR) $(OBJ_DIR) $(RESULTS_DIR) $(GEN_DIR)
 
-build: dirs
+$(PROFILE_SVH): $(GEN_PY) $(wildcard $(ROOT_DIR)/rtl/cfg/*.cfg)
+	@mkdir -p $(GEN_DIR)
+	@python3 $(GEN_PY) full_soc --out $(PROFILE_SVH)
+
+build: dirs $(PROFILE_SVH)
 	@echo "[BUILD] Building memory_arbiter self-check..."
 	@$(VERILATOR) $(VERILATOR_FLAGS) $(RTL_SOURCES) $(TB_SV) $(TB_CPP)
 	@echo "[BUILD] Done: $(BIN)"

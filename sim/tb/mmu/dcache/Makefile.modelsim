@@ -3,8 +3,9 @@
 RTL_DIR = ../../../../rtl
 PKG_DIR = $(RTL_DIR)/pkg
 INC_DIR = $(RTL_DIR)/include
+GEN_DIR = ../../../../build/gen
 
-VLOG_FLAGS = +incdir+$(INC_DIR) +incdir+$(PKG_DIR)
+VLOG_FLAGS = +incdir+$(INC_DIR) +incdir+$(PKG_DIR) +incdir+$(GEN_DIR)
 
 RTL_FILES = \
 	$(PKG_DIR)/level_param.sv \

@@ -7,6 +7,7 @@
 // Usage:
 //   make run LOG_COMMIT=1 KONATA_TRACER=1    # Enable trace logs
 //   make run SIM_FAST=1                       # Fast mode (logs off)
+//   make run_verilator RTL_PRINT_CFG=1         # Print rtl/cfg profile + key params at sim start (tb_wrapper)
 // ============================================================================
 
 // ============================================================================
@@ -20,6 +21,9 @@
 // LOG_BP        : Branch predictor statistics (gshare_bp.sv)
 // LOG_BP_VERBOSE: Detailed per-branch logging (gshare_bp.sv)
 // LOG_CACHE     : Cache request/response table logging (cache_logger.sv)
+// LOG_UC_STORE  : Uncached store transaction trace (memory.sv — cycle-level debug)
+// LOG_L2_MSHR   : L2 MSHR slot lifecycle + mem controller trace (nbmbmp_l2_cache.sv)
+// LOG_DC_MFILL  : dcache multi-fill mem controller trace (dcache_nb.sv)
 // LOG_PERF_STALL: stall_cause cycle counts + flush-event counts (BP miss, traps, FENCE.I, …); sim end
 
 // ============================================================================

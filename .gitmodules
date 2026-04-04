@@ -37,3 +37,6 @@
 [submodule "subrepo/beebs"]
 	path = subrepo/beebs
 	url = https://github.com/mageec/beebs.git
+[submodule "subrepo/asic-tools/librelane"]
+	path = subrepo/asic-tools/librelane
+	url = https://github.com/librelane/librelane.git

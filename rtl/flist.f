@@ -40,10 +40,12 @@ rtl/core/stage04_memory/store_buffer.sv
 rtl/core/stage05_writeback/writeback.sv
 rtl/core/mmu/cache.sv
 rtl/core/mmu/dcache.sv
+rtl/core/mmu/dcache_nb.sv
 rtl/core/mmu/dcache_fencei.sv
 rtl/core/mmu/icache.sv
 rtl/core/mmu/memory_arbiter.sv
 rtl/core/mmu/nbmbmp_l2_cache.sv
+# rtl/core/mmu/stride_prefetcher.sv  # disabled — replaced by inline next-line prefetcher in memory.sv
 rtl/util/fifo.sv
 rtl/periph/gpio/axi_gpio.sv
 rtl/periph/gpio/axi_gpio_bridge.sv

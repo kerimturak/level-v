@@ -64,6 +64,15 @@ module cpu
   pipe_info_t            de_info;
   exc_type_e             de_active_exc_type;
 
+  // Decode-stage early branch resolution
+  logic                  de_branch_taken;
+  logic       [XLEN-1:0] de_branch_target;
+  logic       [XLEN-1:0] de_redirect_target;
+  logic                  de_can_resolve;
+  logic                  de_early_spec_hit;
+  logic                  de_early_miss;
+  logic                  de_early_flush;
+
   // ============================================================================
   // execute logic:
   // ============================================================================
@@ -78,7 +87,8 @@ module cpu
   logic       [XLEN-1:0] ex_wdata;
   logic                  ex_pc_sel;
   logic                  ex_alu_stall;
-  logic                  ex_spec_hit;
+  logic                  ex_spec_hit;       // Effective: suppresses EX flush for DE-resolved branches
+  logic                  ex_actual_spec_hit; // Actual prediction accuracy (for GShare)
   exc_type_e             ex_exc_type;
   exc_type_e             ex_alu_exc_type;
   logic                  ex_rd_csr;
@@ -165,6 +175,9 @@ module cpu
       .lx_ires_i    (fe_lx_ires),
       .pc_target_i  (ex_pc_target_last),
       .spec_hit_i   (ex_spec_hit),
+      .actual_spec_hit_i(ex_actual_spec_hit),
+      .de_redirect_i(de_early_flush),
+      .de_redirect_target_i(de_redirect_target),
       .ex_mtvec_i   (ex_mtvec),
       .trap_active_i(fe_trap_active),
       .misa_c_i     (ex_misa_c),
@@ -201,7 +214,7 @@ module cpu
   //  - ILLEGAL_INSTRUCTION
   // ============================================================================
   always_ff @(posedge clk_i) begin
-    if (!rst_ni || de_flush_en || |priority_flush || fencei_flush) begin
+    if (!rst_ni || de_flush_en || de_early_flush || |priority_flush || fencei_flush) begin
       pipe1 <= '{exc_type: NO_EXCEPTION, instr_type: instr_invalid, default: '0};
     end else if (de_enable) begin
       pipe1 <= '{
@@ -259,6 +272,104 @@ module cpu
   );
 
   // ============================================================================
+  // DECODE-STAGE EARLY BRANCH RESOLUTION
+  // ----------------------------------------------------------------------------
+  // Resolves branches 1 cycle earlier than EX to reduce misprediction penalty
+  // from 2 cycles to 1 cycle.  When the branch has no data hazard with the
+  // instruction in EX (pipe2), we can compare the prediction against the actual
+  // outcome here in DE.  If a misprediction is detected, only the IF stage
+  // (pipe1) is flushed — saving 1 bubble cycle.
+  //
+  // Data forwarding for the comparator:
+  //   MEM→DE: from pipe3 (ex_mem_bypass_data)  — 1 stage ahead, result available
+  //   WB→DE:  already handled by decode module (de_r1_data / de_r2_data)
+  //   EX→DE:  NOT possible (ALU result not computed yet) — skip DE resolution
+  // ============================================================================
+
+  // --- MEM→DE forwarding for branch operands ---
+  logic [XLEN-1:0] de_cmp_a, de_cmp_b;
+
+  always_comb begin
+    // MEM→DE forwarding takes priority over WB→DE (more recent)
+    if (pipe3.rf_rw_en && pipe1.inst.r1_addr == pipe3.rd_addr && pipe1.inst.r1_addr != 0)
+      de_cmp_a = ex_mem_bypass_data;
+    else
+      de_cmp_a = de_r1_data;  // includes WB→DE forwarding from decode module
+
+    if (pipe3.rf_rw_en && pipe1.inst.r2_addr == pipe3.rd_addr && pipe1.inst.r2_addr != 0)
+      de_cmp_b = ex_mem_bypass_data;
+    else
+      de_cmp_b = de_r2_data;
+  end
+
+  // --- EX→DE hazard detection (can't forward, skip DE resolution) ---
+  wire de_is_cond_branch = de_ctrl.pc_sel inside {BEQ, BNE, BLT, BGE, BLTU, BGEU};
+  wire de_is_jalr        = (de_ctrl.pc_sel == JALR);
+  wire de_is_jal         = (de_ctrl.pc_sel == JAL);
+  wire de_is_any_branch  = (de_ctrl.pc_sel != NO_BJ);
+
+  // rs1 needed for: conditional branches and JALR (not JAL)
+  wire de_needs_rs1 = de_is_any_branch && !de_is_jal;
+  // rs2 needed for: conditional branches only
+  wire de_needs_rs2 = de_is_cond_branch;
+
+  wire de_rs1_ex_haz = de_needs_rs1 && pipe2.rf_rw_en &&
+                       (pipe1.inst.r1_addr == pipe2.rd_addr) && (pipe1.inst.r1_addr != 0);
+  wire de_rs2_ex_haz = de_needs_rs2 && pipe2.rf_rw_en &&
+                       (pipe1.inst.r2_addr == pipe2.rd_addr) && (pipe1.inst.r2_addr != 0);
+  wire de_branch_hazard = de_rs1_ex_haz || de_rs2_ex_haz;
+
+  // --- Branch comparator ---
+  always_comb begin
+    de_branch_taken  = 1'b0;
+    de_branch_target = pipe1.pc + de_imm;  // default: PC-relative (B-type, JAL)
+
+    case (de_ctrl.pc_sel)
+      BEQ:  de_branch_taken = (de_cmp_a == de_cmp_b);
+      BNE:  de_branch_taken = (de_cmp_a != de_cmp_b);
+      BLT:  de_branch_taken = ($signed(de_cmp_a) < $signed(de_cmp_b));
+      BGE:  de_branch_taken = ($signed(de_cmp_a) >= $signed(de_cmp_b));
+      BLTU: de_branch_taken = (de_cmp_a < de_cmp_b);
+      BGEU: de_branch_taken = (de_cmp_a >= de_cmp_b);
+      JAL:  de_branch_taken = 1'b1;
+      JALR: begin
+        de_branch_taken  = 1'b1;
+        de_branch_target = (de_cmp_a + de_imm) & ~32'h1;
+      end
+      default: de_branch_taken = 1'b0;
+    endcase
+  end
+
+  // --- Resolution gate: only resolve when no hazard and instruction is valid ---
+  assign de_can_resolve = de_is_any_branch && !de_branch_hazard &&
+                          (pipe1.instr_type != mret) &&
+                          (pipe1.instr_type != instr_invalid) &&
+                          (pipe1.exc_type == NO_EXCEPTION) &&
+                          (de_exc_type == NO_EXCEPTION);
+
+  // --- Compare with prediction ---
+  always_comb begin
+    if (de_branch_taken)
+      de_early_spec_hit = pipe1.spec.taken && (de_branch_target == pipe1.spec.pc);
+    else
+      de_early_spec_hit = !pipe1.spec.taken;
+  end
+
+  // DE redirect target
+  always_comb begin
+    if (de_branch_taken)
+      de_redirect_target = de_branch_target;
+    else
+      de_redirect_target = pipe1.pc_incr;
+  end
+
+  // Fire early miss only when: resolved, mispredicted, no stall, no higher-priority flush
+  assign de_early_miss = de_can_resolve && !de_early_spec_hit && ex_spec_hit &&
+                         !(|priority_flush) && !fencei_flush;
+  assign de_early_flush = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL})
+                          ? 1'b0 : de_early_miss;
+
+  // ============================================================================
   // EXECUTE
   // ============================================================================
 
@@ -302,6 +413,7 @@ module cpu
           csr_idx      : de_ctrl.csr_idx,
           csr_or_data  : de_ctrl.csr_or_data,
           dcache_valid : de_ctrl.dcache_valid,
+          de_resolved  : de_can_resolve,
           r1_data      : de_r1_data,
           r2_data      : de_r2_data,
           r1_addr      : pipe1.inst.r1_addr,
@@ -416,8 +528,12 @@ module cpu
   // ============================================================================
 
   always_comb begin
-    if (ex_pc_sel) ex_spec_hit = pipe2.spec.taken && (ex_pc_target == pipe2.spec.pc);
-    else ex_spec_hit = !pipe2.spec.taken;
+    // Actual prediction accuracy (always computed, used for GShare update)
+    if (ex_pc_sel) ex_actual_spec_hit = pipe2.spec.taken && (ex_pc_target == pipe2.spec.pc);
+    else ex_actual_spec_hit = !pipe2.spec.taken;
+
+    // Effective spec_hit: suppress EX flush when DE already resolved this branch
+    ex_spec_hit = pipe2.de_resolved || ex_actual_spec_hit;
 
     if (!ex_spec_hit) begin
       if (ex_pc_sel) ex_pc_target_last = ex_pc_target;
@@ -566,10 +682,10 @@ module cpu
           instr_type  : pipe3.instr_type,
           csr_wr_data : pipe3.csr_wr_data,
           csr_write_valid : pipe3.csr_write_valid,
-          dcache_valid : pipe3.dcache_valid,
           pc          : pipe3.pc,
           flushed     : pipe3.flushed,
         `endif
+          dcache_valid : pipe3.dcache_valid,
           pc_incr     : pipe3.pc_incr,
           rf_rw_en    : pipe3.rf_rw_en,
           result_src  : pipe3.result_src,
@@ -767,14 +883,20 @@ module cpu
   // Enable with: +define+LOG_PERF_STALL or make verilate/run LOG_PERF_STALL=1
 `ifdef LOG_PERF_STALL
   perf_stall_counters i_perf_stall_counters (
-      .clk_i            (clk_i),
-      .rst_ni           (rst_ni),
-      .stall_cause      (stall_cause),
-      .fencei_flush_i   (fencei_flush),
-      .priority_flush_i (priority_flush),
-      .de_flush_en_i    (de_flush_en),
-      .ex_flush_en_i    (ex_flush_en),
-      .l2_miss_busy_i   (l2_miss_busy)
+      .clk_i              (clk_i),
+      .rst_ni             (rst_ni),
+      .stall_cause        (stall_cause),
+      .fencei_flush_i     (fencei_flush),
+      .priority_flush_i   (priority_flush),
+      .de_flush_en_i      (de_flush_en),
+      .ex_flush_en_i      (ex_flush_en),
+      .l2_miss_busy_i     (l2_miss_busy),
+      .raw_fencei_i       (me_fencei_stall),
+      .raw_imiss_i        (fe_imiss_stall),
+      .raw_dmiss_i        (me_dmiss_stall),
+      .raw_load_hazard_i  (fe_stall || de_stall),
+      .raw_alu_i          (ex_alu_stall)
   );
 `endif
+
 endmodule

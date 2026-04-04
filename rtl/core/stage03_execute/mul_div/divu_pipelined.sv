@@ -38,20 +38,20 @@ module divu_pipelined #(
   localparam int ITERATIONS = WIDTH / BITS_PER_CYCLE;  // 32/2 = 16 iterations
 
   // Internal registers
-  logic [          WIDTH-1:0] divisor_q;
-  logic [          WIDTH-1:0] quotient_q;
-  logic [            WIDTH:0] remainder_q;  // 1 bit wider
+  logic [               WIDTH-1:0] divisor_q;
+  logic [               WIDTH-1:0] quotient_q;
+  logic [                 WIDTH:0] remainder_q;  // 1 bit wider
   logic [$clog2(ITERATIONS+1)-1:0] count_q;
 
   // Intermediate computation signals - broken into stages for better timing
   // Stage 1: First bit shift and compare
-  logic [WIDTH:0] rem_stage1;
-  logic [WIDTH-1:0] quo_stage1;
-  logic sub1_valid;
+  logic [                 WIDTH:0] rem_stage1;
+  logic [               WIDTH-1:0] quo_stage1;
+  logic                            sub1_valid;
 
   // Stage 2: Second bit shift and compare
-  logic [WIDTH:0] rem_stage2;
-  logic [WIDTH-1:0] quo_stage2;
+  logic [                 WIDTH:0] rem_stage2;
+  logic [               WIDTH-1:0] quo_stage2;
 
   // ------------------------------------------------------------
   // Division step - Process 2 bits per cycle
@@ -90,17 +90,12 @@ module divu_pipelined #(
   // ------------------------------------------------------------
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      busy_o      <= 1'b0;
-      done_o      <= 1'b0;
-      valid_o     <= 1'b0;
-      dbz_o       <= 1'b0;
-      quotient_o  <= '0;
-      reminder_o  <= '0;
-
-      divisor_q   <= '0;
-      quotient_q  <= '0;
-      remainder_q <= '0;
-      count_q     <= '0;
+      busy_o  <= 1'b0;
+      done_o  <= 1'b0;
+      valid_o <= 1'b0;
+      dbz_o   <= 1'b0;
+      // quotient_o/reminder_o/divisor_q/quotient_q/remainder_q: no reset — guarded by valid_o/busy_o
+      count_q <= '0;
     end else begin
       // Defaults
       done_o <= 1'b0;

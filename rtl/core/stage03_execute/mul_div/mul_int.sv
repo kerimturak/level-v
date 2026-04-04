@@ -45,12 +45,11 @@ module mul_int #(
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      mult    <= '0;
-      product_o    <= '0;
+      // mult/product_o: no reset — guarded by busy_o/valid_o
       counter <= '0;
-      done_o    <= 1'b0;
-      busy_o    <= 1'b0;
-      valid_o   <= 1'b0;
+      done_o  <= 1'b0;
+      busy_o  <= 1'b0;
+      valid_o <= 1'b0;
     end else begin
       if (start_i) begin
         mult    <= multiplier_i;

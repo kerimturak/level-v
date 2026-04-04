@@ -342,6 +342,11 @@ def build_run_command(config: SimRunConfig) -> List[str]:
     # Seed
     if config.seed is not None:
         cmd.append(f"+seed={config.seed}")
+
+    # Sim prints compiled rtl/cfg + define summary (see sim/tb/tb_wrapper.sv)
+    _rtl_cfg_env = os.environ.get("RTL_PRINT_CFG", "").strip().lower()
+    if _rtl_cfg_env in ("1", "true", "yes", "on"):
+        cmd.append("+print_rtl_cfg")
     
     return cmd
 

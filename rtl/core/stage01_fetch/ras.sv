@@ -58,7 +58,10 @@ module ras
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      ras <= '{default: 0};
+      // Only reset valid bits — data is don't-care when valid=0
+      for (int i = 0; i < RAS_SIZE; i++) begin
+        ras[i].valid <= 1'b0;
+      end
     end else begin
       if (restore_i.valid) begin
         for (int i = RAS_SIZE - 1; i > 0; i--) begin

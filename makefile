@@ -103,7 +103,7 @@ LINT_DIR      := $(RESULTS_DIR)/lint
 # -----------------------------------------
 # RTL Paths
 # -----------------------------------------
-INC_DIRS      := $(RTL_DIR)/include
+INC_DIRS      := $(RTL_DIR)/include $(BUILD_DIR)/gen
 
 # -----------------------------------------
 # Testbench Paths
@@ -641,7 +641,7 @@ endif
 # Compilation Options
 # -----------------------------------------
 VLOG_BASE_OPTS := $(MODELSIM_SV_MODE) $(MODELSIM_MFCU) \
-                  +acc=$(MODELSIM_ACC) +incdir+$(INC_DIRS) \
+                  +acc=$(MODELSIM_ACC) $(foreach d,$(INC_DIRS),+incdir+$(d)) \
                   -work $(WORK_DIR) -svinputport=$(MODELSIM_SVINPUTPORT) \
                   $(MODELSIM_SUPPRESS) $(MODELSIM_NOWARN) \
                   $(MODELSIM_DEFINES)
@@ -964,6 +964,21 @@ ifeq ($(LOG_BP_VERBOSE),1)
   SV_DEFINES += +define+LOG_BP +define+LOG_BP_VERBOSE
 endif
 
+# Uncached store transaction trace (memory.sv) - LOG_UC_STORE=1
+ifeq ($(LOG_UC_STORE),1)
+  SV_DEFINES += +define+LOG_UC_STORE
+endif
+
+# L2 MSHR slot lifecycle trace (nbmbmp_l2_cache.sv) - LOG_L2_MSHR=1
+ifeq ($(LOG_L2_MSHR),1)
+  SV_DEFINES += +define+LOG_L2_MSHR
+endif
+
+# dcache multi-fill mem controller trace (dcache_nb.sv) - LOG_DC_MFILL=1
+ifeq ($(LOG_DC_MFILL),1)
+  SV_DEFINES += +define+LOG_DC_MFILL
+endif
+
 # ===========================================
 # TRACE CONTROLS
 # ===========================================
@@ -1071,6 +1086,37 @@ else
 endif
 
 VERILATOR_DEFINE = $(TRACE_DEFINE) $(SV_DEFINES)
+
+# -------------------------------------------------------------------------
+# RTL pack: rtl/cfg/<profile>.cfg → build/gen/level_param_profile.svh
+# Override profile: RTL_CFG_PROFILE=full_soc | minimal_soc | openlane
+# Default: +define+LEVEL_OPENLANE in SV_DEFINES → openlane;
+#          elif MINIMAL_SOC=1 → minimal_soc; else full_soc
+# -------------------------------------------------------------------------
+RTL_GEN_DIR              := $(BUILD_DIR)/gen
+LEVEL_PARAM_PROFILE_SVH  := $(RTL_GEN_DIR)/level_param_profile.svh
+GEN_LEVEL_PARAM_PY       := $(SCRIPT_DIR)/python/gen_level_param_profile.py
+
+ifneq ($(RTL_CFG_PROFILE),)
+  RESOLVED_RTL_PROFILE := $(RTL_CFG_PROFILE)
+else ifneq ($(findstring +define+LEVEL_OPENLANE,$(SV_DEFINES)),)
+  RESOLVED_RTL_PROFILE := openlane
+else ifeq ($(MINIMAL_SOC),1)
+  RESOLVED_RTL_PROFILE := minimal_soc
+else
+  RESOLVED_RTL_PROFILE := full_soc
+endif
+
+$(LEVEL_PARAM_PROFILE_SVH): $(GEN_LEVEL_PARAM_PY) $(wildcard $(RTL_DIR)/cfg/*.cfg) | $(RTL_GEN_DIR)
+	@printf "$(CYAN)[RTL_CFG]$(RESET) profile=$(RESOLVED_RTL_PROFILE) -> $(LEVEL_PARAM_PROFILE_SVH)\n"
+	@$(PYTHON) $(GEN_LEVEL_PARAM_PY) $(RESOLVED_RTL_PROFILE) --out $(LEVEL_PARAM_PROFILE_SVH)
+
+$(RTL_GEN_DIR):
+	@$(MKDIR) "$(RTL_GEN_DIR)"
+
+.PHONY: gen-rtl-cfg
+gen-rtl-cfg: $(LEVEL_PARAM_PROFILE_SVH)
+	@true
 
 # Verilator: üst modül (level_wrapper) parametre geçersiz kılma — örnek:
 #   make verilate VERILATOR_GFLAGS="-GVGA_EN=1 -GGPIO_EN=1 -GPLIC_EN=1"
@@ -1217,7 +1263,7 @@ NO_WARNING_LINT = \
 # Build Flags
 # -----------------------------------------
 # Lint flags: -Wall enables all warnings, no suppressions for real issues
-LINT_FLAGS  = --lint-only -Wall -I$(INC_DIRS) --top-module $(RTL_LEVEL) $(VERILATOR_GFLAGS)
+LINT_FLAGS  = --lint-only -Wall --top-module $(RTL_LEVEL) $(VERILATOR_GFLAGS)
 RUN_BIN     := $(OBJ_DIR)/V$(RTL_LEVEL)
 
 # Common verilator flags
@@ -1262,7 +1308,7 @@ VERILATOR_BUILD_FLAGS = \
 .PHONY: dirs lint verilate verilate-fast run_verilator wave clean_verilator verilator_help stats
 
 dirs:
-	@$(MKDIR) "$(BUILD_DIR)" "$(OBJ_DIR)" "$(LOG_DIR)"
+	@$(MKDIR) "$(BUILD_DIR)" "$(BUILD_DIR)/gen" "$(OBJ_DIR)" "$(LOG_DIR)"
 
 # ============================================================
 # Lint — Verilator --lint-only -Wall (single pass; all warning classes)
@@ -1272,7 +1318,7 @@ dirs:
 # ============================================================
 VERILATOR_LINT_DIR := $(LINT_DIR)/verilator
 
-lint: dirs
+lint: dirs $(LEVEL_PARAM_PROFILE_SVH)
 	@printf "$(GREEN)[VERILATOR LINT]$(RESET)\n"
 	@mkdir -p "$(VERILATOR_LINT_DIR)"
 	@printf "$(CYAN)[INFO]$(RESET) Output: $(VERILATOR_LINT_DIR)/\n"
@@ -1318,7 +1364,7 @@ lint: dirs
 # as a dependency — make leaves a stale object and the link step fails with
 # undefined reference to VerilatedFst::*.  Drop tb_wrapper.o before each verilate.
 # ============================================================
-verilate: dirs
+verilate: dirs $(LEVEL_PARAM_PROFILE_SVH)
 ifeq ($(VERILATE_FAST),1)
 	@if [ -x "$(RUN_BIN)" ] && [ "$(RUN_BIN)" -nt "$(word 1,$(SV_SOURCES))" ]; then \
 		printf "$(YELLOW)[SKIP]$(RESET) Binary up-to-date vs first flist source: $(RUN_BIN)\n"; \
@@ -1350,7 +1396,7 @@ verilate-fast:
 	@$(MAKE) --no-print-directory verilate VERILATE_FAST=1
 
 # Rebuild only C++ without re-verilating (for testbench changes)
-rebuild-cpp: dirs
+rebuild-cpp: dirs $(LEVEL_PARAM_PROFILE_SVH)
 	@printf "$(GREEN)[REBUILDING C++ ONLY]$(RESET)\n"
 	$(VERILATOR) \
 		$(SV_SOURCES) \
@@ -1369,6 +1415,10 @@ COVERAGE_DATA_DIR := $(LOG_DIR)/verilator/coverage_data
 
 # Python runner
 VERILATOR_RUNNER := $(ROOT_DIR)/script/python/makefile/verilator_runner.py
+
+# Sim: print rtl/cfg profile + key params at t=0 (tb_wrapper +print_rtl_cfg)
+RTL_PRINT_CFG ?= 0
+export RTL_PRINT_CFG
 
 # Memory search directories
 VERILATOR_MEM_DIRS := $(BUILD_DIR)/tests/riscv-tests/mem \
@@ -2212,7 +2262,9 @@ run_flist:
 	@echo -n "" > $(FAIL_LIST_FILE)
 	@echo -e "$(GREEN)Running tests from list file:$(RESET) $(FLIST)"
 	@echo -e "$(CYAN)Output directory:$(RESET) $(RESULTS_DIR)/logs/$(SIM)/"
-	@PASS=0; FAIL=0; TOTAL=0; \
+	@PASS=0; FAIL=0; TOTAL=0; WARN_COMPARE=0; \
+	WARN_LIST="$(RESULTS_DIR)/logs/compare_tail_warn_tests.list"; \
+	: > "$$WARN_LIST"; \
 	while IFS= read -r test || [ -n "$${test}" ]; do \
 		test="$${test%% }"; test="$${test## }"; \
 		if echo "$${test}" | grep -E '^\s*#' >/dev/null || [ -z "$${test}" ]; then continue; fi; \
@@ -2247,7 +2299,10 @@ run_flist:
 				RTL_EXTRA=$$(grep "RTL Extra Entries" "$${TEST_LOG_DIR}/diff.log" | awk '{print $$NF}'); \
 				SPIKE_EXTRA=$$(grep "Spike Extra Entries" "$${TEST_LOG_DIR}/diff.log" | awk '{print $$NF}'); \
 				if [ "$${RTL_EXTRA:-0}" != "0" ] || [ "$${SPIKE_EXTRA:-0}" != "0" ]; then \
+					echo "$${test}" >> "$$WARN_LIST"; \
+					WARN_COMPARE=$$((WARN_COMPARE + 1)); \
 					echo -e "$(YELLOW)⚠ $${test} PASSED (RTL: $$RTL_EXTRA extra, Spike: $$SPIKE_EXTRA extra)$(RESET)"; \
+					echo -e "$(YELLOW)    ↳ Often: RTL trace shorter than Spike (deadlock before PASS, MAX_CYCLES, or trace gating)$(RESET)"; \
 				else \
 					echo -e "$(GREEN)$(SUCCESS) $${test} PASSED$(RESET)"; \
 				fi; \
@@ -2275,6 +2330,12 @@ run_flist:
 	echo -e "$(GREEN)✅ Passed: $${PASS}$(RESET)"; \
 	echo -e "$(RED)$(ERROR) Failed: $${FAIL}$(RESET)"; \
 	echo -e "$(CYAN)📊 Total:  $${TOTAL}$(RESET)"; \
+	if [ "$${WARN_COMPARE:-0}" -gt 0 ]; then \
+		echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
+		echo -e "$(YELLOW)⚠ Trace/compare: $${WARN_COMPARE} passed test(s) have RTL vs Spike log length mismatch$(RESET)"; \
+		echo -e "$(YELLOW)  (not a PC mismatch on the shared prefix — usually RTL sim stopped early: deadlock, MAX_CYCLES, or commit log skipped)$(RESET)"; \
+		echo -e "$(YELLOW)  List: $$WARN_LIST$(RESET)"; \
+	fi; \
 	echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
 	echo -e "$(GREEN)Passed tests:$(RESET) $(PASS_LIST_FILE)"; \
 	echo -e "$(RED)Failed tests:$(RESET) $(FAIL_LIST_FILE)"; \
@@ -2282,7 +2343,11 @@ run_flist:
 		echo -e "$(RED)$(WARN)  $${FAIL} test(s) failed$(RESET)"; \
 		exit 1; \
 	else \
-		echo -e "$(GREEN)🎉 All tests passed!$(RESET)"; \
+		if [ "$${WARN_COMPARE:-0}" -gt 0 ]; then \
+			echo -e "$(YELLOW)🎉 All tests passed — with trace/compare warnings above (review before trusting).$(RESET)"; \
+		else \
+			echo -e "$(GREEN)🎉 All tests passed!$(RESET)"; \
+		fi; \
 	fi
 
 
@@ -3078,7 +3143,8 @@ imperas_help:
 # ============================================================
 
 # Default iteration count (adjust for ~10 second runtime)
-COREMARK_ITERATIONS ?= 1
+# At 25 MHz, ~418 K cycles/iteration → need ≥600 for 10 s
+COREMARK_ITERATIONS ?= 800
 
 # Paths
 COREMARK_SRC_DIR     := $(SUBREPO_DIR)/coremark
@@ -3329,7 +3395,9 @@ coremark_help:
 	@echo -e "  perf log: results/logs/verilator/coremark/perf_pipeline.log (and verilator_run.log tail)"
 	@echo -e "  MAX_CYCLES=N               - Max simulation cycles (default: 5000000)"
 	@echo -e "  $(CYAN)SIM_FAST=1$(RESET)               - $(CYAN)Disable trace and loggers$(RESET)"
-	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP; L2 on by default$(RESET)"
+	@echo -e "  $(CYAN)MINIMAL_SOC=1$(RESET)            - $(CYAN)Small cache/BP; L2 on by default (rtl/cfg/minimal_soc.cfg)$(RESET)"
+	@echo -e "  $(CYAN)RTL_CFG_PROFILE=name$(RESET)      - $(CYAN)Override numeric RTL pack: full_soc | minimal_soc | openlane (rtl/cfg/*.cfg)$(RESET)"
+	@echo -e "  $(CYAN)RTL_PRINT_CFG=1$(RESET)          - $(CYAN)Log compiled RTL profile + cache/BP/UART summary at sim start$(RESET)"
 	@echo -e "  $(CYAN)MINIMAL_NO_L2=1$(RESET)         - $(CYAN)With MINIMAL_SOC: direct mem arbiter (faster sim, no L2)$(RESET)"
 	@echo -e "  $(CYAN)NO_L2_CACHE=1$(RESET)          - $(CYAN)Force memory arbiter instead of L2$(RESET)"
 	@echo -e "  $(CYAN)+uart_finish_pattern=STR$(RESET) - $(CYAN)Verilator plusarg: stop sim after TX sends this substring (default: CoreMark Complete!)$(RESET)"
@@ -3406,9 +3474,12 @@ FLIST_BRANCH    := $(TEST_LIST_DIR)/branch_test.flist
 # Batch suites → run_flist (single template)
 # $(1)=target $(2)=banner $(3)=FLIST variable name $(4)=TEST_TYPE $(5)=MAX_* variable name $(6)=extra make arguments)
 # -----------------------------------------
-ISA_MAX_CYCLES ?= 10000
-CSR_MAX_CYCLES ?= 10000
-EXC_MAX_CYCLES ?= 10000
+# Default batch limits for ISA/CSR/exception suites. 10k cycles is too low for
+# I$/D$ miss-heavy riscv-tests (e.g. rv32ui-p-ld_st): RTL hits the cap before
+# <pass>, leaving a short commit_trace vs Spike → bogus “PASSED” + huge Spike extra.
+ISA_MAX_CYCLES ?= 100000
+CSR_MAX_CYCLES ?= 100000
+EXC_MAX_CYCLES ?= 100000
 BRANCH_MAX_CYCLES ?= 100000
 
 define SUITE_RUN_FLIST
@@ -6001,6 +6072,7 @@ yosys_help:
 # Paths & Defaults
 # -----------------------------------------
 OPENLANE_SH       := $(SCRIPT_DIR)/shell/openlane_flow.sh
+LIBRELANE_SH      := $(SCRIPT_DIR)/shell/librelane_flow.sh
 SRAM_GEN_SH       := $(SCRIPT_DIR)/shell/fetch_sky130_sram_macros_for_openlane.sh
 ASIC_SUBREPO_SH   := $(SCRIPT_DIR)/shell/setup_asic_subrepos.sh
 
@@ -6012,6 +6084,8 @@ SRAM_MACRO_DIR    := $(ASIC_DESIGN_DIR)/macros/sky130_sram_1kbyte_1rw1r_32x256_8
 
 # OpenLane / Docker settings (override via env or command line)
 OPENLANE_IMAGE    ?= efabless/openlane:2023.09.07
+LIBRELANE_MODE    ?= docker
+LIBRELANE_CMD     ?= librelane
 PDK_ROOT          ?= $(HOME)/.volare
 PDK               ?= sky130A
 ASIC_TAG          ?= run_$(shell date +%Y%m%d_%H%M%S)
@@ -6158,6 +6232,60 @@ asic_run_clean: asic_clean asic_run
 
 ## Shortcut: make asic → make asic_run
 asic: asic_run
+
+# ==============================================================
+# LibreLane Flow (OpenLane Successor)
+# ==============================================================
+
+.PHONY: librelane_setup librelane_check librelane_prep librelane_run librelane_report librelane_clean
+
+## Check LibreLane prerequisites and run smoke test
+librelane_setup: asic_sram
+	@echo -e "$(CYAN)[LIBRELANE SETUP]$(RESET)"
+	@LIBRELANE_MODE="$(LIBRELANE_MODE)" LIBRELANE_CMD="$(LIBRELANE_CMD)" \
+		PDK_ROOT="$(PDK_ROOT)" PDK="$(PDK)" \
+		bash $(LIBRELANE_SH) setup
+	@echo -e "$(GREEN)$(SUCCESS) LibreLane setup complete$(RESET)"
+
+## Show LibreLane dependency status
+librelane_check:
+	@echo -e "$(CYAN)[LIBRELANE CHECK]$(RESET)"
+	@LIBRELANE_MODE="$(LIBRELANE_MODE)" LIBRELANE_CMD="$(LIBRELANE_CMD)" \
+		PDK_ROOT="$(PDK_ROOT)" PDK="$(PDK)" \
+		bash $(LIBRELANE_SH) check
+
+## Prepare sources for LibreLane (same source prep as OpenLane)
+librelane_prep:
+	@echo -e "$(CYAN)[LIBRELANE PREP]$(RESET) Preparing sources..."
+	@bash $(LIBRELANE_SH) prep
+	@echo -e "$(GREEN)$(SUCCESS) Sources ready$(RESET)"
+
+## Run full LibreLane Classic flow
+librelane_run: asic_sram librelane_prep
+	@echo -e "$(CYAN)[LIBRELANE RUN]$(RESET) Starting full flow..."
+	@echo "  Tag        : $(ASIC_TAG)"
+	@echo "  Mode       : $(LIBRELANE_MODE)"
+	@echo "  PDK_ROOT   : $(PDK_ROOT)"
+	@echo "  PDK        : $(PDK)"
+	@LIBRELANE_MODE="$(LIBRELANE_MODE)" LIBRELANE_CMD="$(LIBRELANE_CMD)" \
+		TAG="$(ASIC_TAG)" PDK_ROOT="$(PDK_ROOT)" PDK="$(PDK)" \
+		RESULTS_ROOT="$(RESULTS_DIR)/asic/librelane/level_wrapper" \
+		bash $(LIBRELANE_SH) run
+	@echo -e "$(GREEN)$(SUCCESS) LibreLane flow completed$(RESET)"
+
+## Report latest LibreLane run artifacts
+librelane_report:
+	@echo -e "$(CYAN)[LIBRELANE REPORT]$(RESET)"
+	@PDK_ROOT="$(PDK_ROOT)" PDK="$(PDK)" \
+		RESULTS_ROOT="$(RESULTS_DIR)/asic/librelane/level_wrapper" \
+		bash $(LIBRELANE_SH) report
+
+## Clean LibreLane run data and prepared src
+librelane_clean:
+	@echo -e "$(YELLOW)[LIBRELANE CLEAN]$(RESET)"
+	@RESULTS_ROOT="$(RESULTS_DIR)/asic/librelane/level_wrapper" \
+		bash $(LIBRELANE_SH) clean
+	@echo -e "$(GREEN)$(SUCCESS) LibreLane artifacts cleaned$(RESET)"
 
 # ==============================================================
 # Step-by-Step Interactive Flow
@@ -7233,7 +7361,7 @@ check_slang:
 	}
 
 # Run svlint
-svlint: check_svlint $(SVLINT_CONFIG)
+svlint: check_svlint $(SVLINT_CONFIG) $(LEVEL_PARAM_PROFILE_SVH)
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  svlint - SystemVerilog Style Linter$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -7254,7 +7382,7 @@ svlint: check_svlint $(SVLINT_CONFIG)
 	fi
 
 # Run Slang linter (via pyslang)
-slang_lint: check_slang
+slang_lint: check_slang $(LEVEL_PARAM_PROFILE_SVH)
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Slang - SystemVerilog Compiler & Linter$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -7277,7 +7405,7 @@ slang_lint: check_slang
 	fi
 
 # Run Slang with more detailed output (via pyslang)
-slang_check: check_slang
+slang_check: check_slang $(LEVEL_PARAM_PROFILE_SVH)
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Slang - Full Compilation Check$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"

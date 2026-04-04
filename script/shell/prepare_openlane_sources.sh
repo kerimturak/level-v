@@ -61,6 +61,12 @@ find "${SRC_DIR}" -maxdepth 1 -type f -name '*_sim.sv' -delete
 cp -f "${ROOT_DIR}/rtl/include"/*.svh "${INC_DIR}/"
 cp -f "${ROOT_DIR}/rtl/include"/*.svh "${SRC_DIR}/"
 
+PYTHON="${PYTHON:-python3}"
+echo "[openlane:prep] gen level_param_profile.svh (openlane cfg)"
+"${PYTHON}" "${ROOT_DIR}/script/python/gen_level_param_profile.py" openlane \
+  --out "${INC_DIR}/level_param_profile.svh"
+cp -f "${INC_DIR}/level_param_profile.svh" "${SRC_DIR}/"
+
 sv2v_convert() {
     local sv2v_def_args=()
     local sv2v_tmp_out="${SV2V_OUT}.sv2v_tmp.v"
@@ -104,6 +110,18 @@ sv2v_convert() {
             -e 's/\(parameter.*_t_level_param_XLEN\s*=\s*\)0;/\132;/g' \
             -e 's/\(parameter.*_t_level_param_BLK_SIZE\s*=\s*\)0;/\1128;/g' \
             "${sv2v_tmp_out}"
+
+        # Remove 'final' blocks — simulation-only constructs that Yosys
+        # cannot parse (TOK_FINAL error).  Handles both single-line
+        # "final $display(...);" and multi-line "final begin ... end".
+        echo "[openlane:prep] sv2v post-process: removing final blocks"
+        "${PYTHON}" -c "
+import re, sys
+txt = open(sys.argv[1]).read()
+txt = re.sub(r'^\s*final\s+begin\b.*?^\s*end\b[^\n]*\n', '', txt, flags=re.MULTILINE|re.DOTALL)
+txt = re.sub(r'^\s*final\s+[^;]*;\s*\n', '', txt, flags=re.MULTILINE)
+open(sys.argv[1], 'w').write(txt)
+" "${sv2v_tmp_out}"
 
         mv -f "${sv2v_tmp_out}" "${SV2V_OUT}"
     else
