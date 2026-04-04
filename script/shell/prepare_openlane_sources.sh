@@ -111,6 +111,18 @@ sv2v_convert() {
             -e 's/\(parameter.*_t_level_param_BLK_SIZE\s*=\s*\)0;/\1128;/g' \
             "${sv2v_tmp_out}"
 
+        # Remove 'final' blocks — simulation-only constructs that Yosys
+        # cannot parse (TOK_FINAL error).  Handles both single-line
+        # "final $display(...);" and multi-line "final begin ... end".
+        echo "[openlane:prep] sv2v post-process: removing final blocks"
+        "${PYTHON}" -c "
+import re, sys
+txt = open(sys.argv[1]).read()
+txt = re.sub(r'^\s*final\s+begin\b.*?^\s*end\b[^\n]*\n', '', txt, flags=re.MULTILINE|re.DOTALL)
+txt = re.sub(r'^\s*final\s+[^;]*;\s*\n', '', txt, flags=re.MULTILINE)
+open(sys.argv[1], 'w').write(txt)
+" "${sv2v_tmp_out}"
+
         mv -f "${sv2v_tmp_out}" "${SV2V_OUT}"
     else
         rm -f "${sv2v_tmp_out}" "${SV2V_OUT}"

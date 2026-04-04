@@ -6072,6 +6072,7 @@ yosys_help:
 # Paths & Defaults
 # -----------------------------------------
 OPENLANE_SH       := $(SCRIPT_DIR)/shell/openlane_flow.sh
+LIBRELANE_SH      := $(SCRIPT_DIR)/shell/librelane_flow.sh
 SRAM_GEN_SH       := $(SCRIPT_DIR)/shell/fetch_sky130_sram_macros_for_openlane.sh
 ASIC_SUBREPO_SH   := $(SCRIPT_DIR)/shell/setup_asic_subrepos.sh
 
@@ -6083,6 +6084,8 @@ SRAM_MACRO_DIR    := $(ASIC_DESIGN_DIR)/macros/sky130_sram_1kbyte_1rw1r_32x256_8
 
 # OpenLane / Docker settings (override via env or command line)
 OPENLANE_IMAGE    ?= efabless/openlane:2023.09.07
+LIBRELANE_MODE    ?= docker
+LIBRELANE_CMD     ?= librelane
 PDK_ROOT          ?= $(HOME)/.volare
 PDK               ?= sky130A
 ASIC_TAG          ?= run_$(shell date +%Y%m%d_%H%M%S)
@@ -6229,6 +6232,60 @@ asic_run_clean: asic_clean asic_run
 
 ## Shortcut: make asic → make asic_run
 asic: asic_run
+
+# ==============================================================
+# LibreLane Flow (OpenLane Successor)
+# ==============================================================
+
+.PHONY: librelane_setup librelane_check librelane_prep librelane_run librelane_report librelane_clean
+
+## Check LibreLane prerequisites and run smoke test
+librelane_setup: asic_sram
+	@echo -e "$(CYAN)[LIBRELANE SETUP]$(RESET)"
+	@LIBRELANE_MODE="$(LIBRELANE_MODE)" LIBRELANE_CMD="$(LIBRELANE_CMD)" \
+		PDK_ROOT="$(PDK_ROOT)" PDK="$(PDK)" \
+		bash $(LIBRELANE_SH) setup
+	@echo -e "$(GREEN)$(SUCCESS) LibreLane setup complete$(RESET)"
+
+## Show LibreLane dependency status
+librelane_check:
+	@echo -e "$(CYAN)[LIBRELANE CHECK]$(RESET)"
+	@LIBRELANE_MODE="$(LIBRELANE_MODE)" LIBRELANE_CMD="$(LIBRELANE_CMD)" \
+		PDK_ROOT="$(PDK_ROOT)" PDK="$(PDK)" \
+		bash $(LIBRELANE_SH) check
+
+## Prepare sources for LibreLane (same source prep as OpenLane)
+librelane_prep:
+	@echo -e "$(CYAN)[LIBRELANE PREP]$(RESET) Preparing sources..."
+	@bash $(LIBRELANE_SH) prep
+	@echo -e "$(GREEN)$(SUCCESS) Sources ready$(RESET)"
+
+## Run full LibreLane Classic flow
+librelane_run: asic_sram librelane_prep
+	@echo -e "$(CYAN)[LIBRELANE RUN]$(RESET) Starting full flow..."
+	@echo "  Tag        : $(ASIC_TAG)"
+	@echo "  Mode       : $(LIBRELANE_MODE)"
+	@echo "  PDK_ROOT   : $(PDK_ROOT)"
+	@echo "  PDK        : $(PDK)"
+	@LIBRELANE_MODE="$(LIBRELANE_MODE)" LIBRELANE_CMD="$(LIBRELANE_CMD)" \
+		TAG="$(ASIC_TAG)" PDK_ROOT="$(PDK_ROOT)" PDK="$(PDK)" \
+		RESULTS_ROOT="$(RESULTS_DIR)/asic/librelane/level_wrapper" \
+		bash $(LIBRELANE_SH) run
+	@echo -e "$(GREEN)$(SUCCESS) LibreLane flow completed$(RESET)"
+
+## Report latest LibreLane run artifacts
+librelane_report:
+	@echo -e "$(CYAN)[LIBRELANE REPORT]$(RESET)"
+	@PDK_ROOT="$(PDK_ROOT)" PDK="$(PDK)" \
+		RESULTS_ROOT="$(RESULTS_DIR)/asic/librelane/level_wrapper" \
+		bash $(LIBRELANE_SH) report
+
+## Clean LibreLane run data and prepared src
+librelane_clean:
+	@echo -e "$(YELLOW)[LIBRELANE CLEAN]$(RESET)"
+	@RESULTS_ROOT="$(RESULTS_DIR)/asic/librelane/level_wrapper" \
+		bash $(LIBRELANE_SH) clean
+	@echo -e "$(GREEN)$(SUCCESS) LibreLane artifacts cleaned$(RESET)"
 
 # ==============================================================
 # Step-by-Step Interactive Flow

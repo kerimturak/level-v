@@ -77,6 +77,30 @@ OPENLANE_MODE=docker make asic_run
 
 If you'd like, I can add a short GitHub Actions workflow to run `make verilator_static` and basic Python checks on PRs.
 
+ASIC / LibreLane (OpenLane successor)
+
+```bash
+python3 -m pip install --upgrade librelane
+make librelane_setup
+make librelane_run
+make librelane_report
+```
+
+LibreLane flow details:
+
+- Reuses the same source prep and design config under `asic/openlane/designs/level_wrapper/`.
+- Uses LibreLane Classic flow via `script/shell/librelane_flow.sh`.
+- Writes outputs under `results/asic/librelane/level_wrapper/runs/`.
+
+Common overrides:
+
+```bash
+LIBRELANE_MODE=local make librelane_run
+LIBRELANE_MODE=docker make librelane_run
+ASIC_TAG=my_run make librelane_run
+PDK_ROOT=$HOME/.volare PDK=sky130A make librelane_run
+```
+
 Running tests
 
 After creating a virtual environment and installing dev requirements run:

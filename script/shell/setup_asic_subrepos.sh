@@ -8,6 +8,7 @@ ASIC_SUBMODULES=(
     "subrepo/asic-tools/OpenROAD-flow-scripts"
     "subrepo/asic-tools/caravel"
     "subrepo/asic-tools/caravel_user_project"
+    "subrepo/asic-tools/librelane"
 )
 
 cd "${ROOT_DIR}"
