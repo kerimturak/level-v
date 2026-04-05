@@ -58,6 +58,15 @@ A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / mach
 ## Architecture at a glance
 
 <p align="center">
+  <a href="https://htmlpreview.github.io/?https://github.com/kerimturak/level-v/blob/main/level_riscv_architecture.html">
+    <img src="https://img.shields.io/badge/Architecture%20Diagram-Interactive%20HTML-2250CC?style=for-the-badge&logo=html5&logoColor=white" alt="Interactive Architecture Diagram"/>
+  </a>
+</p>
+
+> Click the badge above to open the **live interactive architecture diagram** in your browser (via htmlpreview.github.io).
+> Tabs: Pipeline · Cache &amp; MMU · SoC &amp; Peripherals · Branch Predictor · Memory Map
+
+<p align="center">
   <img src="docs/level-v.svg" alt="Level-V core block diagram" width="720"/>
 </p>
 
@@ -71,7 +80,8 @@ A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / mach
 |--------|------|
 | **L1 I$ / D$** | Blocking line fills toward L2 or main memory; sizes and associativity from `rtl/pkg/level_param.sv`. |
 | **L2 `nbmbmp_l2_cache`** | *Non-blocking, multi-bank, multi-port* cache: separate **I-pipe** and **D-pipe** FSMs, `dp_bram` arrays per way/bank, shared memory controller, inline **MSHR** for concurrent misses, write-back evictions to Wishbone. Turn on with **`USE_L2_CACHE=1`** for sim/synth defines. |
-| **Prefetch** | **`next_line_prefetcher`** + **`prefetcher_wrapper`** in the fetch path; arms the line after a demand miss and refills through the same I$ → L2 port. Default **`PREFETCH_TYPE = 0`** (off); set to `1` for next-line mode. |
+| **I-Cache Prefetch** | **`next_line_prefetcher`** + **`prefetcher_wrapper`** in the fetch path; arms the line after a demand miss. `PREFETCH_TYPE=1` to enable. |
+| **D-Cache Prefetch** | Inline next-line prefetcher in **`memory.sv`**: on a D-cache load miss, the subsequent cache line is prefetched automatically (RAM region only, bit31=1). A stride prefetcher (`stride_prefetcher.sv`, RPT 64-entry) exists but is currently disabled — planned for a future release. |
 
 ### Test dashboard
 

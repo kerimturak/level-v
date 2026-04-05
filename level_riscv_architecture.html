@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Level RISC-V Architecture</title>
+<style>
+  /* ── Design tokens ─────────────────────────────────── */
+  :root {
+    --bg:        #f8f7f3;
+    --bg2:       #efede7;
+    --bg3:       #e3e1d9;
+    --surface:   #ffffff;
+    --text:      #181715;
+    --text2:     #615f58;
+    --text3:     #9b9890;
+    --border:    rgba(0,0,0,0.08);
+    --border2:   rgba(0,0,0,0.17);
+    --accent:    #2250cc;
+    --accent-s:  rgba(34,80,204,.10);
+    --radius:    10px;
+    --radius-lg: 16px;
+    --shadow:    0 1px 3px rgba(0,0,0,.06), 0 6px 18px rgba(0,0,0,.07);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.07);
+    --tr:        .18s cubic-bezier(.4,0,.2,1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:       #111009;
+      --bg2:      #1a1917;
+      --bg3:      #22211e;
+      --surface:  #1a1917;
+      --text:     #e9e7dd;
+      --text2:    #908d83;
+      --text3:    #575450;
+      --border:   rgba(255,255,255,0.07);
+      --border2:  rgba(255,255,255,0.15);
+      --accent:   #6083f5;
+      --accent-s: rgba(96,131,245,.12);
+      --shadow:   0 1px 3px rgba(0,0,0,.35), 0 6px 18px rgba(0,0,0,.28);
+      --shadow-sm:0 1px 2px rgba(0,0,0,.25);
+    }
+  }
+
+  /* ── Reset & Base ────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2.5rem 1.25rem 3.5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 940px; margin: 0 auto; }
+
+  /* ── Header ──────────────────────────────────────── */
+  header { margin-bottom: 2rem; }
+  .header-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 5px; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -.4px; }
+  .chip {
+    font-size: 10.5px; font-weight: 600; padding: 2px 9px;
+    border-radius: 20px; background: var(--accent-s);
+    color: var(--accent); border: 1px solid rgba(34,80,204,.18);
+    letter-spacing: .03em;
+  }
+  .subtitle { font-size: 13px; color: var(--text2); margin-bottom: 13px; }
+  .subtitle a {
+    color: inherit; text-decoration: none;
+    border-bottom: 1px solid var(--border2);
+    transition: color var(--tr), border-color var(--tr);
+  }
+  .subtitle a:hover { color: var(--text); border-color: var(--accent); }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge {
+    font-size: 11px; font-weight: 500; padding: 3px 11px;
+    border-radius: 20px; border: 1px solid var(--border2);
+    color: var(--text2); background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: color var(--tr), border-color var(--tr);
+    white-space: nowrap;
+  }
+  .badge:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ── Tab bar ─────────────────────────────────────── */
+  .tab-bar {
+    display: flex; gap: 3px; flex-wrap: wrap;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 4px;
+    margin-bottom: 14px;
+  }
+  .tab-btn {
+    padding: 6px 15px; font-size: 12.5px; font-weight: 500;
+    cursor: pointer; background: transparent; color: var(--text2);
+    border: none; border-radius: 7px; font-family: inherit;
+    transition: background var(--tr), color var(--tr), box-shadow var(--tr);
+    white-space: nowrap;
+  }
+  .tab-btn:hover { background: var(--bg3); color: var(--text); }
+  .tab-btn.active {
+    background: var(--surface); color: var(--text);
+    box-shadow: var(--shadow);
+  }
+
+  /* ── Tab panels ──────────────────────────────────── */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeIn .18s ease; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* ── SVG container ───────────────────────────────── */
+  .svg-wrap {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    background: var(--surface);
+  }
+  svg { display: block; width: 100%; height: auto; }
+
+  /* ── Info card ───────────────────────────────────── */
+  .info-card {
+    margin-top: 10px; padding: 14px 18px;
+    font-size: 13px; line-height: 1.72;
+    background: var(--surface); border-radius: var(--radius);
+    border: 1px solid var(--border); box-shadow: var(--shadow);
+    color: var(--text2); min-height: 54px;
+    transition: color .1s;
+  }
+  .info-card strong { color: var(--text); font-weight: 600; }
+  .info-card code {
+    font-size: 11.5px; padding: 1px 5px; border-radius: 4px;
+    background: var(--bg2); border: 1px solid var(--border2);
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    color: var(--text);
+  }
+
+  /* ── Clickable SVG nodes ─────────────────────────── */
+  .nc { cursor: pointer; }
+  .nc rect, .nc ellipse { transition: opacity .12s; }
+  .nc:hover rect, .nc:hover ellipse { opacity: .82; }
+
+  /* ── Footer ──────────────────────────────────────── */
+  footer {
+    margin-top: 3rem; padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text3);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
+  }
+  footer a { color: inherit; text-decoration: none; }
+  footer a:hover { color: var(--text2); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ══ HEADER ══════════════════════════════════════════════════════════ -->
+  <header>
+    <div class="header-row">
+      <h1>Level RISC-V</h1>
+      <span class="chip">Level-V</span>
+    </div>
+    <p class="subtitle">
+      Architecture diagram —
+      <a href="https://github.com/kerimturak/level-v">github.com/kerimturak/level-v</a>
+    </p>
+    <div class="badges">
+      <span class="badge">RV32IMC</span>
+      <span class="badge">Zicsr · Zifencei</span>
+      <span class="badge">5-stage pipeline</span>
+      <span class="badge">SystemVerilog</span>
+      <span class="badge">Wishbone B4</span>
+      <span class="badge">2.62 CoreMark/MHz</span>
+      <span class="badge">Machine-mode</span>
+      <span class="badge">GPL-3.0</span>
+    </div>
+  </header>
+
+  <!-- ══ TAB BAR ═════════════════════════════════════════════════════════ -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('pipeline',this)">Pipeline</button>
+    <button class="tab-btn" onclick="showTab('cache',this)">Cache &amp; Bellek</button>
+    <button class="tab-btn" onclick="showTab('soc',this)">SoC &amp; Çevre Birimler</button>
+    <button class="tab-btn" onclick="showTab('bp',this)">Branch Predictor</button>
+    <button class="tab-btn" onclick="showTab('mem',this)">Memory Map</button>
+  </div>
+
+  <!-- ══════════════════════════ PIPELINE ════════════════════════════════ -->
+  <div class="tab-panel active" id="tab-pipeline">
+    <div class="svg-wrap">
+    <svg viewBox="0 0 880 545">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke"
+                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- Hazard Unit banner -->
+      <g class="nc" onclick="showInfo('hazard','pipeline')">
+        <rect x="18" y="12" width="844" height="28" rx="6" fill="none"
+              stroke="#7266CC" stroke-width="0.8" stroke-dasharray="5 3"/>
+        <text x="440" y="31" text-anchor="middle" font-size="10.5"
+              font-weight="600" fill="#7266CC">
+          hazard_unit.sv — forwarding (4 path) · load-use stall · branch flush
+        </text>
+      </g>
+
+      <!-- ── IF ───────────────────────────────────────────── -->
+      <g class="nc" onclick="showInfo('fetch','pipeline')">
+        <rect x="22" y="52" width="148" height="218" rx="9"
+              fill="#E4EFFA" stroke="#1660A8" stroke-width="0.8"/>
+        <text x="96" y="72" text-anchor="middle" font-size="12"
+              font-weight="700" fill="#0B3D78">IF</text>
+        <text x="96" y="87" text-anchor="middle" font-size="9.5"
+              fill="#1660A8">Instruction Fetch</text>
+        <!-- sub-blocks -->
+        <rect x="34" y="100" width="124" height="21" rx="4"
+              fill="#B3D2F2" stroke="#1660A8" stroke-width="0.5"/>
+        <text x="96" y="115" text-anchor="middle" font-size="9" fill="#082544">
+          I-Cache 8 KB · 4-way PLRU
+        </text>
+        <rect x="34" y="127" width="124" height="21" rx="4"
+              fill="#B3D2F2" stroke="#1660A8" stroke-width="0.5"/>
+        <text x="96" y="142" text-anchor="middle" font-size="9" fill="#082544">
+          Align Buffer (align_buffer.sv)
+        </text>
+        <rect x="34" y="154" width="124" height="21" rx="4"
+              fill="#B3D2F2" stroke="#1660A8" stroke-width="0.5"/>
+        <text x="96" y="169" text-anchor="middle" font-size="9" fill="#082544">
+          RV32C Decoder
+        </text>
+        <rect x="34" y="181" width="124" height="21" rx="4"
+              fill="#B3D2F2" stroke="#1660A8" stroke-width="0.5"/>
+        <text x="96" y="196" text-anchor="middle" font-size="9" fill="#082544">
+          Prefetcher (stride + next-line)
+        </text>
+        <rect x="34" y="208" width="124" height="21" rx="4"
+              fill="#B3D2F2" stroke="#1660A8" stroke-width="0.5"/>
+        <text x="96" y="223" text-anchor="middle" font-size="9" fill="#082544">
+          Tournament Branch Predictor
+        </text>
+        <rect x="34" y="235" width="124" height="21" rx="4"
+              fill="#B3D2F2" stroke="#1660A8" stroke-width="0.5"/>
+        <text x="96" y="250" text-anchor="middle" font-size="9" fill="#082544">
+          RAS (16 entries)
+        </text>
+      </g>
+
+      <!-- IF/ID register -->
+      <rect x="174" y="82" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
+      <line x1="170" y1="160" x2="192" y2="160" stroke="#888780" stroke-width="1"
+            marker-end="url(#arr)"/>
+
+      <!-- ── ID ───────────────────────────────────────────── -->
+      <g class="nc" onclick="showInfo('decode','pipeline')">
+        <rect x="196" y="52" width="148" height="218" rx="9"
+              fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.8"/>
+        <text x="270" y="72" text-anchor="middle" font-size="12"
+              font-weight="700" fill="#064235">ID</text>
+        <text x="270" y="87" text-anchor="middle" font-size="9.5"
+              fill="#0D6E57">Instruction Decode</text>
+
+        <rect x="208" y="100" width="124" height="21" rx="4"
+              fill="#96DBBF" stroke="#0D6E57" stroke-width="0.5"/>
+        <text x="270" y="115" text-anchor="middle" font-size="9" fill="#033427">
+          Control Unit (control_unit.sv)
+        </text>
+        <rect x="208" y="127" width="124" height="21" rx="4"
+              fill="#96DBBF" stroke="#0D6E57" stroke-width="0.5"/>
+        <text x="270" y="142" text-anchor="middle" font-size="9" fill="#033427">
+          Reg File × 32 (reg_file.sv)
+        </text>
+        <rect x="208" y="154" width="124" height="21" rx="4"
+              fill="#96DBBF" stroke="#0D6E57" stroke-width="0.5"/>
+        <text x="270" y="169" text-anchor="middle" font-size="9" fill="#033427">
+          Imm Extender (extend.sv)
+        </text>
+      </g>
+
+      <!-- ID/EX register -->
+      <rect x="348" y="82" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
+      <line x1="344" y1="160" x2="366" y2="160" stroke="#888780" stroke-width="1"
+            marker-end="url(#arr)"/>
+
+      <!-- ── EX ───────────────────────────────────────────── -->
+      <g class="nc" onclick="showInfo('execute','pipeline')">
+        <rect x="370" y="52" width="148" height="218" rx="9"
+              fill="#FDF0D9" stroke="#8A5109" stroke-width="0.8"/>
+        <text x="444" y="72" text-anchor="middle" font-size="12"
+              font-weight="700" fill="#62380B">EX</text>
+        <text x="444" y="87" text-anchor="middle" font-size="9.5"
+              fill="#8A5109">Execute</text>
+
+        <rect x="382" y="100" width="124" height="21" rx="4"
+              fill="#F9C66C" stroke="#8A5109" stroke-width="0.5"/>
+        <text x="444" y="115" text-anchor="middle" font-size="9" fill="#3F2104">
+          ALU (alu.sv)
+        </text>
+        <rect x="382" y="127" width="124" height="21" rx="4"
+              fill="#F9C66C" stroke="#8A5109" stroke-width="0.5"/>
+        <text x="444" y="142" text-anchor="middle" font-size="9" fill="#3F2104">
+          CSR Reg File (cs_reg_file.sv)
+        </text>
+        <rect x="382" y="154" width="124" height="21" rx="4"
+              fill="#F9C66C" stroke="#8A5109" stroke-width="0.5"/>
+        <text x="444" y="169" text-anchor="middle" font-size="9" fill="#3F2104">
+          Mul: Wallace / Pipelined
+        </text>
+        <rect x="382" y="181" width="124" height="21" rx="4"
+              fill="#F9C66C" stroke="#8A5109" stroke-width="0.5"/>
+        <text x="444" y="196" text-anchor="middle" font-size="9" fill="#3F2104">
+          Div: Pipelined / Sequential
+        </text>
+      </g>
+
+      <!-- EX/MEM register -->
+      <rect x="522" y="82" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
+      <line x1="518" y1="160" x2="540" y2="160" stroke="#888780" stroke-width="1"
+            marker-end="url(#arr)"/>
+
+      <!-- ── MEM ──────────────────────────────────────────── -->
+      <g class="nc" onclick="showInfo('memory','pipeline')">
+        <rect x="544" y="52" width="148" height="218" rx="9"
+              fill="#FCE9F2" stroke="#9C3157" stroke-width="0.8"/>
+        <text x="618" y="72" text-anchor="middle" font-size="12"
+              font-weight="700" fill="#6A1D3A">MEM</text>
+        <text x="618" y="87" text-anchor="middle" font-size="9.5"
+              fill="#9C3157">Memory Access</text>
+
+        <rect x="556" y="100" width="124" height="21" rx="4"
+              fill="#F0B8CF" stroke="#9C3157" stroke-width="0.5"/>
+        <text x="618" y="115" text-anchor="middle" font-size="9" fill="#450F22">
+          D-Cache NB 8 KB · 4-way
+        </text>
+        <rect x="556" y="127" width="124" height="21" rx="4"
+              fill="#F0B8CF" stroke="#9C3157" stroke-width="0.5"/>
+        <text x="618" y="142" text-anchor="middle" font-size="9" fill="#450F22">
+          Store Buffer (8 entries)
+        </text>
+        <rect x="556" y="154" width="124" height="21" rx="4"
+              fill="#F0B8CF" stroke="#9C3157" stroke-width="0.5"/>
+        <text x="618" y="169" text-anchor="middle" font-size="9" fill="#450F22">
+          Load / Store (byte/half/word)
+        </text>
+        <rect x="556" y="181" width="124" height="21" rx="4"
+              fill="#F0B8CF" stroke="#9C3157" stroke-width="0.5"/>
+        <text x="618" y="196" text-anchor="middle" font-size="9" fill="#450F22">
+          PMA Checker
+        </text>
+      </g>
+
+      <!-- MEM/WB register -->
+      <rect x="696" y="82" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
+      <line x1="692" y1="160" x2="714" y2="160" stroke="#888780" stroke-width="1"
+            marker-end="url(#arr)"/>
+
+      <!-- ── WB ───────────────────────────────────────────── -->
+      <g class="nc" onclick="showInfo('writeback','pipeline')">
+        <rect x="718" y="52" width="144" height="218" rx="9"
+              fill="#EAF5DC" stroke="#3B6F10" stroke-width="0.8"/>
+        <text x="790" y="72" text-anchor="middle" font-size="12"
+              font-weight="700" fill="#254C09">WB</text>
+        <text x="790" y="87" text-anchor="middle" font-size="9.5"
+              fill="#3B6F10">Write-back</text>
+
+        <rect x="730" y="100" width="120" height="21" rx="4"
+              fill="#BDE395" stroke="#3B6F10" stroke-width="0.5"/>
+        <text x="790" y="115" text-anchor="middle" font-size="9" fill="#162B04">
+          Register Write
+        </text>
+        <rect x="730" y="127" width="120" height="21" rx="4"
+              fill="#BDE395" stroke="#3B6F10" stroke-width="0.5"/>
+        <text x="790" y="142" text-anchor="middle" font-size="9" fill="#162B04">
+          Commit Trace (Spike-compat)
+        </text>
+        <rect x="730" y="154" width="120" height="21" rx="4"
+              fill="#BDE395" stroke="#3B6F10" stroke-width="0.5"/>
+        <text x="790" y="169" text-anchor="middle" font-size="9" fill="#162B04">
+          Konata Pipeline Logger
+        </text>
+      </g>
+
+      <!-- Forwarding paths -->
+      <!-- MEM → EX -->
+      <path d="M618 274 L618 315 L444 315 L444 274"
+            fill="none" stroke="#D85530" stroke-width="1.1" stroke-dasharray="4 2"
+            marker-end="url(#arr)" opacity=".78"/>
+      <text x="531" y="330" text-anchor="middle" font-size="9" fill="#D85530">MEM → EX forward</text>
+
+      <!-- WB → EX -->
+      <path d="M790 274 L790 338 L444 338 L444 274"
+            fill="none" stroke="#5B9F22" stroke-width="1.1" stroke-dasharray="4 2"
+            marker-end="url(#arr)" opacity=".68"/>
+      <text x="617" y="353" text-anchor="middle" font-size="9" fill="#5B9F22">WB → EX forward</text>
+
+      <!-- WB → ID -->
+      <path d="M790 274 L790 360 L270 360 L270 274"
+            fill="none" stroke="#5B9F22" stroke-width="1.1" stroke-dasharray="4 2"
+            marker-end="url(#arr)" opacity=".52"/>
+      <text x="530" y="375" text-anchor="middle" font-size="9" fill="#5B9F22">WB → ID forward</text>
+
+      <!-- Branch flush -->
+      <path d="M618 52 L618 36 L96 36 L96 52"
+            fill="none" stroke="#D83A3A" stroke-width="1" stroke-dasharray="3 2"
+            marker-end="url(#arr)" opacity=".65"/>
+      <text x="357" y="33" text-anchor="middle" font-size="9" fill="#D83A3A">
+        branch mispredict flush (IF/ID)
+      </text>
+
+      <!-- ISA info bar -->
+      <rect x="18" y="403" width="844" height="34" rx="7"
+            fill="none" stroke="#c2bfb5" stroke-width="0.5" stroke-dasharray="3 3"/>
+      <text x="440" y="416" text-anchor="middle" font-size="10.5" fill="#605E57">
+        RV32IMC · Zicsr · Zifencei · Machine-mode · 5-stage in-order
+      </text>
+      <text x="440" y="430" text-anchor="middle" font-size="9.5" fill="#8A8880">
+        CoreMark: 2.62 CM/MHz @ 25 MHz · 83 HDL dosyası · level_param.sv (1194 satır)
+      </text>
+
+      <!-- Legend -->
+      <rect x="18" y="453" width="12" height="10" rx="2" fill="#888780" opacity=".35"/>
+      <text x="35" y="462" font-size="9" fill="#888780">Pipeline reg</text>
+      <line x1="145" y1="458" x2="178" y2="458" stroke="#D85530" stroke-width="1" stroke-dasharray="4 2"/>
+      <text x="184" y="462" font-size="9" fill="#888780">Forwarding</text>
+      <line x1="276" y1="458" x2="309" y2="458" stroke="#D83A3A" stroke-width="1" stroke-dasharray="3 2"/>
+      <text x="315" y="462" font-size="9" fill="#888780">Flush/Branch</text>
+
+      <text x="440" y="490" text-anchor="middle" font-size="10" fill="#aaa9a0">
+        — her aşamaya tıkla → detay —
+      </text>
+
+      <!-- Decorative dots -->
+      <circle cx="860" cy="30" r="4" fill="#E4EFFA" stroke="#1660A8" stroke-width="0.5" opacity=".5"/>
+      <circle cx="872" cy="30" r="4" fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.5" opacity=".5"/>
+      <circle cx="848" cy="30" r="4" fill="#FDF0D9" stroke="#8A5109" stroke-width="0.5" opacity=".5"/>
+    </svg>
+    </div>
+    <div class="info-card" id="info-box-pipeline">
+      Bir pipeline aşamasına veya hazard unit banner'ına tıkla ve detaylarını gör.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ CACHE & BELLEK ═══════════════════════════ -->
+  <div class="tab-panel" id="tab-cache">
+    <div class="svg-wrap">
+    <svg viewBox="0 0 880 560">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke"
+                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- CPU core -->
+      <rect x="300" y="16" width="280" height="52" rx="9"
+            fill="#E4EFFA" stroke="#1660A8" stroke-width="0.8"/>
+      <text x="440" y="38" text-anchor="middle" font-size="12"
+            font-weight="700" fill="#0B3D78">Level-V Core (cpu.sv)</text>
+      <text x="440" y="54" text-anchor="middle" font-size="10"
+            fill="#1660A8">IF · ID · EX · MEM · WB</text>
+
+      <!-- I-Cache -->
+      <rect x="60" y="110" width="220" height="82" rx="9"
+            fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.8"/>
+      <text x="170" y="133" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#064235">L1 I-Cache</text>
+      <text x="170" y="149" text-anchor="middle" font-size="9.5"
+            fill="#0D6E57">icache.sv</text>
+      <text x="170" y="164" text-anchor="middle" font-size="9.5"
+            fill="#0D6E57">8 KB · 4-way PLRU · 128-bit block</text>
+      <text x="170" y="179" text-anchor="middle" font-size="9"
+            fill="#3A9E72">MSHR fill · PLRU replacement</text>
+
+      <!-- I-Cache Prefetcher (instruction side) -->
+      <rect x="60" y="202" width="220" height="52" rx="6"
+            fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.7"/>
+      <text x="170" y="219" text-anchor="middle" font-size="10"
+            font-weight="700" fill="#064235">I-Cache Prefetcher</text>
+      <text x="170" y="234" text-anchor="middle" font-size="9"
+            fill="#0D6E57">Next-line + stride (prefetcher_wrapper.sv)</text>
+      <text x="170" y="247" text-anchor="middle" font-size="8.5"
+            fill="#3A9E72">next_line_prefetcher.sv · stride_prefetcher.sv</text>
+
+      <!-- D-Cache -->
+      <rect x="600" y="110" width="220" height="82" rx="9"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.8"/>
+      <text x="710" y="133" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#6A1D3A">L1 D-Cache (NB)</text>
+      <text x="710" y="149" text-anchor="middle" font-size="9.5"
+            fill="#9C3157">dcache_nb.sv</text>
+      <text x="710" y="164" text-anchor="middle" font-size="9.5"
+            fill="#9C3157">8 KB · 4-way · write-back · MSHR×4</text>
+      <text x="710" y="179" text-anchor="middle" font-size="9"
+            fill="#9C3157">dirty bits · PLRU · FENCE.I flush</text>
+
+      <!-- Store Buffer -->
+      <rect x="600" y="202" width="220" height="24" rx="5"
+            fill="#F4C0D1" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="710" y="218" text-anchor="middle" font-size="9"
+            fill="#450F22">Store Buffer — store_buffer.sv (8 entries)</text>
+
+      <!-- FENCE.I helper -->
+      <rect x="600" y="232" width="220" height="22" rx="5"
+            fill="#F4C0D1" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="710" y="247" text-anchor="middle" font-size="9"
+            fill="#450F22">FENCE.I dirty WB — dcache_fencei.sv</text>
+
+      <!-- D-Cache Prefetcher (data side) -->
+      <rect x="600" y="260" width="220" height="52" rx="6"
+            fill="#FDF0D9" stroke="#8A5109" stroke-width="0.7"/>
+      <text x="710" y="277" text-anchor="middle" font-size="10"
+            font-weight="700" fill="#62380B">D-Cache Prefetcher</text>
+      <text x="710" y="291" text-anchor="middle" font-size="9"
+            fill="#8A5109">Next-line (miss üzerine → sonraki cache satırı)</text>
+      <text x="710" y="304" text-anchor="middle" font-size="8.5"
+            fill="#A06820">memory.sv inline · yalnızca RAM bölgesi (bit31=1)</text>
+
+      <!-- Arrows CPU → caches -->
+      <line x1="390" y1="68" x2="210" y2="110"
+            stroke="#1660A8" stroke-width="1" marker-end="url(#arr2)"/>
+      <line x1="490" y1="68" x2="670" y2="110"
+            stroke="#9C3157" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- Memory Arbiter -->
+      <rect x="280" y="360" width="320" height="52" rx="9"
+            fill="#FDF0D9" stroke="#8A5109" stroke-width="0.8"/>
+      <text x="440" y="382" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#62380B">Memory Arbiter</text>
+      <text x="440" y="398" text-anchor="middle" font-size="9.5"
+            fill="#8A5109">memory_arbiter.sv — I$/D$ bus arbitration</text>
+
+      <!-- Arrows caches → arbiter -->
+      <line x1="170" y1="254" x2="330" y2="360"
+            stroke="#666460" stroke-width="1" marker-end="url(#arr2)"/>
+      <line x1="710" y1="312" x2="570" y2="360"
+            stroke="#666460" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- L2 Cache (optional) -->
+      <rect x="280" y="456" width="320" height="68" rx="9"
+            fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
+      <text x="440" y="478" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#3C3489">L2 Cache (optional)</text>
+      <text x="440" y="493" text-anchor="middle" font-size="9.5"
+            fill="#534AB7">nbmbmp_l2_cache.sv — 16 KB · 4-way · non-blocking</text>
+      <text x="440" y="508" text-anchor="middle" font-size="9.5"
+            fill="#534AB7">dual-pipe · multi-bank · MSHR×4 · MESI tags</text>
+      <text x="440" y="520" text-anchor="middle" font-size="8.5"
+            fill="#7F77DD">USE_L2_CACHE=1 ile etkin · cache.sv wrapper</text>
+
+      <!-- Arrow arbiter → L2 -->
+      <line x1="440" y1="412" x2="440" y2="456"
+            stroke="#534AB7" stroke-width="1.2" marker-end="url(#arr2)"/>
+
+      <!-- PMA Checker -->
+      <rect x="640" y="456" width="200" height="68" rx="9"
+            fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8"/>
+      <text x="740" y="478" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#2C2C2A">PMA Checker</text>
+      <text x="740" y="494" text-anchor="middle" font-size="10"
+            fill="#5F5E5A">Physical Memory Attributes</text>
+      <text x="740" y="510" text-anchor="middle" font-size="9"
+            fill="#888780">pmp_pma.sv</text>
+
+      <!-- Arrow arbiter → PMA (dashed) -->
+      <line x1="580" y1="402" x2="700" y2="456"
+            stroke="#666460" stroke-width="0.9" stroke-dasharray="3 2"
+            marker-end="url(#arr2)" opacity=".55"/>
+
+      <!-- Bottom arrow to RAM -->
+      <path d="M440 524 L440 542" fill="none" stroke="#7266CC" stroke-width="1.5"
+            marker-end="url(#arr2)"/>
+      <text x="440" y="556" text-anchor="middle" font-size="9" fill="#888780">
+        Wishbone B4 → RAM / Çevre birimler
+      </text>
+    </svg>
+    </div>
+    <div class="info-card" id="info-box-cache">
+      Cache hiyerarşisi: L1 I-Cache + L1 D-Cache (non-blocking, MSHR) → Memory Arbiter → L2 Unified Cache
+      (opsiyonel, <code>USE_L2_CACHE=1</code>) → Wishbone B4 → RAM / Peripheral.
+      <strong>D-Cache Prefetcher</strong>: D-cache miss olduğunda bir sonraki cache satırını önceden çeker
+      (<code>memory.sv</code> inline, yalnızca RAM bölgesi). Stride prefetcher (<code>stride_prefetcher.sv</code>)
+      de mevcuttur ancak şu an devre dışı; ilerleyen versiyonlarda etkinleştirilmesi planlanmaktadır.
+      <strong>I-Cache Prefetcher</strong>: <code>next_line_prefetcher.sv</code> + <code>prefetcher_wrapper.sv</code>
+      instruction fetch yolunda çalışır.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ SOC & PERİFERAL ══════════════════════════ -->
+  <div class="tab-panel" id="tab-soc">
+    <div class="svg-wrap">
+    <svg viewBox="0 0 880 500">
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="8" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke"
+                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- SoC wrapper outline -->
+      <rect x="8" y="8" width="864" height="484" rx="14"
+            fill="none" stroke="#534AB7" stroke-width="0.7" stroke-dasharray="7 4"/>
+      <text x="440" y="28" text-anchor="middle" font-size="11"
+            fill="#534AB7">level_wrapper.sv — SoC top-level</text>
+
+      <!-- Core -->
+      <rect x="306" y="42" width="268" height="52" rx="9"
+            fill="#E4EFFA" stroke="#1660A8" stroke-width="0.8"/>
+      <text x="440" y="63" text-anchor="middle" font-size="12"
+            font-weight="700" fill="#0B3D78">Level-V Core (cpu.sv)</text>
+      <text x="440" y="79" text-anchor="middle" font-size="10"
+            fill="#1660A8">RV32IMC · Zicsr · 5-stage · Machine-mode</text>
+
+      <!-- Wishbone bus bar -->
+      <rect x="30" y="150" width="820" height="22" rx="6"
+            fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
+      <text x="440" y="165" text-anchor="middle" font-size="10"
+            font-weight="600" fill="#3C3489">
+        Wishbone B4 Pipelined Interconnect (wb_interconnect.sv)
+      </text>
+      <line x1="440" y1="94" x2="440" y2="150"
+            stroke="#534AB7" stroke-width="1.2" marker-end="url(#arr3)"/>
+
+      <!-- CLINT -->
+      <rect x="30" y="192" width="138" height="54" rx="7"
+            fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.7"/>
+      <text x="99" y="213" text-anchor="middle" font-size="10"
+            font-weight="600" fill="#2C2C2A">CLINT</text>
+      <text x="99" y="228" text-anchor="middle" font-size="9"
+            fill="#5F5E5A">mtime · mtimecmp</text>
+      <text x="99" y="240" text-anchor="middle" font-size="8.5"
+            fill="#888780">0x3000_0000</text>
+      <line x1="99" y1="172" x2="99" y2="192"
+            stroke="#5F5E5A" stroke-width="0.9" marker-end="url(#arr3)"/>
+
+      <!-- BRAM -->
+      <rect x="178" y="192" width="138" height="54" rx="7"
+            fill="#EAF5DC" stroke="#3B6F10" stroke-width="0.7"/>
+      <text x="247" y="213" text-anchor="middle" font-size="10"
+            font-weight="600" fill="#254C09">BRAM</text>
+      <text x="247" y="228" text-anchor="middle" font-size="9"
+            fill="#3B6F10">64 KB · reset vector</text>
+      <text x="247" y="240" text-anchor="middle" font-size="8.5"
+            fill="#888780">0x8000_0000</text>
+      <line x1="247" y1="172" x2="247" y2="192"
+            stroke="#3B6F10" stroke-width="0.9" marker-end="url(#arr3)"/>
+
+      <!-- Peripheral bus label -->
+      <text x="630" y="190" text-anchor="middle" font-size="9"
+            fill="#9C3157">Peripheral Bus  0x2000_0000 – 0x2000_FFFF</text>
+      <rect x="326" y="194" width="540" height="12" rx="3"
+            fill="none" stroke="#9C3157" stroke-width="0.5" stroke-dasharray="3 2" opacity=".5"/>
+      <line x1="580" y1="172" x2="580" y2="194"
+            stroke="#9C3157" stroke-width="0.9" marker-end="url(#arr3)" opacity=".65"/>
+
+      <!-- Peripherals row 1 -->
+      <rect x="326" y="216" width="94" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="373" y="236" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">UART ×2</text>
+      <text x="373" y="250" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_0000</text>
+
+      <rect x="428" y="216" width="82" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="469" y="236" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">SPI</text>
+      <text x="469" y="250" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_2000</text>
+
+      <rect x="518" y="216" width="82" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="559" y="236" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">I2C</text>
+      <text x="559" y="250" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_3000</text>
+
+      <rect x="608" y="216" width="82" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="649" y="236" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">GPIO</text>
+      <text x="649" y="250" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_4000</text>
+
+      <rect x="698" y="216" width="74" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="735" y="236" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">PWM</text>
+      <text x="735" y="250" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_5000</text>
+
+      <rect x="780" y="216" width="74" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="817" y="236" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">Timer</text>
+      <text x="817" y="250" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_6000</text>
+
+      <!-- Peripherals row 2 -->
+      <rect x="326" y="272" width="94" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="373" y="292" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">PLIC</text>
+      <text x="373" y="308" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_7000</text>
+
+      <rect x="428" y="272" width="82" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="469" y="292" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">WDT</text>
+      <text x="469" y="308" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_8000</text>
+
+      <rect x="518" y="272" width="82" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="559" y="292" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">DMA</text>
+      <text x="559" y="308" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_9000</text>
+
+      <rect x="608" y="272" width="82" height="46" rx="6"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.5"/>
+      <text x="649" y="292" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#4A1B0C">VGA</text>
+      <text x="649" y="308" text-anchor="middle" font-size="8"
+            fill="#9C3157">0x2000_D000</text>
+
+      <rect x="698" y="272" width="156" height="46" rx="6"
+            fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+      <text x="776" y="292" text-anchor="middle" font-size="9.5"
+            font-weight="600" fill="#2C2C2A">RAM Programmer</text>
+      <text x="776" y="308" text-anchor="middle" font-size="8"
+            fill="#5F5E5A">ram_programmer.sv</text>
+
+      <!-- IRQ lines -->
+      <path d="M373 318 L373 378 L188 378 L188 94 L306 62"
+            fill="none" stroke="#D83A3A" stroke-width="0.9" stroke-dasharray="4 2"
+            marker-end="url(#arr3)" opacity=".55"/>
+      <text x="260" y="395" text-anchor="middle" font-size="9"
+            fill="#D83A3A">IRQ (16 src) → PLIC → meip → Core</text>
+
+      <!-- CLINT timer interrupt -->
+      <path d="M99 246 L99 432 L150 432 L150 460 L306 460 L306 90 L374 70"
+            fill="none" stroke="#854F0B" stroke-width="0.8" stroke-dasharray="3 3"
+            marker-end="url(#arr3)" opacity=".4"/>
+      <text x="180" y="448" text-anchor="middle" font-size="8.5"
+            fill="#854F0B">mtip → meip</text>
+
+      <!-- Verification note -->
+      <text x="440" y="464" text-anchor="middle" font-size="9.5"
+            fill="#888780">
+        Verification: riscv-tests · riscv-arch-test · Imperas · CoreMark · Embench · BEEBS · riscv-formal · riscv-dv
+      </text>
+    </svg>
+    </div>
+    <div class="info-card" id="info-box-soc">
+      SoC: Level-V Core → Wishbone B4 Interconnect → CLINT + BRAM + 10 Peripheral.
+      PLIC 16 harici IRQ kaynağını yönetir ve <code>meip</code> sinyali ile core'u interrupt eder.
+      VGA text-mode çevre birimi 0x2000_D000 adresinde; grafik framebuffer 0x2010_0000'de yer alır.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ BRANCH PREDICTOR ═════════════════════════ -->
+  <div class="tab-panel" id="tab-bp">
+    <div class="svg-wrap">
+    <svg viewBox="0 0 880 450">
+      <defs>
+        <marker id="arr4" viewBox="0 0 10 10" refX="8" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke"
+                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- Outer box (Tournament Predictor) -->
+      <rect x="18" y="16" width="844" height="292" rx="12"
+            fill="none" stroke="#534AB7" stroke-width="0.8" stroke-dasharray="6 3"/>
+      <text x="440" y="37" text-anchor="middle" font-size="11"
+            font-weight="600" fill="#534AB7">
+        Tournament Branch Predictor — gshare_bp.sv
+      </text>
+
+      <!-- GShare predictor -->
+      <rect x="38" y="54" width="182" height="124" rx="9"
+            fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
+      <text x="129" y="77" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#3C3489">GShare</text>
+      <text x="129" y="93" text-anchor="middle" font-size="9.5"
+            fill="#534AB7">GHR XOR PC → PHT index</text>
+      <text x="129" y="108" text-anchor="middle" font-size="9.5"
+            fill="#534AB7">PHT: 2048 entries (Full)</text>
+      <text x="129" y="123" text-anchor="middle" font-size="9.5"
+            fill="#534AB7">2-bit saturating counter</text>
+      <text x="129" y="139" text-anchor="middle" font-size="9"
+            fill="#7F77DD">GHR: 24-bit (Full)</text>
+      <text x="129" y="153" text-anchor="middle" font-size="9"
+            fill="#7F77DD">GHR:  8-bit (Minimal)</text>
+      <text x="129" y="168" text-anchor="middle" font-size="8.5"
+            fill="#9E98DC">PHT:   64 entries (Minimal)</text>
+
+      <!-- Bimodal predictor -->
+      <rect x="234" y="54" width="182" height="124" rx="9"
+            fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.8"/>
+      <text x="325" y="77" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#064235">Bimodal</text>
+      <text x="325" y="93" text-anchor="middle" font-size="9.5"
+            fill="#0D6E57">PC-indexed</text>
+      <text x="325" y="108" text-anchor="middle" font-size="9.5"
+            fill="#0D6E57">PHT: 2048 entries (Full)</text>
+      <text x="325" y="123" text-anchor="middle" font-size="9.5"
+            fill="#0D6E57">2-bit saturating counter</text>
+      <text x="325" y="139" text-anchor="middle" font-size="8.5"
+            fill="#52B894">PHT:  64 entries (Minimal)</text>
+
+      <!-- Choice PHT -->
+      <rect x="430" y="54" width="182" height="124" rx="9"
+            fill="#FDF0D9" stroke="#8A5109" stroke-width="0.8"/>
+      <text x="521" y="77" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#62380B">Choice PHT</text>
+      <text x="521" y="93" text-anchor="middle" font-size="9.5"
+            fill="#8A5109">Meta-predictor</text>
+      <text x="521" y="108" text-anchor="middle" font-size="9.5"
+            fill="#8A5109">GShare vs Bimodal seçimi</text>
+      <text x="521" y="123" text-anchor="middle" font-size="9.5"
+            fill="#8A5109">2048 entry (Full)</text>
+      <text x="521" y="138" text-anchor="middle" font-size="9"
+            fill="#C87A20">hangisi daha doğruysa onu seçer</text>
+
+      <!-- Loop predictor -->
+      <rect x="626" y="54" width="224" height="124" rx="9"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.8"/>
+      <text x="738" y="77" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#6A1D3A">Loop Predictor</text>
+      <text x="738" y="93" text-anchor="middle" font-size="9.5"
+            fill="#9C3157">Sabit iterasyonlu döngü tespiti</text>
+      <text x="738" y="108" text-anchor="middle" font-size="9.5"
+            fill="#9C3157">16 entry (Full) / 4 entry (Minimal)</text>
+      <text x="738" y="123" text-anchor="middle" font-size="9"
+            fill="#B5456E">İterasyon sayacı takibi</text>
+      <text x="738" y="138" text-anchor="middle" font-size="9"
+            fill="#B5456E">Güvenilir döngü tahmini</text>
+      <text x="738" y="153" text-anchor="middle" font-size="8.5"
+            fill="#CC7090">loop_size parametresiyle yapılandırılır</text>
+
+      <!-- BTB -->
+      <rect x="38" y="196" width="182" height="84" rx="9"
+            fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8"/>
+      <text x="129" y="219" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#2C2C2A">BTB</text>
+      <text x="129" y="235" text-anchor="middle" font-size="9.5"
+            fill="#5F5E5A">256 entry (Full) / 32 (Minimal)</text>
+      <text x="129" y="249" text-anchor="middle" font-size="9"
+            fill="#888780">Branch Target Buffer</text>
+      <text x="129" y="263" text-anchor="middle" font-size="8.5"
+            fill="#888780">PC etiket → hedef adres önbelleği</text>
+
+      <!-- IBTC -->
+      <rect x="234" y="196" width="182" height="84" rx="9"
+            fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8"/>
+      <text x="325" y="219" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#2C2C2A">IBTC</text>
+      <text x="325" y="235" text-anchor="middle" font-size="9.5"
+            fill="#5F5E5A">32 entry (Full) / 8 (Minimal)</text>
+      <text x="325" y="249" text-anchor="middle" font-size="9"
+            fill="#888780">Indirect Branch Target Cache</text>
+      <text x="325" y="263" text-anchor="middle" font-size="9"
+            fill="#888780">JALR hedef adresi önbelleği</text>
+
+      <!-- RAS -->
+      <rect x="430" y="196" width="182" height="84" rx="9"
+            fill="#FCE9F2" stroke="#9C3157" stroke-width="0.8"/>
+      <text x="521" y="219" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#6A1D3A">RAS</text>
+      <text x="521" y="235" text-anchor="middle" font-size="9.5"
+            fill="#9C3157">16 entry (Full) / 8 (Minimal)</text>
+      <text x="521" y="249" text-anchor="middle" font-size="9"
+            fill="#9C3157">Return Address Stack</text>
+      <text x="521" y="263" text-anchor="middle" font-size="9"
+            fill="#9C3157">ras.sv — JAL/JALR ayrımı</text>
+
+      <!-- Prefetcher / ABUFF note -->
+      <rect x="626" y="196" width="224" height="84" rx="9"
+            fill="#FDF0D9" stroke="#8A5109" stroke-width="0.8"/>
+      <text x="738" y="219" text-anchor="middle" font-size="11"
+            font-weight="700" fill="#62380B">Prefetcher</text>
+      <text x="738" y="235" text-anchor="middle" font-size="9.5"
+            fill="#8A5109">prefetcher_wrapper.sv</text>
+      <text x="738" y="249" text-anchor="middle" font-size="9"
+            fill="#8A5109">Stride (64 entry, stride_prefetcher.sv)</text>
+      <text x="738" y="263" text-anchor="middle" font-size="9"
+            fill="#8A5109">Next-line (next_line_prefetcher.sv)</text>
+
+      <!-- Vertical arrows → lower boxes -->
+      <line x1="129" y1="178" x2="129" y2="196" stroke="#534AB7" stroke-width="0.8"
+            marker-end="url(#arr4)" opacity=".5"/>
+      <line x1="325" y1="178" x2="325" y2="196" stroke="#0D6E57" stroke-width="0.8"
+            marker-end="url(#arr4)" opacity=".5"/>
+      <line x1="521" y1="178" x2="521" y2="196" stroke="#8A5109" stroke-width="0.8"
+            marker-end="url(#arr4)" opacity=".5"/>
+
+      <!-- Prediction output box -->
+      <rect x="188" y="346" width="504" height="52" rx="9"
+            fill="#B3D2F2" stroke="#1660A8" stroke-width="0.8"/>
+      <text x="440" y="368" text-anchor="middle" font-size="12"
+            font-weight="700" fill="#0B3D78">Tahmin Çıkışı</text>
+      <text x="440" y="384" text-anchor="middle" font-size="10"
+            fill="#1660A8">alınan/alınmayan · tahmin edilen PC → IF aşaması (sonraki döngü)</text>
+
+      <line x1="300" y1="310" x2="300" y2="346"
+            stroke="#1660A8" stroke-width="1" marker-end="url(#arr4)"/>
+      <line x1="580" y1="310" x2="580" y2="346"
+            stroke="#1660A8" stroke-width="1" marker-end="url(#arr4)"/>
+
+      <text x="440" y="428" text-anchor="middle" font-size="10" fill="#888780">
+        LOG_BP=1 ile istatistik logu etkin → bp_stats.log · LOG_BP_VERBOSE=1 ile dallanma başına detay
+      </text>
+    </svg>
+    </div>
+    <div class="info-card" id="info-box-bp">
+      Tournament predictor: <strong>GShare + Bimodal</strong> → <strong>Choice PHT</strong> hangisinin
+      daha doğru olduğunu seçer. <strong>BTB</strong> (256) hedef adresi, <strong>IBTC</strong> (32)
+      indirect branch'ları, <strong>RAS</strong> (16) return adreslerini önbellekler.
+      <strong>Loop predictor</strong> sabit iterasyonlu döngüleri tanır.
+      Tüm boyutlar <code>level_param_profile.svh</code> üzerinden yapılandırılır (Full / Minimal / OpenLane profilleri).
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ MEMORY MAP ════════════════════════════════ -->
+  <div class="tab-panel" id="tab-mem">
+    <div class="svg-wrap">
+    <svg viewBox="0 0 880 510">
+      <!-- Header row -->
+      <text x="56" y="28" font-size="11" font-weight="600" fill="#615F58">Adres</text>
+      <text x="220" y="28" font-size="11" font-weight="600" fill="#615F58">Bölge</text>
+      <text x="410" y="28" font-size="11" font-weight="600" fill="#615F58">Açıklama</text>
+      <line x1="18" y1="34" x2="862" y2="34" stroke="#C8C5BB" stroke-width="0.7"/>
+
+      <!-- DEBUG -->
+      <rect x="18" y="38" width="844" height="40" rx="5" fill="#F1EFE8" opacity=".65"/>
+      <text x="56" y="62" font-size="10.5" font-weight="500" fill="#3C3A35">0x0000_0000</text>
+      <rect x="200" y="45" width="148" height="24" rx="5" fill="#D3D1C7"/>
+      <text x="274" y="61" text-anchor="middle" font-size="10" font-weight="600" fill="#2C2C2A">DEBUG</text>
+      <text x="410" y="62" font-size="10" fill="#615F58">Debug module interface</text>
+
+      <!-- BOOTROM -->
+      <rect x="18" y="81" width="844" height="40" rx="5" fill="#DDF3EC" opacity=".5"/>
+      <text x="56" y="105" font-size="10.5" font-weight="500" fill="#064235">0x1000_0000</text>
+      <rect x="200" y="88" width="148" height="24" rx="5" fill="#96DBBF"/>
+      <text x="274" y="104" text-anchor="middle" font-size="10" font-weight="600" fill="#033427">BOOTROM</text>
+      <text x="410" y="105" font-size="10" fill="#615F58">Boot ROM — reset sonrası ilk komutlar</text>
+
+      <!-- PERIPH -->
+      <rect x="18" y="124" width="844" height="52" rx="5" fill="#FCE9F2" opacity=".6"/>
+      <text x="56" y="146" font-size="10.5" font-weight="500" fill="#4A1B0C">0x2000_0000</text>
+      <text x="56" y="162" font-size="9" fill="#9C3157">→ 0x2000_FFFF</text>
+      <rect x="200" y="131" width="148" height="24" rx="5" fill="#F0B8CF"/>
+      <text x="274" y="147" text-anchor="middle" font-size="10" font-weight="600" fill="#4A1B0C">PERIPH</text>
+      <text x="410" y="146" font-size="10" fill="#615F58">UART×2 · SPI · I2C · GPIO · PWM · Timer</text>
+      <text x="410" y="162" font-size="10" fill="#615F58">PLIC · WDT · DMA · VGA (0x2000_D000)</text>
+
+      <!-- CLINT -->
+      <rect x="18" y="179" width="844" height="40" rx="5" fill="#FDF0D9" opacity=".55"/>
+      <text x="56" y="203" font-size="10.5" font-weight="500" fill="#3F2104">0x3000_0000</text>
+      <rect x="200" y="186" width="148" height="24" rx="5" fill="#F7C96E"/>
+      <text x="274" y="202" text-anchor="middle" font-size="10" font-weight="600" fill="#3F2104">CLINT</text>
+      <text x="410" y="203" font-size="10" fill="#615F58">Core-Local Interruptor — mtime, mtimecmp</text>
+
+      <!-- EXTMEM -->
+      <rect x="18" y="222" width="844" height="40" rx="5" fill="#EEEDFE" opacity=".5"/>
+      <text x="56" y="246" font-size="10.5" font-weight="500" fill="#3C3489">0x4000_0000</text>
+      <rect x="200" y="229" width="148" height="24" rx="5" fill="#CECBF6"/>
+      <text x="274" y="245" text-anchor="middle" font-size="10" font-weight="600" fill="#26215C">EXTMEM</text>
+      <text x="410" y="246" font-size="10" fill="#615F58">Harici bellek bölgesi</text>
+
+      <!-- RAM -->
+      <rect x="18" y="265" width="844" height="40" rx="5" fill="#EAF5DC" opacity=".6"/>
+      <text x="56" y="289" font-size="10.5" font-weight="500" fill="#162B04">0x8000_0000</text>
+      <rect x="200" y="272" width="148" height="24" rx="5" fill="#BDE395"/>
+      <text x="274" y="288" text-anchor="middle" font-size="10" font-weight="600" fill="#162B04">RAM</text>
+      <text x="410" y="289" font-size="10" fill="#615F58">
+        BRAM 64 KB (Full) / 40 KB (Min) — reset vector — program giriş noktası
+      </text>
+
+      <!-- VGA FB -->
+      <rect x="18" y="308" width="844" height="40" rx="5" fill="#FCE9F2" opacity=".4"/>
+      <text x="56" y="332" font-size="10.5" font-weight="500" fill="#4A1B0C">0x2010_0000</text>
+      <rect x="200" y="315" width="148" height="24" rx="5" fill="#F4C8D8" opacity=".85"/>
+      <text x="274" y="331" text-anchor="middle" font-size="10" font-weight="600" fill="#6A1D3A">VGA FB</text>
+      <text x="410" y="332" font-size="10" fill="#615F58">VGA grafik framebuffer — 256 KB</text>
+
+      <!-- Divider -->
+      <line x1="18" y1="362" x2="862" y2="362" stroke="#C8C5BB" stroke-width="0.7"/>
+
+      <!-- Configuration comparison section -->
+      <text x="18" y="384" font-size="12" font-weight="700" fill="#2C2C2A">
+        Profil Karşılaştırması — Full SoC  ↔  Minimal SoC (MINIMAL_SOC=1)
+      </text>
+
+      <rect x="18" y="396" width="406" height="28" rx="6" fill="#E4EFFA"/>
+      <text x="30" y="414" font-size="10" fill="#0B3D78">I/D-Cache: 8 KB 4-way PLRU · MSHR×4</text>
+      <text x="270" y="414" font-size="10" fill="#1660A8">→ Minimal: 2 KB 2-way</text>
+
+      <rect x="436" y="396" width="426" height="28" rx="6" fill="#DDF3EC"/>
+      <text x="448" y="414" font-size="10" fill="#064235">PHT: 2048 · BTB: 256 · GHR: 24-bit · RAS: 16</text>
+      <text x="740" y="414" font-size="10" fill="#0D6E57">→ 64 · 32 · 8 · 8</text>
+
+      <rect x="18" y="432" width="406" height="28" rx="6" fill="#FDF0D9"/>
+      <text x="30" y="450" font-size="10" fill="#62380B">L2: 16 KB 4-way NB · Loop: 16 · IBTC: 32</text>
+      <text x="270" y="450" font-size="10" fill="#8A5109">→ 8 KB · 4 · 8</text>
+
+      <rect x="436" y="432" width="426" height="28" rx="6" fill="#EEEDFE"/>
+      <text x="448" y="450" font-size="10" fill="#3C3489">RAM: 64 KB · Align Buffer: 8192 B</text>
+      <text x="700" y="450" font-size="10" fill="#534AB7">→ 40 KB · 256 B</text>
+
+      <text x="440" y="493" text-anchor="middle" font-size="10" fill="#888780">
+        Tüm parametreler: rtl/pkg/level_param.sv (1194 satır) · Özellik bayrakları: rtl/include/level_defines.svh
+      </text>
+    </svg>
+    </div>
+    <div class="info-card" id="info-box-mem">
+      Memory haritası: <code>0x0000_0000</code> Debug → <code>0x1000_0000</code> BootROM →
+      <code>0x2000_0000</code> Peripheral → <code>0x3000_0000</code> CLINT →
+      <code>0x4000_0000</code> ExtMem → <code>0x8000_0000</code> RAM (reset vector).
+      VGA metin tamponu <code>0x2000_D000</code>, grafik framebuffer <code>0x2010_0000</code> adresinde.
+      Tüm parametreler <code>level_param.sv</code>'de merkezi olarak tanımlı.
+    </div>
+  </div>
+
+  <!-- ══ FOOTER ════════════════════════════════════════════════════════════ -->
+  <footer>
+    <span>Level RISC-V — <a href="https://github.com/kerimturak/level-v">kerimturak/level-v</a></span>
+    <span>RV32IMC · Zicsr · Zifencei · GPL-3.0 · SystemVerilog IEEE 1800-2017</span>
+  </footer>
+
+</div><!-- /container -->
+
+<script>
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ── Per-stage info dictionary ─────────────────────────────────────── */
+const infos = {
+  hazard: `<strong>hazard_unit.sv</strong> — 4 forwarding path yönetir:
+    <code>MEM→EX</code>, <code>WB→EX</code>, <code>WB→ID</code> (ayrı port).
+    Load-use hazard tespitinde 1 bubble (stall) eklenir.
+    Branch mispredict olduğunda IF ve ID pipeline register'ları flush edilir.
+    Stall istatistikleri <code>LOG_PERF_STALL=1</code> ile loglanır.`,
+
+  fetch: `<strong>IF — Instruction Fetch (fetch.sv)</strong> — PC yönetimi.
+    <strong>L1 I-Cache</strong>: 8 KB, 4-way, PLRU, 128-bit blok (Full SoC).
+    <strong>Align Buffer</strong> (<code>align_buffer.sv</code>): 16-bit / 32-bit karışık instruction'ları pipeline'a uyumlu hale getirir (Full: 8192 B, Min: 256 B).
+    <strong>RV32C Decompressor</strong> (<code>compressed_decoder.sv</code>): 16-bit talimatları 32-bit'e genişletir.
+    <strong>Prefetcher</strong>: next-line (<code>next_line_prefetcher.sv</code>) + stride (<code>stride_prefetcher.sv</code>, 64 entry).
+    <strong>Tournament BP</strong> (<code>gshare_bp.sv</code>): GShare + Bimodal + Choice PHT.
+    <strong>RAS</strong> (<code>ras.sv</code>): 16 entry return address stack.`,
+
+  decode: `<strong>ID — Instruction Decode (decode.sv)</strong> —
+    <strong>Control Unit</strong> (<code>control_unit.sv</code>): tüm decode ve kontrol sinyallerini üretir.
+    <strong>Register File</strong> (<code>reg_file.sv</code>): 32 × 32-bit, 2 okuma + 1 yazma portu.
+    <strong>Immediate Extender</strong> (<code>extend.sv</code>): I/S/B/U/J tiplerini destekler.
+    CSR okuma yolu bu aşamada başlar.`,
+
+  execute: `<strong>EX — Execute (execution.sv)</strong> —
+    <strong>ALU</strong> (<code>alu.sv</code>): tüm RV32I aritmetik, mantık ve karşılaştırma işlemleri.
+    <strong>CSR Reg File</strong> (<code>cs_reg_file.sv</code>): machine-mode CSR'lar (mstatus, mepc, mcause vb.).
+    <strong>Multiplier</strong>: Wallace 32×32 ağaç (<code>wallace32x32/</code>) veya pipelined (<code>mul_pipelined.sv</code>); <code>level_defines.svh</code> bayrağıyla seçilir.
+    <strong>Divider</strong>: pipelined (<code>divu_pipelined.sv</code>) veya sıralı (<code>divu_int.sv</code>).`,
+
+  memory: `<strong>MEM — Memory Access (memory.sv)</strong> —
+    <strong>D-Cache (Non-Blocking)</strong> (<code>dcache_nb.sv</code>): 8 KB, 4-way, write-back, MSHR×4, 2-bank, PLRU, 128-bit blok.
+    <strong>Store Buffer</strong> (<code>store_buffer.sv</code>): 8 derinlik; bekleyen yazmaları tamponlar, RAW forwarding sağlar.
+    <strong>Load/Store</strong>: byte/halfword/word hizalama ve genişletme.
+    <strong>FENCE.I</strong>: dirty satır tahliyesi (<code>dcache_fencei.sv</code>).
+    <strong>PMA Checker</strong>: izin, önbelleklenebilirlik ve atomik erişim kontrolleri.
+    <code>LOG_CACHE=1</code> ile cache erişim tablosu loglanır.`,
+
+  writeback: `<strong>WB — Write-back (writeback.sv)</strong> —
+    Sonucu hedef register'a yazar.
+    <code>LOG_COMMIT=1</code>: Spike uyumlu commit trace üretir (GNU Spike formatı, otomatik karşılaştırma için kullanılır).
+    <code>KONATA_TRACER=1 + LOG_PIPELINE=1</code>: cycle-accurate Konata pipeline görselleştirme logu üretir.`,
+};
+
+function showInfo(key, tabId) {
+  const panel = document.getElementById('tab-' + tabId);
+  if (!panel) return;
+  const box = panel.querySelector('.info-card');
+  if (box && infos[key]) box.innerHTML = infos[key];
+}
+</script>
+</body>
+</html>
