@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Level RISC-V Core</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --card-bg: #ffffff;
+    --border: #c8cdd6;
+    --text: #1a1e2e;
+    --text-muted: #4a5568;
+    --stage-bg: #2e6da4;
+    --stage-text: #ffffff;
+    --hazard-line: #2e6da4;
+    --branch-bg: #eaf1f8;
+    --branch-border: #a8c4de;
+    --icache-bg: #4a7c59;
+    --dcache-bg: #3a7a72;
+    --l2-bg: #5a6a7a;
+    --arbiter-bg: #7a6a3a;
+    --uart-bg: #2e5fa3;
+    --gpio-bg: #3a7a5a;
+    --spi-bg: #b84a2e;
+    --i2c-bg: #4a8a3a;
+    --timer-bg: #b87a1a;
+    --plic-bg: #6a3ab8;
+    --dma-bg: #b83a6a;
+    --section-divider: #c0c8d8;
+    --badge-isa: #283272;
+    --badge-hdl: #9333ea;
+    --badge-pipe: #16a34a;
+    --badge-status: #0f766e;
+    --badge-lic: #d92a2a;
+    --perf-bg: #f8fafc;
+    --perf-border: #d1dae8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 24px;
+    min-height: 100vh;
+  }
+
+  .diagram {
+    max-width: 980px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 32px 36px 36px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 22px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+  }
+
+  h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #fff;
+    padding: 5px 11px;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+
+  /* ── Pipeline ── */
+  .pipeline-section { margin-bottom: 8px; }
+
+  .pipeline-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .stage-wrapper {
+    display: flex;
+    align-items: center;
+    flex: 1;
+  }
+
+  .stage {
+    flex: 1;
+    background: var(--stage-bg);
+    border-radius: 6px;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .stage-header {
+    background: var(--stage-bg);
+    color: var(--stage-text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-align: center;
+    padding: 7px 4px;
+    border-bottom: 1.5px solid rgba(255,255,255,0.2);
+  }
+
+  .stage-body {
+    background: #ffffff;
+    border: 1.5px solid var(--stage-bg);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    padding: 10px 10px 12px;
+    min-height: 100px;
+  }
+
+  .stage-body ul { list-style: none; padding: 0; }
+
+  .stage-body ul li {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    padding: 2px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    line-height: 1.4;
+  }
+
+  .stage-body ul li::before {
+    content: '•';
+    color: var(--stage-bg);
+    font-weight: 700;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    margin-top: -1px;
+  }
+
+  .tag {
+    font-size: 0.6rem;
+    font-family: 'IBM Plex Mono', monospace;
+    background: #e8f0f8;
+    color: var(--stage-bg);
+    border-radius: 3px;
+    padding: 1px 4px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .arrow {
+    width: 26px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 18px;
+    margin-top: 10px;
+  }
+
+  .arrow svg { display: block; }
+
+  /* Hazard Unit */
+  .hazard-row {
+    display: flex;
+    align-items: center;
+    margin: 10px 0 12px;
+    position: relative;
+  }
+
+  .hazard-line-left {
+    flex: 1;
+    height: 2px;
+    background: var(--hazard-line);
+  }
+
+  .hazard-label {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--hazard-line);
+    padding: 0 14px;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+  }
+
+  .hazard-line-right {
+    flex: 1;
+    height: 2px;
+    background: var(--hazard-line);
+    position: relative;
+  }
+
+  .hazard-arrow-up {
+    position: absolute;
+    left: 0;
+    top: -6px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 8px solid var(--hazard-line);
+  }
+
+  /* Branch Prediction */
+  .branch-box {
+    border: 1.5px solid var(--branch-border);
+    background: var(--branch-bg);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .branch-header {
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 9px 12px 5px;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+
+  .branch-detail {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.71rem;
+    color: var(--text-muted);
+    text-align: center;
+    background: rgba(255,255,255,0.6);
+    border-top: 1px solid var(--branch-border);
+    padding: 7px 12px;
+  }
+
+  /* Section divider */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 8px 0 16px;
+  }
+
+  .section-divider hr {
+    flex: 1;
+    border: none;
+    border-top: 1.5px solid var(--section-divider);
+  }
+
+  .section-label {
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+  }
+
+  /* Memory Hierarchy */
+  .memory-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .mem-block {
+    flex: 1;
+    min-width: 130px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1.5px solid transparent;
+  }
+
+  .mem-header {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 0.77rem;
+    letter-spacing: 0.05em;
+    color: #fff;
+    text-align: center;
+    padding: 8px 6px 6px;
+  }
+
+  .mem-detail {
+    font-size: 0.69rem;
+    text-align: center;
+    padding: 5px 6px 8px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1.5;
+    color: #2a5a35;
+  }
+
+  .icache .mem-header  { background: var(--icache-bg); }
+  .icache .mem-detail  { background: #d4e8d8; color: #2a5a35; }
+  .icache { border-color: var(--icache-bg); }
+
+  .dcache .mem-header  { background: var(--dcache-bg); }
+  .dcache .mem-detail  { background: #d0e6e4; color: #1e5550; }
+  .dcache { border-color: var(--dcache-bg); }
+
+  .l2 .mem-header  { background: var(--l2-bg); }
+  .l2 .mem-detail  { background: #dde3ea; color: #3a4858; }
+  .l2 { border-color: var(--l2-bg); }
+
+  .arbiter .mem-header  { background: var(--arbiter-bg); }
+  .arbiter .mem-detail  { background: #ede8d4; color: #5a4a1a; }
+  .arbiter { border-color: var(--arbiter-bg); }
+
+  /* Wishbone Bus */
+  .bus-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .bus-block {
+    border-radius: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 0.70rem;
+    letter-spacing: 0.05em;
+    color: #fff;
+    text-align: center;
+    padding: 10px 10px;
+    flex: 1;
+    min-width: 60px;
+  }
+
+  .uart   { background: var(--uart-bg); }
+  .gpio   { background: var(--gpio-bg); }
+  .spi    { background: var(--spi-bg); }
+  .i2c    { background: var(--i2c-bg); }
+  .timer  { background: var(--timer-bg); }
+  .plic   { background: var(--plic-bg); }
+  .dma    { background: var(--dma-bg); font-size: 0.62rem; }
+
+  /* ISA Row */
+  .isa-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .isa-block {
+    flex: 1;
+    min-width: 100px;
+    border-radius: 6px;
+    border: 1.5px solid #c8d8f0;
+    background: #f0f5fc;
+    text-align: center;
+    padding: 8px 10px;
+  }
+
+  .isa-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--badge-isa);
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .isa-desc {
+    font-size: 0.65rem;
+    color: #5a6a8a;
+    line-height: 1.4;
+  }
+
+  /* Perf scores */
+  .perf-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .perf-block {
+    flex: 1;
+    min-width: 150px;
+    border-radius: 6px;
+    border: 1.5px solid var(--perf-border);
+    background: var(--perf-bg);
+    padding: 12px 14px;
+    text-align: center;
+  }
+
+  .perf-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .perf-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--stage-bg);
+    line-height: 1.2;
+  }
+
+  .perf-sub {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+
+  @media (max-width: 700px) {
+    .pipeline-row { flex-wrap: wrap; }
+    .stage-wrapper { min-width: 44%; }
+    .arrow { display: none; }
+    h1 { font-size: 1.2rem; }
+  }
+</style>
+</head>
+<body>
+<div class="diagram">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>Level RISC-V</h1>
+    <div class="badges">
+      <span class="badge" style="background:var(--badge-isa)">ISA · RV32IMC</span>
+      <span class="badge" style="background:var(--badge-hdl)">HDL · SystemVerilog</span>
+      <span class="badge" style="background:var(--badge-pipe)">Pipeline · 5-stage</span>
+      <span class="badge" style="background:var(--badge-status)">Sim active · FPGA paused</span>
+      <span class="badge" style="background:var(--badge-lic)">License · GPLv3</span>
+    </div>
+  </div>
+
+  <!-- ISA extensions -->
+  <div class="section-divider">
+    <hr><span class="section-label">ISA &amp; Extensions</span><hr>
+  </div>
+
+  <div class="isa-row" style="margin-bottom:20px;">
+    <div class="isa-block">
+      <span class="isa-label">RV32I</span>
+      <span class="isa-desc">Base Integer</span>
+    </div>
+    <div class="isa-block">
+      <span class="isa-label">M</span>
+      <span class="isa-desc">Mul / Div</span>
+    </div>
+    <div class="isa-block">
+      <span class="isa-label">C</span>
+      <span class="isa-desc">Compressed 16-bit</span>
+    </div>
+    <div class="isa-block">
+      <span class="isa-label">Zicsr</span>
+      <span class="isa-desc">CSR Instructions</span>
+    </div>
+    <div class="isa-block">
+      <span class="isa-label">Zifencei</span>
+      <span class="isa-desc">Instr-Fetch Fence</span>
+    </div>
+    <div class="isa-block">
+      <span class="isa-label">Machine Mode</span>
+      <span class="isa-desc">M-mode privilege</span>
+    </div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="section-divider">
+    <hr><span class="section-label">5-Stage In-Order Pipeline</span><hr>
+  </div>
+
+  <div class="pipeline-section">
+    <div class="pipeline-row">
+
+      <!-- FETCH -->
+      <div class="stage-wrapper">
+        <div class="stage">
+          <div class="stage-header">FETCH</div>
+          <div class="stage-body">
+            <ul>
+              <li>PC Mgmt</li>
+              <li>I-Cache</li>
+              <li>Align Buffer</li>
+              <li>RV32C Decode</li>
+              <li>Next-line Prefetch <span class="tag">opt</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">
+        <svg width="22" height="14" viewBox="0 0 22 14"><path d="M0 7 H16 M10 1 L21 7 L10 13" stroke="#2e6da4" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
+      </div>
+
+      <!-- DECODE -->
+      <div class="stage-wrapper">
+        <div class="stage">
+          <div class="stage-header">DECODE</div>
+          <div class="stage-body">
+            <ul>
+              <li>Decoder</li>
+              <li>RegFile</li>
+              <li>Imm Gen</li>
+              <li>Control Unit</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">
+        <svg width="22" height="14" viewBox="0 0 22 14"><path d="M0 7 H16 M10 1 L21 7 L10 13" stroke="#2e6da4" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
+      </div>
+
+      <!-- EXECUTE -->
+      <div class="stage-wrapper">
+        <div class="stage">
+          <div class="stage-header">EXECUTE</div>
+          <div class="stage-body">
+            <ul>
+              <li>ALU</li>
+              <li>MUL/DIV <span class="tag">selectable</span></li>
+              <li>CSR File</li>
+              <li>Branch Resolve</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">
+        <svg width="22" height="14" viewBox="0 0 22 14"><path d="M0 7 H16 M10 1 L21 7 L10 13" stroke="#2e6da4" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
+      </div>
+
+      <!-- MEMORY -->
+      <div class="stage-wrapper">
+        <div class="stage">
+          <div class="stage-header">MEMORY</div>
+          <div class="stage-body">
+            <ul>
+              <li>Load/Store</li>
+              <li>D-Cache</li>
+              <li>PMA Check</li>
+              <li>D$ Prefetch <span class="tag">opt</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">
+        <svg width="22" height="14" viewBox="0 0 22 14"><path d="M0 7 H16 M10 1 L21 7 L10 13" stroke="#2e6da4" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
+      </div>
+
+      <!-- WRITEBACK -->
+      <div class="stage-wrapper">
+        <div class="stage">
+          <div class="stage-header">WRITEBACK</div>
+          <div class="stage-body">
+            <ul>
+              <li>Reg WB</li>
+              <li>Commit Trace</li>
+              <li>Konata Export</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- pipeline-row -->
+
+    <!-- Hazard Unit -->
+    <div class="hazard-row">
+      <div class="hazard-arrow-up"></div>
+      <div class="hazard-line-left"></div>
+      <div class="hazard-label">Hazard Unit / Forwarding</div>
+      <div class="hazard-line-right"></div>
+    </div>
+
+    <!-- Branch Prediction -->
+    <div class="branch-box">
+      <div class="branch-header">Tournament Branch Prediction Unit</div>
+      <div class="branch-detail">GShare + Bimodal (tournament) · BTB · RAS · next-line prefetch (PREFETCH_TYPE)</div>
+    </div>
+  </div><!-- pipeline-section -->
+
+  <!-- Memory Hierarchy -->
+  <div class="section-divider">
+    <hr><span class="section-label">Memory Hierarchy</span><hr>
+  </div>
+
+  <div class="memory-row">
+    <div class="mem-block icache">
+      <div class="mem-header">L1 I-Cache</div>
+      <div class="mem-detail">Blocking line fills<br>PMA · I$ Prefetch</div>
+    </div>
+    <div class="mem-block dcache">
+      <div class="mem-header">L1 D-Cache</div>
+      <div class="mem-detail">Blocking line fills<br>Write-back · PMA</div>
+    </div>
+    <div class="mem-block l2">
+      <div class="mem-header">L2 Cache</div>
+      <div class="mem-detail" style="color:#3a4858;">Non-blocking · Dual-pipe<br>Multi-bank · MSHR<br>Write-back · MESI tags<br><span style="font-size:0.62rem;opacity:0.8;">USE_L2_CACHE=1</span></div>
+    </div>
+    <div class="mem-block arbiter">
+      <div class="mem-header">Memory Controller</div>
+      <div class="mem-detail" style="color:#5a4a1a;">Wishbone master<br>I$ / D$ arbitration<br>Write-back eviction</div>
+    </div>
+  </div>
+
+  <!-- Wishbone Bus -->
+  <div class="section-divider">
+    <hr><span class="section-label">Wishbone B4 Bus — Peripherals</span><hr>
+  </div>
+
+  <div class="bus-row">
+    <div class="bus-block uart">UART</div>
+    <div class="bus-block gpio">GPIO</div>
+    <div class="bus-block spi">SPI</div>
+    <div class="bus-block i2c">I2C</div>
+    <div class="bus-block timer">Timers</div>
+    <div class="bus-block plic">PLIC</div>
+    <div class="bus-block dma">DMA · WDT · PWM · VGA</div>
+  </div>
+
+  <!-- Performance -->
+  <div class="section-divider">
+    <hr><span class="section-label">Benchmark Scores (RTL sim · 25 MHz)</span><hr>
+  </div>
+
+  <div class="perf-row">
+    <div class="perf-block">
+      <div class="perf-title">CoreMark</div>
+      <div class="perf-value">2.62</div>
+      <div class="perf-sub">CoreMark/MHz<br>65.38 CM @ 25 MHz<br>-O2 · RV32IMC</div>
+    </div>
+    <div class="perf-block">
+      <div class="perf-title">Dhrystone</div>
+      <div class="perf-value">1.51</div>
+      <div class="perf-sub">DMIPS/MHz<br>37.63 DMIPS @ 25 MHz<br>-O3 · 200 iterations</div>
+    </div>
+    <div class="perf-block">
+      <div class="perf-title">Verification</div>
+      <div class="perf-value" style="font-size:0.82rem;padding-top:4px;">riscv-tests<br>riscv-arch-test<br>Spike trace cmp<br>Imperas · riscv-dv</div>
+      <div class="perf-sub">+ riscv-formal hooks</div>
+    </div>
+    <div class="perf-block">
+      <div class="perf-title">Tooling</div>
+      <div class="perf-value" style="font-size:0.78rem;padding-top:4px;">Verilator 5+<br>Yosys · OpenLane<br>GTKWave · Konata</div>
+      <div class="perf-sub">make dashboard → HTML</div>
+    </div>
+  </div>
+
+</div><!-- diagram -->
+</body>
+</html>

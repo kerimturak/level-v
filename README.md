@@ -71,8 +71,12 @@ A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / mach
 </p>
 
 <p align="center">
-  <img src="docs/mcu_diagram.png" alt="Level-V SoC block diagram" width="720"/>
+  <a href="https://htmlpreview.github.io/?https://github.com/kerimturak/level-v/blob/main/docs/level_riscv_core_diagram.html">
+    <img src="https://img.shields.io/badge/SoC%20%26%20Pipeline%20Diagram-Interactive%20HTML-2250CC?style=for-the-badge&logo=html5&logoColor=white" alt="Level-V SoC and pipeline diagram (HTML)"/>
+  </a>
 </p>
+
+> **SoC / pipeline / memory / Wishbone / benchmarks:** styled one-pager in [`docs/level_riscv_core_diagram.html`](docs/level_riscv_core_diagram.html) (open locally or use the badge via [htmlpreview.github.io](https://htmlpreview.github.io/)). GitHub’s README renderer does not apply custom CSS, so this replaces the old static `mcu_diagram.png` slide.
 
 ### Memory hierarchy (detail)
 

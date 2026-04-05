@@ -1104,10 +1104,18 @@ else ifneq ($(findstring +define+LEVEL_OPENLANE,$(SV_DEFINES)),)
 else ifeq ($(MINIMAL_SOC),1)
   RESOLVED_RTL_PROFILE := minimal_soc
 else
-  RESOLVED_RTL_PROFILE := full_soc
+  RESOLVED_RTL_PROFILE := medium
 endif
 
-$(LEVEL_PARAM_PROFILE_SVH): $(GEN_LEVEL_PARAM_PY) $(wildcard $(RTL_DIR)/cfg/*.cfg) | $(RTL_GEN_DIR)
+# Each profile gets its own obj_dir so binaries never conflict across profiles.
+# RUN_BIN (defined below) and all Verilator flags pick this up automatically.
+OBJ_DIR := $(BUILD_DIR)/obj_dir_$(RESOLVED_RTL_PROFILE)
+
+# Always regenerate so the file reflects the current RESOLVED_RTL_PROFILE.
+# The script is fast (~0.01 s); stale SVH from a previous profile would
+# cause a silent build with wrong parameters.
+.PHONY: FORCE
+$(LEVEL_PARAM_PROFILE_SVH): $(GEN_LEVEL_PARAM_PY) $(wildcard $(RTL_DIR)/cfg/*.cfg) FORCE | $(RTL_GEN_DIR)
 	@printf "$(CYAN)[RTL_CFG]$(RESET) profile=$(RESOLVED_RTL_PROFILE) -> $(LEVEL_PARAM_PROFILE_SVH)\n"
 	@$(PYTHON) $(GEN_LEVEL_PARAM_PY) $(RESOLVED_RTL_PROFILE) --out $(LEVEL_PARAM_PROFILE_SVH)
 
@@ -1117,6 +1125,21 @@ $(RTL_GEN_DIR):
 .PHONY: gen-rtl-cfg
 gen-rtl-cfg: $(LEVEL_PARAM_PROFILE_SVH)
 	@true
+
+# ============================================================
+# auto_verilate — build once per profile, skip when binary exists.
+# All test entry-points depend on this instead of calling `verilate`
+# directly.  Switching profiles is implicit: each profile has its
+# own OBJ_DIR so a missing binary triggers a fresh build automatically.
+# ============================================================
+.PHONY: auto_verilate
+auto_verilate: | dirs
+	@if [ ! -x "$(RUN_BIN)" ]; then \
+	  printf "$(GREEN)[AUTO-VERILATE]$(RESET) No binary for profile=$(RESOLVED_RTL_PROFILE) → building...\n"; \
+	  $(MAKE) --no-print-directory verilate; \
+	else \
+	  printf "$(CYAN)[RTL_CFG]$(RESET) Binary ready: profile=$(RESOLVED_RTL_PROFILE)  $(RUN_BIN)\n"; \
+	fi
 
 # Verilator: üst modül (level_wrapper) parametre geçersiz kılma — örnek:
 #   make verilate VERILATOR_GFLAGS="-GVGA_EN=1 -GGPIO_EN=1 -GPLIC_EN=1"
@@ -1305,7 +1328,7 @@ VERILATOR_BUILD_FLAGS = \
 # Targets
 # =========================================
 
-.PHONY: dirs lint verilate verilate-fast run_verilator wave clean_verilator verilator_help stats
+.PHONY: dirs lint verilate verilate-fast auto_verilate run_verilator wave clean_verilator verilator_help stats
 
 dirs:
 	@$(MKDIR) "$(BUILD_DIR)" "$(BUILD_DIR)/gen" "$(OBJ_DIR)" "$(LOG_DIR)"
@@ -1473,7 +1496,7 @@ ifdef EXCEPTION_FAIL_ADDR
 endif
 
 # Main run target using Python runner
-run_verilator: verilate
+run_verilator: auto_verilate
 	@$(PYTHON) $(VERILATOR_RUNNER) $(VERILATOR_RUNNER_ARGS)
 
 # Quick run — incremental verilate (VERILATE_FAST=1)
@@ -1954,7 +1977,7 @@ endef
 # Targets
 # =========================================
 
-.PHONY: run run_python run_make test_prepare run_rtl run_spike compare_logs test_report clean_test list_tests help_test run_flist
+.PHONY: run run_python run_make test_prepare run_rtl run_spike compare_logs test_report clean_test list_tests help_test run_flist auto_verilate
 
 
 # ============================================================
@@ -1974,7 +1997,7 @@ compare_logs: run_spike
 test_report: compare_logs
 
 # Python-based test runner (USE_PYTHON=1)
-run_python:
+run_python: auto_verilate
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Level RISC-V Test Runner (Python Mode)$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -1986,6 +2009,7 @@ run_python:
 			--test-name "$(TEST_NAME)" \
 			--test-type "$(TEST_TYPE)" \
 			--simulator "$(SIM)" \
+			--bin-path "$(RUN_BIN)" \
 			--build-dir "$(BUILD_DIR)" \
 			--sim-dir "$(SIM_DIR)" \
 			--results-dir "$(RESULTS_DIR)" \
@@ -2007,6 +2031,7 @@ run_python:
 			--test-name "$(TEST_NAME)" \
 			--test-type "$(TEST_TYPE)" \
 			--simulator "$(SIM)" \
+			--bin-path "$(RUN_BIN)" \
 			--build-dir "$(BUILD_DIR)" \
 			--sim-dir "$(SIM_DIR)" \
 			--results-dir "$(RESULTS_DIR)" \
@@ -2027,7 +2052,7 @@ run_python:
 # ============================================================
 # 1 Prepare Test Environment
 # ============================================================
-test_prepare:
+test_prepare: auto_verilate
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo -e "$(GREEN)  Level RISC-V Test Runner$(RESET)"
 	@echo -e "$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -3940,7 +3965,6 @@ t:
 ifndef T
 	$(error Usage: make t T=<test_name>)
 endif
-	@$(MAKE) --no-print-directory verilate
 	@$(MAKE) --no-print-directory run \
 		TEST_NAME=$(T) \
 		TEST_TYPE=isa \

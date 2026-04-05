@@ -261,6 +261,7 @@ class TestConfig:
     build_dir: Path
     root_dir: Path
     log_dir: Path
+    bin_path: Optional[Path] = None  # Verilator binary (per-profile obj_dir)
     
     # Test paths (auto-filled)
     test_paths: Dict[str, Path] = field(default_factory=dict)
@@ -400,10 +401,11 @@ def run_rtl_simulation(config: TestConfig, logger: DebugLogger) -> Tuple[bool, i
         # Invoke Verilator runner
         runner_script = config.root_dir / "script/python/makefile/verilator_runner.py"
         
+        _bin = config.bin_path or (config.build_dir / "obj_dir/Vlevel_wrapper")
         cmd = [
             sys.executable, str(runner_script),
             "--test", config.test_name,
-            "--bin-path", str(config.build_dir / "obj_dir/Vlevel_wrapper"),
+            "--bin-path", str(_bin),
             "--log-dir", str(config.log_dir),
             "--mem-dirs", str(config.test_paths["mem_dir"]),
             "--max-cycles", str(config.max_cycles),
@@ -929,6 +931,12 @@ Examples:
     parser.add_argument("--resync", action="store_true", help="Resync on mismatch")
     parser.add_argument("--resync-window", type=int, default=8, help="Resync window size")
 
+    # Binary path (per-profile obj_dir)
+    parser.add_argument(
+        "--bin-path",
+        help="Path to Verilator binary (overrides default build/obj_dir/Vlevel_wrapper)"
+    )
+
     # Exception address override
     parser.add_argument("--exception-pass-addr", help="Exception test pass address override (e.g., 0x80000040)")
     parser.add_argument("--exception-fail-addr", help="Exception test fail address override (e.g., 0x8000103c)")
@@ -998,6 +1006,7 @@ def main() -> int:
         root_dir=root_dir,
         log_dir=log_dir,
         max_cycles=args.max_cycles,
+        bin_path=Path(args.bin_path) if getattr(args, 'bin_path', None) else None,
         exception_pass_addr=args.exception_pass_addr if hasattr(args, 'exception_pass_addr') else None,
         exception_fail_addr=args.exception_fail_addr if hasattr(args, 'exception_fail_addr') else None,
         skip_spike=skip_spike,
