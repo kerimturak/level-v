@@ -1,0 +1,58 @@
+# Level-V template for future MLPerf Tiny + bare-metal harness.
+# Align `memory.ram.length` with on-chip BRAM (rtl/pkg/level_param.sv) or link
+# against a larger testbench RAM for Verilator.
+# UART/timer bases match env/coremark/levelv (Level SoC memory map).
+
+processor:
+  name: "level-V"
+  isa: "RV32IMC_Zicsr"
+  endian: "little"
+
+clock:
+  cpu_hz: 25000000
+  timer_hz: 25000000
+
+memory:
+  ram:
+    origin: 0x80000000
+    length: 64K
+    type: "rwx"
+    description: "Unified RAM — increase for TFLM tensor arena + model if RTL allows"
+
+stack:
+  size: 8K
+  location: "end_of_ram"
+
+heap:
+  size: 48K
+  location: "after_bss"
+
+peripherals:
+  uart:
+    base: 0x20000000
+    size: 16
+    registers:
+      ctrl:   { offset: 0x00, access: "rw" }
+      status: { offset: 0x04, access: "ro" }
+      rdata:  { offset: 0x08, access: "ro" }
+      wdata:  { offset: 0x0C, access: "wo" }
+  timer:
+    base: 0x30000000
+    size: 8
+    registers:
+      low:  { offset: 0x00, access: "ro" }
+      high: { offset: 0x04, access: "ro" }
+
+uart:
+  baud_rate: 115200
+
+entry: "_start"
+
+sections:
+  text_init:
+    vma: 0x80000000
+    align: 4
+  tohost:
+    vma: 0x80001000
+    size: 64
+    align: 64
