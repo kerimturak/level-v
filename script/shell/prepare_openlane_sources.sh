@@ -62,8 +62,10 @@ cp -f "${ROOT_DIR}/rtl/include"/*.svh "${INC_DIR}/"
 cp -f "${ROOT_DIR}/rtl/include"/*.svh "${SRC_DIR}/"
 
 PYTHON="${PYTHON:-python3}"
-echo "[openlane:prep] gen level_param_profile.svh (openlane cfg)"
-"${PYTHON}" "${ROOT_DIR}/script/python/gen_level_param_profile.py" openlane \
+# Default SMALL (ASIC); override e.g. RTL_CFG_PROFILE=MEDIUM for prep with medium/large numerics.
+RTL_CFG_PROFILE="${RTL_CFG_PROFILE:-small}"
+echo "[openlane:prep] gen level_param_profile.svh (RTL_CFG_PROFILE=${RTL_CFG_PROFILE})"
+"${PYTHON}" "${ROOT_DIR}/script/python/gen_level_param_profile.py" "${RTL_CFG_PROFILE}" \
   --out "${INC_DIR}/level_param_profile.svh"
 cp -f "${INC_DIR}/level_param_profile.svh" "${SRC_DIR}/"
 

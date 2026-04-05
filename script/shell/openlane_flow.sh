@@ -27,6 +27,7 @@ Commands:
   clean   : Remove OpenLane generated run data and prepared src/
 
 Environment variables:
+  RTL_CFG_PROFILE RTL pack for prep (small|medium|large; default: small) → level_param_profile.svh
   OPENLANE_IMAGE  Docker image (default: ${OPENLANE_IMAGE})
   PDK_ROOT        PDK root path  (default: ${PDK_ROOT})
   PDK             PDK variant    (default: ${PDK})

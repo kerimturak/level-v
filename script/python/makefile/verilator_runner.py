@@ -319,7 +319,7 @@ def build_run_command(config: SimRunConfig) -> List[str]:
 
     # Skip heavy RTL log plusargs for UART-centric benchmarks (rebuild: verilate w/ TEST_CONFIG).
     # VERILATOR_FORCE_ALL_PLUSARGS=1 always passes them (debug).
-    _uart_centric_tests = frozenset({"coremark", "dhrystone"})
+    _uart_centric_tests = frozenset({"coremark", "dhrystone", "mlperf_tiny"})
     embench_run = _mem_file_under_embench(config.mem_file)
     uart_centric = config.test_name.lower() in _uart_centric_tests or embench_run
     force_plus = os.environ.get("VERILATOR_FORCE_ALL_PLUSARGS", "") == "1"
@@ -332,6 +332,8 @@ def build_run_command(config: SimRunConfig) -> List[str]:
     tn = config.test_name.lower()
     if tn == "dhrystone":
         cmd.append("+uart_finish_pattern=Dhrystone Complete")
+    elif tn == "mlperf_tiny":
+        cmd.append("+uart_finish_pattern=m-mlperf-tiny-levelv-done")
     elif embench_run:
         cmd.append("+uart_finish_pattern=Benchmark Complete")
     

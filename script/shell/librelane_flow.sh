@@ -34,6 +34,7 @@ Environment variables:
   LIBRELANE_CMD         CLI binary (default: ${LIBRELANE_CMD})
   LIBRELANE_PY_FALLBACK Python fallback command (default: ${LIBRELANE_PY_FALLBACK})
   LIBRELANE_DOCKER_MOUNTS Extra mounts (space-separated), used as repeated --docker-mount
+  RTL_CFG_PROFILE       RTL pack for level_param_profile.svh during prep: small|medium|large (default: small)
   PDK_ROOT              PDK root path (default: ${PDK_ROOT})
   PDK                   PDK variant   (default: ${PDK})
   TAG                   Run tag       (default: ${TAG})

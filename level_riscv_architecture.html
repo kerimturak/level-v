@@ -1,70 +1,84 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Level RISC-V Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   /* ── Design tokens ─────────────────────────────────── */
   :root {
-    --bg:        #f8f7f3;
-    --bg2:       #efede7;
-    --bg3:       #e3e1d9;
-    --surface:   #ffffff;
-    --text:      #181715;
-    --text2:     #615f58;
-    --text3:     #9b9890;
-    --border:    rgba(0,0,0,0.08);
-    --border2:   rgba(0,0,0,0.17);
-    --accent:    #2250cc;
-    --accent-s:  rgba(34,80,204,.10);
-    --radius:    10px;
-    --radius-lg: 16px;
-    --shadow:    0 1px 3px rgba(0,0,0,.06), 0 6px 18px rgba(0,0,0,.07);
-    --shadow-sm: 0 1px 2px rgba(0,0,0,.07);
-    --tr:        .18s cubic-bezier(.4,0,.2,1);
+    --bg:        #f4f2ec;
+    --bg2:       #ebe8e0;
+    --bg3:       #dedad1;
+    --surface:   #fffcf7;
+    --text:      #141210;
+    --text2:     #5c5a52;
+    --text3:     #949089;
+    --border:    rgba(0,0,0,0.07);
+    --border2:   rgba(0,0,0,0.14);
+    --accent:    #1e4ed8;
+    --accent-s:  rgba(30,78,216,.11);
+    --accent-glow: rgba(30,78,216,.22);
+    --radius:    12px;
+    --radius-lg: 20px;
+    --shadow:    0 2px 8px rgba(0,0,0,.04), 0 12px 40px rgba(0,0,0,.08);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.06);
+    --tr:        .2s cubic-bezier(.4,0,.2,1);
+    --stage-if:  #1660A8;
+    --stage-id:  #0D6E57;
+    --stage-ex:  #8A5109;
+    --stage-mem: #9C3157;
+    --stage-wb:  #3B6F10;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg:       #111009;
-      --bg2:      #1a1917;
-      --bg3:      #22211e;
-      --surface:  #1a1917;
-      --text:     #e9e7dd;
-      --text2:    #908d83;
-      --text3:    #575450;
-      --border:   rgba(255,255,255,0.07);
-      --border2:  rgba(255,255,255,0.15);
-      --accent:   #6083f5;
-      --accent-s: rgba(96,131,245,.12);
-      --shadow:   0 1px 3px rgba(0,0,0,.35), 0 6px 18px rgba(0,0,0,.28);
-      --shadow-sm:0 1px 2px rgba(0,0,0,.25);
+      --bg:       #0d0c0a;
+      --bg2:      #161513;
+      --bg3:      #1e1d1a;
+      --surface:  #141311;
+      --text:     #ebe9e0;
+      --text2:    #9e9a90;
+      --text3:    #5c5953;
+      --border:   rgba(255,255,255,0.06);
+      --border2:  rgba(255,255,255,0.12);
+      --accent:   #7c9fff;
+      --accent-s: rgba(124,159,255,.14);
+      --accent-glow: rgba(124,159,255,.2);
+      --shadow:   0 2px 12px rgba(0,0,0,.4), 0 20px 50px rgba(0,0,0,.35);
+      --shadow-sm:0 1px 2px rgba(0,0,0,.3);
     }
   }
 
   /* ── Reset & Base ────────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
-    background: var(--bg);
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background:
+      radial-gradient(1200px 600px at 12% -8%, var(--accent-glow), transparent 55%),
+      radial-gradient(900px 500px at 92% 0%, rgba(157,49,87,.08), transparent 50%),
+      var(--bg);
     color: var(--text);
     min-height: 100vh;
     padding: 2.5rem 1.25rem 3.5rem;
     -webkit-font-smoothing: antialiased;
   }
-  .container { max-width: 940px; margin: 0 auto; }
+  .container { max-width: 1080px; margin: 0 auto; }
 
   /* ── Header ──────────────────────────────────────── */
   header { margin-bottom: 2rem; }
   .header-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 5px; }
-  h1 { font-size: 22px; font-weight: 700; letter-spacing: -.4px; }
+  h1 { font-size: clamp(1.35rem, 2.5vw, 1.65rem); font-weight: 700; letter-spacing: -.45px; }
   .chip {
-    font-size: 10.5px; font-weight: 600; padding: 2px 9px;
+    font-size: 10.5px; font-weight: 600; padding: 3px 10px;
     border-radius: 20px; background: var(--accent-s);
-    color: var(--accent); border: 1px solid rgba(34,80,204,.18);
-    letter-spacing: .03em;
+    color: var(--accent); border: 1px solid rgba(30,78,216,.2);
+    letter-spacing: .04em;
+    text-transform: uppercase;
   }
-  .subtitle { font-size: 13px; color: var(--text2); margin-bottom: 13px; }
+  .subtitle { font-size: 13px; color: var(--text2); margin-bottom: 13px; max-width: 52ch; line-height: 1.55; }
   .subtitle a {
     color: inherit; text-decoration: none;
     border-bottom: 1px solid var(--border2);
@@ -73,40 +87,41 @@
   .subtitle a:hover { color: var(--text); border-color: var(--accent); }
   .badges { display: flex; gap: 6px; flex-wrap: wrap; }
   .badge {
-    font-size: 11px; font-weight: 500; padding: 3px 11px;
+    font-size: 11px; font-weight: 500; padding: 4px 12px;
     border-radius: 20px; border: 1px solid var(--border2);
     color: var(--text2); background: var(--surface);
     box-shadow: var(--shadow-sm);
-    transition: color var(--tr), border-color var(--tr);
+    transition: color var(--tr), border-color var(--tr), transform var(--tr);
     white-space: nowrap;
   }
-  .badge:hover { color: var(--text); border-color: var(--accent); }
+  .badge:hover { color: var(--text); border-color: var(--accent); transform: translateY(-1px); }
 
   /* ── Tab bar ─────────────────────────────────────── */
   .tab-bar {
-    display: flex; gap: 3px; flex-wrap: wrap;
+    display: flex; gap: 4px; flex-wrap: wrap;
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 4px;
-    margin-bottom: 14px;
+    border-radius: 14px; padding: 5px;
+    margin-bottom: 18px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
   }
   .tab-btn {
-    padding: 6px 15px; font-size: 12.5px; font-weight: 500;
+    padding: 8px 16px; font-size: 12.5px; font-weight: 500;
     cursor: pointer; background: transparent; color: var(--text2);
-    border: none; border-radius: 7px; font-family: inherit;
+    border: none; border-radius: 10px; font-family: inherit;
     transition: background var(--tr), color var(--tr), box-shadow var(--tr);
     white-space: nowrap;
   }
   .tab-btn:hover { background: var(--bg3); color: var(--text); }
   .tab-btn.active {
     background: var(--surface); color: var(--text);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-sm), 0 0 0 1px var(--border);
   }
 
   /* ── Tab panels ──────────────────────────────────── */
   .tab-panel { display: none; }
-  .tab-panel.active { display: block; animation: fadeIn .18s ease; }
+  .tab-panel.active { display: block; animation: fadeIn .22s ease; }
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
+    from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: none; }
   }
 
@@ -115,39 +130,96 @@
     border-radius: var(--radius-lg);
     border: 1px solid var(--border);
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
-    background: var(--surface);
+    box-shadow: var(--shadow);
+    background: linear-gradient(165deg, var(--surface) 0%, var(--bg2) 120%);
   }
   svg { display: block; width: 100%; height: auto; }
 
   /* ── Info card ───────────────────────────────────── */
   .info-card {
-    margin-top: 10px; padding: 14px 18px;
-    font-size: 13px; line-height: 1.72;
+    margin-top: 14px; padding: 16px 20px;
+    font-size: 13px; line-height: 1.75;
     background: var(--surface); border-radius: var(--radius);
-    border: 1px solid var(--border); box-shadow: var(--shadow);
-    color: var(--text2); min-height: 54px;
-    transition: color .1s;
+    border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+    color: var(--text2); min-height: 56px;
+    transition: border-color var(--tr), box-shadow var(--tr);
+  }
+  .info-card:focus-within, .info-card.info-pulse {
+    border-color: rgba(30,78,216,.25);
+    box-shadow: var(--shadow-sm), 0 0 0 3px var(--accent-s);
   }
   .info-card strong { color: var(--text); font-weight: 600; }
   .info-card code {
-    font-size: 11.5px; padding: 1px 5px; border-radius: 4px;
+    font-size: 11.5px; padding: 2px 6px; border-radius: 5px;
     background: var(--bg2); border: 1px solid var(--border2);
-    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
     color: var(--text);
+  }
+  .info-hint { font-size: 12px; color: var(--text3); font-style: italic; }
+
+  /* ── Stage reference (accordion) ─────────────────── */
+  .reference-block { margin-top: 1.75rem; }
+  .reference-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .12em; color: var(--text3); margin-bottom: 10px;
+  }
+  .acc-root { border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .acc-item { border-bottom: 1px solid var(--border); }
+  .acc-item:last-child { border-bottom: none; }
+  .acc-btn {
+    width: 100%; text-align: left; padding: 12px 16px 12px 18px;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    color: var(--text); background: transparent; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    transition: background var(--tr);
+  }
+  .acc-btn:hover { background: var(--bg2); }
+  .acc-btn[aria-expanded="true"] { background: var(--bg2); }
+  .acc-btn .acc-chev {
+    flex-shrink: 0; width: 18px; height: 18px; opacity: .45;
+    transition: transform var(--tr);
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23666'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+  .acc-btn[aria-expanded="true"] .acc-chev { transform: rotate(180deg); }
+  .acc-tag {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .acc-tag.if { background: rgba(22,96,168,.15); color: var(--stage-if); }
+  .acc-tag.hz { background: rgba(114,102,204,.18); color: #5c4db3; }
+  .acc-tag.id { background: rgba(13,110,87,.15); color: var(--stage-id); }
+  .acc-tag.ex { background: rgba(138,81,9,.15); color: var(--stage-ex); }
+  .acc-tag.mem { background: rgba(156,49,87,.14); color: var(--stage-mem); }
+  .acc-tag.wb { background: rgba(59,111,16,.15); color: var(--stage-wb); }
+  .acc-tag.gen { background: var(--accent-s); color: var(--accent); }
+  .acc-panel-inner {
+    padding: 0 18px 16px 18px; font-size: 13px; line-height: 1.72;
+    color: var(--text2); border-top: 1px solid var(--border);
+    background: linear-gradient(180deg, transparent, var(--bg2));
+  }
+  .acc-panel-inner ul { margin: 8px 0 0 1.1rem; }
+  .acc-panel-inner li { margin: 4px 0; }
+  .acc-panel[hidden] { display: none; }
+
+  .acc-item.acc-highlight .acc-btn {
+    box-shadow: inset 3px 0 0 var(--accent);
   }
 
   /* ── Clickable SVG nodes ─────────────────────────── */
   .nc { cursor: pointer; }
-  .nc rect, .nc ellipse { transition: opacity .12s; }
-  .nc:hover rect, .nc:hover ellipse { opacity: .82; }
+  .nc rect, .nc ellipse { transition: filter .15s, opacity .15s; }
+  .nc:hover rect, .nc:hover ellipse { filter: brightness(1.03); }
+  @media (prefers-color-scheme: dark) {
+    .nc:hover rect, .nc:hover ellipse { filter: brightness(1.12); }
+  }
 
   /* ── Footer ──────────────────────────────────────── */
   footer {
     margin-top: 3rem; padding-top: 1.25rem;
     border-top: 1px solid var(--border);
     font-size: 12px; color: var(--text3);
-    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
   }
   footer a { color: inherit; text-decoration: none; }
   footer a:hover { color: var(--text2); }
@@ -163,7 +235,7 @@
       <span class="chip">Level-V</span>
     </div>
     <p class="subtitle">
-      Architecture diagram —
+      Interactive architecture reference — click blocks in each diagram or expand the sections below for full English documentation.
       <a href="https://github.com/kerimturak/level-v">github.com/kerimturak/level-v</a>
     </p>
     <div class="badges">
@@ -181,8 +253,8 @@
   <!-- ══ TAB BAR ═════════════════════════════════════════════════════════ -->
   <div class="tab-bar">
     <button class="tab-btn active" onclick="showTab('pipeline',this)">Pipeline</button>
-    <button class="tab-btn" onclick="showTab('cache',this)">Cache &amp; Bellek</button>
-    <button class="tab-btn" onclick="showTab('soc',this)">SoC &amp; Çevre Birimler</button>
+    <button class="tab-btn" onclick="showTab('cache',this)">Cache &amp; Memory</button>
+    <button class="tab-btn" onclick="showTab('soc',this)">SoC &amp; Peripherals</button>
     <button class="tab-btn" onclick="showTab('bp',this)">Branch Predictor</button>
     <button class="tab-btn" onclick="showTab('mem',this)">Memory Map</button>
   </div>
@@ -190,7 +262,7 @@
   <!-- ══════════════════════════ PIPELINE ════════════════════════════════ -->
   <div class="tab-panel active" id="tab-pipeline">
     <div class="svg-wrap">
-    <svg viewBox="0 0 880 545">
+    <svg viewBox="0 0 880 568">
       <defs>
         <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5"
                 markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -199,19 +271,31 @@
         </marker>
       </defs>
 
-      <!-- Hazard Unit banner -->
+      <!-- Hazard / forwarding strip (RTL: hazard_unit.sv + cpu.sv branch fwd + DE early spec) -->
       <g class="nc" onclick="showInfo('hazard','pipeline')">
-        <rect x="18" y="12" width="844" height="28" rx="6" fill="none"
+        <rect x="18" y="6" width="844" height="54" rx="6" fill="rgba(114,102,204,0.04)"
               stroke="#7266CC" stroke-width="0.8" stroke-dasharray="5 3"/>
-        <text x="440" y="31" text-anchor="middle" font-size="10.5"
+        <text x="440" y="19" text-anchor="middle" font-size="9.5"
               font-weight="600" fill="#7266CC">
-          hazard_unit.sv — forwarding (4 path) · load-use stall · branch flush
+          hazard_unit.sv — MEM→EX · WB→EX · WB→ID (rs1 / rs2)
+        </text>
+        <text x="440" y="30" text-anchor="middle" font-size="8.3"
+              font-weight="500" fill="#5a4d96">
+          cpu.sv — MEM→ID branch operands (ex_mem_bypass_data); WB→ID when no MEM match
+        </text>
+        <text x="440" y="41" text-anchor="middle" font-size="8.3"
+              font-weight="600" fill="#2f855a">
+          DE early speculation: de_early_spec_hit vs IFU spec · if miss → de_early_miss → de_early_flush (pipe1)
+        </text>
+        <text x="440" y="52" text-anchor="middle" font-size="8.3"
+              font-weight="600" fill="#D83A3A">
+          EX: !ex_spec_hit → flush pipe1 (IF/ID) + pipe2 (ID/EX)
         </text>
       </g>
 
       <!-- ── IF ───────────────────────────────────────────── -->
       <g class="nc" onclick="showInfo('fetch','pipeline')">
-        <rect x="22" y="52" width="148" height="218" rx="9"
+        <rect x="22" y="64" width="148" height="218" rx="9"
               fill="#E4EFFA" stroke="#1660A8" stroke-width="0.8"/>
         <text x="96" y="72" text-anchor="middle" font-size="12"
               font-weight="700" fill="#0B3D78">IF</text>
@@ -251,13 +335,13 @@
       </g>
 
       <!-- IF/ID register -->
-      <rect x="174" y="82" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
-      <line x1="170" y1="160" x2="192" y2="160" stroke="#888780" stroke-width="1"
+      <rect x="174" y="94" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
+      <line x1="170" y1="174" x2="192" y2="174" stroke="#888780" stroke-width="1"
             marker-end="url(#arr)"/>
 
       <!-- ── ID ───────────────────────────────────────────── -->
       <g class="nc" onclick="showInfo('decode','pipeline')">
-        <rect x="196" y="52" width="148" height="218" rx="9"
+        <rect x="196" y="64" width="148" height="218" rx="9"
               fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.8"/>
         <text x="270" y="72" text-anchor="middle" font-size="12"
               font-weight="700" fill="#064235">ID</text>
@@ -279,16 +363,24 @@
         <text x="270" y="169" text-anchor="middle" font-size="9" fill="#033427">
           Imm Extender (extend.sv)
         </text>
+        <rect x="208" y="178" width="124" height="28" rx="4"
+              fill="#c5ebe0" stroke="#0D6E57" stroke-width="0.5"/>
+        <text x="270" y="190" text-anchor="middle" font-size="7.5" fill="#033427">
+          Early branch &amp; spec (cpu.sv)
+        </text>
+        <text x="270" y="200" text-anchor="middle" font-size="7" fill="#055a45">
+          de_early_spec_hit / de_early_miss
+        </text>
       </g>
 
       <!-- ID/EX register -->
-      <rect x="348" y="82" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
-      <line x1="344" y1="160" x2="366" y2="160" stroke="#888780" stroke-width="1"
+      <rect x="348" y="94" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
+      <line x1="344" y1="174" x2="366" y2="174" stroke="#888780" stroke-width="1"
             marker-end="url(#arr)"/>
 
       <!-- ── EX ───────────────────────────────────────────── -->
       <g class="nc" onclick="showInfo('execute','pipeline')">
-        <rect x="370" y="52" width="148" height="218" rx="9"
+        <rect x="370" y="64" width="148" height="218" rx="9"
               fill="#FDF0D9" stroke="#8A5109" stroke-width="0.8"/>
         <text x="444" y="72" text-anchor="middle" font-size="12"
               font-weight="700" fill="#62380B">EX</text>
@@ -318,13 +410,13 @@
       </g>
 
       <!-- EX/MEM register -->
-      <rect x="522" y="82" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
-      <line x1="518" y1="160" x2="540" y2="160" stroke="#888780" stroke-width="1"
+      <rect x="522" y="94" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
+      <line x1="518" y1="174" x2="540" y2="174" stroke="#888780" stroke-width="1"
             marker-end="url(#arr)"/>
 
       <!-- ── MEM ──────────────────────────────────────────── -->
       <g class="nc" onclick="showInfo('memory','pipeline')">
-        <rect x="544" y="52" width="148" height="218" rx="9"
+        <rect x="544" y="64" width="148" height="218" rx="9"
               fill="#FCE9F2" stroke="#9C3157" stroke-width="0.8"/>
         <text x="618" y="72" text-anchor="middle" font-size="12"
               font-weight="700" fill="#6A1D3A">MEM</text>
@@ -348,19 +440,24 @@
         </text>
         <rect x="556" y="181" width="124" height="21" rx="4"
               fill="#F0B8CF" stroke="#9C3157" stroke-width="0.5"/>
-        <text x="618" y="196" text-anchor="middle" font-size="9" fill="#450F22">
+        <text x="618" y="196" text-anchor="middle" font-size="8.5" fill="#450F22">
+          Next-line prefetch (memory.sv)
+        </text>
+        <rect x="556" y="208" width="124" height="21" rx="4"
+              fill="#F0B8CF" stroke="#9C3157" stroke-width="0.5"/>
+        <text x="618" y="223" text-anchor="middle" font-size="9" fill="#450F22">
           PMA Checker
         </text>
       </g>
 
       <!-- MEM/WB register -->
-      <rect x="696" y="82" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
-      <line x1="692" y1="160" x2="714" y2="160" stroke="#888780" stroke-width="1"
+      <rect x="696" y="94" width="10" height="160" rx="3" fill="#888780" opacity=".3"/>
+      <line x1="692" y1="174" x2="714" y2="174" stroke="#888780" stroke-width="1"
             marker-end="url(#arr)"/>
 
       <!-- ── WB ───────────────────────────────────────────── -->
       <g class="nc" onclick="showInfo('writeback','pipeline')">
-        <rect x="718" y="52" width="144" height="218" rx="9"
+        <rect x="718" y="64" width="144" height="218" rx="9"
               fill="#EAF5DC" stroke="#3B6F10" stroke-width="0.8"/>
         <text x="790" y="72" text-anchor="middle" font-size="12"
               font-weight="700" fill="#254C09">WB</text>
@@ -385,62 +482,136 @@
       </g>
 
       <!-- Forwarding paths -->
-      <!-- MEM → EX -->
-      <path d="M618 274 L618 315 L444 315 L444 274"
+      <!-- MEM → EX (hazard_unit fwd_a/b_ex 2'b10) -->
+      <path d="M618 282 L618 333 L444 333 L444 282"
             fill="none" stroke="#D85530" stroke-width="1.1" stroke-dasharray="4 2"
             marker-end="url(#arr)" opacity=".78"/>
-      <text x="531" y="330" text-anchor="middle" font-size="9" fill="#D85530">MEM → EX forward</text>
+      <text x="531" y="348" text-anchor="middle" font-size="9" fill="#D85530">MEM → EX (ALU operands)</text>
 
-      <!-- WB → EX -->
-      <path d="M790 274 L790 338 L444 338 L444 274"
+      <!-- WB → EX (hazard_unit fwd 2'b01) -->
+      <path d="M790 282 L790 358 L444 358 L444 282"
             fill="none" stroke="#5B9F22" stroke-width="1.1" stroke-dasharray="4 2"
             marker-end="url(#arr)" opacity=".68"/>
-      <text x="617" y="353" text-anchor="middle" font-size="9" fill="#5B9F22">WB → EX forward</text>
+      <text x="612" y="373" text-anchor="middle" font-size="9" fill="#5B9F22">WB → EX (ALU operands)</text>
 
-      <!-- WB → ID -->
-      <path d="M790 274 L790 360 L270 360 L270 274"
+      <!-- MEM → ID — branch comparator only (cpu.sv, not hazard_unit) -->
+      <path d="M618 282 L618 348 L270 348 L270 282"
+            fill="none" stroke="#6B46C1" stroke-width="1" stroke-dasharray="5 3"
+            marker-end="url(#arr)" opacity=".75"/>
+      <text x="440" y="343" text-anchor="middle" font-size="8.5" fill="#6B46C1">MEM → ID (branch compare)</text>
+
+      <!-- WB → ID (hazard_unit fwd_a/b_de → decode reg read mux) -->
+      <path d="M790 282 L790 384 L270 384 L270 282"
             fill="none" stroke="#5B9F22" stroke-width="1.1" stroke-dasharray="4 2"
             marker-end="url(#arr)" opacity=".52"/>
-      <text x="530" y="375" text-anchor="middle" font-size="9" fill="#5B9F22">WB → ID forward</text>
+      <text x="530" y="399" text-anchor="middle" font-size="9" fill="#5B9F22">WB → ID (regfile bypass)</text>
 
-      <!-- Branch flush -->
-      <path d="M618 52 L618 36 L96 36 L96 52"
-            fill="none" stroke="#D83A3A" stroke-width="1" stroke-dasharray="3 2"
+      <!-- EX mispredict flush: pc_sel_ex_i = !ex_spec_hit → flush_de + flush_ex (pipe1 & pipe2) -->
+      <path d="M444 64 L444 60 L96 60 L96 64"
+            fill="none" stroke="#D83A3A" stroke-width="1.15" stroke-dasharray="3 2"
+            marker-end="url(#arr)" opacity=".85"/>
+
+      <!-- DE: de_early_miss (= de_can_resolve & !de_early_spec_hit & …) → de_early_flush → pipe1 only -->
+      <path d="M270 64 L270 62 L96 62 L96 64"
+            fill="none" stroke="#DD8A35" stroke-width="0.85" stroke-dasharray="2 3"
             marker-end="url(#arr)" opacity=".65"/>
-      <text x="357" y="33" text-anchor="middle" font-size="9" fill="#D83A3A">
-        branch mispredict flush (IF/ID)
-      </text>
 
       <!-- ISA info bar -->
-      <rect x="18" y="403" width="844" height="34" rx="7"
+      <rect x="18" y="423" width="844" height="34" rx="7"
             fill="none" stroke="#c2bfb5" stroke-width="0.5" stroke-dasharray="3 3"/>
-      <text x="440" y="416" text-anchor="middle" font-size="10.5" fill="#605E57">
+      <text x="440" y="436" text-anchor="middle" font-size="10.5" fill="#605E57">
         RV32IMC · Zicsr · Zifencei · Machine-mode · 5-stage in-order
       </text>
-      <text x="440" y="430" text-anchor="middle" font-size="9.5" fill="#8A8880">
-        CoreMark: 2.62 CM/MHz @ 25 MHz · 83 HDL dosyası · level_param.sv (1194 satır)
+      <text x="440" y="450" text-anchor="middle" font-size="9.5" fill="#8A8880">
+        CoreMark: 2.62 CM/MHz @ 25 MHz · 83 HDL files · level_param.sv (1194 LOC)
       </text>
 
       <!-- Legend -->
-      <rect x="18" y="453" width="12" height="10" rx="2" fill="#888780" opacity=".35"/>
-      <text x="35" y="462" font-size="9" fill="#888780">Pipeline reg</text>
-      <line x1="145" y1="458" x2="178" y2="458" stroke="#D85530" stroke-width="1" stroke-dasharray="4 2"/>
-      <text x="184" y="462" font-size="9" fill="#888780">Forwarding</text>
-      <line x1="276" y1="458" x2="309" y2="458" stroke="#D83A3A" stroke-width="1" stroke-dasharray="3 2"/>
-      <text x="315" y="462" font-size="9" fill="#888780">Flush/Branch</text>
+      <rect x="18" y="473" width="12" height="10" rx="2" fill="#888780" opacity=".35"/>
+      <text x="35" y="482" font-size="9" fill="#888780">Pipeline reg</text>
+      <line x1="130" y1="478" x2="163" y2="478" stroke="#D85530" stroke-width="1" stroke-dasharray="4 2"/>
+      <text x="169" y="482" font-size="8.5" fill="#888780">MEM→EX</text>
+      <line x1="232" y1="478" x2="265" y2="478" stroke="#5B9F22" stroke-width="1" stroke-dasharray="4 2"/>
+      <text x="271" y="482" font-size="8.5" fill="#888780">WB→EX / WB→ID</text>
+      <line x1="360" y1="478" x2="393" y2="478" stroke="#6B46C1" stroke-width="1" stroke-dasharray="5 3"/>
+      <text x="399" y="482" font-size="8.5" fill="#888780">MEM→ID branch</text>
+      <line x1="500" y1="478" x2="533" y2="478" stroke="#D83A3A" stroke-width="1" stroke-dasharray="3 2"/>
+      <text x="539" y="482" font-size="8.5" fill="#888780">EX flush</text>
+      <line x1="600" y1="478" x2="633" y2="478" stroke="#DD8A35" stroke-width="1" stroke-dasharray="2 3"/>
+      <text x="639" y="482" font-size="8.5" fill="#888780">DE early miss</text>
 
-      <text x="440" y="490" text-anchor="middle" font-size="10" fill="#aaa9a0">
-        — her aşamaya tıkla → detay —
+      <text x="440" y="510" text-anchor="middle" font-size="10" fill="#aaa9a0">
+        — click a stage for details · expand reference below —
       </text>
 
       <!-- Decorative dots -->
-      <circle cx="860" cy="30" r="4" fill="#E4EFFA" stroke="#1660A8" stroke-width="0.5" opacity=".5"/>
-      <circle cx="872" cy="30" r="4" fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.5" opacity=".5"/>
-      <circle cx="848" cy="30" r="4" fill="#FDF0D9" stroke="#8A5109" stroke-width="0.5" opacity=".5"/>
+      <circle cx="860" cy="28" r="4" fill="#E4EFFA" stroke="#1660A8" stroke-width="0.5" opacity=".5"/>
+      <circle cx="872" cy="28" r="4" fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.5" opacity=".5"/>
+      <circle cx="848" cy="28" r="4" fill="#FDF0D9" stroke="#8A5109" stroke-width="0.5" opacity=".5"/>
     </svg>
     </div>
-    <div class="info-card" id="info-box-pipeline">
-      Bir pipeline aşamasına veya hazard unit banner'ına tıkla ve detaylarını gör.
+    <div class="info-card" id="info-box-pipeline" tabindex="-1">
+      <span class="info-hint">Click a pipeline stage or the hazard banner above, or open a section below.</span>
+    </div>
+
+    <div class="reference-block" id="pipeline-reference">
+      <div class="reference-title">Pipeline stage reference</div>
+      <div class="acc-root" role="region" aria-label="Pipeline stages">
+        <div class="acc-item" data-acc="hazard">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="hazard">
+            <span><span class="acc-tag hz">Hazard</span> hazard_unit.sv</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden>
+            <div class="acc-panel-inner" data-panel="hazard"></div>
+          </div>
+        </div>
+        <div class="acc-item" data-acc="fetch">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="fetch">
+            <span><span class="acc-tag if">IF</span> Instruction fetch</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden>
+            <div class="acc-panel-inner" data-panel="fetch"></div>
+          </div>
+        </div>
+        <div class="acc-item" data-acc="decode">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="decode">
+            <span><span class="acc-tag id">ID</span> Instruction decode</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden>
+            <div class="acc-panel-inner" data-panel="decode"></div>
+          </div>
+        </div>
+        <div class="acc-item" data-acc="execute">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="execute">
+            <span><span class="acc-tag ex">EX</span> Execute</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden>
+            <div class="acc-panel-inner" data-panel="execute"></div>
+          </div>
+        </div>
+        <div class="acc-item" data-acc="memory">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="memory">
+            <span><span class="acc-tag mem">MEM</span> Memory access</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden>
+            <div class="acc-panel-inner" data-panel="memory"></div>
+          </div>
+        </div>
+        <div class="acc-item" data-acc="writeback">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="writeback">
+            <span><span class="acc-tag wb">WB</span> Write-back</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden>
+            <div class="acc-panel-inner" data-panel="writeback"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -457,14 +628,17 @@
       </defs>
 
       <!-- CPU core -->
+      <g class="nc" onclick="showInfo('cache-core','cache')">
       <rect x="300" y="16" width="280" height="52" rx="9"
             fill="#E4EFFA" stroke="#1660A8" stroke-width="0.8"/>
       <text x="440" y="38" text-anchor="middle" font-size="12"
             font-weight="700" fill="#0B3D78">Level-V Core (cpu.sv)</text>
       <text x="440" y="54" text-anchor="middle" font-size="10"
             fill="#1660A8">IF · ID · EX · MEM · WB</text>
+      </g>
 
       <!-- I-Cache -->
+      <g class="nc" onclick="showInfo('cache-icache','cache')">
       <rect x="60" y="110" width="220" height="82" rx="9"
             fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.8"/>
       <text x="170" y="133" text-anchor="middle" font-size="11"
@@ -475,8 +649,10 @@
             fill="#0D6E57">8 KB · 4-way PLRU · 128-bit block</text>
       <text x="170" y="179" text-anchor="middle" font-size="9"
             fill="#3A9E72">MSHR fill · PLRU replacement</text>
+      </g>
 
       <!-- I-Cache Prefetcher (instruction side) -->
+      <g class="nc" onclick="showInfo('cache-ipref','cache')">
       <rect x="60" y="202" width="220" height="52" rx="6"
             fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.7"/>
       <text x="170" y="219" text-anchor="middle" font-size="10"
@@ -485,8 +661,10 @@
             fill="#0D6E57">Next-line + stride (prefetcher_wrapper.sv)</text>
       <text x="170" y="247" text-anchor="middle" font-size="8.5"
             fill="#3A9E72">next_line_prefetcher.sv · stride_prefetcher.sv</text>
+      </g>
 
-      <!-- D-Cache -->
+      <!-- D-Cache cluster -->
+      <g class="nc" onclick="showInfo('cache-dcache','cache')">
       <rect x="600" y="110" width="220" height="82" rx="9"
             fill="#FCE9F2" stroke="#9C3157" stroke-width="0.8"/>
       <text x="710" y="133" text-anchor="middle" font-size="11"
@@ -514,11 +692,12 @@
       <rect x="600" y="260" width="220" height="52" rx="6"
             fill="#FDF0D9" stroke="#8A5109" stroke-width="0.7"/>
       <text x="710" y="277" text-anchor="middle" font-size="10"
-            font-weight="700" fill="#62380B">D-Cache Prefetcher</text>
+            font-weight="700" fill="#62380B">D-Cache prefetch (MEM)</text>
       <text x="710" y="291" text-anchor="middle" font-size="9"
-            fill="#8A5109">Next-line (miss üzerine → sonraki cache satırı)</text>
+            fill="#8A5109">Next-line on load miss → LD port (memory.sv)</text>
       <text x="710" y="304" text-anchor="middle" font-size="8.5"
-            fill="#A06820">memory.sv inline · yalnızca RAM bölgesi (bit31=1)</text>
+            fill="#A06820">RAM only (nl_target[31]) · pf_fire / pf_active</text>
+      </g>
 
       <!-- Arrows CPU → caches -->
       <line x1="390" y1="68" x2="210" y2="110"
@@ -527,12 +706,14 @@
             stroke="#9C3157" stroke-width="1" marker-end="url(#arr2)"/>
 
       <!-- Memory Arbiter -->
+      <g class="nc" onclick="showInfo('cache-arb','cache')">
       <rect x="280" y="360" width="320" height="52" rx="9"
             fill="#FDF0D9" stroke="#8A5109" stroke-width="0.8"/>
       <text x="440" y="382" text-anchor="middle" font-size="11"
             font-weight="700" fill="#62380B">Memory Arbiter</text>
       <text x="440" y="398" text-anchor="middle" font-size="9.5"
             fill="#8A5109">memory_arbiter.sv — I$/D$ bus arbitration</text>
+      </g>
 
       <!-- Arrows caches → arbiter -->
       <line x1="170" y1="254" x2="330" y2="360"
@@ -541,6 +722,7 @@
             stroke="#666460" stroke-width="1" marker-end="url(#arr2)"/>
 
       <!-- L2 Cache (optional) -->
+      <g class="nc" onclick="showInfo('cache-l2','cache')">
       <rect x="280" y="456" width="320" height="68" rx="9"
             fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
       <text x="440" y="478" text-anchor="middle" font-size="11"
@@ -550,13 +732,15 @@
       <text x="440" y="508" text-anchor="middle" font-size="9.5"
             fill="#534AB7">dual-pipe · multi-bank · MSHR×4 · MESI tags</text>
       <text x="440" y="520" text-anchor="middle" font-size="8.5"
-            fill="#7F77DD">USE_L2_CACHE=1 ile etkin · cache.sv wrapper</text>
+            fill="#7F77DD">Enable with USE_L2_CACHE=1 · cache.sv wrapper</text>
+      </g>
 
       <!-- Arrow arbiter → L2 -->
       <line x1="440" y1="412" x2="440" y2="456"
             stroke="#534AB7" stroke-width="1.2" marker-end="url(#arr2)"/>
 
       <!-- PMA Checker -->
+      <g class="nc" onclick="showInfo('cache-pma','cache')">
       <rect x="640" y="456" width="200" height="68" rx="9"
             fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8"/>
       <text x="740" y="478" text-anchor="middle" font-size="11"
@@ -565,6 +749,7 @@
             fill="#5F5E5A">Physical Memory Attributes</text>
       <text x="740" y="510" text-anchor="middle" font-size="9"
             fill="#888780">pmp_pma.sv</text>
+      </g>
 
       <!-- Arrow arbiter → PMA (dashed) -->
       <line x1="580" y1="402" x2="700" y2="456"
@@ -575,22 +760,71 @@
       <path d="M440 524 L440 542" fill="none" stroke="#7266CC" stroke-width="1.5"
             marker-end="url(#arr2)"/>
       <text x="440" y="556" text-anchor="middle" font-size="9" fill="#888780">
-        Wishbone B4 → RAM / Çevre birimler
+        Wishbone B4 → RAM / peripherals
       </text>
     </svg>
     </div>
-    <div class="info-card" id="info-box-cache">
-      Cache hiyerarşisi: L1 I-Cache + L1 D-Cache (non-blocking, MSHR) → Memory Arbiter → L2 Unified Cache
-      (opsiyonel, <code>USE_L2_CACHE=1</code>) → Wishbone B4 → RAM / Peripheral.
-      <strong>D-Cache Prefetcher</strong>: D-cache miss olduğunda bir sonraki cache satırını önceden çeker
-      (<code>memory.sv</code> inline, yalnızca RAM bölgesi). Stride prefetcher (<code>stride_prefetcher.sv</code>)
-      de mevcuttur ancak şu an devre dışı; ilerleyen versiyonlarda etkinleştirilmesi planlanmaktadır.
-      <strong>I-Cache Prefetcher</strong>: <code>next_line_prefetcher.sv</code> + <code>prefetcher_wrapper.sv</code>
-      instruction fetch yolunda çalışır.
+    <div class="info-card" id="info-box-cache" tabindex="-1">
+      <span class="info-hint">Memory hierarchy overview — expand sections below for each block.</span>
+    </div>
+
+    <div class="reference-block" id="cache-reference">
+      <div class="reference-title">Cache &amp; memory path</div>
+      <div class="acc-root" role="region" aria-label="Cache hierarchy">
+        <div class="acc-item" data-acc="cache-core">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="cache-core">
+            <span><span class="acc-tag if">Core</span> cpu.sv — IF / MEM ports</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="cache-core"></div></div>
+        </div>
+        <div class="acc-item" data-acc="cache-icache">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="cache-icache">
+            <span><span class="acc-tag id">I$</span> L1 instruction cache</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="cache-icache"></div></div>
+        </div>
+        <div class="acc-item" data-acc="cache-ipref">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="cache-ipref">
+            <span><span class="acc-tag gen">Prefetch</span> I-cache prefetcher</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="cache-ipref"></div></div>
+        </div>
+        <div class="acc-item" data-acc="cache-dcache">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="cache-dcache">
+            <span><span class="acc-tag mem">D$</span> L1 data cache (non-blocking)</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="cache-dcache"></div></div>
+        </div>
+        <div class="acc-item" data-acc="cache-arb">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="cache-arb">
+            <span><span class="acc-tag ex">Arbiter</span> memory_arbiter.sv</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="cache-arb"></div></div>
+        </div>
+        <div class="acc-item" data-acc="cache-l2">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="cache-l2">
+            <span><span class="acc-tag hz">L2</span> Optional unified L2</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="cache-l2"></div></div>
+        </div>
+        <div class="acc-item" data-acc="cache-pma">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="cache-pma">
+            <span><span class="acc-tag gen">PMA</span> Physical memory attributes</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="cache-pma"></div></div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- ══════════════════════════ SOC & PERİFERAL ══════════════════════════ -->
+  <!-- ══════════════════════════ SOC & PERIPHERALS ═══════════════════════ -->
   <div class="tab-panel" id="tab-soc">
     <div class="svg-wrap">
     <svg viewBox="0 0 880 500">
@@ -609,14 +843,17 @@
             fill="#534AB7">level_wrapper.sv — SoC top-level</text>
 
       <!-- Core -->
+      <g class="nc" onclick="showInfo('soc-core','soc')">
       <rect x="306" y="42" width="268" height="52" rx="9"
             fill="#E4EFFA" stroke="#1660A8" stroke-width="0.8"/>
       <text x="440" y="63" text-anchor="middle" font-size="12"
             font-weight="700" fill="#0B3D78">Level-V Core (cpu.sv)</text>
       <text x="440" y="79" text-anchor="middle" font-size="10"
             fill="#1660A8">RV32IMC · Zicsr · 5-stage · Machine-mode</text>
+      </g>
 
       <!-- Wishbone bus bar -->
+      <g class="nc" onclick="showInfo('soc-wb','soc')">
       <rect x="30" y="150" width="820" height="22" rx="6"
             fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
       <text x="440" y="165" text-anchor="middle" font-size="10"
@@ -625,8 +862,10 @@
       </text>
       <line x1="440" y1="94" x2="440" y2="150"
             stroke="#534AB7" stroke-width="1.2" marker-end="url(#arr3)"/>
+      </g>
 
       <!-- CLINT -->
+      <g class="nc" onclick="showInfo('soc-clint','soc')">
       <rect x="30" y="192" width="138" height="54" rx="7"
             fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.7"/>
       <text x="99" y="213" text-anchor="middle" font-size="10"
@@ -637,8 +876,10 @@
             fill="#888780">0x3000_0000</text>
       <line x1="99" y1="172" x2="99" y2="192"
             stroke="#5F5E5A" stroke-width="0.9" marker-end="url(#arr3)"/>
+      </g>
 
       <!-- BRAM -->
+      <g class="nc" onclick="showInfo('soc-bram','soc')">
       <rect x="178" y="192" width="138" height="54" rx="7"
             fill="#EAF5DC" stroke="#3B6F10" stroke-width="0.7"/>
       <text x="247" y="213" text-anchor="middle" font-size="10"
@@ -649,6 +890,7 @@
             fill="#888780">0x8000_0000</text>
       <line x1="247" y1="172" x2="247" y2="192"
             stroke="#3B6F10" stroke-width="0.9" marker-end="url(#arr3)"/>
+      </g>
 
       <!-- Peripheral bus label -->
       <text x="630" y="190" text-anchor="middle" font-size="9"
@@ -737,6 +979,11 @@
       <text x="776" y="308" text-anchor="middle" font-size="8"
             fill="#5F5E5A">ram_programmer.sv</text>
 
+      <g class="nc" onclick="showInfo('soc-periph','soc')">
+        <rect x="318" y="178" width="552" height="148" rx="10"
+              fill="#534AB7" fill-opacity="0.04" stroke="none"/>
+      </g>
+
       <!-- IRQ lines -->
       <path d="M373 318 L373 378 L188 378 L188 94 L306 62"
             fill="none" stroke="#D83A3A" stroke-width="0.9" stroke-dasharray="4 2"
@@ -758,10 +1005,56 @@
       </text>
     </svg>
     </div>
-    <div class="info-card" id="info-box-soc">
-      SoC: Level-V Core → Wishbone B4 Interconnect → CLINT + BRAM + 10 Peripheral.
-      PLIC 16 harici IRQ kaynağını yönetir ve <code>meip</code> sinyali ile core'u interrupt eder.
-      VGA text-mode çevre birimi 0x2000_D000 adresinde; grafik framebuffer 0x2010_0000'de yer alır.
+    <div class="info-card" id="info-box-soc" tabindex="-1">
+      <span class="info-hint">Click the core, Wishbone bar, CLINT, BRAM, or the peripheral region — or expand a section below.</span>
+    </div>
+
+    <div class="reference-block" id="soc-reference">
+      <div class="reference-title">SoC reference</div>
+      <div class="acc-root" role="region" aria-label="SoC blocks">
+        <div class="acc-item" data-acc="soc-core">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="soc-core">
+            <span><span class="acc-tag if">Core</span> Level-V CPU</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="soc-core"></div></div>
+        </div>
+        <div class="acc-item" data-acc="soc-wb">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="soc-wb">
+            <span><span class="acc-tag hz">Bus</span> Wishbone B4 interconnect</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="soc-wb"></div></div>
+        </div>
+        <div class="acc-item" data-acc="soc-clint">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="soc-clint">
+            <span><span class="acc-tag gen">CLINT</span> Machine timer</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="soc-clint"></div></div>
+        </div>
+        <div class="acc-item" data-acc="soc-bram">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="soc-bram">
+            <span><span class="acc-tag wb">BRAM</span> On-chip RAM / reset vector</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="soc-bram"></div></div>
+        </div>
+        <div class="acc-item" data-acc="soc-periph">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="soc-periph">
+            <span><span class="acc-tag mem">IO</span> Peripherals &amp; PLIC</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="soc-periph"></div></div>
+        </div>
+        <div class="acc-item" data-acc="soc-irq">
+          <button type="button" class="acc-btn" aria-expanded="false" data-key="soc-irq">
+            <span><span class="acc-tag ex">IRQ</span> Interrupt paths</span>
+            <span class="acc-chev" aria-hidden="true"></span>
+          </button>
+          <div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="soc-irq"></div></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -786,6 +1079,7 @@
       </text>
 
       <!-- GShare predictor -->
+      <g class="nc" onclick="showInfo('bp-gshare','bp')">
       <rect x="38" y="54" width="182" height="124" rx="9"
             fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
       <text x="129" y="77" text-anchor="middle" font-size="11"
@@ -802,8 +1096,10 @@
             fill="#7F77DD">GHR:  8-bit (Minimal)</text>
       <text x="129" y="168" text-anchor="middle" font-size="8.5"
             fill="#9E98DC">PHT:   64 entries (Minimal)</text>
+      </g>
 
       <!-- Bimodal predictor -->
+      <g class="nc" onclick="showInfo('bp-bimodal','bp')">
       <rect x="234" y="54" width="182" height="124" rx="9"
             fill="#DDF3EC" stroke="#0D6E57" stroke-width="0.8"/>
       <text x="325" y="77" text-anchor="middle" font-size="11"
@@ -816,8 +1112,10 @@
             fill="#0D6E57">2-bit saturating counter</text>
       <text x="325" y="139" text-anchor="middle" font-size="8.5"
             fill="#52B894">PHT:  64 entries (Minimal)</text>
+      </g>
 
       <!-- Choice PHT -->
+      <g class="nc" onclick="showInfo('bp-choice','bp')">
       <rect x="430" y="54" width="182" height="124" rx="9"
             fill="#FDF0D9" stroke="#8A5109" stroke-width="0.8"/>
       <text x="521" y="77" text-anchor="middle" font-size="11"
@@ -825,29 +1123,33 @@
       <text x="521" y="93" text-anchor="middle" font-size="9.5"
             fill="#8A5109">Meta-predictor</text>
       <text x="521" y="108" text-anchor="middle" font-size="9.5"
-            fill="#8A5109">GShare vs Bimodal seçimi</text>
+            fill="#8A5109">GShare vs Bimodal selection</text>
       <text x="521" y="123" text-anchor="middle" font-size="9.5"
             fill="#8A5109">2048 entry (Full)</text>
       <text x="521" y="138" text-anchor="middle" font-size="9"
-            fill="#C87A20">hangisi daha doğruysa onu seçer</text>
+            fill="#C87A20">Favors whichever sub-predictor is more accurate</text>
+      </g>
 
       <!-- Loop predictor -->
+      <g class="nc" onclick="showInfo('bp-loop','bp')">
       <rect x="626" y="54" width="224" height="124" rx="9"
             fill="#FCE9F2" stroke="#9C3157" stroke-width="0.8"/>
       <text x="738" y="77" text-anchor="middle" font-size="11"
             font-weight="700" fill="#6A1D3A">Loop Predictor</text>
       <text x="738" y="93" text-anchor="middle" font-size="9.5"
-            fill="#9C3157">Sabit iterasyonlu döngü tespiti</text>
+            fill="#9C3157">Fixed-iteration loop detection</text>
       <text x="738" y="108" text-anchor="middle" font-size="9.5"
             fill="#9C3157">16 entry (Full) / 4 entry (Minimal)</text>
       <text x="738" y="123" text-anchor="middle" font-size="9"
-            fill="#B5456E">İterasyon sayacı takibi</text>
+            fill="#B5456E">Iteration counter tracking</text>
       <text x="738" y="138" text-anchor="middle" font-size="9"
-            fill="#B5456E">Güvenilir döngü tahmini</text>
+            fill="#B5456E">Confident loop-edge prediction</text>
       <text x="738" y="153" text-anchor="middle" font-size="8.5"
-            fill="#CC7090">loop_size parametresiyle yapılandırılır</text>
+            fill="#CC7090">Configured via loop_size parameter</text>
+      </g>
 
       <!-- BTB -->
+      <g class="nc" onclick="showInfo('bp-btb','bp')">
       <rect x="38" y="196" width="182" height="84" rx="9"
             fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8"/>
       <text x="129" y="219" text-anchor="middle" font-size="11"
@@ -857,9 +1159,11 @@
       <text x="129" y="249" text-anchor="middle" font-size="9"
             fill="#888780">Branch Target Buffer</text>
       <text x="129" y="263" text-anchor="middle" font-size="8.5"
-            fill="#888780">PC etiket → hedef adres önbelleği</text>
+            fill="#888780">PC-tagged target address cache</text>
+      </g>
 
       <!-- IBTC -->
+      <g class="nc" onclick="showInfo('bp-ibtc','bp')">
       <rect x="234" y="196" width="182" height="84" rx="9"
             fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8"/>
       <text x="325" y="219" text-anchor="middle" font-size="11"
@@ -869,9 +1173,11 @@
       <text x="325" y="249" text-anchor="middle" font-size="9"
             fill="#888780">Indirect Branch Target Cache</text>
       <text x="325" y="263" text-anchor="middle" font-size="9"
-            fill="#888780">JALR hedef adresi önbelleği</text>
+            fill="#888780">JALR target address cache</text>
+      </g>
 
       <!-- RAS -->
+      <g class="nc" onclick="showInfo('bp-ras','bp')">
       <rect x="430" y="196" width="182" height="84" rx="9"
             fill="#FCE9F2" stroke="#9C3157" stroke-width="0.8"/>
       <text x="521" y="219" text-anchor="middle" font-size="11"
@@ -881,9 +1187,11 @@
       <text x="521" y="249" text-anchor="middle" font-size="9"
             fill="#9C3157">Return Address Stack</text>
       <text x="521" y="263" text-anchor="middle" font-size="9"
-            fill="#9C3157">ras.sv — JAL/JALR ayrımı</text>
+            fill="#9C3157">ras.sv — JAL / JALR discrimination</text>
+      </g>
 
       <!-- Prefetcher / ABUFF note -->
+      <g class="nc" onclick="showInfo('bp-prefetch','bp')">
       <rect x="626" y="196" width="224" height="84" rx="9"
             fill="#FDF0D9" stroke="#8A5109" stroke-width="0.8"/>
       <text x="738" y="219" text-anchor="middle" font-size="11"
@@ -894,6 +1202,7 @@
             fill="#8A5109">Stride (64 entry, stride_prefetcher.sv)</text>
       <text x="738" y="263" text-anchor="middle" font-size="9"
             fill="#8A5109">Next-line (next_line_prefetcher.sv)</text>
+      </g>
 
       <!-- Vertical arrows → lower boxes -->
       <line x1="129" y1="178" x2="129" y2="196" stroke="#534AB7" stroke-width="0.8"
@@ -904,12 +1213,14 @@
             marker-end="url(#arr4)" opacity=".5"/>
 
       <!-- Prediction output box -->
+      <g class="nc" onclick="showInfo('bp-output','bp')">
       <rect x="188" y="346" width="504" height="52" rx="9"
             fill="#B3D2F2" stroke="#1660A8" stroke-width="0.8"/>
       <text x="440" y="368" text-anchor="middle" font-size="12"
-            font-weight="700" fill="#0B3D78">Tahmin Çıkışı</text>
+            font-weight="700" fill="#0B3D78">Prediction output</text>
       <text x="440" y="384" text-anchor="middle" font-size="10"
-            fill="#1660A8">alınan/alınmayan · tahmin edilen PC → IF aşaması (sonraki döngü)</text>
+            fill="#1660A8">taken / not-taken · predicted PC → IF stage (next cycle)</text>
+      </g>
 
       <line x1="300" y1="310" x2="300" y2="346"
             stroke="#1660A8" stroke-width="1" marker-end="url(#arr4)"/>
@@ -917,16 +1228,27 @@
             stroke="#1660A8" stroke-width="1" marker-end="url(#arr4)"/>
 
       <text x="440" y="428" text-anchor="middle" font-size="10" fill="#888780">
-        LOG_BP=1 ile istatistik logu etkin → bp_stats.log · LOG_BP_VERBOSE=1 ile dallanma başına detay
+        LOG_BP=1 enables stats → bp_stats.log · LOG_BP_VERBOSE=1 per-branch detail
       </text>
     </svg>
     </div>
-    <div class="info-card" id="info-box-bp">
-      Tournament predictor: <strong>GShare + Bimodal</strong> → <strong>Choice PHT</strong> hangisinin
-      daha doğru olduğunu seçer. <strong>BTB</strong> (256) hedef adresi, <strong>IBTC</strong> (32)
-      indirect branch'ları, <strong>RAS</strong> (16) return adreslerini önbellekler.
-      <strong>Loop predictor</strong> sabit iterasyonlu döngüleri tanır.
-      Tüm boyutlar <code>level_param_profile.svh</code> üzerinden yapılandırılır (Full / Minimal / OpenLane profilleri).
+    <div class="info-card" id="info-box-bp" tabindex="-1">
+      <span class="info-hint">Click any predictor block in the diagram or open a reference section below.</span>
+    </div>
+
+    <div class="reference-block" id="bp-reference">
+      <div class="reference-title">Branch prediction reference</div>
+      <div class="acc-root" role="region" aria-label="Branch predictor">
+        <div class="acc-item" data-acc="bp-gshare"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-gshare"><span><span class="acc-tag hz">GShare</span> Global history</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-gshare"></div></div></div>
+        <div class="acc-item" data-acc="bp-bimodal"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-bimodal"><span><span class="acc-tag id">Bimodal</span> PC-indexed</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-bimodal"></div></div></div>
+        <div class="acc-item" data-acc="bp-choice"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-choice"><span><span class="acc-tag ex">Choice</span> Meta-predictor</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-choice"></div></div></div>
+        <div class="acc-item" data-acc="bp-loop"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-loop"><span><span class="acc-tag mem">Loop</span> Loop predictor</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-loop"></div></div></div>
+        <div class="acc-item" data-acc="bp-btb"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-btb"><span><span class="acc-tag gen">BTB</span> Target addresses</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-btb"></div></div></div>
+        <div class="acc-item" data-acc="bp-ibtc"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-ibtc"><span><span class="acc-tag gen">IBTC</span> Indirect branches</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-ibtc"></div></div></div>
+        <div class="acc-item" data-acc="bp-ras"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-ras"><span><span class="acc-tag mem">RAS</span> Return stack</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-ras"></div></div></div>
+        <div class="acc-item" data-acc="bp-prefetch"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-prefetch"><span><span class="acc-tag ex">Prefetch</span> Instruction fetch</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-prefetch"></div></div></div>
+        <div class="acc-item" data-acc="bp-output"><button type="button" class="acc-btn" aria-expanded="false" data-key="bp-output"><span><span class="acc-tag if">Output</span> To IF stage</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="bp-output"></div></div></div>
+      </div>
     </div>
   </div>
 
@@ -935,26 +1257,31 @@
     <div class="svg-wrap">
     <svg viewBox="0 0 880 510">
       <!-- Header row -->
-      <text x="56" y="28" font-size="11" font-weight="600" fill="#615F58">Adres</text>
-      <text x="220" y="28" font-size="11" font-weight="600" fill="#615F58">Bölge</text>
-      <text x="410" y="28" font-size="11" font-weight="600" fill="#615F58">Açıklama</text>
+      <text x="56" y="28" font-size="11" font-weight="600" fill="#615F58">Address</text>
+      <text x="220" y="28" font-size="11" font-weight="600" fill="#615F58">Region</text>
+      <text x="410" y="28" font-size="11" font-weight="600" fill="#615F58">Description</text>
       <line x1="18" y1="34" x2="862" y2="34" stroke="#C8C5BB" stroke-width="0.7"/>
 
       <!-- DEBUG -->
+      <g class="nc" onclick="showInfo('mem-debug','mem')">
       <rect x="18" y="38" width="844" height="40" rx="5" fill="#F1EFE8" opacity=".65"/>
       <text x="56" y="62" font-size="10.5" font-weight="500" fill="#3C3A35">0x0000_0000</text>
       <rect x="200" y="45" width="148" height="24" rx="5" fill="#D3D1C7"/>
       <text x="274" y="61" text-anchor="middle" font-size="10" font-weight="600" fill="#2C2C2A">DEBUG</text>
       <text x="410" y="62" font-size="10" fill="#615F58">Debug module interface</text>
+      </g>
 
       <!-- BOOTROM -->
+      <g class="nc" onclick="showInfo('mem-bootrom','mem')">
       <rect x="18" y="81" width="844" height="40" rx="5" fill="#DDF3EC" opacity=".5"/>
       <text x="56" y="105" font-size="10.5" font-weight="500" fill="#064235">0x1000_0000</text>
       <rect x="200" y="88" width="148" height="24" rx="5" fill="#96DBBF"/>
       <text x="274" y="104" text-anchor="middle" font-size="10" font-weight="600" fill="#033427">BOOTROM</text>
-      <text x="410" y="105" font-size="10" fill="#615F58">Boot ROM — reset sonrası ilk komutlar</text>
+      <text x="410" y="105" font-size="10" fill="#615F58">Boot ROM — first instructions after reset</text>
+      </g>
 
       <!-- PERIPH -->
+      <g class="nc" onclick="showInfo('mem-periph','mem')">
       <rect x="18" y="124" width="844" height="52" rx="5" fill="#FCE9F2" opacity=".6"/>
       <text x="56" y="146" font-size="10.5" font-weight="500" fill="#4A1B0C">0x2000_0000</text>
       <text x="56" y="162" font-size="9" fill="#9C3157">→ 0x2000_FFFF</text>
@@ -962,43 +1289,52 @@
       <text x="274" y="147" text-anchor="middle" font-size="10" font-weight="600" fill="#4A1B0C">PERIPH</text>
       <text x="410" y="146" font-size="10" fill="#615F58">UART×2 · SPI · I2C · GPIO · PWM · Timer</text>
       <text x="410" y="162" font-size="10" fill="#615F58">PLIC · WDT · DMA · VGA (0x2000_D000)</text>
+      </g>
 
       <!-- CLINT -->
+      <g class="nc" onclick="showInfo('mem-clint','mem')">
       <rect x="18" y="179" width="844" height="40" rx="5" fill="#FDF0D9" opacity=".55"/>
       <text x="56" y="203" font-size="10.5" font-weight="500" fill="#3F2104">0x3000_0000</text>
       <rect x="200" y="186" width="148" height="24" rx="5" fill="#F7C96E"/>
       <text x="274" y="202" text-anchor="middle" font-size="10" font-weight="600" fill="#3F2104">CLINT</text>
-      <text x="410" y="203" font-size="10" fill="#615F58">Core-Local Interruptor — mtime, mtimecmp</text>
+      <text x="410" y="203" font-size="10" fill="#615F58">Core-local interrupts (CLINT) — mtime, mtimecmp</text>
+      </g>
 
       <!-- EXTMEM -->
+      <g class="nc" onclick="showInfo('mem-extmem','mem')">
       <rect x="18" y="222" width="844" height="40" rx="5" fill="#EEEDFE" opacity=".5"/>
       <text x="56" y="246" font-size="10.5" font-weight="500" fill="#3C3489">0x4000_0000</text>
       <rect x="200" y="229" width="148" height="24" rx="5" fill="#CECBF6"/>
       <text x="274" y="245" text-anchor="middle" font-size="10" font-weight="600" fill="#26215C">EXTMEM</text>
-      <text x="410" y="246" font-size="10" fill="#615F58">Harici bellek bölgesi</text>
+      <text x="410" y="246" font-size="10" fill="#615F58">External memory region</text>
+      </g>
 
       <!-- RAM -->
+      <g class="nc" onclick="showInfo('mem-ram','mem')">
       <rect x="18" y="265" width="844" height="40" rx="5" fill="#EAF5DC" opacity=".6"/>
       <text x="56" y="289" font-size="10.5" font-weight="500" fill="#162B04">0x8000_0000</text>
       <rect x="200" y="272" width="148" height="24" rx="5" fill="#BDE395"/>
       <text x="274" y="288" text-anchor="middle" font-size="10" font-weight="600" fill="#162B04">RAM</text>
       <text x="410" y="289" font-size="10" fill="#615F58">
-        BRAM 64 KB (Full) / 40 KB (Min) — reset vector — program giriş noktası
+        BRAM 64 KB (Full) / 40 KB (Min) — reset vector — program entry
       </text>
+      </g>
 
       <!-- VGA FB -->
+      <g class="nc" onclick="showInfo('mem-vga','mem')">
       <rect x="18" y="308" width="844" height="40" rx="5" fill="#FCE9F2" opacity=".4"/>
       <text x="56" y="332" font-size="10.5" font-weight="500" fill="#4A1B0C">0x2010_0000</text>
       <rect x="200" y="315" width="148" height="24" rx="5" fill="#F4C8D8" opacity=".85"/>
       <text x="274" y="331" text-anchor="middle" font-size="10" font-weight="600" fill="#6A1D3A">VGA FB</text>
-      <text x="410" y="332" font-size="10" fill="#615F58">VGA grafik framebuffer — 256 KB</text>
+      <text x="410" y="332" font-size="10" fill="#615F58">VGA graphics framebuffer — 256 KB</text>
+      </g>
 
       <!-- Divider -->
       <line x1="18" y1="362" x2="862" y2="362" stroke="#C8C5BB" stroke-width="0.7"/>
 
       <!-- Configuration comparison section -->
       <text x="18" y="384" font-size="12" font-weight="700" fill="#2C2C2A">
-        Profil Karşılaştırması — Full SoC  ↔  Minimal SoC (MINIMAL_SOC=1)
+        Profile comparison — Full SoC ↔ Minimal SoC (MINIMAL_SOC=1)
       </text>
 
       <rect x="18" y="396" width="406" height="28" rx="6" fill="#E4EFFA"/>
@@ -1018,16 +1354,26 @@
       <text x="700" y="450" font-size="10" fill="#534AB7">→ 40 KB · 256 B</text>
 
       <text x="440" y="493" text-anchor="middle" font-size="10" fill="#888780">
-        Tüm parametreler: rtl/pkg/level_param.sv (1194 satır) · Özellik bayrakları: rtl/include/level_defines.svh
+        Parameters: rtl/pkg/level_param.sv (1194 LOC) · Feature flags: rtl/include/level_defines.svh
       </text>
     </svg>
     </div>
-    <div class="info-card" id="info-box-mem">
-      Memory haritası: <code>0x0000_0000</code> Debug → <code>0x1000_0000</code> BootROM →
-      <code>0x2000_0000</code> Peripheral → <code>0x3000_0000</code> CLINT →
-      <code>0x4000_0000</code> ExtMem → <code>0x8000_0000</code> RAM (reset vector).
-      VGA metin tamponu <code>0x2000_D000</code>, grafik framebuffer <code>0x2010_0000</code> adresinde.
-      Tüm parametreler <code>level_param.sv</code>'de merkezi olarak tanımlı.
+    <div class="info-card" id="info-box-mem" tabindex="-1">
+      <span class="info-hint">Click a memory row in the diagram or expand a region below.</span>
+    </div>
+
+    <div class="reference-block" id="mem-reference">
+      <div class="reference-title">Memory map reference</div>
+      <div class="acc-root" role="region" aria-label="Memory regions">
+        <div class="acc-item" data-acc="mem-debug"><button type="button" class="acc-btn" aria-expanded="false" data-key="mem-debug"><span><span class="acc-tag gen">0x0</span> Debug</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="mem-debug"></div></div></div>
+        <div class="acc-item" data-acc="mem-bootrom"><button type="button" class="acc-btn" aria-expanded="false" data-key="mem-bootrom"><span><span class="acc-tag id">0x1000…</span> Boot ROM</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="mem-bootrom"></div></div></div>
+        <div class="acc-item" data-acc="mem-periph"><button type="button" class="acc-btn" aria-expanded="false" data-key="mem-periph"><span><span class="acc-tag mem">0x2000…</span> Peripherals</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="mem-periph"></div></div></div>
+        <div class="acc-item" data-acc="mem-clint"><button type="button" class="acc-btn" aria-expanded="false" data-key="mem-clint"><span><span class="acc-tag ex">0x3000…</span> CLINT</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="mem-clint"></div></div></div>
+        <div class="acc-item" data-acc="mem-extmem"><button type="button" class="acc-btn" aria-expanded="false" data-key="mem-extmem"><span><span class="acc-tag hz">0x4000…</span> ExtMem</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="mem-extmem"></div></div></div>
+        <div class="acc-item" data-acc="mem-ram"><button type="button" class="acc-btn" aria-expanded="false" data-key="mem-ram"><span><span class="acc-tag wb">0x8000…</span> RAM</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="mem-ram"></div></div></div>
+        <div class="acc-item" data-acc="mem-vga"><button type="button" class="acc-btn" aria-expanded="false" data-key="mem-vga"><span><span class="acc-tag mem">VGA</span> Framebuffer</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="mem-vga"></div></div></div>
+        <div class="acc-item" data-acc="mem-profile"><button type="button" class="acc-btn" aria-expanded="false" data-key="mem-profile"><span><span class="acc-tag gen">Profiles</span> Full vs minimal</span><span class="acc-chev" aria-hidden="true"></span></button><div class="acc-panel" hidden><div class="acc-panel-inner" data-panel="mem-profile"></div></div></div>
+      </div>
     </div>
   </div>
 
@@ -1041,60 +1387,142 @@
 
 <script>
 function showTab(name, btn) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+  document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
 }
 
-/* ── Per-stage info dictionary ─────────────────────────────────────── */
-const infos = {
-  hazard: `<strong>hazard_unit.sv</strong> — 4 forwarding path yönetir:
-    <code>MEM→EX</code>, <code>WB→EX</code>, <code>WB→ID</code> (ayrı port).
-    Load-use hazard tespitinde 1 bubble (stall) eklenir.
-    Branch mispredict olduğunda IF ve ID pipeline register'ları flush edilir.
-    Stall istatistikleri <code>LOG_PERF_STALL=1</code> ile loglanır.`,
-
-  fetch: `<strong>IF — Instruction Fetch (fetch.sv)</strong> — PC yönetimi.
-    <strong>L1 I-Cache</strong>: 8 KB, 4-way, PLRU, 128-bit blok (Full SoC).
-    <strong>Align Buffer</strong> (<code>align_buffer.sv</code>): 16-bit / 32-bit karışık instruction'ları pipeline'a uyumlu hale getirir (Full: 8192 B, Min: 256 B).
-    <strong>RV32C Decompressor</strong> (<code>compressed_decoder.sv</code>): 16-bit talimatları 32-bit'e genişletir.
-    <strong>Prefetcher</strong>: next-line (<code>next_line_prefetcher.sv</code>) + stride (<code>stride_prefetcher.sv</code>, 64 entry).
-    <strong>Tournament BP</strong> (<code>gshare_bp.sv</code>): GShare + Bimodal + Choice PHT.
-    <strong>RAS</strong> (<code>ras.sv</code>): 16 entry return address stack.`,
-
-  decode: `<strong>ID — Instruction Decode (decode.sv)</strong> —
-    <strong>Control Unit</strong> (<code>control_unit.sv</code>): tüm decode ve kontrol sinyallerini üretir.
-    <strong>Register File</strong> (<code>reg_file.sv</code>): 32 × 32-bit, 2 okuma + 1 yazma portu.
-    <strong>Immediate Extender</strong> (<code>extend.sv</code>): I/S/B/U/J tiplerini destekler.
-    CSR okuma yolu bu aşamada başlar.`,
-
-  execute: `<strong>EX — Execute (execution.sv)</strong> —
-    <strong>ALU</strong> (<code>alu.sv</code>): tüm RV32I aritmetik, mantık ve karşılaştırma işlemleri.
-    <strong>CSR Reg File</strong> (<code>cs_reg_file.sv</code>): machine-mode CSR'lar (mstatus, mepc, mcause vb.).
-    <strong>Multiplier</strong>: Wallace 32×32 ağaç (<code>wallace32x32/</code>) veya pipelined (<code>mul_pipelined.sv</code>); <code>level_defines.svh</code> bayrağıyla seçilir.
-    <strong>Divider</strong>: pipelined (<code>divu_pipelined.sv</code>) veya sıralı (<code>divu_int.sv</code>).`,
-
-  memory: `<strong>MEM — Memory Access (memory.sv)</strong> —
-    <strong>D-Cache (Non-Blocking)</strong> (<code>dcache_nb.sv</code>): 8 KB, 4-way, write-back, MSHR×4, 2-bank, PLRU, 128-bit blok.
-    <strong>Store Buffer</strong> (<code>store_buffer.sv</code>): 8 derinlik; bekleyen yazmaları tamponlar, RAW forwarding sağlar.
-    <strong>Load/Store</strong>: byte/halfword/word hizalama ve genişletme.
-    <strong>FENCE.I</strong>: dirty satır tahliyesi (<code>dcache_fencei.sv</code>).
-    <strong>PMA Checker</strong>: izin, önbelleklenebilirlik ve atomik erişim kontrolleri.
-    <code>LOG_CACHE=1</code> ile cache erişim tablosu loglanır.`,
-
-  writeback: `<strong>WB — Write-back (writeback.sv)</strong> —
-    Sonucu hedef register'a yazar.
-    <code>LOG_COMMIT=1</code>: Spike uyumlu commit trace üretir (GNU Spike formatı, otomatik karşılaştırma için kullanılır).
-    <code>KONATA_TRACER=1 + LOG_PIPELINE=1</code>: cycle-accurate Konata pipeline görselleştirme logu üretir.`,
+const DETAILS = {
+  pipeline: {
+    hazard: '<p><strong>hazard_unit.sv</strong> drives register bypass for EX and ID, and EX-stage branch flush. Extra forwarding for early branches is in <strong>cpu.sv</strong>.</p><ul><li><strong>MEM→EX / WB→EX:</strong> <code>fwd_a_ex_o</code>, <code>fwd_b_ex_o</code> (2 bits each) mux <code>rs1</code>/<code>rs2</code> in execute from MEM (<code>pipe3</code>) or WB (<code>pipe4</code>), using <code>ex_mem_bypass_data</code> for MEM so loads expose <code>read_data</code> not the address.</li><li><strong>WB→ID:</strong> <code>fwd_a_de_o</code>, <code>fwd_b_de_o</code> bypass into decode’s register read path.</li><li><strong>MEM→ID (not in hazard_unit):</strong> combinational logic in <code>cpu.sv</code> feeds the <em>decode-stage branch comparator</em> from <code>ex_mem_bypass_data</code> when <code>pipe3.rd</code> matches <code>rs1</code>/<code>rs2</code> of the branch in <code>pipe1</code>; takes priority over WB→ID for those operands.</li><li><strong>Load–use:</strong> front-end stalls are tied off; when the consumer reaches EX the producer load is in MEM and MEM→EX bypass supplies the value (SSR-style).</li><li><strong>EX mispredict:</strong> <code>pc_sel_ex_i = !ex_spec_hit</code> asserts <code>flush_de_o</code> and <code>flush_ex_o</code>, clearing <strong>pipe1</strong> (IF/ID) and <strong>pipe2</strong> (ID/EX) together.</li><li><strong>DE early speculation check (<code>cpu.sv</code>):</strong> when <code>de_can_resolve</code> (branch in <code>pipe1</code>, no EX operand hazard, valid/allowed opcode), the decode-stage comparator produces <code>de_branch_taken</code> and <code>de_branch_target</code>. <strong><code>de_early_spec_hit</code></strong> compares that outcome to the fetch unit’s prediction carried in <code>pipe1.spec</code>: if taken, it requires <code>spec.taken</code> and matching <code>spec.pc</code>; if not taken, it requires <code>!spec.taken</code>. <strong><code>de_early_miss</code></strong> is <code>de_can_resolve &amp;&amp; !de_early_spec_hit &amp;&amp; ex_spec_hit</code> (and no higher-priority flush), and drives <code>de_early_flush</code> to clear <strong>pipe1 only</strong> — one cycle cheaper than a full EX-stage redirect when the branch could be resolved in DE.</li><li>Pipeline stall / flush accounting: <code>LOG_PERF_STALL=1</code> (see <code>perf_stall_counters.sv</code>).</li></ul>',
+    fetch: '<p><strong>IF — Instruction fetch (<code>fetch.sv</code>)</strong> drives the PC and fills the decode stage.</p><ul><li><strong>L1 I-cache</strong> (<code>icache.sv</code>): 8&nbsp;KB, 4-way PLRU, 128-bit lines (Full SoC profile).</li><li><strong>Align buffer</strong> (<code>align_buffer.sv</code>): aligns mixed 16/32-bit (compressed) fetches to 32-bit issue; Full 8192&nbsp;B, Minimal 256&nbsp;B.</li><li><strong>RV32C decompressor</strong> (<code>compressed_decoder.sv</code>): expands 16-bit parcels to 32-bit ops.</li><li><strong>Prefetch:</strong> next-line (<code>next_line_prefetcher.sv</code>) plus stride table (<code>stride_prefetcher.sv</code>, 64 entries).</li><li><strong>Branch prediction:</strong> tournament predictor (<code>gshare_bp.sv</code>) — GShare + bimodal + choice PHT.</li><li><strong>RAS</strong> (<code>ras.sv</code>): 16-entry return-address stack for calls/returns.</li></ul>',
+    decode: '<p><strong>ID — Instruction decode (<code>decode.sv</code>)</strong> prepares operands and control for EX.</p><ul><li><strong>Control unit</strong> (<code>control_unit.sv</code>): decodes opcode/funct and drives the full control matrix.</li><li><strong>Register file</strong> (<code>reg_file.sv</code>): 32×32-bit, two read ports and one write port.</li><li><strong>Immediate extend</strong> (<code>extend.sv</code>): I, S, B, U, J encodings.</li><li>CSR read path is launched here for instructions that need early CSR data.</li><li><strong>Early branch / speculation resolution (<code>cpu.sv</code>, not inside <code>decode.sv</code>):</strong> the branch in <code>pipe1</code> can be evaluated in decode using <code>de_cmp_a</code>/<code>de_cmp_b</code> (with MEM→ID and WB→ID bypass). <code>de_early_spec_hit</code> checks agreement with <code>pipe1.spec</code> (predicted direction and target). If resolved but wrong, <code>de_early_miss</code> raises <code>de_early_flush</code> and only <code>pipe1</code> is invalidated; if operands are still pending in EX (<code>de_branch_hazard</code>), resolution is skipped until EX.</li></ul>',
+    execute: '<p><strong>EX — Execute (<code>execution.sv</code>)</strong> performs datapath work and CSR side effects that do not need memory.</p><ul><li><strong>ALU</strong> (<code>alu.sv</code>): RV32I arithmetic, logic, and branches (comparison).</li><li><strong>CSR register file</strong> (<code>cs_reg_file.sv</code>): machine-mode CSRs (<code>mstatus</code>, <code>mepc</code>, <code>mcause</code>, …).</li><li><strong>Multiplier:</strong> Wallace 32×32 tree (<code>wallace32x32/</code>) or pipelined multiplier (<code>mul_pipelined.sv</code>) — selected in <code>level_defines.svh</code>.</li><li><strong>Divider:</strong> pipelined (<code>divu_pipelined.sv</code>) or iterative (<code>divu_int.sv</code>).</li></ul>',
+    memory: '<p><strong>MEM — Memory access (<code>memory.sv</code>)</strong> is where loads, stores, and the L1 data interface (including prefetch) are orchestrated.</p><ul><li><strong>D-cache (non-blocking)</strong> (<code>dcache_nb.sv</code>): 8&nbsp;KB, 4-way write-back, MSHR×4, dual bank, PLRU, 128-bit lines.</li><li><strong>Store buffer</strong> (<code>store_buffer.sv</code>): eight entries; coalesces writes and supplies store-forwarding for RAW cases.</li><li><strong>Load/store</strong>: byte, halfword, and word with alignment and sign/zero extension.</li><li><strong>Next-line prefetch (in <code>memory.sv</code>):</strong> on a demand <em>load miss</em>, the stage detects miss (<code>load_fired_q</code> / <code>load_active</code>), line-aligns the faulting address, and queues a <strong>cached word read</strong> of the <em>following</em> cache line (<code>pf_valid</code> / <code>pf_addr</code>). The prefetch issues on the <strong>same LD port</strong> as ordinary loads when the port is idle (<code>pf_fire</code>), and <code>ld_port_busy</code> includes <code>pf_active</code> so prefetch does not collide with demand traffic. Targets are gated to <strong>RAM only</strong> (<code>nl_addr_ok = nl_target[31]</code>, i.e. addresses with bit&nbsp;31 set, e.g. <code>0x8000_0000</code>+).</li><li><strong>FENCE.I</strong>: dirty-line writeback / invalidate via <code>dcache_fencei.sv</code>; <code>fe_flush_cache_i</code> clears prefetch state.</li><li><strong>PMA checker</strong>: permissions, cacheability, and atomic access rules.</li><li>Cache trace logging: <code>LOG_CACHE=1</code>.</li></ul>',
+    writeback: '<p><strong>WB — Write-back (<code>writeback.sv</code>)</strong> selects the result and commits to the integer register file.</p><ul><li><strong>Register write:</strong> final mux among ALU, load, CSR, PC+4, and multiplier/divider results.</li><li><code>LOG_COMMIT=1</code>: emits a Spike-compatible commit trace (GNU Spike format) for lock-step comparison.</li><li><code>KONATA_TRACER=1</code> with <code>LOG_PIPELINE=1</code>: cycle-accurate pipeline log for Konata visualization.</li></ul>'
+  },
+  cache: {
+    'cache-core': '<p><strong>Level-V core (<code>cpu.sv</code>)</strong> contains the five pipeline stages. Instruction fetch traffic goes to the I-cache / prefetch stack; data accesses go through the non-blocking D-cache, store buffer, and optional prefetch on the right.</p>',
+    'cache-icache': '<p><strong>L1 I-cache (<code>icache.sv</code>)</strong></p><ul><li>8&nbsp;KB capacity, 4-way set associative, PLRU replacement.</li><li>128-bit fetch blocks; MSHR tracks outstanding fills.</li><li>Feeds the align buffer and compressed instruction path in IF.</li></ul>',
+    'cache-ipref': '<p><strong>I-cache prefetcher</strong> (<code>prefetcher_wrapper.sv</code>)</p><ul><li>Combines <code>next_line_prefetcher.sv</code> (sequential line) and <code>stride_prefetcher.sv</code> (stride detection).</li><li>Runs on the instruction side to hide miss latency under streaming code.</li></ul>',
+    'cache-dcache': '<p><strong>L1 D-cache cluster</strong></p><ul><li><strong>D-cache NB</strong> (<code>dcache_nb.sv</code>): 8&nbsp;KB, 4-way write-back, MSHR×4, dirty bits, PLRU; supports FENCE.I flush.</li><li><strong>Store buffer</strong> (<code>store_buffer.sv</code>): eight entries decouple commit from DRAM latency.</li><li><strong>FENCE.I helper</strong> (<code>dcache_fencei.sv</code>): write-back of dirty lines for instruction-stream coherence.</li><li><strong>Next-line data prefetch</strong> lives in the <strong>MEM stage</strong> (<code>memory.sv</code>): after a load miss it issues a cached line read for the next block on the load port when idle; RAM region only (<code>nl_target[31]</code>). Instruction-side stride/next-line prefetch is separate (<code>prefetcher_wrapper.sv</code> in IF).</li></ul>',
+    'cache-arb': '<p><strong>Memory arbiter (<code>memory_arbiter.sv</code>)</strong> merges I-cache and D-cache (plus L2 if present) onto a single downstream path toward the L2 or Wishbone slave ports, enforcing fairness and protocol conversion as needed.</p>',
+    'cache-l2': '<p><strong>Optional unified L2</strong> (<code>nbmbmp_l2_cache.sv</code> via <code>cache.sv</code>)</p><ul><li>16&nbsp;KB (Full) / 8&nbsp;KB (Minimal), 4-way, non-blocking, dual-pipe multi-bank.</li><li>MSHR×4, MESI-style tags.</li><li>Enable with <code>USE_L2_CACHE=1</code>.</li></ul>',
+    'cache-pma': '<p><strong>PMA checker (<code>pmp_pma.sv</code>)</strong> enforces physical memory attributes: which regions are cacheable, which support atomics, and whether accesses are legal before they reach the bus.</p>'
+  },
+  soc: {
+    'soc-core': '<p><strong>Level-V CPU</strong> — RV32IMC with Zicsr, five-stage in-order pipeline, machine mode only. Connects to the SoC through instruction/data memory ports that terminate in caches and then the Wishbone fabric.</p>',
+    'soc-wb': '<p><strong>Wishbone B4 pipelined interconnect (<code>wb_interconnect.sv</code>)</strong> fans out master transactions from the memory subsystem to CLINT, BRAM, peripherals, and (through the arbiter path) external RAM. Pipelined mode improves throughput when multiple slaves are active.</p>',
+    'soc-clint': '<p><strong>CLINT</strong> at <code>0x3000_0000</code> provides RISC-V machine timer registers <code>mtime</code> and <code>mtimecmp</code>. Timer compare events assert <code>mtip</code>, which folds into the core’s interrupt pending bundle with PLIC external interrupts.</p>',
+    'soc-bram': '<p><strong>On-chip BRAM</strong> at <code>0x8000_0000</code> — typically 64&nbsp;KB (Full) or 40&nbsp;KB (Minimal). Holds the reset vector and primary program image in many reference designs.</p>',
+    'soc-periph': '<p><strong>Peripheral bus</strong> <code>0x2000_0000</code>–<code>0x2000_FFFF</code></p><ul><li>UART×2, SPI, I2C, GPIO, PWM, timer, PLIC, WDT, DMA, VGA (text at <code>0x2000_D000</code>).</li><li><strong>Graphics framebuffer</strong> at <code>0x2010_0000</code> (256&nbsp;KB).</li><li><strong>RAM programmer</strong> (<code>ram_programmer.sv</code>) for loading firmware over the debug/host path.</li></ul>',
+    'soc-irq': '<p><strong>Interrupt delivery</strong></p><ul><li><strong>PLIC:</strong> up to 16 external sources; asserts <code>meip</code> to the core when enabled and pending.</li><li><strong>CLINT:</strong> machine timer interrupt <code>mtip</code> path shown separately in the diagram.</li><li>Verification stack includes riscv-tests, riscv-arch-test, Imperas, CoreMark, Embench, BEEBS, riscv-formal, and riscv-dv.</li></ul>'
+  },
+  bp: {
+    'bp-gshare': '<p><strong>GShare</strong> indexes a 2048-entry PHT with <code>GHR XOR PC</code>. Global history register is 24&nbsp;bits (Full) or 8&nbsp;bits (Minimal); Minimal also shrinks PHT to 64 entries. Each PHT cell is a 2-bit saturating counter (taken / not-taken).</p>',
+    'bp-bimodal': '<p><strong>Bimodal</strong> is PC-indexed only — same PHT width as GShare in each profile (2048 Full, 64 Minimal), 2-bit counters. Good baseline for branches that do not correlate with global history.</p>',
+    'bp-choice': '<p><strong>Choice PHT</strong> is a meta-predictor: another 2048-entry table learns whether GShare or Bimodal was more accurate for a given context and selects the winner for the next prediction.</p>',
+    'bp-loop': '<p><strong>Loop predictor</strong> detects tight loops with stable iteration counts. 16 entries (Full) / 4 (Minimal). Tracks iteration counters for confident prediction of back-edges. Sized via <code>loop_size</code> parameters.</p>',
+    'bp-btb': '<p><strong>BTB (branch target buffer)</strong> — 256 entries (Full) / 32 (Minimal). Caches predicted target PCs for direct branches and jumps using a tagged structure.</p>',
+    'bp-ibtc': '<p><strong>IBTC (indirect branch target cache)</strong> — 32 entries (Full) / 8 (Minimal). Stores predicted targets for indirect branches (notably <code>JALR</code>).</p>',
+    'bp-ras': '<p><strong>RAS (return address stack)</strong> — 16 entries (Full) / 8 (Minimal), implemented in <code>ras.sv</code> with explicit handling to distinguish call-like <code>JAL</code>/<code>JALR</code> from other indirects.</p>',
+    'bp-prefetch': '<p><strong>Instruction prefetch</strong> (<code>prefetcher_wrapper.sv</code>) couples stride detection (64-entry <code>stride_prefetcher.sv</code>) with next-line prefetch (<code>next_line_prefetcher.sv</code>) ahead of the fetch queue.</p>',
+    'bp-output': '<p><strong>Prediction bundle to IF</strong> — direction (taken / not-taken), predicted next PC, and supporting metadata arrive at the fetch stage on the following cycle. Mispredicts are corrected via the hazard / flush logic in <code>hazard_unit.sv</code>.</p>'
+  },
+  mem: {
+    'mem-debug': '<p><strong>Debug region (<code>0x0000_0000</code>)</strong> — debug-module interface for halt, resume, and abstract access as wired in your SoC. Exact footprint follows your DM implementation.</p>',
+    'mem-bootrom': '<p><strong>Boot ROM (<code>0x1000_0000</code>)</strong> — first code that runs after reset if the core vectors there; often contains a small loader that jumps to BRAM or external flash.</p>',
+    'mem-periph': '<p><strong>Peripherals (<code>0x2000_0000</code>–<code>0x2000_FFFF</code>)</strong> — UART, SPI, I2C, GPIO, PWM, timer, PLIC, WDT, DMA, and VGA text registers. VGA text-mode window at <code>0x2000_D000</code>.</p>',
+    'mem-clint': '<p><strong>CLINT (<code>0x3000_0000</code>)</strong> — core-local interrupts: machine timer compare (<code>mtime</code> / <code>mtimecmp</code>) per RISC-V privileged spec.</p>',
+    'mem-extmem': '<p><strong>External memory (<code>0x4000_0000</code>)</strong> — mapped region for off-chip RAM, flash, or other masters (e.g. DMA targets) depending on your board wrapper.</p>',
+    'mem-ram': '<p><strong>BRAM (<code>0x8000_0000</code>)</strong> — primary on-chip SRAM; 64&nbsp;KB Full / 40&nbsp;KB Minimal in the profile table. Typical reset vector and main program load address.</p>',
+    'mem-vga': '<p><strong>VGA framebuffer (<code>0x2010_0000</code>)</strong> — 256&nbsp;KB graphics buffer separate from the text-mode peripheral registers in the <code>0x2000_xxxx</code> window.</p>',
+    'mem-profile': '<p><strong>Full vs Minimal (<code>MINIMAL_SOC=1</code>)</strong></p><ul><li>I/D caches: 8&nbsp;KB 4-way → 2&nbsp;KB 2-way.</li><li>Branch predictor: PHT 2048, BTB 256, GHR 24, RAS 16 → 64, 32, 8, 8.</li><li>L2: 16&nbsp;KB, loop 16, IBTC 32 → 8&nbsp;KB, 4, 8.</li><li>RAM 64&nbsp;KB, align buffer 8192&nbsp;B → 40&nbsp;KB, 256&nbsp;B.</li></ul><p>All knobs live in <code>rtl/pkg/level_param.sv</code>; feature switches in <code>rtl/include/level_defines.svh</code>.</p>'
+  }
 };
 
-function showInfo(key, tabId) {
-  const panel = document.getElementById('tab-' + tabId);
-  if (!panel) return;
-  const box = panel.querySelector('.info-card');
-  if (box && infos[key]) box.innerHTML = infos[key];
+function fillPanels() {
+  Object.keys(DETAILS).forEach(function (tabId) {
+    var tab = document.getElementById('tab-' + tabId);
+    if (!tab) return;
+    var map = DETAILS[tabId];
+    tab.querySelectorAll('[data-panel]').forEach(function (el) {
+      var k = el.getAttribute('data-panel');
+      if (map[k]) el.innerHTML = map[k];
+    });
+  });
 }
+
+function syncAccordion(tabId, key) {
+  var root = document.getElementById('tab-' + tabId);
+  if (!root) return;
+  root.querySelectorAll('.acc-item').forEach(function (i) {
+    i.classList.remove('acc-highlight');
+    var b = i.querySelector('.acc-btn');
+    var p = i.querySelector('.acc-panel');
+    if (b) b.setAttribute('aria-expanded', 'false');
+    if (p) p.setAttribute('hidden', '');
+  });
+  var item = root.querySelector('.acc-item[data-acc="' + key + '"]');
+  if (item) {
+    item.classList.add('acc-highlight');
+    var btn = item.querySelector('.acc-btn');
+    var panel = item.querySelector('.acc-panel');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    if (panel) panel.removeAttribute('hidden');
+    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function showInfo(key, tabId) {
+  var box = document.getElementById('info-box-' + tabId);
+  var d = DETAILS[tabId];
+  if (box && d && d[key]) {
+    box.innerHTML = d[key];
+    box.classList.add('info-pulse');
+    setTimeout(function () { box.classList.remove('info-pulse'); }, 450);
+  }
+  syncAccordion(tabId, key);
+}
+
+function wireAccordions() {
+  document.querySelectorAll('.acc-root').forEach(function (accRoot) {
+    accRoot.querySelectorAll('.acc-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var item = btn.closest('.acc-item');
+        var panel = item.querySelector('.acc-panel');
+        var key = btn.dataset.key;
+        var tabPanel = btn.closest('.tab-panel');
+        var tabId = tabPanel.id.replace('tab-', '');
+        var expanded = btn.getAttribute('aria-expanded') === 'true';
+        if (expanded) {
+          btn.setAttribute('aria-expanded', 'false');
+          panel.setAttribute('hidden', '');
+          item.classList.remove('acc-highlight');
+        } else {
+          accRoot.querySelectorAll('.acc-item').forEach(function (i) {
+            i.classList.remove('acc-highlight');
+            var b2 = i.querySelector('.acc-btn');
+            var p2 = i.querySelector('.acc-panel');
+            if (b2) b2.setAttribute('aria-expanded', 'false');
+            if (p2) p2.setAttribute('hidden', '');
+          });
+          btn.setAttribute('aria-expanded', 'true');
+          panel.removeAttribute('hidden');
+          item.classList.add('acc-highlight');
+          var box = document.getElementById('info-box-' + tabId);
+          if (box && DETAILS[tabId] && DETAILS[tabId][key]) box.innerHTML = DETAILS[tabId][key];
+        }
+      });
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  fillPanels();
+  wireAccordions();
+});
 </script>
 </body>
 </html>

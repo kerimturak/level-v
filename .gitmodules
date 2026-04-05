@@ -40,3 +40,9 @@
 [submodule "subrepo/asic-tools/librelane"]
 	path = subrepo/asic-tools/librelane
 	url = https://github.com/librelane/librelane.git
+[submodule "subrepo/mlperf-tiny"]
+	path = subrepo/mlperf-tiny
+	url = https://github.com/mlcommons/tiny.git
+[submodule "subrepo/tflite-micro"]
+	path = subrepo/tflite-micro
+	url = https://github.com/tensorflow/tflite-micro.git
