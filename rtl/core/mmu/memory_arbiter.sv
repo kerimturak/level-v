@@ -118,4 +118,19 @@ module memory_arbiter (
     end
   end
 
+  // synthesis translate_off
+`ifdef LOG_FENCEI_DEBUG
+  always_ff @(posedge clk_i) begin
+    if (rst_ni) begin
+      if (icache_req_i.valid && !icache_req_reg.valid)
+        $display("[FENCEI-DBG][ARB] %0t IC_REQ LATCH addr=%08x round=%0d", $time, icache_req_i.addr, round);
+      if (dcache_req_i.valid && !dcache_req_reg.valid)
+        $display("[FENCEI-DBG][ARB] %0t DC_REQ LATCH addr=%08x rw=%b round=%0d", $time, dcache_req_i.addr, dcache_req_i.rw, round);
+      if (iomem_res_i.valid)
+        $display("[FENCEI-DBG][ARB] %0t IOMEM_RES round=%0d ic_reg_v=%b dc_reg_v=%b", $time, round, icache_req_reg.valid, dcache_req_reg.valid);
+    end
+  end
+`endif
+  // synthesis translate_on
+
 endmodule

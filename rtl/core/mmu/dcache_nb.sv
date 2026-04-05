@@ -114,7 +114,11 @@ module dcache_nb
   dc_pipe_req_t ld_req_q, st_req_q;
 
   // ===========================================================================
-  // Flush logic
+  // Flush logic — tag invalidation
+  // Only triggers on reset. Run-time flush_i (fence.i) must NOT invalidate
+  // D-cache tags — only dirty writeback (via dcache_fencei FSM) is needed.
+  // D-cache data and tags are preserved across fence.i; the I-cache handles
+  // its own invalidation separately.
   // ===========================================================================
   logic                 flush_active;
   logic [IDX_WIDTH-1:0] flush_cnt;
@@ -130,9 +134,6 @@ module dcache_nb
       end else begin
         flush_cnt <= flush_cnt + 1;
       end
-    end else if (flush_i && ld_pipe_state == PIPE_IDLE && st_pipe_state == PIPE_IDLE) begin
-      flush_active <= 1'b1;
-      flush_cnt    <= '0;
     end
   end
 
@@ -1137,6 +1138,38 @@ module dcache_nb
   );
 
   assign fencei_stall_o = fi_active || (flush_i && !pipes_idle_o);
+
+  // Fence.i debug logger — Enable with: +define+LOG_FENCEI_DEBUG
+  // synthesis translate_off
+`ifdef LOG_FENCEI_DEBUG
+  logic fi_dbg_prev_nb;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) fi_dbg_prev_nb <= 1'b0;
+    else         fi_dbg_prev_nb <= flush_i;
+  end
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && (flush_i || fi_active || fi_dbg_prev_nb)) begin
+      if (flush_i && !fi_dbg_prev_nb)
+        $display("[FENCEI-DBG][DC_NB] %0t FLUSH_I RISE pipes_idle=%b ld_st=%0d/%0d mshr_empty=%b mem_st=%0d flush_active=%b fi_gated=%b",
+                 $time, pipes_idle_o, ld_pipe_state, st_pipe_state, mshr_all_empty, mem_state, flush_active, fi_flush_gated);
+      if ($time % 100 == 0 && flush_i)
+        $display("[FENCEI-DBG][DC_NB] %0t STATUS flush_i=%b fi_active=%b fi_gated=%b flush_active=%b pipes_idle=%b ld=%0d st=%0d mshr_empty=%b mem=%0d fencei_stall=%b",
+                 $time, flush_i, fi_active, fi_flush_gated, flush_active, pipes_idle_o, ld_pipe_state, st_pipe_state, mshr_all_empty, mem_state, fencei_stall_o);
+      if (fi_dbg_prev_nb && !flush_i)
+        $display("[FENCEI-DBG][DC_NB] %0t FLUSH_I FALL fi_active=%b fencei_stall=%b", $time, fi_active, fencei_stall_o);
+    end
+    // Log ST pipe activity during fence.i period
+    if (rst_ni && st_pipe_accept)
+      $display("[FENCEI-DBG][DC_NB] %0t ST_ACCEPT addr=%08x rw=%b size=%0d", $time, st_req_i.addr, st_req_i.rw, st_req_i.rw_size);
+    if (rst_ni && st_pipe_state == PIPE_TAG_LOOKUP && st_hit_any)
+      $display("[FENCEI-DBG][DC_NB] %0t ST_HIT addr=%08x set=%0d dirty_before=%04b", $time, st_req_q.addr, st_req_set, dirty_reg[st_req_set]);
+    if (rst_ni && st_pipe_state == PIPE_TAG_LOOKUP && !st_hit_any && !st_resolve_stall)
+      $display("[FENCEI-DBG][DC_NB] %0t ST_MISS addr=%08x set=%0d", $time, st_req_q.addr, st_req_set);
+    if (rst_ni && st_dirty_wr)
+      $display("[FENCEI-DBG][DC_NB] %0t DIRTY_WR set=%0d way=%04b val=%b", $time, st_dirty_idx, st_dirty_way, st_dirty_val);
+  end
+`endif
+  // synthesis translate_on
 
   // ===========================================================================
   // LD-pipe FSM — miss-under-miss: returns to IDLE after MSHR allocation

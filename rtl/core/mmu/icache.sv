@@ -142,6 +142,39 @@ module icache
     end
   end
 
+  // Fence.i I-Cache flush logger — Enable with: +define+LOG_FENCEI_DEBUG
+  // synthesis translate_off
+`ifdef LOG_FENCEI_DEBUG
+  logic ic_flush_prev;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) ic_flush_prev <= 1'b1;
+    else         ic_flush_prev <= flush;
+  end
+  // Post-flush diagnostic counter
+  logic [7:0] ic_postflush_cnt;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni || flush) ic_postflush_cnt <= '0;
+    else if (ic_postflush_cnt < 30) ic_postflush_cnt <= ic_postflush_cnt + 1;
+  end
+  always_ff @(posedge clk_i) begin
+    if (rst_ni) begin
+      if (flush && !ic_flush_prev)
+        $display("[FENCEI-DBG][IC] %0t I-CACHE FLUSH START flush_i=%b", $time, flush_i);
+      if (ic_flush_prev && !flush)
+        $display("[FENCEI-DBG][IC] %0t I-CACHE FLUSH DONE (invalidated %0d sets)", $time, NUM_SET);
+      // Post-flush: show critical signals for 20 cycles
+      if (ic_flush_prev && !flush || (!flush && ic_postflush_cnt > 0 && ic_postflush_cnt <= 20))
+        $display("[FENCEI-DBG][IC] %0t POST-FLUSH +%0d crq_v=%b crq_rdy=%b flush_i=%b miss=%b hit=%b lkup_ack=%b lx_req_v=%b lx_res_v=%b lx_req_rdy=%b issue_dem=%b pf_stale=%b",
+                 $time, ic_postflush_cnt,
+                 cache_req_q.valid, cache_req_i.ready, flush_i,
+                 cache_miss, cache_hit, lookup_ack,
+                 lowX_req_o.valid, lowX_res_i.valid, lowX_req_o.ready,
+                 issue_dem, pf_stale_q);
+    end
+  end
+`endif
+  // synthesis translate_on
+
   // Memory instantiation: Data and tag arrays
   for (genvar i = 0; i < NUM_WAY; i++) begin : data_array
     sp_bram #(
@@ -279,8 +312,10 @@ module icache
   end
 
   // Lookup acknowledgment logic
+  // Clear during flush: any in-flight bus response arriving while flush=1
+  // (lowX_req_o.ready=0) would leave lookup_ack stuck at 1 forever.
   always_ff @(posedge clk_i) begin
-    if (!rst_ni) begin
+    if (!rst_ni || flush) begin
       lookup_ack <= '0;
     end else begin
       lookup_ack <= lowX_res_i.valid ? !lowX_req_o.ready : (!lookup_ack ? lowX_req_o.valid && lowX_res_i.ready : lookup_ack);

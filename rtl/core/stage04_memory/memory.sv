@@ -418,6 +418,47 @@ module memory
 
   assign fencei_stall_o = dcache_fencei_stall || fencei_pending || (fe_flush_cache_i && (!sb_empty || !dcache_pipes_idle));
 
+  // Fence.i debug logger — Enable with: +define+LOG_FENCEI_DEBUG
+  // synthesis translate_off
+`ifdef LOG_FENCEI_DEBUG
+  logic fencei_dbg_prev_mem;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) fencei_dbg_prev_mem <= 1'b0;
+    else         fencei_dbg_prev_mem <= fe_flush_cache_i;
+  end
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && fe_flush_cache_i) begin
+      // Log first cycle
+      if (!fencei_dbg_prev_mem)
+        $display("[FENCEI-DBG][MEM] %0t FENCE.I ENTER sb_empty=%b pipes_idle=%b dcache_fi_stall=%b fencei_pending=%b",
+                 $time, sb_empty, dcache_pipes_idle, dcache_fencei_stall, fencei_pending);
+      // Log state every 50 cycles during fence.i
+      if ($time % 50 == 0)
+        $display("[FENCEI-DBG][MEM] %0t STATUS sb_empty=%b pipes_idle=%b dcache_fi_stall=%b fencei_pending=%b dcache_flush=%b drain_fire=%b drain_active=%b st_port_busy=%b sb_drain_valid=%b st_ready=%b",
+                 $time, sb_empty, dcache_pipes_idle, dcache_fencei_stall, fencei_pending, dcache_flush, drain_fire, drain_active, st_port_busy, sb_drain_valid, st_dcache_res.ready);
+      // Log drain events
+      if (drain_fire)
+        $display("[FENCEI-DBG][MEM] %0t SB_DRAIN addr=%08x data=%08x size=%0d",
+                 $time, sb_drain_addr, sb_drain_data, sb_drain_size);
+      // Log when store buffer empties during fence.i
+      if (!sb_empty && fencei_dbg_prev_mem) begin end  // suppress unused
+    end
+  end
+  // Log sb_empty transition
+  logic sb_empty_prev;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) sb_empty_prev <= 1'b1;
+    else         sb_empty_prev <= sb_empty;
+  end
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && fe_flush_cache_i && !sb_empty_prev && sb_empty)
+      $display("[FENCEI-DBG][MEM] %0t SB NOW EMPTY", $time);
+    if (rst_ni && fe_flush_cache_i && dcache_flush && !fencei_dbg_prev_mem)
+      $display("[FENCEI-DBG][MEM] %0t DCACHE_FLUSH ASSERTED (sb_empty=%b pipes_idle=%b)", $time, sb_empty, dcache_pipes_idle);
+  end
+`endif
+  // synthesis translate_on
+
   // -------------------------------------------------------------------
   // PMA
   // -------------------------------------------------------------------

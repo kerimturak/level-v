@@ -44,7 +44,7 @@ package level_param;
   // ============================================================================
   localparam int BLK_SIZE = 128;  // Cache block size (bits)
 
-  // Profile numerics: rtl/cfg/<profile>.cfg → build/gen/level_param_profile.svh (see Makefile / OpenLane prep)
+  // Profile numerics: rtl/cfg/{small,medium,large}.cfg → build/gen/level_param_profile.svh (Makefile / ASIC prep)
   `include "level_param_profile.svh"
 
   localparam int L2_LINE_SIZE_B = BLK_SIZE / 8;  // 16 bytes, matches L1 block

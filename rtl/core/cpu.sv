@@ -40,6 +40,7 @@ module cpu
   exc_type_e                fe_active_exc_type;
   instr_type_e              fe_instr_type;
   logic                     fencei_flush;
+  logic                     fencei_was_stalled_q;  // one-shot: tracks D-cache stall seen
   logic         [XLEN-1:0]  flush_pc;
 `ifdef COMMIT_TRACER
   fe_tracer_info_t fe_tracer;
@@ -239,11 +240,23 @@ module cpu
   // this instruction does not raise an exception (NO_EXCEPTION).
   // On a speculative hit, the exception from fetch is preserved.
   // ============================================================================
+
+  // One-shot fence.i flush: once D-cache writeback stall has risen and fallen,
+  // the fence.i processing is complete.  Drop fencei_flush so the I-cache
+  // flush can finish without being perpetually re-triggered.
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni || pipe2.instr_type != fence_i)
+      fencei_was_stalled_q <= 1'b0;
+    else if (me_fencei_stall)
+      fencei_was_stalled_q <= 1'b1;
+  end
+
   always_comb begin
     fe_active_exc_type  = ex_spec_hit ? fe_exc_type : NO_EXCEPTION;
     de_active_exc_type  = ex_spec_hit ? pipe1.exc_type != NO_EXCEPTION ? pipe1.exc_type : de_exc_type : NO_EXCEPTION;
     // Flush on fence.i OR misa write (misa.C change affects instruction decoding)
-    fencei_flush        = (pipe2.instr_type == fence_i) || 
+    // One-shot: suppress when D-cache stall was seen and has now dropped
+    fencei_flush        = ((pipe2.instr_type == fence_i) && !(fencei_was_stalled_q && !me_fencei_stall)) || 
                           (ex_wr_csr && pipe2.csr_idx == 12'h301);  // misa write
     flush_pc            = pipe2.pc_incr;
     de_enable           = (stall_cause == NO_STALL); // to synch spike and core log stall on fetch flush
@@ -872,6 +885,42 @@ module cpu
   // pipe2 is frozen during any heavy stall — pipe3 must not re-accept
   // stale pipe2 output.  Declared early; assigned after stall_cause for vlog.
   assign pipe2_frozen = (stall_cause inside {IMISS_STALL, DMISS_STALL, ALU_STALL, FENCEI_STALL});
+
+  // Fence.i debug logger — Enable with: +define+LOG_FENCEI_DEBUG or make LOG_FENCEI_DEBUG=1
+  // synthesis translate_off
+`ifdef LOG_FENCEI_DEBUG
+  logic fencei_dbg_prev;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) fencei_dbg_prev <= 1'b0;
+    else         fencei_dbg_prev <= fencei_flush;
+  end
+  logic [15:0] post_fencei_cnt;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) post_fencei_cnt <= '0;
+    else if (fencei_dbg_prev && !fencei_flush) post_fencei_cnt <= 16'd1;
+    else if (post_fencei_cnt > 0 && post_fencei_cnt < 16'd50) post_fencei_cnt <= post_fencei_cnt + 16'd1;
+    else if (post_fencei_cnt >= 16'd50) post_fencei_cnt <= '0;
+  end
+  always_ff @(posedge clk_i) begin
+    if (rst_ni) begin
+      // Log rising edge of fencei_flush
+      if (fencei_flush && !fencei_dbg_prev)
+        $display("[FENCEI-DBG][CPU] %0t FENCE.I DETECTED pc=%08x flush_pc=%08x", $time, pipe2.pc, flush_pc);
+      // Log stall state every 100 cycles during fence.i stall
+      if (stall_cause == FENCEI_STALL && ($time % 100 == 0))
+        $display("[FENCEI-DBG][CPU] %0t STALL stall=%0d fencei_flush=%b me_fencei_stall=%b pipe2.instr_type=%0d",
+                 $time, stall_cause, fencei_flush, me_fencei_stall, pipe2.instr_type);
+      // Log when stall deasserts
+      if (fencei_dbg_prev && !fencei_flush)
+        $display("[FENCEI-DBG][CPU] %0t FENCE.I COMPLETE — stall released", $time);
+      // Log 50 cycles after fence.i to diagnose post-fence.i deadlock
+      if (post_fencei_cnt > 0 && post_fencei_cnt <= 16'd50)
+        $display("[FENCEI-DBG][CPU] %0t POST-FENCEI +%0d stall=%0d imiss=%b dmiss=%b fencei=%b pipe2.pc=%08x pipe2.type=%0d",
+                 $time, post_fencei_cnt, stall_cause, fe_imiss_stall, me_dmiss_stall, me_fencei_stall, pipe2.pc, pipe2.instr_type);
+    end
+  end
+`endif
+  // synthesis translate_on
 
   // Pipeline visualizer (KONATA format)
   // Enable with: +define+KONATA_TRACER

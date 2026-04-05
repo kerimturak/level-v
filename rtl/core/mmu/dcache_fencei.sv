@@ -157,4 +157,26 @@ module dcache_fencei #(
 
   assign fi_set_idx = fi_set_idx_q;
 
+  // Fence.i FSM debug logger — Enable with: +define+LOG_FENCEI_DEBUG
+  // synthesis translate_off
+`ifdef LOG_FENCEI_DEBUG
+  always_ff @(posedge clk_i) begin
+    if (rst_ni) begin
+      if (fi_start)
+        $display("[FENCEI-DBG][FSM] %0t FSM START flush_i=%b", $time, flush_i);
+      if (fi_state_q != fi_state_d)
+        $display("[FENCEI-DBG][FSM] %0t STATE %0d -> %0d set=%0d way=%0d dirty=%b has_dirty=%b",
+                 $time, fi_state_q, fi_state_d, fi_set_idx_q, fi_way_idx_q, drsram_rd_rdirty, fi_has_dirty);
+      if (fi_writeback_req && lowx_res_ready)
+        $display("[FENCEI-DBG][FSM] %0t WB_ACCEPTED addr=%08x tag=%05x set=%0d way=%0d",
+                 $time, fi_evict_addr, fi_evict_tag, fi_set_idx_q, fi_way_idx_q);
+      if (fi_mark_clean)
+        $display("[FENCEI-DBG][FSM] %0t MARK_CLEAN set=%0d way=%0d", $time, fi_set_idx_q, fi_way_idx_q);
+      if (fi_state_q != FI_IDLE && fi_state_d == FI_DONE)
+        $display("[FENCEI-DBG][FSM] %0t FSM DONE", $time);
+    end
+  end
+`endif
+  // synthesis translate_on
+
 endmodule

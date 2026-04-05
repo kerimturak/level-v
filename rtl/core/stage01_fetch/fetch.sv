@@ -299,6 +299,25 @@ module fetch
     icache_req.uncached = abuff_icache_req.uncached;
   end
 
+  // Fence.i fetch redirect logger — Enable with: +define+LOG_FENCEI_DEBUG
+  // synthesis translate_off
+`ifdef LOG_FENCEI_DEBUG
+  logic fe_flush_prev;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) fe_flush_prev <= 1'b0;
+    else         fe_flush_prev <= flush_i;
+  end
+  always_ff @(posedge clk_i) begin
+    if (rst_ni) begin
+      if (flush_i && !fe_flush_prev)
+        $display("[FENCEI-DBG][FE] %0t PC REDIRECT old_pc=%08x -> new_pc=%08x", $time, pc, flush_pc_i);
+      if (fe_flush_prev && !flush_i)
+        $display("[FENCEI-DBG][FE] %0t FLUSH DONE resuming at pc=%08x imiss_stall=%b", $time, pc, imiss_stall_o);
+    end
+  end
+`endif
+  // synthesis translate_on
+
   assign ic_miss_uncached = icache_res.miss && icache_req.uncached;
   assign pf_pma_addr      = pf_valid ? pf_addr : pc_o;
   // Line-aligned demand fetch address (match align_buffer lowX addr); avoids stale icache_req.addr
