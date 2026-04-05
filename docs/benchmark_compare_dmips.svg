@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 400" role="img" aria-labelledby="t2 d2">
+  <title id="t2">DMIPS/MHz (Dhrystone) - RISC-V peer comparison (illustrative)</title>
+  <desc id="d2">Horizontal bars sorted low to high by DMIPS/MHz; LEVEL-V highlighted.</desc>
+  <defs>
+    <style type="text/css"><![CDATA[
+      .lbl { font: 12px system-ui,Segoe UI,sans-serif; fill: #3d3d38; }
+      .lbl-hi { font: 600 12px system-ui,Segoe UI,sans-serif; fill: #2d5016; }
+      .cap { font: 11px system-ui,Segoe UI,sans-serif; fill: #6b6a63; }
+      .title { font: 500 15px system-ui,Segoe UI,sans-serif; fill: #2c2c2a; }
+      .axis { font: 10px system-ui,Segoe UI,sans-serif; fill: #888780; }
+    ]]></style>
+  </defs>
+  <rect width="920" height="400" fill="#f9f9f7"/>
+  <rect x="20" y="16" width="880" height="368" rx="12" fill="#fff" stroke="rgba(0,0,0,0.08)"/>
+  <text x="40" y="44" class="title">DMIPS / MHz - Dhrystone 2.1 (illustrative)</text>
+  <text x="40" y="62" class="cap">Same data as docs/performance.html - Mixed sources and configurations.</text>
+  <g transform="translate(40,72)">
+    <rect width="10" height="10" fill="#185FA5" rx="2"/><text x="16" y="9" class="cap">In-order</text>
+    <rect x="100" width="10" height="10" fill="#D85A30" rx="2"/><text x="116" y="9" class="cap">Out-of-order</text>
+    <rect x="230" width="10" height="10" fill="#3B6D11" rx="2"/><text x="246" y="9" class="cap">LEVEL-V</text>
+  </g>
+  <!-- max scale 3.5; bar max width 560; x0=220 -->
+  <g font-family="system-ui,Segoe UI,sans-serif">
+    <text x="220" y="118" class="axis">0</text>
+    <text x="380" y="118" class="axis">1</text>
+    <text x="540" y="118" class="axis">2</text>
+    <text x="700" y="118" class="axis">3</text>
+    <line x1="220" y1="122" x2="780" y2="122" stroke="#e8e8e4" stroke-width="1"/>
+  </g>
+  <g>
+    <text x="40" y="132" class="lbl">SERV (RV32I)</text>
+    <rect x="220" y="118" width="4.5" height="18" rx="3" fill="#185FA5" stroke="#85B7EB" stroke-width="0.5"/>
+    <text x="230" y="130" class="axis">0.03</text>
+  </g>
+  <g>
+    <text x="40" y="160" class="lbl">PicoRV32 (RV32IM)</text>
+    <rect x="220" y="146" width="83.2" height="18" rx="3" fill="#185FA5" stroke="#85B7EB" stroke-width="0.5"/>
+    <text x="310" y="158" class="axis">0.52</text>
+  </g>
+  <g>
+    <text x="40" y="188" class="lbl">Ibex (RV32IMC)</text>
+    <rect x="220" y="174" width="144" height="18" rx="3" fill="#185FA5" stroke="#85B7EB" stroke-width="0.5"/>
+    <text x="372" y="186" class="axis">0.90</text>
+  </g>
+  <g>
+    <text x="40" y="216" class="lbl">VexRiscv (RV32IM)</text>
+    <rect x="220" y="202" width="193.6" height="18" rx="3" fill="#185FA5" stroke="#85B7EB" stroke-width="0.5"/>
+    <text x="420" y="214" class="axis">1.21</text>
+  </g>
+  <g>
+    <text x="40" y="244" class="lbl">Taiga / CVA5 (RV32IMA)</text>
+    <rect x="220" y="230" width="193.6" height="18" rx="3" fill="#185FA5" stroke="#85B7EB" stroke-width="0.5"/>
+    <text x="420" y="242" class="axis">1.21</text>
+  </g>
+  <g>
+    <text x="40" y="272" class="lbl-hi">LEVEL-V (RV32IMC)</text>
+    <rect x="220" y="258" width="241.6" height="18" rx="3" fill="#3B6D11" stroke="#97C459" stroke-width="2"/>
+    <text x="470" y="270" class="axis">1.51</text>
+  </g>
+  <g>
+    <text x="40" y="300" class="lbl">CV32E40P (RV32IMC)</text>
+    <rect x="220" y="286" width="257.6" height="18" rx="3" fill="#185FA5" stroke="#85B7EB" stroke-width="0.5"/>
+    <text x="486" y="298" class="axis">1.61</text>
+  </g>
+  <g>
+    <text x="40" y="328" class="lbl">NaxRiscv (RV32IMA, OoO)</text>
+    <rect x="220" y="314" width="470.4" height="18" rx="3" fill="#D85A30" stroke="#F0997B" stroke-width="0.5"/>
+    <text x="698" y="326" class="axis">2.94</text>
+  </g>
+  <g>
+    <text x="40" y="356" class="lbl">BOOMv3 (RV64GC, OoO)</text>
+    <rect x="220" y="342" width="544" height="18" rx="3" fill="#D85A30" stroke="#F0997B" stroke-width="0.5"/>
+    <text x="772" y="354" class="axis">3.40</text>
+  </g>
+  <text x="40" y="392" class="cap">Sources: see footer of docs/performance.html - OoO rows are upper-bound reference only.</text>
+</svg>

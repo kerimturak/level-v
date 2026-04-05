@@ -1000,6 +1000,16 @@ module nbmbmp_l2_cache
   logic d_pipe_accept;
   assign d_pipe_accept = (d_pipe_state == PIPE_IDLE) && !flush_active && dcache_req_i.valid && !d_mshr_complete_dport && !d_mshr_any_active;
 
+  // Guard against double-processing: after FILL_RESPOND, the MSHR entry stays
+  // valid for one extra cycle (d_mshr_resp_accepted clears it via a separate
+  // always_ff, introducing a 1-cycle delay). Without this guard, PIPE_IDLE
+  // would re-detect the COMPLETE entry and send a spurious response.
+  logic d_fill_responded_q;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) d_fill_responded_q <= 1'b0;
+    else d_fill_responded_q <= (d_pipe_state == PIPE_FILL_RESPOND);
+  end
+
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
       d_pipe_state         <= PIPE_IDLE;
@@ -1011,7 +1021,7 @@ module nbmbmp_l2_cache
 
       unique case (d_pipe_state)
         PIPE_IDLE: begin
-          if (d_mshr_complete_dport && !flush_active) begin
+          if (d_mshr_complete_dport && !flush_active && !d_fill_responded_q) begin
             // Fill-write: load MSHR entry data for SRAM write next cycle
             d_req_q.addr       <= mshr_entries[d_fill_mshr_idx].addr;
             d_req_q.is_write   <= mshr_entries[d_fill_mshr_idx].is_write;

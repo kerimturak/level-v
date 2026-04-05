@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RISC-V Benchmark Comparison — LEVEL-V vs Others</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f9f9f7;
+      color: #2c2c2a;
+      padding: 2rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+    p.subtitle {
+      font-size: 13px;
+      color: #5f5e5a;
+      margin-bottom: 2rem;
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #888780;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 2rem 0 0.5rem;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: #5f5e5a;
+    }
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 340px;
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    footer {
+      margin-top: 2rem;
+      font-size: 11px;
+      color: #888780;
+      border-top: 0.5px solid rgba(0,0,0,0.1);
+      padding-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>RISC-V Processor Benchmark Comparison</h1>
+  <p class="subtitle">LEVEL-V (RV32IMC, pipelined in-order) vs. well-known open-source RISC-V cores</p>
+
+  <!-- ── CoreMark/MHz ── -->
+  <p class="section-label">CoreMark / MHz</p>
+  <div class="legend">
+    <span><span class="legend-dot" style="background:#185FA5"></span>In-order</span>
+    <span><span class="legend-dot" style="background:#D85A30"></span>Out-of-order</span>
+    <span><span class="legend-dot" style="background:#3B6D11"></span>LEVEL-V (your design)</span>
+  </div>
+  <div class="chart-wrapper">
+    <canvas id="cmChart"></canvas>
+  </div>
+
+  <!-- ── DMIPS/MHz ── -->
+  <p class="section-label">DMIPS / MHz (Dhrystone)</p>
+  <div class="legend">
+    <span><span class="legend-dot" style="background:#185FA5"></span>In-order</span>
+    <span><span class="legend-dot" style="background:#D85A30"></span>Out-of-order</span>
+    <span><span class="legend-dot" style="background:#3B6D11"></span>LEVEL-V (your design)</span>
+  </div>
+  <div class="chart-wrapper">
+    <canvas id="dmChart"></canvas>
+  </div>
+
+  <footer>
+    Sources: VexRiscv GitHub, PicoRV32 GitHub, Ibex lowRISC docs, Aries Embedded manual,
+    CARRV 2021 (Ibex/CV32E40P), Luffca NaxRiscv benchmark, published BOOMv3 reports.
+    OoO cores included as upper-bound reference only.
+    LEVEL-V values as reported by kerimturak/level-v.
+  </footer>
+
+  <script>
+    const processors = [
+      { name: 'SERV\n(RV32I)',            cm: 0.024, dm: 0.028, type: 'inorder' },
+      { name: 'PicoRV32\n(RV32IM)',       cm: 0.66,  dm: 0.52,  type: 'inorder' },
+      { name: 'Ibex\n(RV32IMC)',          cm: 2.36,  dm: 0.90,  type: 'inorder' },
+      { name: 'Taiga/CVA5\n(RV32IMA)',    cm: 2.53,  dm: 1.21,  type: 'inorder' },
+      { name: 'VexRiscv\n(RV32IM)',       cm: 2.30,  dm: 1.21,  type: 'inorder' },
+      { name: 'LEVEL-V\n(RV32IMC)',       cm: 2.62,  dm: 1.51,  type: 'levelv'  },
+      { name: 'CV32E40P\n(RV32IMC)',      cm: 3.11,  dm: 1.61,  type: 'inorder' },
+      { name: 'BOOMv3\n(RV64GC, OoO)',    cm: 4.20,  dm: 3.40,  type: 'ooo'     },
+      { name: 'NaxRiscv\n(RV32IMA, OoO)', cm: 5.00,  dm: 2.94,  type: 'ooo'     },
+    ];
+
+    const BG   = { inorder: '#185FA5', ooo: '#D85A30', levelv: '#3B6D11' };
+    const BORD = { inorder: '#85B7EB', ooo: '#F0997B', levelv: '#97C459' };
+    const BW   = { inorder: 1,         ooo: 1,         levelv: 2.5       };
+
+    function buildChart(canvasId, field, xLabel) {
+      const sorted = [...processors].sort((a, b) => a[field] - b[field]);
+      new Chart(document.getElementById(canvasId), {
+        type: 'bar',
+        data: {
+          labels: sorted.map(p => p.name),
+          datasets: [{
+            label: xLabel,
+            data:           sorted.map(p => p[field]),
+            backgroundColor: sorted.map(p => BG[p.type]),
+            borderColor:     sorted.map(p => BORD[p.type]),
+            borderWidth:     sorted.map(p => BW[p.type]),
+            borderRadius: 4,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.parsed.x.toFixed(2)} ${xLabel}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0,0,0,0.07)' },
+              ticks: { color: '#888780', font: { size: 11 } },
+              title: { display: true, text: xLabel, color: '#888780', font: { size: 11 } }
+            },
+            y: {
+              grid: { display: false },
+              ticks: {
+                color: ctx => {
+                  const p = sorted[ctx.index];
+                  return p && p.type === 'levelv' ? '#3B6D11' : '#888780';
+                },
+                font: ctx => {
+                  const p = sorted[ctx.index];
+                  return { size: 11, weight: (p && p.type === 'levelv') ? '600' : '400' };
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    buildChart('cmChart', 'cm', 'CoreMark/MHz');
+    buildChart('dmChart', 'dm', 'DMIPS/MHz');
+  </script>
+</body>
+</html>

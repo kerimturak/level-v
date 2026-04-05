@@ -194,13 +194,15 @@ module memory
       load_pending   <= 1'b0;
       load_partial_q <= 1'b0;
     end else begin
-      if (is_load && new_req && !sb_fwd_hit && !sb_fwd_partial && (sb_fwd_conflict || ld_port_busy || uc_drain_pending)) load_pending <= 1'b1;
+      if (is_load && new_req && !sb_fwd_hit && (sb_fwd_conflict || ld_port_busy || uc_drain_pending)) load_pending <= 1'b1;
       else if (load_req_fire || load_fwd_resolve) load_pending <= 1'b0;
       else if (!is_load && pipe2_advanced_q) load_pending <= 1'b0;
 
-      // Track partial forwarding state
-      if (load_req_fire && sb_fwd_partial) load_partial_q <= 1'b1;
-      else if (ld_dcache_res.valid || fe_flush_cache_i) load_partial_q <= 1'b0;
+      // Track partial forwarding state — capture on fire OR when blocked
+      // so the SB data is preserved even if entries drain while port is busy.
+      if ((load_req_fire || first_cycle_load_blocked) && sb_fwd_partial) load_partial_q <= 1'b1;
+      else if (ld_dcache_res.valid && load_active) load_partial_q <= 1'b0;
+      else if (fe_flush_cache_i) load_partial_q <= 1'b0;
     end
   end
 
@@ -395,9 +397,10 @@ module memory
   assign dcache_flush = (fe_flush_cache_i || fencei_pending) && sb_empty && dcache_pipes_idle;
 
   // Load blocked on first cycle (hard conflict / dcache busy) — combinational
-  // Partial overlap (sb_fwd_partial) is NOT a block — load fires to dcache.
+  // Partial overlap still needs to stall if the LD port is busy, so that
+  // partial SB data can be captured before the SB entries drain away.
   logic first_cycle_load_blocked;
-  assign first_cycle_load_blocked = is_load && new_req && !sb_fwd_hit && !sb_fwd_partial && (sb_fwd_conflict || ld_port_busy || uc_drain_pending);
+  assign first_cycle_load_blocked = is_load && new_req && !sb_fwd_hit && (sb_fwd_conflict || ld_port_busy || uc_drain_pending);
 
   // Pending load stalls unless resolved by forwarding this cycle
   logic load_stall_pending;
@@ -424,37 +427,45 @@ module memory
   logic fencei_dbg_prev_mem;
   always_ff @(posedge clk_i) begin
     if (!rst_ni) fencei_dbg_prev_mem <= 1'b0;
-    else         fencei_dbg_prev_mem <= fe_flush_cache_i;
+    else fencei_dbg_prev_mem <= fe_flush_cache_i;
   end
   always_ff @(posedge clk_i) begin
     if (rst_ni && fe_flush_cache_i) begin
       // Log first cycle
       if (!fencei_dbg_prev_mem)
-        $display("[FENCEI-DBG][MEM] %0t FENCE.I ENTER sb_empty=%b pipes_idle=%b dcache_fi_stall=%b fencei_pending=%b",
-                 $time, sb_empty, dcache_pipes_idle, dcache_fencei_stall, fencei_pending);
+        $display("[FENCEI-DBG][MEM] %0t FENCE.I ENTER sb_empty=%b pipes_idle=%b dcache_fi_stall=%b fencei_pending=%b", $time, sb_empty, dcache_pipes_idle, dcache_fencei_stall, fencei_pending);
       // Log state every 50 cycles during fence.i
       if ($time % 50 == 0)
-        $display("[FENCEI-DBG][MEM] %0t STATUS sb_empty=%b pipes_idle=%b dcache_fi_stall=%b fencei_pending=%b dcache_flush=%b drain_fire=%b drain_active=%b st_port_busy=%b sb_drain_valid=%b st_ready=%b",
-                 $time, sb_empty, dcache_pipes_idle, dcache_fencei_stall, fencei_pending, dcache_flush, drain_fire, drain_active, st_port_busy, sb_drain_valid, st_dcache_res.ready);
+        $display(
+            "[FENCEI-DBG][MEM] %0t STATUS sb_empty=%b pipes_idle=%b dcache_fi_stall=%b fencei_pending=%b dcache_flush=%b drain_fire=%b drain_active=%b st_port_busy=%b sb_drain_valid=%b st_ready=%b",
+            $time,
+            sb_empty,
+            dcache_pipes_idle,
+            dcache_fencei_stall,
+            fencei_pending,
+            dcache_flush,
+            drain_fire,
+            drain_active,
+            st_port_busy,
+            sb_drain_valid,
+            st_dcache_res.ready
+        );
       // Log drain events
-      if (drain_fire)
-        $display("[FENCEI-DBG][MEM] %0t SB_DRAIN addr=%08x data=%08x size=%0d",
-                 $time, sb_drain_addr, sb_drain_data, sb_drain_size);
+      if (drain_fire) $display("[FENCEI-DBG][MEM] %0t SB_DRAIN addr=%08x data=%08x size=%0d", $time, sb_drain_addr, sb_drain_data, sb_drain_size);
       // Log when store buffer empties during fence.i
-      if (!sb_empty && fencei_dbg_prev_mem) begin end  // suppress unused
+      if (!sb_empty && fencei_dbg_prev_mem) begin
+      end  // suppress unused
     end
   end
   // Log sb_empty transition
   logic sb_empty_prev;
   always_ff @(posedge clk_i) begin
     if (!rst_ni) sb_empty_prev <= 1'b1;
-    else         sb_empty_prev <= sb_empty;
+    else sb_empty_prev <= sb_empty;
   end
   always_ff @(posedge clk_i) begin
-    if (rst_ni && fe_flush_cache_i && !sb_empty_prev && sb_empty)
-      $display("[FENCEI-DBG][MEM] %0t SB NOW EMPTY", $time);
-    if (rst_ni && fe_flush_cache_i && dcache_flush && !fencei_dbg_prev_mem)
-      $display("[FENCEI-DBG][MEM] %0t DCACHE_FLUSH ASSERTED (sb_empty=%b pipes_idle=%b)", $time, sb_empty, dcache_pipes_idle);
+    if (rst_ni && fe_flush_cache_i && !sb_empty_prev && sb_empty) $display("[FENCEI-DBG][MEM] %0t SB NOW EMPTY", $time);
+    if (rst_ni && fe_flush_cache_i && dcache_flush && !fencei_dbg_prev_mem) $display("[FENCEI-DBG][MEM] %0t DCACHE_FLUSH ASSERTED (sb_empty=%b pipes_idle=%b)", $time, sb_empty, dcache_pipes_idle);
   end
 `endif
   // synthesis translate_on
@@ -681,10 +692,10 @@ module memory
     if (!rst_ni) begin
       // sb_partial_data_q: no reset — guarded by sb_partial_mask_q
       sb_partial_mask_q <= '0;
-    end else if (load_req_fire && sb_fwd_partial) begin
+    end else if ((load_req_fire || first_cycle_load_blocked) && sb_fwd_partial) begin
       sb_partial_data_q <= sb_fwd_partial_data;
       sb_partial_mask_q <= sb_fwd_byte_mask;
-    end else if (ld_dcache_res.valid || fe_flush_cache_i) begin
+    end else if ((ld_dcache_res.valid && load_active) || fe_flush_cache_i) begin
       sb_partial_mask_q <= '0;
     end
   end

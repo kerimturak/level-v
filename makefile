@@ -1127,15 +1127,25 @@ gen-rtl-cfg: $(LEVEL_PARAM_PROFILE_SVH)
 	@true
 
 # ============================================================
-# auto_verilate — build once per profile, skip when binary exists.
-# All test entry-points depend on this instead of calling `verilate`
-# directly.  Switching profiles is implicit: each profile has its
-# own OBJ_DIR so a missing binary triggers a fresh build automatically.
+# auto_verilate — build once per profile, skip when binary exists
+# AND the compile-time defines haven't changed.  Each profile has
+# its own OBJ_DIR; a stamp file inside records the VERILATOR_DEFINE
+# used for the last build so that switching LOG_UART, SIM_FAST etc.
+# triggers an automatic re-verilate.
 # ============================================================
+DEFINES_STAMP := $(OBJ_DIR)/.verilator_defines.stamp
+
 .PHONY: auto_verilate
 auto_verilate: | dirs
-	@if [ ! -x "$(RUN_BIN)" ]; then \
+	@NEED_BUILD=0; \
+	if [ ! -x "$(RUN_BIN)" ]; then \
 	  printf "$(GREEN)[AUTO-VERILATE]$(RESET) No binary for profile=$(RESOLVED_RTL_PROFILE) → building...\n"; \
+	  NEED_BUILD=1; \
+	elif [ ! -f "$(DEFINES_STAMP)" ] || [ "$$(cat '$(DEFINES_STAMP)')" != "$(VERILATOR_DEFINE)" ]; then \
+	  printf "$(YELLOW)[AUTO-VERILATE]$(RESET) Compile defines changed → rebuilding for profile=$(RESOLVED_RTL_PROFILE)...\n"; \
+	  NEED_BUILD=1; \
+	fi; \
+	if [ "$$NEED_BUILD" = "1" ]; then \
 	  $(MAKE) --no-print-directory verilate; \
 	else \
 	  printf "$(CYAN)[RTL_CFG]$(RESET) Binary ready: profile=$(RESOLVED_RTL_PROFILE)  $(RUN_BIN)\n"; \
@@ -1413,6 +1423,7 @@ else
 		$(VERILATOR_DEFINE)
 	@printf "$(GREEN)[SUCCESS]$(RESET) Built: $(RUN_BIN)\n"
 endif
+	@printf '%s' '$(VERILATOR_DEFINE)' > $(DEFINES_STAMP)
 
 # Alias: same as `make verilate VERILATE_FAST=1`
 verilate-fast:
@@ -5112,8 +5123,8 @@ _torture_build_one:
 
 # Ensure verilator is built with torture config
 torture_verilate:
-	@echo -e "$(YELLOW)[TORTURE] Building Verilator with torture config...$(RESET)"
-	@$(MAKE) --no-print-directory verilate TEST_TYPE=torture
+	@echo -e "$(YELLOW)[TORTURE] Checking Verilator build for torture config...$(RESET)"
+	@$(MAKE) --no-print-directory auto_verilate TEST_TYPE=torture
 
 torture_run: torture_build torture_verilate
 	@echo -e "$(YELLOW)[TORTURE] Running tests...$(RESET)"

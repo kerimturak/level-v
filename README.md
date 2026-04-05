@@ -27,6 +27,32 @@
 
 Normalized bars use `1.00` as a fixed visual baseline for fast scanning. Detailed methodology, raw counters, and reproduction commands stay in [Benchmark scores](#benchmark-scores).
 
+### Peer comparison (illustrative)
+
+Literature-style **CoreMark/MHz** and **DMIPS/MHz (Dhrystone)** figures next to other public RISC-V cores. These rows are **not** measured under identical toolchains or SoCs; treat the table and charts as orientation only. Out-of-order (OoO) entries are **reference / upper bound** only.
+
+| Core | ISA | Class | CoreMark/MHz | DMIPS/MHz |
+|------|-----|-------|-------------:|----------:|
+| SERV | RV32I | In-order | 0.024 | 0.028 |
+| PicoRV32 | RV32IM | In-order | 0.66 | 0.52 |
+| VexRiscv | RV32IM | In-order | 2.30 | 1.21 |
+| Ibex | RV32IMC | In-order | 2.36 | 0.90 |
+| Taiga / CVA5 | RV32IMA | In-order | 2.53 | 1.21 |
+| **LEVEL-V** | RV32IMC | In-order | **2.62** | **1.51** |
+| CV32E40P | RV32IMC | In-order | 3.11 | 1.61 |
+| BOOMv3 | RV64GC | OoO (ref.) | 4.20 | 3.40 |
+| NaxRiscv | RV32IMA | OoO (ref.) | 5.00 | 2.94 |
+
+<p align="center">
+  <img src="docs/benchmark_compare_coremark.svg" alt="CoreMark per MHz comparison chart" width="720"/>
+</p>
+
+<p align="center">
+  <img src="docs/benchmark_compare_dmips.svg" alt="DMIPS per MHz (Dhrystone) comparison chart" width="720"/>
+</p>
+
+**Interactive version (Chart.js):** open [`docs/performance.html`](docs/performance.html) locally, or via [htmlpreview.github.io](https://htmlpreview.github.io/?https://github.com/kerimturak/level-v/blob/main/docs/performance.html) (replace the path with your fork if needed). Source notes are in that file’s footer.
+
 > Status: RTL simulation, verification, and benchmark automation are active. FPGA bring-up is paused until hardware and a stable implementation flow are back in hand.
 
 A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / machine mode, caches, Wishbone, and a small SoC (UART, GPIO, SPI, I2C, timers, PLIC, and more). Built for learning, research, FPGA bring-up, and flow automation - not a minimal toy core.
