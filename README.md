@@ -1,61 +1,41 @@
 <p align="center">
+  <!-- Ana Özellik Rozetleri -->
   <img src="https://img.shields.io/badge/ISA-RV32IMC-283272?style=for-the-badge&logo=riscv&logoColor=white" alt="RISC-V">
   <img src="https://img.shields.io/badge/HDL-SystemVerilog-9333EA?style=for-the-badge" alt="SystemVerilog">
   <img src="https://img.shields.io/badge/Pipeline-5--stage-16A34A?style=for-the-badge" alt="Pipeline">
-  <img src="https://img.shields.io/badge/Status-Sim%20active%20%7C%20FPGA%20paused-0F766E?style=for-the-badge" alt="Project status">
   <img src="https://img.shields.io/badge/License-GPLv3-D92A2A?style=for-the-badge&logo=gnu&logoColor=white" alt="GPLv3">
   <br/><br/>
-  <a href="https://kerimturak.github.io/level-v/"><img src="https://img.shields.io/badge/docs-mkdocs-00A67E?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation"></a>
-  <a href="https://github.com/kerimturak/level-v"><img src="https://img.shields.io/badge/GitHub-repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a>
+
+  <!-- Performans ve Durum Rozetleri (Öne Çıkarıldı) -->
+  <img src="https://img.shields.io/badge/Performance-2.62_CoreMark--MHz-0F766E?style=for-the-badge" alt="CoreMark/MHz">
+  <img src="https://img.shields.io/badge/Status-Sim_Active-0F766E?style=for-the-badge" alt="Simulation Active">
+  <img src="https://img.shields.io/badge/FPGA_Bring--up-Paused-FFA500?style=for-the-badge&logo=amd&logoColor=white" alt="FPGA Status">
+  <br/><br/>
+
+  <!-- Bağlantı Rozetleri -->
+  <a href="https://kerimturak.github.io/level-v/">
+    <img src="https://img.shields.io/badge/Documentation-mkdocs-00A67E?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation">
+  </a>
+  <a href="https://github.com/kerimturak/level-v">
+    <img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub">
+  </a>
+  <a href="https://github.com/kerimturak/level-v/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/kerimturak/level-v/verilator.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI" alt="CI Status">
+  </a>
 </p>
 
-# Level RISC-V
-
+<!-- Proje Başlığı ve Kısa Açıklama -->
 <p align="center">
-  <img src="docs/level-v-logo.png" alt="Level-V logo" width="720"/>
+  <img src="docs/level-v-logo.png" alt="Level-V Logo" height="80" style="vertical-align: middle;">
+  <span style="font-size: 48px; font-weight: bold; vertical-align: middle; margin-left: 15px;">Level RISC-V</span>
 </p>
-
-## Performance snapshot
-
 <p align="center">
-  <img src="docs/perf_coremark.svg" alt="Level-V CoreMark performance snapshot" width="720"/>
+  <strong>Open-source, 5-stage in-order, RV32IMC RISC-V processor core.</strong><br>
+  Built for <strong>simulation, verification, and SoC experiments</strong> with a comprehensive toolchain.
 </p>
 
-<p align="center">
-  <img src="docs/perf_dmips.svg" alt="Level-V Dhrystone performance snapshot" width="720"/>
-</p>
 
 Normalized bars use `1.00` as a fixed visual baseline for fast scanning. Detailed methodology, raw counters, and reproduction commands stay in [Benchmark scores](#benchmark-scores).
-
-### Peer comparison (illustrative)
-
-Literature-style **CoreMark/MHz** and **DMIPS/MHz (Dhrystone)** figures next to other public RISC-V cores. These rows are **not** measured under identical toolchains or SoCs; treat the table and charts as orientation only. Out-of-order (OoO) entries are **reference / upper bound** only.
-
-| Core | ISA | Class | CoreMark/MHz | DMIPS/MHz |
-|------|-----|-------|-------------:|----------:|
-| SERV | RV32I | In-order | 0.024 | 0.028 |
-| PicoRV32 | RV32IM | In-order | 0.66 | 0.52 |
-| VexRiscv | RV32IM | In-order | 2.30 | 1.21 |
-| Ibex | RV32IMC | In-order | 2.36 | 0.90 |
-| Taiga / CVA5 | RV32IMA | In-order | 2.53 | 1.21 |
-| **LEVEL-V** | RV32IMC | In-order | **2.62** | **1.51** |
-| CV32E40P | RV32IMC | In-order | 3.11 | 1.61 |
-| BOOMv3 | RV64GC | OoO (ref.) | 4.20 | 3.40 |
-| NaxRiscv | RV32IMA | OoO (ref.) | 5.00 | 2.94 |
-
-<p align="center">
-  <img src="docs/benchmark_compare_coremark.svg" alt="CoreMark per MHz comparison chart" width="720"/>
-</p>
-
-<p align="center">
-  <img src="docs/benchmark_compare_dmips.svg" alt="DMIPS per MHz (Dhrystone) comparison chart" width="720"/>
-</p>
-
-**Interactive version (Chart.js):** open [`docs/performance.html`](docs/performance.html) locally, or via [htmlpreview.github.io](https://htmlpreview.github.io/?https://github.com/kerimturak/level-v/blob/main/docs/performance.html) (replace the path with your fork if needed). Source notes are in that file’s footer.
-
-> Status: RTL simulation, verification, and benchmark automation are active. FPGA bring-up is paused until hardware and a stable implementation flow are back in hand.
-
-A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / machine mode, caches, Wishbone, and a small SoC (UART, GPIO, SPI, I2C, timers, PLIC, and more). Built for learning, research, FPGA bring-up, and flow automation - not a minimal toy core.
 
 ## Why Level-V?
 
@@ -63,10 +43,6 @@ A **5-stage in-order RV32IMC** RISC-V core in **SystemVerilog**, with CSR / mach
 - It is built for verification work: Spike comparison, riscv-tests, riscv-arch-test, Imperas flows, and optional riscv-dv / formal hooks are already integrated.
 - It is parameterized for experiments: prefetch mode, cache hierarchy, multiplier/divider implementation, and simulation profiles are all configurable.
 - It is easy to inspect: commit traces, Konata exports, dashboards, and memory-size reports are first-class workflows.
-
-<p align="center">
-  <img src="docs/why_level_v.svg" alt="Level-V architecture and workflow snapshot" width="720"/>
-</p>
 
 ---
 
