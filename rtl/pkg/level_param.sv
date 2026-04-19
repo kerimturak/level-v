@@ -104,20 +104,20 @@ package level_param;
 
   // L2 MSHR entry structure
   typedef struct packed {
-    logic                      valid;
-    mshr_state_t               state;
-    logic [L2_ADDR_WIDTH-1:0]  addr;
-    logic                      is_write;
-    logic [BLK_SIZE-1:0]       wdata;
-    logic [BLK_SIZE/8-1:0]     wstrb;
-    logic                      from_dport;
+    logic                     valid;
+    mshr_state_t              state;
+    logic [L2_ADDR_WIDTH-1:0] addr;
+    logic                     is_write;
+    logic [BLK_SIZE-1:0]      wdata;
+    logic [BLK_SIZE/8-1:0]    wstrb;
+    logic                     from_dport;
     // Eviction data stored in MSHR for autonomous WB
-    logic [L2_NUM_WAY-1:0]     victim_way;
-    logic                      evict_dirty;
-    logic [L2_ADDR_WIDTH-1:0]  evict_addr;
-    logic [BLK_SIZE-1:0]       evict_data;
+    logic [L2_NUM_WAY-1:0]    victim_way;
+    logic                     evict_dirty;
+    logic [L2_ADDR_WIDTH-1:0] evict_addr;
+    logic [BLK_SIZE-1:0]      evict_data;
     // Fill data from memory (set on COMPLETE)
-    logic [BLK_SIZE-1:0]       fill_data;
+    logic [BLK_SIZE-1:0]      fill_data;
   } l2_mshr_entry_t;
 
   // L2 tag entry structure
@@ -345,6 +345,7 @@ package level_param;
     rw_size_e            rw_size;      // Original request size
     logic [31:0]         wdata;        // Write data (word-level)
     logic                from_st;      // 1 = store port, 0 = load port
+    logic                is_pf;        // 1 = prefetch, 0 = demand
     logic [DC_WAY-1:0]   victim_way;   // Latched eviction way
     logic                uncached;     // Uncached bypass request
     // Miss-under-miss: eviction data stored in MSHR for autonomous WB
@@ -759,6 +760,7 @@ package level_param;
     logic            rw;
     rw_size_e        rw_size;
     logic [31:0]     data;
+    logic            is_pf;     // 1 = prefetch, 0 = demand
   } dcache_req_t;
 
   typedef struct packed {
@@ -766,6 +768,7 @@ package level_param;
     logic        miss;
     logic        ready;
     logic [31:0] data;
+    logic        is_pf;  // 1 = response from prefetch, 0 = demand
   } dcache_res_t;
 
   // ---------------------------------------------------------------------------

@@ -201,7 +201,7 @@ module memory
       // Track partial forwarding state — capture on fire OR when blocked
       // so the SB data is preserved even if entries drain while port is busy.
       if ((load_req_fire || first_cycle_load_blocked) && sb_fwd_partial) load_partial_q <= 1'b1;
-      else if (ld_dcache_res.valid && load_active) load_partial_q <= 1'b0;
+      else if (ld_dcache_res.valid && !ld_dcache_res.is_pf && load_active) load_partial_q <= 1'b0;
       else if (fe_flush_cache_i) load_partial_q <= 1'b0;
     end
   end
@@ -220,9 +220,13 @@ module memory
       pf_active       <= 1'b0;
     end else begin
       // Load port: ld_dcache_res
-      if (ld_dcache_res.valid) begin
+      // Demand response: clear load_active only for non-prefetch responses
+      if (ld_dcache_res.valid && !ld_dcache_res.is_pf) begin
         load_active <= 1'b0;
-        pf_active   <= 1'b0;
+      end
+      // Any valid response (demand or prefetch) clears pf_active
+      if (ld_dcache_res.valid) begin
+        pf_active <= 1'b0;
       end
       if (load_req_fire) begin
         load_active <= 1'b1;
@@ -325,6 +329,7 @@ module memory
       ld_dcache_req.rw_size  = ex_data_req_i.rw_size;
       ld_dcache_req.data     = '0;
       ld_dcache_req.uncached = uncached;
+      ld_dcache_req.is_pf    = 1'b0;
     end else if (pf_fire) begin
       // Prefetch: read a full cache line (WORD-sized read, cached)
       ld_dcache_req.valid    = 1'b1;
@@ -334,6 +339,7 @@ module memory
       ld_dcache_req.rw_size  = WORD;
       ld_dcache_req.data     = '0;
       ld_dcache_req.uncached = 1'b0;
+      ld_dcache_req.is_pf    = 1'b1;
     end else begin
       ld_dcache_req.valid    = 1'b0;
       ld_dcache_req.addr     = ex_data_req_i.addr;
@@ -342,6 +348,7 @@ module memory
       ld_dcache_req.rw_size  = ex_data_req_i.rw_size;
       ld_dcache_req.data     = '0;
       ld_dcache_req.uncached = uncached;
+      ld_dcache_req.is_pf    = 1'b0;
     end
   end
 
@@ -357,6 +364,7 @@ module memory
       st_dcache_req.rw_size  = uc_drain_pending ? uc_size_q : ex_data_req_i.rw_size;
       st_dcache_req.data     = uc_drain_pending ? uc_data_q : ex_data_req_i.data;
       st_dcache_req.uncached = 1'b1;
+      st_dcache_req.is_pf    = 1'b0;
     end else if (drain_fire) begin
       st_dcache_req.valid    = 1'b1;
       st_dcache_req.addr     = sb_drain_addr;
@@ -365,6 +373,7 @@ module memory
       st_dcache_req.rw_size  = sb_drain_size;
       st_dcache_req.data     = sb_drain_data;
       st_dcache_req.uncached = sb_drain_uncached;
+      st_dcache_req.is_pf    = 1'b0;
     end else begin
       st_dcache_req.valid    = 1'b0;
       st_dcache_req.addr     = '0;
@@ -373,6 +382,7 @@ module memory
       st_dcache_req.rw_size  = WORD;
       st_dcache_req.data     = '0;
       st_dcache_req.uncached = 1'b0;
+      st_dcache_req.is_pf    = 1'b0;
     end
   end
 
@@ -408,7 +418,7 @@ module memory
 
   always_comb begin
     dmiss_stall_o = load_req_fire
-                  || (load_active && !ld_dcache_res.valid)
+                  || (load_active && !ld_demand_valid)
                   || first_cycle_load_blocked
                   || load_stall_pending
                   || (cached_store_fire && sb_full)
@@ -648,11 +658,15 @@ module memory
   logic [XLEN-1:0] ld_data_q;
   logic            ld_data_valid_q;
 
+  // Demand-load response: only accept dcache data for non-prefetch responses.
+  logic            ld_demand_valid;
+  assign ld_demand_valid = ld_dcache_res.valid && !ld_dcache_res.is_pf;
+
   always_ff @(posedge clk_i) begin
     if (!rst_ni || fe_flush_cache_i) begin
       // ld_data_q: no reset — guarded by ld_data_valid_q
       ld_data_valid_q <= 1'b0;
-    end else if (ld_dcache_res.valid) begin
+    end else if (ld_demand_valid) begin
       ld_data_q       <= ld_dcache_res.data;
       ld_data_valid_q <= 1'b1;
     end else if (load_req_fire) begin
@@ -662,7 +676,7 @@ module memory
 
   // Select between live dcache output and latched data
   logic [XLEN-1:0] ld_data_mux;
-  assign ld_data_mux = ld_dcache_res.valid ? ld_dcache_res.data : ld_data_q;
+  assign ld_data_mux = ld_demand_valid ? ld_dcache_res.data : ld_data_q;
 
   // Latch SB-forwarded data — the entry may drain before pipe3 captures me_data_o.
   // When a load has SB-forwarded data but the pipeline can't advance (IMISS_STALL),
@@ -695,7 +709,7 @@ module memory
     end else if ((load_req_fire || first_cycle_load_blocked) && sb_fwd_partial) begin
       sb_partial_data_q <= sb_fwd_partial_data;
       sb_partial_mask_q <= sb_fwd_byte_mask;
-    end else if ((ld_dcache_res.valid && load_active) || fe_flush_cache_i) begin
+    end else if ((ld_demand_valid && load_active) || fe_flush_cache_i) begin
       sb_partial_mask_q <= '0;
     end
   end

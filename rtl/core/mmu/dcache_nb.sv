@@ -105,6 +105,7 @@ module dcache_nb
     rw_size_e        rw_size;
     logic [31:0]     wdata;
     logic            uncached;
+    logic            is_pf;
   } dc_pipe_req_t;
 
   // ===========================================================================
@@ -541,15 +542,16 @@ module dcache_nb
   // ===========================================================================
   // Memory controller signals
   // ===========================================================================
-  logic                      fill_resp_valid;
-  logic       [BLK_SIZE-1:0] fill_resp_data;
-  logic                      fill_issued;
-  logic                      wb_done;
-  logic                      mem_busy;
-  logic       [    XLEN-1:0] mem_addr_q;
-  logic       [BLK_SIZE-1:0] mem_data_q;
-  mem_state_t                mem_state;
-  logic                      wb_from_st;
+  logic                        fill_resp_valid;
+  logic       [  BLK_SIZE-1:0] fill_resp_data;
+  logic                        fill_issued;
+  logic                        wb_done;
+  logic                        mem_busy;
+  logic       [      XLEN-1:0] mem_addr_q;
+  logic       [  BLK_SIZE-1:0] mem_data_q;
+  mem_state_t                  mem_state;
+  logic                        wb_from_st;
+  logic       [MSHR_PTR_W-1:0] mshr_wb_idx_q;  // Latched WB entry index for targeted transition
 
   // Fill routing to pipes (via fill writer, not pipe FSM)
   assign ld_fill_complete = fill_resp_valid && !mshr_fill_from_st;
@@ -642,6 +644,7 @@ module dcache_nb
         mshr_entries[mshr_free_idx].rw_size     <= ld_req_q.rw_size;
         mshr_entries[mshr_free_idx].wdata       <= ld_req_q.wdata;
         mshr_entries[mshr_free_idx].from_st     <= 1'b0;
+        mshr_entries[mshr_free_idx].is_pf       <= ld_req_q.is_pf;
         mshr_entries[mshr_free_idx].victim_way  <= ld_evict_way;
         mshr_entries[mshr_free_idx].uncached    <= 1'b0;
         mshr_entries[mshr_free_idx].evict_dirty <= ld_evict_dirty;
@@ -666,6 +669,7 @@ module dcache_nb
         mshr_entries[st_idx].rw_size     <= st_req_q.rw_size;
         mshr_entries[st_idx].wdata       <= st_req_q.wdata;
         mshr_entries[st_idx].from_st     <= 1'b1;
+        mshr_entries[st_idx].is_pf       <= 1'b0;
         mshr_entries[st_idx].victim_way  <= st_evict_way;
         mshr_entries[st_idx].uncached    <= 1'b0;
         mshr_entries[st_idx].evict_dirty <= st_evict_dirty;
@@ -699,9 +703,9 @@ module dcache_nb
         end
       end
 
-      // WB done → WB_PENDING → PENDING (memory controller handled WB from MSHR data)
-      if (mshr_wb_valid && wb_done) begin
-        for (int i = 0; i < MSHR_DEPTH; i++) if (mshr_entries[i].valid && mshr_entries[i].state == DC_MSHR_WB_PENDING) mshr_entries[i].state <= DC_MSHR_PENDING;
+      // WB done → WB_PENDING → PENDING (only the entry that was actually written back)
+      if (wb_done) begin
+        mshr_entries[mshr_wb_idx_q].state <= DC_MSHR_PENDING;
       end
 
       // Fill writer writes SRAM → COMPLETE → IDLE (entry pending dealloc)
@@ -749,6 +753,7 @@ module dcache_nb
       fill_issued     <= 1'b0;
       wb_done         <= 1'b0;
       wb_from_st      <= 1'b0;
+      mshr_wb_idx_q   <= '0;
     end else begin
       fill_resp_valid <= 1'b0;
       fill_issued     <= 1'b0;
@@ -757,10 +762,11 @@ module dcache_nb
       unique case (mem_state)
         MEM_IDLE: begin
           if (wb_req_valid) begin
-            mem_state  <= MEM_WB_SEND;
-            mem_addr_q <= mshr_wb_addr;
-            mem_data_q <= mshr_wb_data;
-            wb_from_st <= mshr_wb_from_st;
+            mem_state     <= MEM_WB_SEND;
+            mem_addr_q    <= mshr_wb_addr;
+            mem_data_q    <= mshr_wb_data;
+            wb_from_st    <= mshr_wb_from_st;
+            mshr_wb_idx_q <= mshr_wb_idx;
           end else if (fill_req_valid) begin
             mem_state   <= MEM_FILL_SEND;
             mem_addr_q  <= {mshr_pending_addr[XLEN-1:BOFFSET], {BOFFSET{1'b0}}};
@@ -1207,6 +1213,7 @@ module dcache_nb
             ld_req_q.rw_size  <= ld_req_i.rw_size;
             ld_req_q.wdata    <= ld_req_i.data;
             ld_req_q.uncached <= ld_req_i.uncached;
+            ld_req_q.is_pf    <= ld_req_i.is_pf;
             ld_pipe_state     <= ld_req_i.uncached ? PIPE_BYPASS : PIPE_TAG_LOOKUP;
           end
         end
@@ -1296,6 +1303,7 @@ module dcache_nb
             st_req_q.rw_size  <= st_req_i.rw_size;
             st_req_q.wdata    <= st_req_i.data;
             st_req_q.uncached <= st_req_i.uncached;
+            st_req_q.is_pf    <= st_req_i.is_pf;
             st_pipe_state     <= st_req_i.uncached ? PIPE_BYPASS : PIPE_TAG_LOOKUP;
           end
         end
@@ -1339,14 +1347,17 @@ module dcache_nb
     ld_res_o.miss  = 1'b0;
     ld_res_o.ready = (ld_pipe_state == PIPE_IDLE) && !flush_active && !fi_active && !fw_ld_writing;
     ld_res_o.data  = '0;
+    ld_res_o.is_pf = 1'b0;
 
     if (ld_hit_respond) begin
       ld_res_o.valid = 1'b1;
       ld_res_o.data  = ld_select_data[ld_word_idx*32+:32];
+      ld_res_o.is_pf = ld_req_q.is_pf;
     end else if (fw_ld_writing) begin
       // Fill writer is writing SRAM — also generate response to memory.sv
       ld_res_o.valid = 1'b1;
       ld_res_o.data  = fw_ld_merged[fw_ld_word_idx*32+:32];
+      ld_res_o.is_pf = mshr_entries[fw_ld_idx].is_pf;
     end else if (ld_bypass_active && lowX_res_i.valid && !st_bypass_active && !fi_writeback_req) begin
       ld_res_o.valid = 1'b1;
       ld_res_o.data  = lowX_res_i.data[ld_word_idx*32+:32];
@@ -1363,6 +1374,7 @@ module dcache_nb
     st_res_o.miss  = 1'b0;
     st_res_o.ready = (st_pipe_state == PIPE_IDLE) && !flush_active && !fi_active && !fw_st_writing;
     st_res_o.data  = '0;
+    st_res_o.is_pf = 1'b0;
 
     if (st_pipe_state == PIPE_HIT_RESPOND) begin
       st_res_o.valid = 1'b1;
