@@ -635,6 +635,12 @@ module dcache_nb
     if (!rst_ni) begin
       for (int i = 0; i < MSHR_DEPTH; i++) mshr_entries[i] <= '0;
     end else begin
+      // Demand load matches pending prefetch MSHR → demote is_pf to 0
+      // so fill-writer response carries is_pf=0 (treated as demand data)
+      if ((ld_pipe_state == PIPE_TAG_LOOKUP) && ld_mshr_any_match && ld_miss && !ld_req_q.uncached && !ld_req_q.is_pf) begin
+        for (int i = 0; i < MSHR_DEPTH; i++) if (ld_mshr_line_match[i]) mshr_entries[i].is_pf <= 1'b0;
+      end
+
       // LD-pipe allocation (with eviction data for autonomous WB)
       if (ld_mshr_do_alloc) begin
         mshr_entries[mshr_free_idx].valid       <= 1'b1;

@@ -46,23 +46,24 @@ module gshare_bp
 
   // Branch Target Buffer
   logic                              btb_valid                                     [ BTB_SIZE];
-  logic [ XLEN-1:$clog2(BTB_SIZE)+2] btb_tag                                       [ BTB_SIZE];
+  logic [ XLEN-1:$clog2(BTB_SIZE)+1] btb_tag                                       [ BTB_SIZE];
   logic [                  XLEN-1:0] btb_target                                    [ BTB_SIZE];
 
   // Indirect Branch Target Cache (for JALR)
   // Simple target-address table indexed by PC
   // IBTC_SIZE comes from level_param package
   logic                              ibtc_valid                                    [IBTC_SIZE];
-  logic [XLEN-1:$clog2(IBTC_SIZE)+2] ibtc_tag                                      [IBTC_SIZE];
+  logic [XLEN-1:$clog2(IBTC_SIZE)+1] ibtc_tag                                      [IBTC_SIZE];
   logic [                  XLEN-1:0] ibtc_target                                   [IBTC_SIZE];
 
   // Loop Predictor - tracks loop iteration counts
 
   logic [     $clog2(LOOP_SIZE)-1:0] loop_idx;
+  logic [     $clog2(LOOP_SIZE)-1:0] lp_wr_idx;
   logic [                       7:0] loop_count                                    [LOOP_SIZE];  // Current iteration
   logic [                       7:0] loop_trip                                     [LOOP_SIZE];  // Max iterations seen
   logic                              loop_valid                                    [LOOP_SIZE];
-  logic [XLEN-1:$clog2(LOOP_SIZE)+2] loop_tag                                      [LOOP_SIZE];
+  logic [XLEN-1:$clog2(LOOP_SIZE)+1] loop_tag                                      [LOOP_SIZE];
 
   // ============================================================================
   // INTERNAL SIGNALS
@@ -217,10 +218,10 @@ module gshare_bp
   // BTB, IBTC & LOOP LOOKUP
   // ============================================================================
   always_comb begin
-    btb_hit = btb_valid[btb_rd_idx] && (btb_tag[btb_rd_idx] == pc_i[XLEN-1:$clog2(BTB_SIZE)+2]);
+    btb_hit = btb_valid[btb_rd_idx] && (btb_tag[btb_rd_idx] == pc_i[XLEN-1:$clog2(BTB_SIZE)+1]);
     btb_predicted_target = btb_target[btb_rd_idx];
 
-    ibtc_hit = ibtc_valid[ibtc_rd_idx] && (ibtc_tag[ibtc_rd_idx] == pc_i[XLEN-1:$clog2(IBTC_SIZE)+2]);
+    ibtc_hit = ibtc_valid[ibtc_rd_idx] && (ibtc_tag[ibtc_rd_idx] == pc_i[XLEN-1:$clog2(IBTC_SIZE)+1]);
     ibtc_predicted_target = ibtc_target[ibtc_rd_idx];
 
     // PHT and Bimodal predictions (MSB = taken)
@@ -237,7 +238,7 @@ module gshare_bp
     high_confidence = (pht_taken == bimodal_taken) || (pht[pht_rd_idx] == 2'b00) || (pht[pht_rd_idx] == 2'b11) || (bimodal[bimodal_rd_idx] == 2'b00) || (bimodal[bimodal_rd_idx] == 2'b11);
 
     // Loop predictor lookup
-    loop_hit = loop_valid[loop_idx] && (loop_tag[loop_idx] == pc_i[XLEN-1:$clog2(LOOP_SIZE)+2]);
+    loop_hit = loop_valid[loop_idx] && (loop_tag[loop_idx] == pc_i[XLEN-1:$clog2(LOOP_SIZE)+1]);
     loop_current_count = loop_count[loop_idx];
     // Predict exit when we're about to reach trip count
     loop_pred_exit = loop_hit && (loop_current_count >= loop_trip[loop_idx] - 1) && (loop_trip[loop_idx] > 1);
@@ -434,32 +435,30 @@ module gshare_bp
 
         // BTB Update: Always update BTB with resolved target
         btb_valid[btb_wr_idx]  <= 1'b1;
-        btb_tag[btb_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(BTB_SIZE)+2];
+        btb_tag[btb_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(BTB_SIZE)+1];
         btb_target[btb_wr_idx] <= pc_target_i;
 
         // GHR Update: Shift left, append new outcome (committed)
         ghr <= {ghr[GHR_SIZE-2:0], ex_was_taken};
 
         // Loop Predictor Update (for backward branches)
-        if ($signed(pc_target_i - ex_info_i.pc) < 0) begin
+        lp_wr_idx = ex_info_i.pc[$clog2(LOOP_SIZE):1];
+        if (ex_was_taken && ($signed(pc_target_i - ex_info_i.pc) < 0)) begin
           // Backward branch - potential loop
-          automatic logic [$clog2(LOOP_SIZE)-1:0] lp_wr_idx = ex_info_i.pc[$clog2(LOOP_SIZE):1];
-          if (ex_was_taken) begin
+          if (loop_valid[lp_wr_idx] && loop_tag[lp_wr_idx] == ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+1]) begin
             // Loop iteration
-            if (loop_valid[lp_wr_idx] && loop_tag[lp_wr_idx] == ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+2]) begin
-              loop_count[lp_wr_idx] <= loop_count[lp_wr_idx] + 1;
-            end else begin
-              // New loop entry
-              loop_valid[lp_wr_idx] <= 1'b1;
-              loop_tag[lp_wr_idx]   <= ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+2];
-              loop_count[lp_wr_idx] <= 8'd1;
-            end
+            loop_count[lp_wr_idx] <= loop_count[lp_wr_idx] + 1;
           end else begin
-            // Loop exit - record trip count
-            if (loop_valid[lp_wr_idx] && loop_tag[lp_wr_idx] == ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+2]) begin
-              loop_trip[lp_wr_idx]  <= loop_count[lp_wr_idx];
-              loop_count[lp_wr_idx] <= 8'd0;
-            end
+            // New loop entry
+            loop_valid[lp_wr_idx] <= 1'b1;
+            loop_tag[lp_wr_idx]   <= ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+1];
+            loop_count[lp_wr_idx] <= 8'd1;
+          end
+        end else if (!ex_was_taken) begin
+          // Loop exit - record trip count
+          if (loop_valid[lp_wr_idx] && loop_tag[lp_wr_idx] == ex_info_i.pc[XLEN-1:$clog2(LOOP_SIZE)+1]) begin
+            loop_trip[lp_wr_idx]  <= loop_count[lp_wr_idx];
+            loop_count[lp_wr_idx] <= 8'd0;
           end
         end
       end
@@ -467,7 +466,7 @@ module gshare_bp
       // IBTC Update: Cache target address for JALR (non-return JALRs not handled by RAS)
       if (ex_info_i.bjtype == JALR && ex_info_i.spec.spectype != RAS) begin
         ibtc_valid[ibtc_wr_idx]  <= 1'b1;
-        ibtc_tag[ibtc_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(IBTC_SIZE)+2];
+        ibtc_tag[ibtc_wr_idx]    <= ex_info_i.pc[XLEN-1:$clog2(IBTC_SIZE)+1];
         ibtc_target[ibtc_wr_idx] <= pc_target_i;
       end
     end

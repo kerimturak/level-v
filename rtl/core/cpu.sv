@@ -85,6 +85,8 @@ module cpu
   logic       [XLEN-1:0] ex_alu_result;
   logic       [XLEN-1:0] ex_pc_target;
   logic       [XLEN-1:0] ex_pc_target_last;
+  // Correct redirect target: taken→branch target, not-taken→fall-through
+  assign ex_pc_target_last = ex_pc_sel ? ex_pc_target : pipe2.pc_incr;
   logic       [XLEN-1:0] ex_wdata;
   logic                  ex_pc_sel;
   logic                  ex_alu_stall;
@@ -427,6 +429,8 @@ module cpu
           csr_or_data  : de_ctrl.csr_or_data,
           dcache_valid : de_ctrl.dcache_valid,
           de_resolved  : de_can_resolve,
+          de_taken     : de_branch_taken,
+          de_target    : de_branch_target,
           r1_data      : de_r1_data,
           r2_data      : de_r2_data,
           r1_addr      : pipe1.inst.r1_addr,
@@ -545,16 +549,15 @@ module cpu
     if (ex_pc_sel) ex_actual_spec_hit = pipe2.spec.taken && (ex_pc_target == pipe2.spec.pc);
     else ex_actual_spec_hit = !pipe2.spec.taken;
 
-    // Effective spec_hit: suppress EX flush when DE already resolved this branch
-    ex_spec_hit = pipe2.de_resolved || ex_actual_spec_hit;
-
-    if (!ex_spec_hit) begin
-      if (ex_pc_sel) ex_pc_target_last = ex_pc_target;
-      else ex_pc_target_last = pipe2.pc_incr;
+    // Effective spec_hit: when DE resolved, verify direction with EX.
+    // DE and EX must agree on taken/not-taken. For conditional branches,
+    // the target is always pc+imm so no target check needed.
+    // For JALR, DE only resolves when no EX hazard, so forwarding matches.
+    if (pipe2.de_resolved) begin
+      ex_spec_hit = (ex_pc_sel == pipe2.de_taken);
     end else begin
-      ex_pc_target_last = ex_pc_target;
+      ex_spec_hit = ex_actual_spec_hit;
     end
-
     ex_info.spec     = pipe2.spec;
     ex_info.bjtype   = is_branch(pipe2.instr_type);
     ex_info.pc       = pipe2.pc;

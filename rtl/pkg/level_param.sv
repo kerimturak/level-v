@@ -642,6 +642,8 @@ package level_param;
     predict_info_t   spec;
     logic            dcache_valid;
     logic            de_resolved;   // Branch was resolved in decode (skip EX flush)
+    logic            de_taken;      // DE resolution: branch taken?
+    logic [XLEN-1:0] de_target;     // DE resolution: branch target
     logic            misa_c;        // C extension enabled when this instruction was fetched
 `ifdef COMMIT_TRACER
     fe_tracer_info_t fe_tracer;
